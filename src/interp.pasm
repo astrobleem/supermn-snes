@@ -573,7 +573,14 @@ k97m: pha
     pla
     jmp op_movl_d16_dn
 k97n: pla
-k98: cmp #$2110           ; move.l (An),-(An)
+k98: pha
+    and #$F1F0
+    cmp #$2100           ; move.l Dn/An,-(An)  (register push)
+    bne k98b
+    pla
+    jmp op_movl_reg_pre
+k98b: pla
+    cmp #$2110           ; move.l (An),-(An)
     bne k99
     jmp op_movl_an_pre
 k99: lda $44
@@ -4457,6 +4464,55 @@ op_movl_d16_dn:        ; move.l (d16,An),Dn : Dn = [An+d16] (32, work RAM) ; PC+
     lda $40
     clc
     adc #4
+    sta $40
+    jmp inext
+
+op_movl_reg_pre:       ; move.l Dn/An,-(An) : push 32-bit register ; PC+=2
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    sta $52            ; src reg*4 (Dn slot)
+    lda $44
+    and #$0038
+    cmp #$0008         ; source mode 001 = An?
+    bne mrp_src
+    lda $52
+    clc
+    adc #$0020
+    sta $52            ; -> An slot
+mrp_src:
+    ldx $52
+    lda $00,x
+    sta $54            ; src low16
+    lda $02,x
+    sta $56            ; src high16
+    jsr regdst         ; X = (bits 11-9)*4
+    txa
+    clc
+    adc #$0020
+    tax                ; dest An slot
+    lda $00,x
+    sec
+    sbc #4
+    sta $00,x          ; An -= 4
+    tax                ; An low16 -> work-RAM offset
+    sep #$20
+    lda $57            ; bits 31-24
+    sta $7F0000,x
+    inx
+    lda $56            ; bits 23-16
+    sta $7F0000,x
+    inx
+    lda $55            ; bits 15-8
+    sta $7F0000,x
+    inx
+    lda $54            ; bits 7-0
+    sta $7F0000,x
+    rep #$20
+    lda $40
+    clc
+    adc #2
     sta $40
     jmp inext
 
