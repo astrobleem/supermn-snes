@@ -5823,6 +5823,10 @@ rb_cc_p0c:
     lda #$004B           ; 'K'
     rts
 rb_cc_inputs:
+    lda $62              ; GWK download active (cmd $01)? then $900001/3/5 carry the
+    and #$00FF           ; routine bytes, NOT the input mailbox. Route to rb_data so the
+    cmp #$0001           ; $2C42 copy loop reads RESP1[idx] (boot writes cmd $00 after,
+    beq rb_cc_dp         ; so later input polls see $62!=1 and fall through to $FF).
     lda $54
     cmp #$0001
     beq rb_cc_ff
