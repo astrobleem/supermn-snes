@@ -366,8 +366,11 @@ k52w: cmp #$48A0           ; movem.w <list>,-(An)
     bne k53
     jmp op_movem_w_pre
 k53: cmp #$4CD8            ; movem.l (An)+,<list>
-    bne k54
+    bne k53w
     jmp op_movem_post
+k53w: cmp #$4C98           ; movem.w (An)+,<list>
+    bne k54
+    jmp op_movem_w_post
 k54: lda $44
     and #$F1F8
     cmp #$2068            ; movea.l (d16,An),An  (frame/stack -> direct $7F)
@@ -2495,6 +2498,62 @@ mpw_skip:
     iny
     cpy #$0010
     bne mpw_loop
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+
+op_movem_w_post:         ; movem.w (An)+,<list> : pop reg low16s, sign-extend ; PC+=4
+    jsr rdw2
+    sta $50              ; mask (bit0=D0..bit15=A7)
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    sta $6C              ; An slot
+    ldy #$0000
+mqw_loop:
+    lda $50
+    lsr a
+    sta $50
+    bcc mqw_skip
+    tya
+    asl a
+    asl a
+    sta $6E              ; reg slot = i*4
+    ldx $6C
+    lda $00,x
+    tax                  ; An addr
+    sep #$20
+    lda $7F0000,x        ; bits15-8
+    sta $55
+    inx
+    lda $7F0000,x        ; bits7-0
+    sta $54
+    rep #$20
+    ldx $6C
+    lda $00,x
+    clc
+    adc #2
+    sta $00,x            ; An += 2
+    ldx $6E
+    lda $54              ; low16 = $55:$54
+    sta $00,x
+    lda $54
+    bpl mqw_pos
+    lda #$FFFF
+    bra mqw_hi
+mqw_pos:
+    lda #$0000
+mqw_hi:
+    sta $02,x            ; high16 = sign extension
+mqw_skip:
+    iny
+    cpy #$0010
+    bne mqw_loop
     lda $40
     clc
     adc #4
