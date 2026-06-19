@@ -407,8 +407,15 @@ k64: cmp #$4A40            ; tst.w Dn
     bne k65
     jmp op_tst_w
 k65: cmp #$4218            ; clr.b (An)+
-    bne k66
+    bne k65w
     jmp op_clrb_anp
+k65w: pha
+    and #$FFF8
+    cmp #$4258            ; clr.w (An)+
+    bne k65x
+    pla
+    jmp op_clrw_anp
+k65x: pla
 k66: lda $44
     and #$F1F8
     cmp #$2148            ; move.l An,(d16,An)
@@ -4901,6 +4908,39 @@ op_clrb_d16:           ; clr.b (d16,An) : [An+d16]=0; Z=1 ; PC+=4
     lda $40
     clc
     adc #4
+    sta $40
+    jmp inext
+
+op_clrw_anp:           ; clr.w (An)+ : [An]=0 (work RAM only); An+=2; Z=1 ; PC+=2
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                ; X = An slot
+    lda $02,x          ; An high16
+    cmp #$00F0
+    bne caw_noff       ; non-work-RAM (video/I-O) target -> no-op the write
+    lda $00,x          ; An low16
+    phx                ; save An slot
+    tax                ; X = work-RAM offset
+    sep #$20
+    stz $7F0000,x
+    inx
+    stz $7F0000,x
+    rep #$20
+    plx                ; restore An slot
+caw_noff:
+    lda $00,x
+    clc
+    adc #2
+    sta $00,x          ; An += 2
+    lda #$0001
+    sta $60            ; Z = 1
+    lda $40
+    clc
+    adc #2
     sta $40
     jmp inext
 
