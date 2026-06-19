@@ -274,8 +274,11 @@ k24: lda $44
 k24b: lda $44
     and #$F1F8
     cmp #$3100            ; move.w Dn,-(An)
-    bne k24c
+    bne k24b2
     jmp op_movw_dn_predec
+k24b2: cmp #$3128          ; move.w (d16,An),-(An)
+    bne k24c
+    jmp op_movw_d16_predec
 k24c: lda $44
     and #$F1FF
 k25: cmp #$D1FC           ; adda.l #imm,An
@@ -1775,6 +1778,48 @@ op_movw_imm_d16:         ; move.w #imm,(d16,An) : work-RAM word write (big-endia
     lda $40
     clc
     adc #6               ; move.w #imm,(d16,An) is 6 bytes
+    sta $40
+    jmp inext
+
+op_movw_d16_predec:      ; move.w (d16,An),-(An) : push word from (srcAn+d16); Z ; PC+=4
+    jsr rdw2
+    sta $52              ; src d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; src An slot
+    lda $00,x
+    clc
+    adc $52
+    tax                  ; src addr
+    sep #$20
+    lda $7F0000,x        ; src bits15-8
+    sta $51
+    inx
+    lda $7F0000,x        ; src bits7-0
+    sta $50
+    rep #$20
+    jsr regdstA          ; X = dst An slot (bits 11-9)
+    lda $00,x
+    sec
+    sbc #2
+    sta $00,x            ; An -= 2
+    tax                  ; dst addr (stack work RAM)
+    sep #$20
+    lda $51
+    sta $7F0000,x        ; high byte
+    inx
+    lda $50
+    sta $7F0000,x        ; low byte
+    rep #$20
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #4
     sta $40
     jmp inext
 
