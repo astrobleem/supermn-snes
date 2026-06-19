@@ -129,9 +129,16 @@ irq_none:
     lda $40
     sta $56              ; ptr low16 = PC low16
     lda $42
+    cmp #$00F0           ; 68K work-RAM PC ($F0xxxx)? execute from SNES $7F bank
+    bne ifetch_rom
+    lda #$007F
+    sta $58              ; ptr bank = $7F (work RAM); RAM-resident routines
+    bra ifetch_go
+ifetch_rom:
     clc
     adc #$00C1
-    sta $58              ; ptr high byte = PC.high8 + $C1
+    sta $58              ; ptr high byte = PC.high8 + $C1 (ROM image at $C1:0000)
+ifetch_go:
     ldy #$0000
     lda [$56],y
     xba                  ; A = big-endian opcode word
@@ -469,7 +476,14 @@ k83: lda $44
     cmp #$4EF9            ; jmp (xxx).L
     bne k84
     jmp op_jmp_abs
-k84: cmp #$007C            ; ori #imm,SR
+k84: pha
+    and #$FFF8
+    cmp #$4EE8            ; jmp (d16,An)  ($4EE8|An)
+    bne k84j
+    pla
+    jmp op_jmp_d16_an
+k84j: pla
+    cmp #$007C            ; ori #imm,SR
     bne k85
     jmp op_ori_sr
 k85: cmp #$027C            ; andi #imm,SR
@@ -3487,6 +3501,34 @@ op_jmp_abs:            ; jmp (xxx).L : PC = target (low16; bank 0)
     jsr rdw4           ; target low16 (top word @+2 = bank = 0000)
     sta $40
     stz $42
+    jmp inext
+
+op_jmp_d16_an:         ; jmp (d16,An) : PC = An + signext(d16) ; (RAM-resident routines)
+    jsr rdw2
+    sta $50            ; d16
+    lda $50
+    bpl jda_pos
+    lda #$FFFF
+    bra jda_hi
+jda_pos:
+    lda #$0000
+jda_hi:
+    sta $52            ; sign-extension high word
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                ; An slot
+    lda $00,x
+    clc
+    adc $50
+    sta $40            ; PC low16 = An.lo + d16
+    lda $02,x
+    adc $52
+    and #$00FF
+    sta $42            ; PC high8 (24-bit 68K addr)
     jmp inext
 
 ; idx_ea: brief-extension indexed EA (d8,An,Xn).  A = ext word, X = base An slot.
