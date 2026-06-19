@@ -429,9 +429,13 @@ k65: cmp #$4218            ; clr.b (An)+
 k65w: pha
     and #$FFF8
     cmp #$4258            ; clr.w (An)+
-    bne k65x
+    bne k65w2
     pla
     jmp op_clrw_anp
+k65w2: cmp #$4210          ; clr.b (An)
+    bne k65x
+    pla
+    jmp op_clrb_an
 k65x: pla
 k66: lda $44
     and #$F1F8
@@ -3047,6 +3051,31 @@ op_tst_w:              ; tst.w Dn : Z=(Dn.lo==0) ; PC+=2
     tax
     lda $00,x
     jsr setz_from_a
+    lda $40
+    clc
+    adc #2
+    sta $40
+    jmp inext
+
+op_clrb_an:            ; clr.b (An) : [An]=0 (work RAM only); Z=1 ; PC+=2
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                 ; An slot
+    lda $02,x
+    cmp #$00F0
+    bne cba_noff
+    lda $00,x
+    tax
+    sep #$20
+    stz $7F0000,x
+    rep #$20
+cba_noff:
+    lda #$0001
+    sta $60             ; Z = 1
     lda $40
     clc
     adc #2
