@@ -224,8 +224,15 @@ k17: cmp #$4E75
     bne k18
     jmp op_rts
 k18: cmp #$0C39          ; cmpi.b #imm,(xxx).L  (.L = $0C39; .W would be $0C38)
-    bne k19
+    bne k18b
     jmp op_cmpib_abs
+k18b: pha
+    and #$FFF8
+    cmp #$0C00           ; cmpi.b #imm,Dn  ($0C00|Dn)
+    bne k18c
+    pla
+    jmp op_cmpi_b_dn
+k18c: pla
 k19: and #$F1FF
     cmp #$317C
     bne k20
@@ -1507,6 +1514,26 @@ op_cmpib_abs:            ; cmpi.b #imm,(xxx).L : Z=(mem==imm) ; PC += 8
     lda $40
     clc
     adc #8
+    sta $40
+    jmp inext
+
+op_cmpi_b_dn:           ; cmpi.b #imm,Dn : Z=(Dn.b==imm.b) ; PC += 4
+    jsr rdw2
+    and #$00FF
+    sta $50              ; imm byte
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax
+    lda $00,x            ; Dn (low byte = Dn.b)
+    sep #$20
+    cmp $50
+    rep #$20
+    jsr setz_from_eq
+    lda $40
+    clc
+    adc #4
     sta $40
     jmp inext
 
