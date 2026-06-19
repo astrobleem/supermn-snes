@@ -266,8 +266,15 @@ k23b: and #$F000             ; any other $6xxx (incl bne/beq) -> generic Bcc
 k24: lda $44
     and #$F1FF
     cmp #$313C            ; move.w #imm,-(An)  (push word)
-    bne k25
+    bne k24b
     jmp op_movw_imm_pre
+k24b: lda $44
+    and #$F1F8
+    cmp #$3100            ; move.w Dn,-(An)
+    bne k24c
+    jmp op_movw_dn_predec
+k24c: lda $44
+    and #$F1FF
 k25: cmp #$D1FC           ; adda.l #imm,An
     bne k26
     jmp op_adda_l
@@ -1730,6 +1737,38 @@ op_movw_imm_d16:         ; move.w #imm,(d16,An) : work-RAM word write (big-endia
     lda $40
     clc
     adc #6               ; move.w #imm,(d16,An) is 6 bytes
+    sta $40
+    jmp inext
+
+op_movw_dn_predec:       ; move.w Dn,-(An) : An-=2; [An]=Dn.w (big-endian); Z ; PC+=2
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax
+    lda $00,x
+    sta $50              ; Dn word
+    jsr regdstA          ; X = An slot
+    lda $00,x
+    sec
+    sbc #2
+    sta $00,x            ; An -= 2
+    tax                  ; An.low16 (stack assumed work RAM $F0)
+    lda $50
+    xba
+    sep #$20
+    sta $7F0000,x        ; high byte
+    rep #$20
+    inx
+    lda $50
+    sep #$20
+    sta $7F0000,x        ; low byte
+    rep #$20
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #2
     sta $40
     jmp inext
 
