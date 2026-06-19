@@ -341,8 +341,15 @@ k46: cmp #$42A8            ; clr.w (d16,An)
     jmp op_clrw_d16
 k47: lda $44
     cmp #$4879            ; pea (xxx).L
-    bne k48
+    bne k47b
     jmp op_pea
+k47b: pha
+    and #$FFF8
+    cmp #$4868            ; pea (d16,An)
+    bne k47c
+    pla
+    jmp op_pea_d16
+k47c: pla
 k48: lda $44
     and #$F1C8
     cmp #$E148            ; lsl.w #cnt,Dn
@@ -2106,6 +2113,54 @@ op_pea:                  ; pea (xxx).L : push 32-bit abs address ; PC += 6
     lda $40
     clc
     adc #6
+    sta $40
+    jmp inext
+
+op_pea_d16:              ; pea (d16,An) : push 32-bit EA (An+signext(d16)) ; PC+=4
+    jsr rdw2
+    sta $52              ; d16
+    bpl ped_pos
+    lda #$FFFF
+    bra ped_hi
+ped_pos:
+    lda #$0000
+ped_hi:
+    sta $58              ; d16 sign-extension high
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; An slot
+    lda $00,x
+    clc
+    adc $52
+    sta $54              ; EA low16
+    lda $02,x
+    adc $58
+    sta $56              ; EA high16
+    lda $3C
+    sec
+    sbc #4
+    sta $3C
+    tax                  ; A7 low16
+    sep #$20
+    lda $57              ; EA bits31-24
+    sta $7F0000,x
+    inx
+    lda $56              ; bits23-16
+    sta $7F0000,x
+    inx
+    lda $55              ; bits15-8
+    sta $7F0000,x
+    inx
+    lda $54              ; bits7-0
+    sta $7F0000,x
+    rep #$20
+    lda $40
+    clc
+    adc #4
     sta $40
     jmp inext
 
