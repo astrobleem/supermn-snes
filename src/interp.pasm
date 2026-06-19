@@ -732,12 +732,16 @@ k125: lda $44
 k126: cmp #$5088           ; addq.l #data,An
     bne k127
     jmp op_addq_l
-k127: cmp #$5068           ; addq.w #data,(d16,An)
-    bne k128
+k127: lda $44             ; ($F1C8 from k125 can't distinguish the full mode field)
+    and #$F1F8
+    cmp #$5068           ; addq.w #data,(d16,An)
+    bne k127b
     jmp op_addq_w_d16
-k128: cmp #$5168           ; subq.w #data,(d16,An)
-    bne k129
+k127b: cmp #$5168          ; subq.w #data,(d16,An)
+    bne k127c
     jmp op_subq_w_d16
+k127c: lda $44
+    and #$F1C8
 k129: cmp #$E140           ; asl.w #cnt,Dn (== lsl.w for left)
     bne k130
     jmp op_shift  ; (retired -> generic)
