@@ -202,6 +202,9 @@ k9c: lda $44
     jmp op_movb_imm_predec
 k9d: lda $44
     and #$F1F8
+    cmp #$1140            ; move.b Dn,(d16,An)
+    bne k10
+    jmp op_movb_dn_d16
 k10: cmp #$B018
     bne k11
     jmp op_cmpb_anp
@@ -1230,6 +1233,38 @@ op_movb_dn_anp:          ; move.b Dn,(An)+ : dstAn=(11-9), srcDn=(2-0); PC += 2
     lda $40
     clc
     adc #2
+    sta $40
+    jmp inext
+
+op_movb_dn_d16:          ; move.b Dn,(d16,An) : [An+d16]=Dn.b (work RAM); Z ; PC += 4
+    jsr rdw2
+    sta $52              ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax
+    lda $00,x
+    and #$00FF
+    sta $50              ; Dn byte
+    jsr regdstA          ; X = dst An slot (bits 11-9)
+    lda $02,x
+    cmp #$00F0
+    bne mbdd_skip        ; non-work-RAM -> no-op
+    lda $00,x
+    clc
+    adc $52
+    tax                  ; dst addr = An.low16 + d16
+    sep #$20
+    lda $50
+    sta $7F0000,x
+    rep #$20
+mbdd_skip:
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #4
     sta $40
     jmp inext
 
