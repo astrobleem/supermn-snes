@@ -88,6 +88,7 @@ rclr:
     stz $A2              ; X flag = 0
     stz $A4              ; USP low16  (Batch 8 MOVE USP)
     stz $A6              ; USP high16
+    stz $A8              ; C-Chip phase: 0=GWK signature handshake, 1=input mailbox
     stz $60
     stz $62              ; last C-Chip command (selects response buffer)
     stz $6E              ; C flag
@@ -5740,8 +5741,48 @@ rb_io:
     bne rb_chk50
     lda $54
     cmp #$0803           ; self-test status -> $01 (OK)
-    bne rb_data
+    bne rb_cc_inp
     lda #$0001
+    rts
+; C-Chip $900001/3/5 serve two phases (the (addr>>1) index aliases them onto the
+; even signature bytes, so they need explicit handling):
+;   phase 0 = GWK signature handshake (68K writes a seed, polls until it reads
+;             back $47/$57/$4B 'G'/'W'/'K' at $900001/3/5);
+;   phase 1 = per-frame input mailbox (P1/P2/coins) read by the $3A92 frame work,
+;             idle = $FF (active-low). $A8 = phase, set when the full sig is read.
+rb_cc_inp:
+    lda $A8
+    and #$00FF
+    bne rb_cc_inputs     ; phase 1 -> inputs
+    lda $54              ; phase 0 -> signature
+    cmp #$0001
+    bne rb_cc_p0b
+    lda #$0047           ; 'G'
+    rts
+rb_cc_p0b:
+    cmp #$0003
+    bne rb_cc_p0c
+    lda #$0057           ; 'W'
+    rts
+rb_cc_p0c:
+    cmp #$0005
+    bne rb_cc_dp
+    lda #$0001
+    sta $A8              ; full signature read -> switch to input phase
+    lda #$004B           ; 'K'
+    rts
+rb_cc_inputs:
+    lda $54
+    cmp #$0001
+    beq rb_cc_ff
+    cmp #$0003
+    beq rb_cc_ff
+    cmp #$0005
+    beq rb_cc_ff
+rb_cc_dp:
+    jmp rb_data          ; other C-Chip addrs -> data-port replay
+rb_cc_ff:
+    lda #$00FF
     rts
 rb_chk50:
     cmp #$0050           ; $500000 DIP/input space -> $0F (idle, MAME ground truth)
