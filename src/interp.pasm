@@ -557,8 +557,15 @@ k96: cmp #$2070           ; movea.l (d8,An,Xn),An
     bne k97
     jmp op_movea_l_idx
 k97: cmp #$2128           ; move.l (d16,An),-(An)  (src (d16,An)=101 -> $2128)
-    bne k98
+    bne k97m
     jmp op_movl_d16_pre
+k97m: pha
+    and #$F1F8
+    cmp #$2028           ; move.l (d16,An),Dn
+    bne k97n
+    pla
+    jmp op_movl_d16_dn
+k97n: pla
 k98: cmp #$2110           ; move.l (An),-(An)
     bne k99
     jmp op_movl_an_pre
@@ -4399,6 +4406,47 @@ op_movl_d16_pre:       ; move.l (d16,An),-(An) : dst An-=4; [dst]=[srcAn+d16] (3
     lda $50
     sta $7F0000,x
     rep #$20
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+
+op_movl_d16_dn:        ; move.l (d16,An),Dn : Dn = [An+d16] (32, work RAM) ; PC+=4
+    jsr rdw2
+    sta $52            ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                ; src An slot
+    lda $00,x
+    clc
+    adc $52
+    tax                ; src addr low16 (An assumed $F0xxxx -> $7F)
+    sep #$20
+    lda $7F0000,x
+    sta $53            ; bits 31-24
+    inx
+    lda $7F0000,x
+    sta $52            ; bits 23-16
+    inx
+    lda $7F0000,x
+    sta $55            ; bits 15-8
+    inx
+    lda $7F0000,x
+    sta $54            ; bits 7-0
+    rep #$20
+    jsr regdst         ; X = dest Dn slot (bits 11-9)
+    lda $54
+    sta $00,x          ; low16 = $55:$54
+    lda $52
+    sta $02,x          ; high16 = $53:$52
+    lda $54
+    ora $52
+    jsr setz_from_a    ; move.l sets Z from the 32-bit value
     lda $40
     clc
     adc #4
