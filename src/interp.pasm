@@ -638,8 +638,11 @@ k100: cmp #$4840          ; swap Dn
 k101: lda $44
     and #$F1F8
     cmp #$1168            ; move.b (d16,An),(d16,An)
-    bne k102
+    bne k101w
     jmp op_movb_d16_d16
+k101w: cmp #$3168           ; move.w (d16,An),(d16,An)
+    bne k102
+    jmp op_movw_d16_d16
 k102: cmp #$2088           ; move.l An,(An)
     bne k103
     jmp op_movl_an_an
@@ -5046,6 +5049,49 @@ op_movb_d16_d16:       ; move.b (d16,An),(d16,An) : work RAM ; PC+=6
     lda $54
     and #$00FF
     jsr setz_from_a      ; move.b sets Z from the moved byte (was missing -> $06CE bne mis-fell-through)
+    lda $40
+    clc
+    adc #6
+    sta $40
+    jmp inext
+
+op_movw_d16_d16:       ; move.w (d16,An),(d16,An) : work RAM ; Z ; PC+=6
+    jsr rdw2
+    sta $50            ; src d16
+    jsr rdw4
+    sta $52            ; dst d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                ; src An slot
+    lda $00,x
+    clc
+    adc $50
+    tax                ; src addr
+    sep #$20
+    lda $7F0000,x      ; src bits15-8
+    sta $55
+    inx
+    lda $7F0000,x      ; src bits7-0
+    sta $54
+    rep #$20
+    jsr regdstA        ; dst An slot
+    lda $00,x
+    clc
+    adc $52
+    tax                ; dst addr
+    sep #$20
+    lda $55
+    sta $7F0000,x      ; high byte
+    inx
+    lda $54
+    sta $7F0000,x      ; low byte
+    rep #$20
+    lda $54
+    jsr setz_from_a
     lda $40
     clc
     adc #6
