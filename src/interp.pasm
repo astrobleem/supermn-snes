@@ -435,8 +435,11 @@ k67: lda $44
 k68: lda $44
     and #$F1F8
     cmp #$8040            ; or.w Dn,Dn  (opmode 001)
-    bne k69
+    bne k68b
     jmp op_or_w
+k68b: cmp #$8068           ; or.w (d16,An),Dn
+    bne k69
+    jmp op_or_w_d16
 k69: lda $44
     and #$F1FF
     cmp #$1179            ; move.b (xxx).L,(d16,An)
@@ -3833,6 +3836,38 @@ op_movw_dn_dn:         ; move.w Dn,Dn : dst.lo = src.lo ; Z ; PC+=2
     lda $40
     clc
     adc #2
+    sta $40
+    jmp inext
+
+op_or_w_d16:           ; or.w (d16,An),Dn : Dn.lo |= [An+d16].w ; Z ; PC+=4
+    jsr rdw2
+    sta $52            ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                ; An slot
+    lda $00,x
+    clc
+    adc $52
+    tax                ; src addr low16
+    sep #$20
+    lda $7F0000,x      ; bits15-8
+    sta $51
+    inx
+    lda $7F0000,x      ; bits7-0
+    sta $50
+    rep #$20
+    jsr regdst         ; dst Dn slot
+    lda $50            ; word value $51:$50
+    ora $00,x
+    sta $00,x
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #4
     sta $40
     jmp inext
 
