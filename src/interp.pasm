@@ -229,9 +229,13 @@ k18: cmp #$0C39          ; cmpi.b #imm,(xxx).L  (.L = $0C39; .W would be $0C38)
 k18b: pha
     and #$FFF8
     cmp #$0C00           ; cmpi.b #imm,Dn  ($0C00|Dn)
-    bne k18c
+    bne k18b2
     pla
     jmp op_cmpi_b_dn
+k18b2: cmp #$0C80          ; cmpi.l #imm,Dn  ($0C80|Dn)
+    bne k18c
+    pla
+    jmp op_cmpi_l_dn
 k18c: pla
 k19: and #$F1FF
     cmp #$317C
@@ -1551,6 +1555,68 @@ op_cmpib_abs:            ; cmpi.b #imm,(xxx).L : Z=(mem==imm) ; PC += 8
     lda $40
     clc
     adc #8
+    sta $40
+    jmp inext
+
+op_cmpi_l_dn:           ; cmpi.l #imm,Dn : full CCR (Dn - imm32) ; PC += 6
+    jsr rdw2
+    sta $76            ; imm high16
+    jsr rdw4
+    sta $74            ; imm low16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax                ; Dn slot
+    sec
+    lda $00,x
+    sbc $74
+    sta $78            ; result low16
+    lda $02,x
+    sbc $76
+    sta $7A            ; result high16
+    bcs cil_noc        ; 65816 carry set = no borrow
+    lda #$0001
+    sta $6E            ; C (68k borrow) = 1
+    bra cil_z
+cil_noc:
+    stz $6E
+cil_z:
+    lda $78
+    ora $7A
+    bne cil_nz
+    lda #$0001
+    sta $60            ; Z = 1
+    bra cil_n
+cil_nz:
+    stz $60
+cil_n:
+    lda $7A
+    and #$8000
+    beq cil_npos
+    lda #$0001
+    sta $70            ; N = 1
+    bra cil_v
+cil_npos:
+    stz $70
+cil_v:
+    lda $02,x
+    eor $76
+    sta $5C            ; (dest^src) high16
+    lda $02,x
+    eor $7A
+    and $5C
+    and #$8000
+    beq cil_vno
+    lda #$0001
+    sta $72            ; V = 1
+    bra cil_done
+cil_vno:
+    stz $72
+cil_done:
+    lda $40
+    clc
+    adc #6
     sta $40
     jmp inext
 
