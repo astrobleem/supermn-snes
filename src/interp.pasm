@@ -97,8 +97,14 @@ rclr:
     lda #$0007
     sta $7C              ; SR interrupt mask = 7 (IRQs masked during boot)
     stz $88              ; IRQ pending = 0
-    lda #$1800
-    sta $8A              ; vblank IRQ countdown (instr/frame)
+    lda #$7000
+    sta $8A              ; vblank IRQ countdown (instr/frame); ~28k matches MAME 16MHz/57Hz
+    ; NOTE: a prior reset-time bootstrap of ($F00006)=$00F0000A was REMOVED. With the
+    ; corrected VBLANK cadence ($8A=$7000), trap#1 ($0466) now runs to completion and
+    ; itself sets ($F00006) and fabricates slot0's context at $F015C4 (A5=$00F00000),
+    ; exactly as MAME does. The bootstrap made pre-trap#1 ISRs save the boot stack into
+    ; ($F0000A) and corrupted the scheduler; leaving ($F00006)=0 lets $06D8's
+    ; move.l A7,(A6=0) no-op (write to $000000 = ROM, ignored) until trap#1 sets it.
 
 iloop:
     ; ---- vblank IRQ: countdown -> pending; take if mask < 6 (level-6 autovector $6C4)
@@ -106,8 +112,8 @@ iloop:
     dec a
     sta $8A
     bne irq_chk
-    lda #$1800
-    sta $8A              ; reload frame countdown
+    lda #$7000
+    sta $8A              ; reload frame countdown (~28k matches MAME cadence)
     lda #$0001
     sta $88              ; raise vblank pending
 irq_chk:
