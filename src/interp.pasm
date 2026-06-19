@@ -421,8 +421,11 @@ k63: cmp #$0440            ; subi.w #imm,Dn
     bne k64
     jmp op_subi_w
 k64: cmp #$4A40            ; tst.w Dn
-    bne k65
+    bne k64b
     jmp op_tst_w
+k64b: cmp #$4A80           ; tst.l Dn
+    bne k65
+    jmp op_tst_l
 k65: cmp #$4218            ; clr.b (An)+
     bne k65w
     jmp op_clrb_anp
@@ -3040,6 +3043,30 @@ op_subi_w:             ; subi.w #imm,Dn : Dn.lo -= imm ; Z ; PC+=4
     lda $40
     clc
     adc #4
+    sta $40
+    jmp inext
+
+op_tst_l:              ; tst.l Dn : Z=(Dn==0), N=bit31 ; PC+=2
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax
+    lda $00,x
+    ora $02,x
+    jsr setz_from_a
+    lda $02,x
+    and #$8000
+    beq tl_npos
+    lda #$0001
+    sta $70            ; N = 1
+    bra tl_done
+tl_npos:
+    stz $70
+tl_done:
+    lda $40
+    clc
+    adc #2
     sta $40
     jmp inext
 
