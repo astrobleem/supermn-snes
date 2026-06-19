@@ -4437,6 +4437,9 @@ op_movb_d16_d16:       ; move.b (d16,An),(d16,An) : work RAM ; PC+=6
     lda $54
     sta $7F0000,x
     rep #$20
+    lda $54
+    and #$00FF
+    jsr setz_from_a      ; move.b sets Z from the moved byte (was missing -> $06CE bne mis-fell-through)
     lda $40
     clc
     adc #6
