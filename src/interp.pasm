@@ -190,8 +190,18 @@ k8: cmp #$10C0
     bne k9
     jmp op_movb_dn_anp
 k9: cmp #$1080
-    bne k10
+    bne k9b
     jmp op_movb_dn_an
+k9b: cmp #$1100           ; move.b Dn,-(An)  (A masked $F1F8)
+    bne k9c
+    jmp op_movb_dn_predec
+k9c: lda $44
+    and #$F1FF
+    cmp #$113C            ; move.b #imm,-(An)
+    bne k9d
+    jmp op_movb_imm_predec
+k9d: lda $44
+    and #$F1F8
 k10: cmp #$B018
     bne k11
     jmp op_cmpb_anp
@@ -1210,6 +1220,63 @@ op_movb_dn_anp:          ; move.b Dn,(An)+ : dstAn=(11-9), srcDn=(2-0); PC += 2
     lda $40
     clc
     adc #2
+    sta $40
+    jmp inext
+
+op_movb_dn_predec:       ; move.b Dn,-(An) : An-=1; [An]=Dn.b (work RAM); Z ; PC += 2
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax
+    lda $00,x
+    and #$00FF
+    sta $50              ; Dn byte
+    jsr regdstA          ; X = dst An slot
+    lda $00,x
+    dec a
+    sta $00,x            ; An -= 1
+    lda $02,x
+    cmp #$00F0
+    bne mdp_skip
+    lda $00,x
+    tax
+    sep #$20
+    lda $50
+    sta $7F0000,x
+    rep #$20
+mdp_skip:
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #2
+    sta $40
+    jmp inext
+
+op_movb_imm_predec:      ; move.b #imm,-(An) : An-=1; [An]=imm.b ; Z ; PC += 4
+    jsr rdw2
+    and #$00FF
+    sta $50              ; imm byte
+    jsr regdstA          ; X = dst An slot
+    lda $00,x
+    dec a
+    sta $00,x            ; An -= 1
+    lda $02,x
+    cmp #$00F0
+    bne mip_skip
+    lda $00,x
+    tax
+    sep #$20
+    lda $50
+    sta $7F0000,x
+    rep #$20
+mip_skip:
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #4
     sta $40
     jmp inext
 
