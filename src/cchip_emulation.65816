@@ -1,0 +1,97 @@
+; ============================================================================
+; C-Chip Emulation for Superman SNES Port
+; ============================================================================
+; Runs on SA-1 coprocessor. Emulates Taito C-Chip command-response protocol.
+;
+; Mailbox (SA-1 I-RAM):
+;   $3000 : Command byte 1
+;   $3001 : Command byte 2
+;   $3002 : Command byte 3
+;   $3003 : Response byte
+;   $3004 : Status (0=idle, 1=busy, 2=done)
+;   $3005 : Trigger (main CPU writes 1 to start)
+; ============================================================================
+
+.i16
+.a8
+
+; Mailbox equates
+MAILBOX_CMD1    = $3000
+MAILBOX_CMD2    = $3001
+MAILBOX_CMD3    = $3002
+MAILBOX_RESP    = $3003
+MAILBOX_STATUS  = $3004
+MAILBOX_TRIGGER = $3005
+
+STATUS_IDLE  = $00
+STATUS_BUSY  = $01
+STATUS_DONE  = $02
+
+.section "cchip_table" bank 0 slot 0
+
+cchip_table:
+    .byte $4A, $46, $34, $4B  ; Init/reset
+    .byte $40, $00, $00, $4B  ; Input read (type=0)
+    .byte $40, $01, $00, $4B  ; Input read (type=1)
+    .byte $40, $02, $00, $4B  ; Input read (type=2)
+    .byte $40, $03, $00, $4B  ; Input read (type=3)
+    .byte $50, $00, $00, $4B  ; Sound command (type=0)
+    .byte $50, $01, $00, $4B  ; Sound command (type=1)
+    .byte $50, $02, $00, $4B  ; Sound command (type=2)
+    .byte $60, $00, $00, $4B  ; Game state (type=0)
+    .byte $60, $01, $00, $4B  ; Game state (type=1)
+    .byte $60, $02, $00, $4B  ; Game state (type=2)
+    .byte $60, $03, $00, $4B  ; Game state (type=3)
+    .byte $60, $04, $00, $4B  ; Game state (type=4)
+    .byte $60, $05, $00, $4B  ; Game state (type=5)
+    .byte $70, $00, $00, $4B  ; Protection (type=0)
+    .byte $70, $01, $00, $4B  ; Protection (type=1)
+
+cchip_table_end:
+
+; C-Chip emulation main loop
+cchip_main:
+    lda MAILBOX_TRIGGER
+    beq .no_cmd
+    lda #$00
+    sta MAILBOX_TRIGGER
+    lda #STATUS_BUSY
+    sta MAILBOX_STATUS
+    lda MAILBOX_CMD1
+    sta $3010
+    lda MAILBOX_CMD2
+    sta $3011
+    lda MAILBOX_CMD3
+    sta $3012
+    ldx #0
+.search:
+    cpx #64
+    bcc .not_found
+    lda cchip_table, x
+    cmp $3010
+    bne .next
+    inx
+    lda cchip_table, x
+    cmp $3011
+    bne .next2
+    inx
+    lda cchip_table, x
+    cmp $3012
+    bne .next3
+    inx
+    lda cchip_table, x
+    sta MAILBOX_RESP
+    bra .done
+.next:  inx
+.next2: inx
+.next3: inx
+    inx
+    bra .search
+.not_found:
+    lda #$FF
+    sta MAILBOX_RESP
+.done:
+    lda #STATUS_DONE
+    sta MAILBOX_STATUS
+.no_cmd:
+    rts

@@ -1,0 +1,23 @@
+# Superman Arcade → SNES Port
+# Poppy build configuration
+
+.name "superman"
+.platform "snes"
+.version "0.1.0"
+
+# Memory mapping: LoROM, 2MB ROM, 64KB SRAM
+.memory_map "lorom"
+.rom_size 2048
+.ram_size 64
+
+# Entry point
+.entry "src/main.65816"
+
+# Source files
+.sources "src"
+
+# Include paths
+.includes "src/definition"
+
+# SA-1 coprocessor support
+.sa1_enabled true

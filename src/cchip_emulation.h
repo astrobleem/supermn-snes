@@ -1,0 +1,1 @@
+; C-Chip emulation stub
