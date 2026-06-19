@@ -360,8 +360,11 @@ k51: cmp #$4E58            ; unlk An
     bne k52
     jmp op_unlk
 k52: cmp #$48E0            ; movem.l <list>,-(An)
-    bne k53
+    bne k52w
     jmp op_movem_pre
+k52w: cmp #$48A0           ; movem.w <list>,-(An)
+    bne k53
+    jmp op_movem_w_pre
 k53: cmp #$4CD8            ; movem.l (An)+,<list>
     bne k54
     jmp op_movem_post
@@ -2446,6 +2449,52 @@ mp_skip:
     iny
     cpy #$0010
     bne mp_loop
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+
+op_movem_w_pre:          ; movem.w <list>,-(An) : push reg low16s (D0..A7 by mask) ; PC+=4
+    jsr rdw2
+    sta $50              ; mask (bit0=A7..bit15=D0)
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    sta $6C              ; An slot
+    ldy #$0000
+mpw_loop:
+    lda $50
+    lsr a
+    sta $50
+    bcc mpw_skip
+    tya
+    eor #$000F
+    asl a
+    asl a
+    tax                  ; reg slot
+    lda $00,x
+    sta $54              ; reg low16
+    ldx $6C
+    lda $00,x
+    sec
+    sbc #2
+    sta $00,x            ; An -= 2
+    tax                  ; An addr (work RAM $7F)
+    sep #$20
+    lda $55              ; bits15-8
+    sta $7F0000,x
+    inx
+    lda $54              ; bits7-0
+    sta $7F0000,x
+    rep #$20
+mpw_skip:
+    iny
+    cpy #$0010
+    bne mpw_loop
     lda $40
     clc
     adc #4
