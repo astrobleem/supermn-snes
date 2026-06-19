@@ -466,8 +466,11 @@ k65x: pla
 k66: lda $44
     and #$F1F8
     cmp #$2148            ; move.l An,(d16,An)
-    bne k67
+    bne k66b
     jmp op_movl_an_d16
+k66b: cmp #$2140           ; move.l Dn,(d16,An)
+    bne k67
+    jmp op_movl_dn_d16
 k67: lda $44
     and #$FFF8
     cmp #$0800            ; btst #imm,Dn
@@ -4974,6 +4977,49 @@ op_movl_d16_dn:        ; move.l (d16,An),Dn : Dn = [An+d16] (32, work RAM) ; PC+
     lda $54
     ora $52
     jsr setz_from_a    ; move.l sets Z from the 32-bit value
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+
+op_movl_dn_d16:        ; move.l Dn,(d16,An) : [An+d16]=Dn (32, work RAM); Z ; PC+=4
+    jsr rdw2
+    sta $52            ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax                ; src Dn slot
+    lda $00,x
+    sta $54            ; Dn low16
+    lda $02,x
+    sta $56            ; Dn high16
+    jsr regdstA        ; X = dst An slot (bits 11-9)
+    lda $02,x
+    cmp #$00F0
+    bne mldd_skip      ; non-work-RAM -> no-op write
+    lda $00,x
+    clc
+    adc $52
+    tax                ; dst addr
+    sep #$20
+    lda $57
+    sta $7F0000,x      ; bits31-24
+    inx
+    lda $56
+    sta $7F0000,x      ; bits23-16
+    inx
+    lda $55
+    sta $7F0000,x      ; bits15-8
+    inx
+    lda $54
+    sta $7F0000,x      ; bits7-0
+    rep #$20
+mldd_skip:
+    lda $54
+    ora $56
+    jsr setz_from_a
     lda $40
     clc
     adc #4
