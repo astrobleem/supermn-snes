@@ -13,9 +13,15 @@ boots Superman all the way to its live per-frame game loop on real SNES hardware
 — past the cooperative scheduler, the C-Chip GWK routine download, and full init;
 both scheduler tasks run (`tmask=$0003`, matches MAME), the per-frame frame counter
 increments, and work RAM evolves every frame. The interpret-cold/transpile-hot
-hybrid is fully de-risked on the "cold" side. **Next: video plumbing** — the game
-is running blind because 68K writes to the video/sprite hardware banks are still
-no-op'd (see `VIDEO_PLUMBING.md`). Not yet started: bulk transpilation, audio.
+hybrid is fully de-risked on the "cold" side. **Video plumbing is now live**: the
+interpreter mirrors every 68K video-bank write into SNES `$7E` shadow RAM and, once
+per game-frame, renders to the real PPU — **palette → CGRAM is byte-exact (100%)** and
+**arcade OBJ sprites + the BG1 playfield render on hardware** (tile decode validated
+128/128 vs the Python oracle). The game is no longer blind. Remaining video polish:
+OBJ tile dedup (currently 64-sprite cap, no dedup) and a proper LRU tile cache /
+per-frame decode cap (BG has a direct-mapped 64-slot cache); pixel-diff vs MAME at a
+real-gameplay frame is blocked by interpreter speed (it can't reach gameplay frame
+~3000 cheaply). See `VIDEO_PLUMBING.md`. Not yet started: bulk transpilation, audio.
 
 ## Workstream status
 

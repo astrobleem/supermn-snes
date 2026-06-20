@@ -9,12 +9,18 @@ from pathlib import Path
 
 INTERP = Path("src/interp.bin").read_bytes()        # 32KB ($8000-$FFFF)
 IMG = Path("data/superman_m68k.bin").read_bytes()   # 512KB 68K program
+GFX = Path("tools/mame-trace/gfx1.bin").read_bytes() # 2MB arcade tile ROM (16x16 planar 4bpp)
 assert len(INTERP) == 0x8000, len(INTERP)
 assert len(IMG) == 0x80000, len(IMG)
+assert len(GFX) == 0x200000, len(GFX)
 
-ROM = bytearray(0x100000)                            # 1MB HiROM
+# 4MB HiROM: interp @ $C0:8000, 68K image @ $C1:0000 (file $10000), arcade tile ROM
+# gfx1 @ $C9:0000 (file $90000) so the runtime tile decoder reads gfx[code*1024+off]
+# at flat CPU address $C90000 + code*1024.
+ROM = bytearray(0x400000)                            # 4MB HiROM
 ROM[0x8000:0x10000] = INTERP                         # interpreter + vectors @ $00/$C0:8000
 ROM[0x10000:0x90000] = IMG                           # 68K image @ $C1:0000 (flat $C10000+A)
+ROM[0x90000:0x290000] = GFX                          # arcade tiles @ $C9:0000 (flat $C90000+off)
 
 # HiROM cartridge header at file $FFC0 (= CPU $00:FFC0)
 H = 0xFFC0
@@ -22,7 +28,7 @@ title = b"SUPERMAN INTERP H>SNES"[:21].ljust(21, b" ")
 ROM[H:H+21] = title
 ROM[H+0x15] = 0x31      # map mode: HiROM + FastROM
 ROM[H+0x16] = 0x00      # cart type: ROM only
-ROM[H+0x17] = 0x0A      # ROM size: 1MB
+ROM[H+0x17] = 0x0C      # ROM size: 4MB (2^12 KB)
 ROM[H+0x18] = 0x00      # SRAM size: none
 ROM[H+0x19] = 0x01      # country
 ROM[H+0x1A] = 0x33      # licensee

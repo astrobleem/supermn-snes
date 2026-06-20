@@ -12,6 +12,29 @@
 ; =============================================================================
 .snes
 INIDISP=$2100
+OBSEL=$2101
+OAMADDL=$2102
+BGMODE=$2105
+BG1SC=$2107
+BG12NBA=$210B
+BG1HOFS=$210D
+BG1VOFS=$210E
+VMAIN=$2115
+VMADDL=$2116
+VMADDH=$2117
+CGADD=$2121
+CGDATA=$2122
+TM=$212C
+NMITIMEN=$4200
+HVBJOY=$4212
+MDMAEN=$420B
+DMAP0=$4300
+BBAD0=$4301
+A1T0L=$4302
+A1T0H=$4303
+A1B0=$4304
+DAS0L=$4305
+DAS0H=$4306
 SLICE_BASE=$3E00
 
 .bank 0
@@ -51,7 +74,7 @@ wramclr:
     lda #$0001
     sta $7E              ; single-step ON
     stz $A0              ; go-flag clear
-    jmp test_idle
+    jmp test_or_vid      ; TESTFLAG 1 -> single-step; TESTFLAG 2 -> video render test
 notest:
     ; fast-start at $4008; preset ALL 68K regs to MAME's exact state there
     ; (ground truth, regs_at_4008.log): D0=$3FFE D6=$FFFF D7=$4
@@ -99,6 +122,7 @@ rclr:
     stz $88              ; IRQ pending = 0
     lda #$7000
     sta $8A              ; vblank IRQ countdown (instr/frame); ~28k matches MAME 16MHz/57Hz
+    jsr vid_init         ; clear $7E shadow/staging, screen off, TM=0 (production)
     ; NOTE: a prior reset-time bootstrap of ($F00006)=$00F0000A was REMOVED. With the
     ; corrected VBLANK cadence ($8A=$7000), trap#1 ($0466) now runs to completion and
     ; itself sets ($F00006) and fabricates slot0's context at $F015C4 (A5=$00F00000),
@@ -107,6 +131,11 @@ rclr:
     ; move.l A7,(A6=0) no-op (write to $000000 = ROM, ignored) until trap#1 sets it.
 
 iloop:
+    ; ---- Stage 2+: real SNES VBLANK rising edge -> PPU flush (video output).
+    ; Independent of the simulated 68K IRQ below; just mirrors current shadow
+    ; state to the PPU once per real frame. Interp is ~100x slower than realtime
+    ; so it polls HVBJOY many times per frame and reliably catches the edge.
+    ; (BISECT: iloop-top hook removed; flush now happens at the $8A reload below.)
     ; ---- vblank IRQ: countdown -> pending; take if mask < 6 (level-6 autovector $6C4)
     lda $8A
     dec a
@@ -116,6 +145,7 @@ iloop:
     sta $8A              ; reload frame countdown (~28k matches MAME cadence)
     lda #$0001
     sta $88              ; raise vblank pending
+    jsr vid_frame        ; game-frame boundary: rebuild CGRAM from shadow + DMA
 irq_chk:
     lda $88
     beq irq_none
@@ -2521,19 +2551,29 @@ op_movl_anp_anp:         ; move.l (An)+,(An)+ : copy 4 bytes (I/O-aware src) ; P
     sta $00,x            ; src An += 4
     jsr regdstA          ; dst An slot
     lda $02,x
-    sta $5E              ; dst high16 (gate: only $00F0 work RAM is real; $B00000 etc = I/O)
+    sta $5E              ; dst high16
     lda $00,x
     sta $6A              ; dst addr (running)
     clc
     adc #4
     sta $00,x            ; dst An += 4
+    lda $5E
+    jsr map_snes         ; -> $C2 mode (0=$7F/1=$7E/2=noop), $6A = SNES offset
     ldy #$0000
 mll_loop:
     jsr readbyte         ; reads from $52(top16)/$54(low16); ROM or RAM
     sta $50              ; byte
-    lda $5E
-    cmp #$00F0
-    bne mll_nowrite      ; dst is I/O (sprite RAM $B00000 etc.) -> no-op the write
+    lda $C2
+    beq mll_work         ; mode 0 -> work RAM $7F
+    cmp #$0001
+    bne mll_nowrite      ; mode 2 -> no-op
+    ldx $6A              ; mode 1 -> shadow RAM $7E
+    sep #$20
+    lda $50
+    sta $7E0000,x        ; mirror byte into video shadow
+    rep #$20
+    bra mll_nowrite
+mll_work:
     ldx $6A
     sep #$20
     lda $50
@@ -3018,17 +3058,32 @@ op_movw_anp_an:         ; move.w (An)+,(An) : [dstAn]=[srcAn] (ROM-aware src, ga
     sta $50
     rep #$20
     jsr regdstA          ; X = dst An slot (bits 11-9)
-    lda $02,x
-    cmp #$00F0
-    bne mwaa_skip        ; dst not work RAM (sprite/I-O) -> no-op
     lda $00,x
-    tax                  ; dst addr
+    sta $6A              ; dst lo16
+    lda $02,x
+    jsr map_snes         ; -> $C2 mode, $6A = SNES offset
+    lda $C2
+    cmp #$0002
+    beq mwaa_skip        ; no-op
+    cmp #$0001
+    beq mwaa_shadow      ; shadow $7E
+    ldx $6A              ; work RAM $7F
     sep #$20
     lda $51
     sta $7F0000,x        ; high byte
     inx
     lda $50
     sta $7F0000,x        ; low byte
+    rep #$20
+    bra mwaa_skip
+mwaa_shadow:
+    ldx $6A
+    sep #$20
+    lda $51
+    sta $7E0000,x        ; high byte (video shadow)
+    inx
+    lda $50
+    sta $7E0000,x        ; low byte
     rep #$20
 mwaa_skip:
     lda $50
@@ -5561,10 +5616,16 @@ op_movw_dn_abs:        ; move.w Dn,(xxx).L : work RAM ($F0) write; else I/O no-o
     tax
     lda $00,x
     sta $50
+    lda $54
+    sta $6A              ; dst lo16
     lda $52
-    cmp #$00F0
-    bne mwa_io
-    ldx $54
+    jsr map_snes         ; -> $C2 mode, $6A = SNES offset
+    lda $C2
+    cmp #$0002
+    beq mwa_io           ; no-op (e.g. $30/$40/$60 ctrl strobes)
+    cmp #$0001
+    beq mwa_shadow       ; shadow $7E
+    ldx $6A              ; work RAM $7F
     lda $50
     xba
     sep #$20
@@ -5574,6 +5635,19 @@ op_movw_dn_abs:        ; move.w Dn,(xxx).L : work RAM ($F0) write; else I/O no-o
     lda $50
     sep #$20
     sta $7F0000,x
+    rep #$20
+    bra mwa_io
+mwa_shadow:
+    ldx $6A
+    lda $50
+    xba
+    sep #$20
+    sta $7E0000,x        ; high byte (video shadow)
+    rep #$20
+    inx
+    lda $50
+    sep #$20
+    sta $7E0000,x        ; low byte
     rep #$20
 mwa_io:
     lda $40
@@ -10650,6 +10724,1113 @@ irq:
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
+
+; =============================================================================
+; VIDEO PLUMBING routines, placed in free bank space ($F800+) so adding them does
+; NOT shift the main code (a mid-file insertion can push a relative branch out of
+; range). All are jsr-called, so position within the bank is irrelevant.
+;
+;  map_snes — destination-bank dispatch for stores. The live game writes hardware
+;  video banks via only op_movl_anp_anp / op_movw_anp_an / op_movw_dn_abs (Stage-0
+;  capture, video_writes.log). We mirror them into SNES bank $7E shadow RAM:
+;    $B0 = palette (xRGB555 4KB) -> $7E:2000+(lo&$0FFF)
+;    $D0 = sprite Y/scroll/ctrl  -> $7E:3000+(lo&$0FFF)
+;    $E0 = sprite code+X (16KB)  -> $7E:4000+(lo&$3FFF)  (bases ORA-aligned)
+;  in: A=dst hi16, $6A=dst lo16 ; out: $C2=mode(0=$7F work/1=$7E shadow/2=noop),
+;  $6A=SNES offset ; preserves $50/$51 and X ; 16-bit A.
+; =============================================================================
+.org $F800
+SHADOW_PAL=$2000
+SHADOW_D0=$3000
+SHADOW_COD=$4000
+STAGING_CGRAM=$8000
+map_snes:
+    cmp #$00F0
+    bne ms_b0
+    stz $C2              ; mode 0: work RAM $7F, offset already = lo16
+    rts
+ms_b0:
+    cmp #$00B0
+    bne ms_e0
+    lda $6A
+    and #$0FFF
+    ora #SHADOW_PAL
+    sta $6A
+    bra ms_shadow
+ms_e0:
+    cmp #$00E0
+    bne ms_d0
+    lda $6A
+    and #$3FFF
+    ora #SHADOW_COD
+    sta $6A
+    bra ms_shadow
+ms_d0:
+    cmp #$00D0
+    bne ms_noop
+    lda $6A
+    and #$0FFF
+    ora #SHADOW_D0
+    sta $6A
+    bra ms_shadow
+ms_noop:
+    lda #$0002           ; mode 2: unknown I/O -> no-op
+    sta $C2
+    rts
+ms_shadow:
+    lda #$0001           ; mode 1: shadow RAM $7E
+    sta $C2
+    rts
+
+; ppu_build — convert shadow palette ($7E:2000) -> CGRAM staging ($7E:8000).
+; Runs once per simulated game-frame (at the $8A reload), not per real vblank.
+ppu_build:
+    php
+    rep #$30
+    ldx #$0000
+pf_cg:
+    lda $7E2000,x        ; shadow palette word (byte-swapped: hi | lo<<8)
+    xba                  ; -> W (arcade xRGB555)
+    jsr snes_color       ; -> A = SNES xBGR555
+    sta $7E8000,x        ; CGRAM staging (LE byte order = CGDATA write order)
+    inx
+    inx
+    cpx #$0200           ; 256 colors * 2 bytes
+    bne pf_cg
+    plp
+    rts
+
+; ppu_dma_flush — DMA prebuilt CGRAM staging -> CGRAM + screen on (cheap, vblank).
+ppu_dma_flush:
+    php
+    sep #$20
+    stz CGADD
+    stz DMAP0            ; DMA mode 0: A-bus -> single B reg
+    lda #$22
+    sta BBAD0            ; B dest = $2122 CGDATA
+    stz A1T0L
+    lda #$80
+    sta A1T0H            ; A src lo16 = $8000
+    lda #$7E
+    sta A1B0             ; A src bank = $7E
+    stz DAS0L
+    lda #$02
+    sta DAS0H            ; length = 512
+    lda #$01
+    sta MDMAEN
+    lda #$0F
+    sta INIDISP          ; screen on
+    plp
+    rts
+
+; snes_color: A = arcade xRGB555 -> A = SNES xBGR555. Clobbers $C6/$C8. 16-bit A.
+; The leading rep #$30 is REQUIRED: it tells the assembler M is 16-bit here so the
+; `and #$....` immediates assemble as 3-byte (16-bit) operands. Without it Poppy
+; inherits the preceding routine's `sep #$20` state and emits 8-bit immediates,
+; which the CPU (running 16-bit) misreads -> the whole routine desyncs.
+snes_color:
+    rep #$30
+    sta $C6
+    and #$001F           ; arcade B
+    xba
+    asl a
+    asl a                ; B<<10
+    sta $C8
+    lda $C6
+    and #$03E0           ; G in place
+    ora $C8
+    sta $C8
+    lda $C6
+    xba                  ; W>>8 -> low byte
+    and #$00FF
+    lsr a
+    lsr a                ; W>>10 = arcade R
+    and #$001F
+    ora $C8
+    rts
+
+; vid_init — production reset: clear $7E shadow+staging, screen setup. (jsr-called
+; from reset so it doesn't shift main code.)
+vid_init:
+    php
+    rep #$30
+    stz $C0
+    ldx #$2000           ; clear shadow + staging $7E:2000-$7E:9FFE
+viclr:
+    stz $7E0000,x
+    inx
+    inx
+    cpx #$A000
+    bne viclr
+    sep #$20
+    stz TM               ; no layers yet (Stage 2 shows backdrop only)
+    rep #$30
+    plp
+    rts
+
+; vid_frame — once per simulated game-frame (called at the $8A reload): rebuild the
+; CGRAM image from shadow and DMA it. DMA happens at the game-frame boundary (not
+; strictly in vblank): the image is static for ~hundreds of real frames between
+; game-frames, so any single mid-frame CGRAM glitch is imperceptible.
+vid_frame:
+    jsr ppu_build
+    ; Only build sprites once the game is alive (scheduler tmask $F00002 == $0003,
+    ; byte-swapped $0300). During boot the shadow holds garbage and the heavy OBJ
+    ; build would cripple the (already slow) boot.
+    lda $7F0002
+    cmp #$0300
+    bne vf_noobj
+    jsr vid_bg           ; build + upload BG1 playfield from shadow ($E00800/$E00C00)
+    jsr vid_obj          ; build + upload OBJ sprites from shadow ($E0/$D0)
+vf_noobj:
+    jsr ppu_dma_flush
+    rts
+
+; decode_tile: $C4 = arcade tile code (14-bit) -> four SNES 4bpp 8x8 tiles at
+; $7E:8400 (128 bytes, quad order tl,tr,bl,br = offsets 0,32,64,96).
+; The Taito 16x16 planar layout stores each row's plane byte IDENTICALLY to SNES
+; 4bpp (bit 7-col = pixel col, plane p in consecutive bytes), so decode is a pure
+; byte rearrangement. For pixel-row y (0..15), half h (0=left x0-7,1=right x8-15):
+;   src 4 plane bytes = gfx[base + Yb(y) + h*32 .. +3],  base = $C90000 + code*128
+;   Yb(y) = y*4 (y<8) else 64+(y-8)*4
+;   dst SNES tile = quad (h + (y>=8)*2), row (y&7): plane0/1 at row*2, plane2/3 at 16+row*2.
+decode_tile:
+    php
+    rep #$30
+    lda $C4              ; gfx byte base = $C90000 + code*128 (code<<7)
+    sta $D0
+    stz $D2
+    ldy #$0007
+dt_shl:
+    asl $D0
+    rol $D2
+    dey
+    bne dt_shl
+    lda $D2
+    clc
+    adc #$00C9
+    sta $D2              ; $D0/$D1/$D2 = 24-bit gfx pointer
+    stz $C6              ; y = 0
+dt_y:
+    lda $C6              ; Yb -> $CA
+    cmp #$0008
+    bcc dt_ylt8
+    sec
+    sbc #$0008
+    asl a
+    asl a
+    clc
+    adc #$0040
+    bra dt_yb
+dt_ylt8:
+    asl a
+    asl a
+dt_yb:
+    sta $CA
+    lda $C6
+    and #$0007
+    asl a
+    sta $CC              ; outrow*2
+    lda $C6              ; quadbaseY (0 for rows 0-7, 64 for rows 8-15)
+    cmp #$0008
+    bcc dt_q0
+    lda #$0040
+    bra dt_qs
+dt_q0:
+    lda #$0000
+dt_qs:
+    sta $CE
+    ; --- h=0 (left quad) ---
+    ldy $CA              ; src byte0 = Yb
+    lda $CE
+    clc
+    adc $CC
+    sta $D4              ; dst plane0/1 offset
+    clc
+    adc #$0010
+    sta $D6              ; dst plane2/3 offset
+    jsr dt_copy4
+    ; --- h=1 (right quad) ---
+    lda $CA
+    clc
+    adc #$0020
+    tay                  ; src byte0 = Yb+32
+    lda $CE
+    clc
+    adc #$0020
+    adc $CC
+    sta $D4
+    clc
+    adc #$0010
+    sta $D6
+    jsr dt_copy4
+    lda $C6
+    inc a
+    sta $C6
+    cmp #$0010
+    bne dt_y
+    plp
+    rts
+
+; dt_copy4: copy 4 source plane bytes gfx[$D0+Y .. +3] into the SNES tile with the
+; plane order REVERSED (SNES plane p = Taito source plane 3-p; this is the net of
+; decode_16x16's `<<(3-p)` and pack8's `>>p`). Dst: SNES plane0/1 at $D4/$D4+1,
+; plane2/3 at $D6/$D6+1. Y = src byte0 (16-bit). Returns in 16-bit mode.
+dt_copy4:
+    sep #$20
+    ldx $D6
+    inx                  ; X = $D6+1 (SNES plane3)
+    lda [$D0],y          ; src plane0 -> SNES plane3
+    sta $7E8400,x
+    dex                  ; X = $D6 (SNES plane2)
+    iny
+    lda [$D0],y          ; src plane1 -> SNES plane2
+    sta $7E8400,x
+    ldx $D4
+    inx                  ; X = $D4+1 (SNES plane1)
+    iny
+    lda [$D0],y          ; src plane2 -> SNES plane1
+    sta $7E8400,x
+    dex                  ; X = $D4 (SNES plane0)
+    iny
+    lda [$D0],y          ; src plane3 -> SNES plane0
+    sta $7E8400,x
+    rep #$30
+    rts
+
+; =============================================================================
+; vid_obj — build the SNES OBJ frame from the shadowed arcade sprite state and
+; upload it. Ports tools/build_snes_full_scene.py's OBJ path. Shadow sources:
+;   code[i]   = word  $7E:4000 + 2i   ($E00000)  : tile(0-13) | flipX(15) | flipY(14)
+;   xcolor[i] = word  $7E:4400 + 2i   ($E00400)  : X(0-8 signed) | bank(11-15)
+;   y[i]      = byte  $7E:3000 + 2i   ($D00000)  : Y low
+; Staging: OAM $7E:8600 (544), OBJ tile VRAM $7E:B000 (16-wide grid), bank->slot
+; table $7E:8580 (32). OBJ palettes -> CGRAM staging $7E:8100+ (slot*32). Caps at
+; 64 sprites / 8 palette banks (plenty for one frame; the rest are dropped).
+; DP loop vars $E0-$F8 (clear of decode_tile/snes_color scratch $C4-$D6).
+; =============================================================================
+OAMSTG=$8600            ; $7E OAM staging (lo 512 + hi 32)
+OBJVRAM=$B000           ; $7E OBJ tile VRAM staging (16-wide grid)
+BANKTBL=$8580           ; $7E bank(0-31)->palslot table (32 bytes)
+vid_obj:
+    php
+    rep #$30
+    ; --- init OAM staging: all 128 sprites Y=$F0 (off), attrs 0; hi-table 0 ---
+    ldx #$0000
+voi_oami:
+    stz $7E8600,x        ; X=0, Y=0 (fixed below)
+    inx
+    inx
+    cpx #$0220
+    bne voi_oami
+    sep #$20
+    ldx #$0001
+voi_yoff:
+    lda #$F0
+    sta $7E8600,x        ; sprite (X-1)/4 Y byte = $F0
+    rep #$30
+    txa
+    clc
+    adc #$0004
+    tax
+    sep #$20
+    cpx #$0201           ; X = 1,5,..,509 (128 sprites) -> stop at 513
+    bne voi_yoff
+    ; --- init bank->slot table = $FF ---
+    rep #$30
+    ldx #$0000
+voi_bti:
+    sep #$20
+    lda #$FF
+    sta $7E8580,x
+    rep #$30
+    inx
+    cpx #$0020
+    bne voi_bti
+    ; counters
+    stz $E0              ; i = 0 (shadow index, steps 0,2,..)
+    stz $E2              ; n = 0 (output sprite count)
+    stz $E6              ; palslot counter
+voi_loop:
+    ; code = shadow word $7E:4000+i (byte-swapped back to arcade order via xba)
+    ldx $E0
+    lda $7E4000,x
+    xba
+    sta $F6
+    and #$3FFF
+    bne vchk1
+    jmp voi_next         ; code&$3FFF==0 -> skip
+vchk1:
+    lda $F6
+    cmp #$FFFF
+    bne vchk2
+    jmp voi_next
+vchk2:
+    ldx $E0
+    lda $7E4400,x
+    xba
+    sta $E8              ; xcolor word
+    ldx $E0
+    inx
+    sep #$20
+    lda $7E3000,x        ; arcade low byte = Y
+    rep #$30
+    and #$00FF
+    sta $EC              ; sy
+    bne vchk3
+    jmp voi_next         ; sy==0 -> skip
+vchk3:
+    cmp #$00F0
+    bcc vchk4
+    jmp voi_next         ; sy>=240 -> skip
+vchk4:
+    lda $E8              ; sx = (xcolor&$FF) - (xcolor&$100)
+    and #$00FF
+    sta $EA
+    lda $E8
+    and #$0100
+    beq vchk5
+    lda $EA
+    sec
+    sbc #$0100
+    sta $EA
+vchk5:
+    lda $EA
+    clc
+    adc #$0010
+    bpl vchk6
+    jmp voi_next         ; sx < -16 -> skip
+vchk6:
+    lda $E8              ; bank = (xcolor>>11)&$1F
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    and #$001F
+    sta $EE
+    jsr obj_palslot      ; -> $F0 palslot (assign+fill if new)
+    lda $F6
+    and #$3FFF
+    sta $C4
+    jsr decode_tile      ; -> $7E:8400
+    jsr obj_place        ; quads -> OBJVRAM grid; $E4 = tile T
+    jsr obj_oam          ; OAM entry n
+    lda $E2
+    inc a
+    sta $E2
+    cmp #$0040           ; cap 64 sprites
+    beq voi_done
+voi_next:
+    lda $E0
+    clc
+    adc #$0002
+    sta $E0
+    cmp #$0400           ; 512 sprites * 2
+    beq voi_done
+    jmp voi_loop
+voi_done:
+    jsr obj_upload
+    plp
+    rts
+
+; obj_palslot: in $EE=bank(0-31). out $F0=palslot(0-7). Assigns a new OBJ palette
+; slot on first use of a bank (cap 8) and copies that bank's 16 arcade colors,
+; converted, into the CGRAM staging OBJ region ($7E:8100 + slot*32 = CGRAM 128+).
+obj_palslot:
+    sep #$20
+    ldx $EE
+    lda $7E8580,x        ; existing slot?
+    cmp #$FF
+    bne ops_have
+    ; new bank
+    rep #$30
+    lda $E6              ; next slot
+    cmp #$0008
+    bcc ops_assign
+    sep #$20
+    stz $F0              ; out of slots -> use palette 0
+    rep #$30
+    rts
+ops_assign:
+    sep #$20
+    lda $E6
+    sta $7E8580,x        ; bank -> slot
+    sta $F0
+    rep #$30
+    inc $E6
+    jsr obj_pal_fill
+    rts
+ops_have:
+    sta $F0
+    rep #$30
+    rts
+
+; obj_pal_fill: copy 16 colors of arcade bank $EE -> CGRAM OBJ slot $F0.
+;   src word = $7E:2000 + bank*32 + e*2 ; dst staging = $7E:8100 + slot*32 + e*2
+obj_pal_fill:
+    rep #$30
+    lda $EE              ; src offset = $2000 + bank*32
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$2000
+    sta $D0              ; src ptr lo16 (bank $7E in $D2)
+    lda $F0              ; dst offset = $8100 + slot*32
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$8100
+    sta $D4              ; dst ptr lo16 (bank $7E in $D6)
+    lda #$007E
+    sta $D2
+    sta $D6
+    ldy #$0000
+opf_l:
+    lda [$D0],y          ; arcade color word (shadow, byte-swapped)
+    xba
+    jsr snes_color
+    sta [$D4],y
+    iny
+    iny
+    cpy #$0020           ; 16 colors
+    bne opf_l
+    rts
+
+; obj_place: copy the 4 decoded quads ($7E:8400) into the OBJ VRAM grid for sprite
+; n ($E2). 16-wide tile grid: T = 2*(n&7) + 32*(n>>3); quads -> T, T+1, T+16, T+17.
+; Sets $E4 = T. Uses copy ptrs $D0-$D2 (src) / $D4-$D6 (dst), free after decode_tile.
+obj_place:
+    rep #$30
+    lda $E2
+    and #$0007
+    asl a                ; 2*(n&7)
+    sta $E4
+    lda $E2
+    lsr a
+    lsr a
+    lsr a                ; n>>3
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a                ; (n>>3)*32
+    clc
+    adc $E4
+    sta $E4              ; T
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a                ; T*32
+    clc
+    adc #OBJVRAM         ; dst base = $B000 + T*32
+    sta $F2              ; (saved dst base)
+    lda #$007E
+    sta $D2              ; src bank $7E
+    sta $D6              ; dst bank $7E
+    ; quad0 -> +0
+    lda #$8400
+    sta $D0
+    lda $F2
+    sta $D4
+    jsr copy32
+    ; quad1 -> +32
+    lda #$8420
+    sta $D0
+    lda $F2
+    clc
+    adc #$0020
+    sta $D4
+    jsr copy32
+    ; quad2 -> +512
+    lda #$8440
+    sta $D0
+    lda $F2
+    clc
+    adc #$0200
+    sta $D4
+    jsr copy32
+    ; quad3 -> +544
+    lda #$8460
+    sta $D0
+    lda $F2
+    clc
+    adc #$0220
+    sta $D4
+    jsr copy32
+    rts
+
+copy32:                  ; copy 32 bytes $7E:($D0) -> $7E:($D4) (16-bit words)
+    ldy #$0000
+c32l:
+    lda [$D0],y
+    sta [$D4],y
+    iny
+    iny
+    cpy #$0020
+    bne c32l
+    rts
+
+; obj_oam: write OAM entry n ($E2) from sx($EA) sy($EC) code($F6) palslot($F0) T($E4).
+obj_oam:
+    rep #$30
+    ; X = $8600 + n*4 (OAM lo entry)
+    lda $E2
+    asl a
+    asl a
+    clc
+    adc #OAMSTG
+    tax
+    ; xlow = sx & $FF
+    lda $EA
+    sep #$20
+    sta $7E0000,x        ; byte0 = X low
+    rep #$30
+    ; py = 224 - ((sy+14) & $FF)
+    lda $EC
+    clc
+    adc #$000E
+    and #$00FF
+    sta $F2
+    lda #$00E0           ; 224
+    sec
+    sbc $F2
+    inx
+    sep #$20
+    sta $7E0000,x        ; byte1 = Y
+    rep #$30
+    ; tile low = T & $FF
+    lda $E4
+    inx
+    sep #$20
+    sta $7E0000,x        ; byte2 = tile low
+    rep #$30
+    ; attr = $30 | (palslot<<1) | ((T>>8)&1) | flip
+    lda $F0
+    asl a
+    ora #$0030
+    sta $F2
+    lda $E4              ; (T>>8)&1
+    xba
+    and #$0001
+    ora $F2
+    sta $F2
+    lda $F6              ; flip bits from code: bit15 X, bit14 Y
+    and #$8000
+    beq oo_nfx
+    lda $F2
+    ora #$0040
+    sta $F2
+oo_nfx:
+    lda $F6
+    and #$4000
+    beq oo_nfy
+    lda $F2
+    ora #$0080
+    sta $F2
+oo_nfy:
+    lda $F2
+    inx
+    sep #$20
+    sta $7E0000,x        ; byte3 = attr
+    rep #$30
+    ; hi-table: byte $8800 + (n>>2), shift (n&3)*2, val (xsign|2)<<shift
+    lda $E2
+    lsr a
+    lsr a                ; n>>2
+    clc
+    adc #$8800
+    tax                  ; hi byte addr offset
+    lda $EA              ; sx<0 ? xsign=1
+    and #$8000
+    beq oo_xpos
+    lda #$0001
+    bra oo_xs
+oo_xpos:
+    lda #$0000
+oo_xs:
+    ora #$0002           ; size = large (16x16)
+    sta $F2              ; (xsign|2)
+    ; shift = (n&3)*2
+    lda $E2
+    and #$0003
+    asl a
+    tay                  ; shift count
+    lda $F2
+oo_shl:
+    cpy #$0000
+    beq oo_shd
+    asl a
+    dey
+    bra oo_shl
+oo_shd:
+    sta $F2              ; shifted bits
+    sep #$20
+    lda $7E0000,x
+    ora $F2
+    sta $7E0000,x        ; OR into hi-table byte
+    rep #$30
+    rts
+
+; obj_upload: DMA OBJ tiles ($7E:B000, 8KB) -> VRAM word $4000, OAM ($7E:8600, 544)
+; -> OAM, set OBSEL + enable OBJ in TM.
+obj_upload:
+    sep #$20
+    lda #$80
+    sta VMAIN
+    stz VMADDL
+    lda #$40
+    sta VMADDH           ; VRAM word $4000
+    lda #$01
+    sta DMAP0            ; mode 1 (VMDATAL/H)
+    lda #$18
+    sta BBAD0
+    stz A1T0L
+    lda #$B0
+    sta A1T0H            ; src $B000
+    lda #$7E
+    sta A1B0
+    stz DAS0L
+    lda #$20
+    sta DAS0H            ; 8192 bytes
+    lda #$01
+    sta MDMAEN
+    ; OAM
+    stz OAMADDL
+    stz $2103
+    stz DMAP0            ; mode 0
+    lda #$04
+    sta BBAD0
+    stz A1T0L
+    lda #$86
+    sta A1T0H            ; src $8600
+    lda #$7E
+    sta A1B0
+    lda #$20
+    sta DAS0L
+    lda #$02
+    sta DAS0H            ; 544 bytes
+    lda #$01
+    sta MDMAEN
+    lda #$02
+    sta OBSEL            ; OBJ base word $4000, 8/16
+    lda #$11
+    sta TM               ; BG1 + OBJ
+    rep #$30
+    rts
+
+; =============================================================================
+; vid_bg — build BG1 (the X1-001 type0 playfield) from shadow tilemap codes
+; ($E00800 -> $7E:4800) + colors ($E00C00 -> $7E:4C00). 16 cols x 32 offs of 16x16
+; cells -> a 64x32 SNES BG1 tilemap. Tile dedup via a direct-mapped 64-slot cache
+; (slot = code & $3F; decoded-flag at $7E:8900). BG tiles are contiguous (slot s ->
+; SNES tiles s*4..s*4+3), so decode_tile's output copies straight in. BG palettes
+; -> CGRAM 0-127. Staging: tiles $7E:D000 (8KB), tilemap $7E:F000 (4KB).
+; =============================================================================
+BGTILE=$D000
+BGMAP=$F000
+vid_bg:
+    php
+    rep #$30
+    ldx #$0000           ; clear tilemap staging (4KB)
+vb_mclr:
+    stz $7EF000,x
+    inx
+    inx
+    cpx #$1000
+    bne vb_mclr
+    ldx #$0000           ; clear decoded-flags (64) + BG bank table (32)->$FF
+vb_dclr:
+    sep #$20
+    stz $7E8900,x
+    lda #$FF
+    sta $7E8940,x
+    rep #$30
+    inx
+    cpx #$0040
+    bne vb_dclr
+    stz $E6              ; BG palslot counter
+    stz $DC              ; BG tile-slot count*2 (sequential dedup)
+    stz $E0              ; i*2 = 0
+vb_loop:
+    ldx $E0
+    lda $7E4800,x        ; tilemap code (byte-swapped)
+    xba
+    sta $F6
+    and #$3FFF
+    bne vb_c1
+    jmp vb_next          ; empty cell
+vb_c1:
+    sta $E4              ; c = code & $3FFF
+    ldx $E0
+    lda $7E4C00,x        ; color word
+    xba
+    sta $E8
+    jsr bg_slot          ; sequential dedup: $DA = tile slot (decodes if new)
+    rep #$30
+    ; bank = (color>>11)&$1F ; bgpal = bank->slot
+    lda $E8
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    and #$001F
+    sta $EE
+    jsr bg_palslot       ; -> $F0 = bgpal
+    ; gx = col*2 + (offs&1) ; gy = offs>>1   (i = $E0>>1 ; col=i>>5 ; offs=i&31)
+    lda $E0
+    lsr a                ; i
+    sta $F2
+    and #$001F           ; offs
+    sta $F4
+    lsr a
+    sta $EC              ; gy = offs>>1
+    lda $F2
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a                ; col = i>>5
+    asl a                ; col*2
+    sta $F2
+    lda $F4
+    and #$0001
+    clc
+    adc $F2
+    sta $EA              ; gx = col*2 + (offs&1)   (reuse $EA now=gx)
+    ; 4 entries: (dx,dy,tk): (0,0,0)(1,0,1)(0,1,2)(1,1,3)
+    ; base tilenum = slot*4 (slot from bg_slot in $DA)
+    lda $DA
+    asl a
+    asl a
+    sta $F8              ; base tile = slot*4
+    ; tl
+    lda $EA
+    asl a
+    sta $D0              ; tx = gx*2
+    lda $EC
+    asl a
+    sta $D2              ; ty = gy*2
+    lda $F8
+    jsr bg_ent
+    ; tr
+    inc $D0
+    lda $F8
+    inc a
+    jsr bg_ent
+    ; br
+    inc $D2
+    lda $F8
+    clc
+    adc #$0003
+    jsr bg_ent
+    ; bl
+    dec $D0
+    lda $F8
+    clc
+    adc #$0002
+    jsr bg_ent
+vb_next:
+    lda $E0
+    clc
+    adc #$0002
+    sta $E0
+    cmp #$0400
+    beq vb_done
+    jmp vb_loop
+vb_done:
+    jsr bg_upload
+    plp
+    rts
+
+; bg_ent: write one BG tilemap entry. tx=$D0, ty=$D2, tilenum=A. ent = (tile&$3FF) |
+; (bgpal $F0 <<10) | flipX($4000 if code $F6 bit15) | flipY($8000 if bit14).
+; map_index = (tx>=32?$400:0) + (ty&31)*32 + (tx&31); store word at BGMAP+mi*2.
+; bg_slot — sequential tile-slot dedup for BG. in $E4=code(0-13). out $DA=slot.
+; First-come assignment into a 64-slot table ($7E:8B00 codes, count*2 in $DC); decodes
+; the tile into BGTILE+slot*128 on first sight. Overflow (>64 distinct codes) -> slot 0.
+bg_slot:
+    rep #$30
+    ldx #$0000
+bs_srch:
+    cpx $DC
+    beq bs_new
+    lda $7E8B00,x
+    cmp $E4
+    beq bs_found
+    inx
+    inx
+    bra bs_srch
+bs_found:
+    txa
+    lsr a
+    sta $DA              ; slot = k (found)
+    rts
+bs_new:
+    lda $DC
+    cmp #$0080           ; 64-slot cap
+    bcc bs_assign
+    stz $DA              ; overflow -> slot 0
+    rts
+bs_assign:
+    lda $E4
+    sta $7E8B00,x        ; slotcode[count] = code
+    txa
+    lsr a
+    sta $DA              ; slot = count
+    lda $E4
+    sta $C4
+    jsr decode_tile      ; -> $7E:8400
+    lda $DA
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #BGTILE          ; dst = BGTILE + slot*128
+    sta $D4
+    lda #$007E
+    sta $D6
+    jsr copy128
+    lda $DC
+    clc
+    adc #$0002
+    sta $DC
+    rts
+
+bg_ent:
+    rep #$30             ; ensure 16-bit immediates (Poppy width tracking)
+    pha
+    and #$03FF
+    sta $FA              ; tile bits
+    lda $F0              ; bgpal<<10
+    asl a
+    asl a
+    xba                  ; <<8 ... need <<10: after xba (<<8) then asl asl
+    asl a
+    asl a
+    and #$1C00
+    ora $FA
+    sta $FA
+    lda $F6
+    and #$8000
+    beq bge_nfx
+    lda $FA
+    ora #$4000
+    sta $FA
+bge_nfx:
+    lda $F6
+    and #$4000
+    beq bge_nfy
+    lda $FA
+    ora #$8000
+    sta $FA
+bge_nfy:
+    ; mi = (tx>=32?$400:0) + (ty&31)*32 + (tx&31)
+    lda $D2
+    and #$001F
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a                ; (ty&31)*32
+    sta $FC
+    lda $D0
+    and #$001F
+    clc
+    adc $FC
+    sta $FC              ; + (tx&31)
+    lda $D0
+    and #$0020
+    beq bge_lo
+    lda $FC
+    clc
+    adc #$0400
+    sta $FC
+bge_lo:
+    asl $FC              ; mi*2 (byte offset)
+    ldx $FC
+    lda $FA
+    sta $7EF000,x        ; tilemap entry word
+    pla
+    rts
+
+copy128:                 ; $7E:8400 -> $7E:($D4) (128 bytes, 16-bit)
+    rep #$30
+    ldy #$0000
+c128l:
+    lda $7E8400,y
+    sta [$D4],y
+    iny
+    iny
+    cpy #$0080
+    bne c128l
+    rts
+
+; bg_palslot: in $EE=bank. out $F0=BG palette slot (0-7). Fills CGRAM 0-127 region
+; (BG palettes) of the CGRAM staging on first use of a bank. Table $7E:8940.
+bg_palslot:
+    sep #$20
+    ldx $EE
+    lda $7E8940,x
+    cmp #$FF
+    bne bps_have
+    rep #$30
+    lda $E6
+    cmp #$0008
+    bcc bps_assign
+    sep #$20
+    stz $F0
+    rep #$30
+    rts
+bps_assign:
+    sep #$20
+    lda $E6
+    sta $7E8940,x
+    sta $F0
+    rep #$30
+    inc $E6
+    ; fill CGRAM staging BG slot: dst = $8000 + slot*32 ; src = $2000 + bank*32
+    rep #$30
+    lda $EE
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$2000
+    sta $D0
+    lda $F0
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$8000
+    sta $D4
+    lda #$007E
+    sta $D2
+    sta $D6
+    ldy #$0000
+bps_fl:
+    lda [$D0],y
+    xba
+    jsr snes_color
+    sta [$D4],y
+    iny
+    iny
+    cpy #$0020
+    bne bps_fl
+    rts
+bps_have:
+    sta $F0
+    rep #$30
+    rts
+
+; bg_upload: DMA BG tilemap ($7E:F000, 4KB) -> VRAM word $0000, BG tiles ($7E:D000,
+; 8KB) -> VRAM word $1000, set BG mode/regs/scroll.
+bg_upload:
+    sep #$20
+    lda #$01
+    sta BGMODE           ; mode 1
+    lda #$01
+    sta BG1SC            ; BG1 map @ word $0000, 64x32
+    lda #$01
+    sta BG12NBA          ; BG1 char @ word $1000
+    lda #$80
+    sta VMAIN
+    ; tilemap -> word $0000
+    stz VMADDL
+    stz VMADDH
+    lda #$01
+    sta DMAP0
+    lda #$18
+    sta BBAD0
+    stz A1T0L
+    lda #$F0
+    sta A1T0H            ; src $F000
+    lda #$7E
+    sta A1B0
+    stz DAS0L
+    lda #$10
+    sta DAS0H            ; 4096 bytes
+    lda #$01
+    sta MDMAEN
+    ; BG tiles -> word $1000
+    stz VMADDL
+    lda #$10
+    sta VMADDH
+    lda #$01
+    sta DMAP0
+    lda #$18
+    sta BBAD0
+    stz A1T0L
+    lda #$D0
+    sta A1T0H            ; src $D000
+    lda #$7E
+    sta A1B0
+    stz DAS0L
+    lda #$20
+    sta DAS0H            ; 8192 bytes
+    lda #$01
+    sta MDMAEN
+    ; scroll: place playfield at (126,8) like the validated scene (hofs -126, vofs -8)
+    lda #$82
+    sta BG1HOFS
+    lda #$03
+    sta BG1HOFS          ; hofs = $382 = (-126 & $3FF)
+    lda #$F8
+    sta BG1VOFS
+    lda #$03
+    sta BG1VOFS          ; vofs = $3F8 = (-8 & $3FF)
+    rep #$30
+    rts
+
+; test_or_vid — TESTFLAG ($00:F400): 2 = video render test (render shadow forever,
+; no 68K interpreter), else single-step (optest). Lets tools/check_render.py inject
+; a MAME-captured frame into $7E shadow and validate vid_bg/vid_obj on real data.
+test_or_vid:
+    lda $F400
+    cmp #$0002
+    beq vidtest_init
+    jmp test_idle
+vidtest_init:
+    rep #$30
+    jsr vid_init
+vidtest_wait:
+    lda $7F0000          ; wait for harness go-flag (so shadow is injected first)
+    beq vidtest_wait
+    jsr ppu_build
+    jsr vid_bg
+    jsr vid_obj
+    jsr ppu_dma_flush
+vidtest_halt:
+    bra vidtest_halt     ; render ONCE then halt -> stable VRAM/OAM/screen to read
 
 .org $FFE0
 .word $0000,$0000,irq,irq,$0000,nmi,reset,irq
