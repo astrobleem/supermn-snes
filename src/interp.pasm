@@ -411,8 +411,11 @@ k54: lda $44
     bne k55
     jmp op_movea_l_d16
 k55: cmp #$3018            ; move.w (An)+,Dn  (ROM-aware src)
-    bne k56
+    bne k55b
     jmp op_movw_anp_dn
+k55b: cmp #$3098           ; move.w (An)+,(An)  (ROM-aware src, gated dst)
+    bne k56
+    jmp op_movw_anp_an
 k56: cmp #$2058            ; movea.l (An)+,An  (ROM-aware src)
     bne k57
     jmp op_movea_l_anp
@@ -2987,6 +2990,52 @@ op_movea_l_d16:         ; movea.l (d16,An),An : dst = [srcAn+d16] (direct $7F) ;
     lda $40
     clc
     adc #4
+    sta $40
+    jmp inext
+
+op_movw_anp_an:         ; move.w (An)+,(An) : [dstAn]=[srcAn] (ROM-aware src, gated dst); srcAn+=2 ; PC+=2
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; src An slot (bits 2-0)
+    lda $02,x
+    sta $52              ; src high16
+    lda $00,x
+    sta $54              ; src low16
+    clc
+    adc #2
+    sta $00,x            ; src An += 2
+    jsr readbyte         ; src high byte
+    sep #$20
+    sta $51
+    rep #$20
+    inc $54
+    jsr readbyte         ; src low byte
+    sep #$20
+    sta $50
+    rep #$20
+    jsr regdstA          ; X = dst An slot (bits 11-9)
+    lda $02,x
+    cmp #$00F0
+    bne mwaa_skip        ; dst not work RAM (sprite/I-O) -> no-op
+    lda $00,x
+    tax                  ; dst addr
+    sep #$20
+    lda $51
+    sta $7F0000,x        ; high byte
+    inx
+    lda $50
+    sta $7F0000,x        ; low byte
+    rep #$20
+mwaa_skip:
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #2
     sta $40
     jmp inext
 
