@@ -1,6 +1,6 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 19, 2026. Single source of "where we're at." Per-area detail
+Last updated: June 20, 2026. Single source of "where we're at." Per-area detail
 lives in the linked docs.
 
 ## TL;DR
@@ -13,15 +13,23 @@ boots Superman all the way to its live per-frame game loop on real SNES hardware
 — past the cooperative scheduler, the C-Chip GWK routine download, and full init;
 both scheduler tasks run (`tmask=$0003`, matches MAME), the per-frame frame counter
 increments, and work RAM evolves every frame. The interpret-cold/transpile-hot
-hybrid is fully de-risked on the "cold" side. **Video plumbing is now live**: the
+hybrid is fully de-risked on the "cold" side. **Video plumbing is complete**: the
 interpreter mirrors every 68K video-bank write into SNES `$7E` shadow RAM and, once
-per game-frame, renders to the real PPU — **palette → CGRAM is byte-exact (100%)** and
-**arcade OBJ sprites + the BG1 playfield render on hardware** (tile decode validated
-128/128 vs the Python oracle). The game is no longer blind. Remaining video polish:
-OBJ tile dedup (currently 64-sprite cap, no dedup) and a proper LRU tile cache /
-per-frame decode cap (BG has a direct-mapped 64-slot cache); pixel-diff vs MAME at a
-real-gameplay frame is blocked by interpreter speed (it can't reach gameplay frame
-~3000 cheaply). See `VIDEO_PLUMBING.md`. Not yet started: bulk transpilation, audio.
+per game-frame, renders to the real PPU — **palette→CGRAM byte-exact (100%)**, tile
+decode **128/128** vs the Python oracle, and **OBJ sprites + the BG1 playfield render a
+recognizable arcade frame** (injecting a captured MAME gameplay frame produces the
+church/GAME-OVER scene with Superman, validated vs an independent Python renderer). All
+four polish items are done: OBJ tile dedup (sprites share tiles, up to 128 OAM),
+cross-frame BG tile cache (persistent hash + VRAM, skips re-decode), vblank-safe
+forced-blank DMA, and the integration validation. The render subsystem was relocated to
+ROM bank `$E9` (`src/video.pasm`) to free interp-bank space; `map_snes` (hot store
+dispatch) stays in-bank, reached + 3 `jsl`/`jml` wrappers. See `VIDEO_PLUMBING.md`.
+**Next: inputs** (wire SNES pad → C-Chip mailbox so the game responds) and **speed**
+(profile + transpile hot paths — the interpreter runs ~18 interp-steps per real frame).
+Not yet started: bulk transpilation, audio.
+
+ROM layout (4 MB HiROM): interp `$C0:8000` · 68K image `$C1:0000`–`$C8` · arcade tiles
+`gfx1` `$C9:0000`–`$E8` · video subsystem `$E9:8000` (file `$298000`).
 
 ## Workstream status
 
@@ -30,7 +38,8 @@ real-gameplay frame is blocked by interpreter speed (it can't reach gameplay fra
 | **Graphics pipeline** | ✅ validated on real SNES PPU vs MAME | `PALETTE_VERDICT.md` |
 | **Transpiler design (D1–D4)** | ✅ settled | `TRANSPILER_DESIGN.md` |
 | **Transpiler spike (gate G2)** | ✅ GREEN — 2 functions differentially verified | `SPIKE_RESULT.md` |
-| **68K interpreter** | ✅ **BOOTS TO LIVE GAME LOOP** on real SNES — past the cooperative scheduler, C-Chip GWK routine download, and init; both tasks run (`tmask=$0003`), per-frame counter increments, PC cycles 26+ game addresses/sec. Legal MC68000 ISA + the boot-exercised addressing modes added this session. Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md`, `VIDEO_PLUMBING.md` |
+| **68K interpreter** | ✅ **BOOTS TO LIVE GAME LOOP** on real SNES — past the cooperative scheduler, C-Chip GWK routine download, and init; both tasks run (`tmask=$0003`), per-frame counter increments. Legal MC68000 ISA (optest 154/154). Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md` |
+| **Video plumbing** | ✅ **COMPLETE** — 68K video-bank writes → `$7E` shadow → real PPU each game-frame. Palette byte-exact, tile decode 128/128, OBJ+BG render the correct arcade frame; OBJ/BG tile dedup, cross-frame BG cache, vblank-safe DMA. Render subsystem in ROM bank `$E9` (`src/video.pasm`). | `VIDEO_PLUMBING.md` |
 | **Disassembly coverage (gate G1)** | ⬆ in progress — reliable pipeline + full playthrough | `COVERAGE_G1.md` |
 | **Tooling (MAME/Mesen MCP, trace/CDL)** | ✅ built & validated | below |
 | **C-Chip** | ✅ SOLVED — patch + input mailbox + **boot handshake replay**, still **no MCU emulation** | `CCHIP_BOOT_HANDSHAKE.md`, `CCHIP_FIRMWARE.md` |
@@ -87,15 +96,24 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
 
 ## Recommended next steps
 The interpret-cold/transpile-hot **hybrid is fully de-risked on the cold side**
-(the interpreter is now a complete, MAME-verified MC68000). The strategy: boot
-and run on the interpreter, then transpile hot paths. Detailed plan in
-**[ROADMAP.md](ROADMAP.md)**. In short:
-1. **Video plumbing** (the boot + frame loop now run — see `VIDEO_PLUMBING.md`):
-   route the 68K hardware-bank writes (sprites `$B00000`, tilemaps/regs
-   `$300000/$400000/$600000`) — currently no-op'd — to the validated SNES PPU
-   path, and wire real inputs into the C-Chip mailbox (`$900001/3/5`). This is
-   I/O plumbing, not opcodes. Confirm a frame matches MAME.
-2. **Profile, then transpile hot paths** to native 65816 (generalize the spike's
-   hand-transpilation into a tool); expand G2 across the D1 branch matrix.
+(the interpreter is a complete, MAME-verified MC68000) **and now renders video**.
+The boot, frame loop, and PPU output all work. Detailed plan in
+**[ROADMAP.md](ROADMAP.md)**. In short, in priority order:
+1. **Inputs** — wire SNES controller state into the C-Chip input mailbox
+   (`$900001/3/5`, active-low) so the game actually responds. The read path
+   already returns `$FF` (idle) there; map the joypad to it (and keep the GWK
+   boot-handshake replay intact). This makes it interactive and is the gate for
+   any "does it play like MAME" check. I/O plumbing, not opcodes.
+2. **Speed: profile, then transpile hot paths** to native 65816. The interpreter
+   runs ~18 interp-steps per real frame — far below realtime — so reaching real
+   gameplay (and a frame-synced pixel-diff vs MAME) is gated on speed. Capture a
+   Mesen save-state at the live loop to skip the ~2200-frame boot per test, profile
+   the hot 68K paths (boot delay loops, frame-work, VBLANK ISR), and generalize the
+   `$412`/`$24D98` hand-transpilation spike into a tool. Expand G2 across the D1
+   branch matrix.
 3. Finish G1 coverage + the G4 endianness manifest; convert audio (YM2610→TAD)
    in parallel.
+
+Video follow-ups (optional, low priority): OBJ cross-frame cache (sprites still
+re-decode each frame; BG already caches), and a frame-synced per-pixel diff vs
+MAME once the interpreter is fast enough to reach a gameplay frame.
