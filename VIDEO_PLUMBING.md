@@ -124,12 +124,17 @@ must keep replaying `cchip_boot_response.bin` — don't break it (see
   limits: no tile dedup (per-sprite tiles, 64-sprite cap) and 8 OBJ palettes (excess
   banks fall back to palette 0 → some sprites show wrong colors). `vid_obj` is gated on
   liveness (`tmask==$0003`) so it never runs on garbage shadow during boot.
-- **Stage 4 ◐** BG playfield (`vid_bg`: tilemap + tiles + scroll + sequential tile dedup),
-  renders and boot stays alive. The BG-staging bug found by render-validation is **FIXED**:
-  `copy128` used a nonexistent `lda long,Y` mode (garbage reads) — now uses `lda [$D0],y`;
-  BG staging verified == `decode_tile($0100)`. Remaining (Stage-5/perf, not a correctness
-  bug): real frames have ~120 distinct BG codes vs the 64-slot cache (overflow → residual
-  noise), and `vid_bg`'s per-game-frame linear-search dedup makes the live game very slow.
+- **Stage 4 ✓** BG playfield (`vid_bg`: tilemap + tiles + scroll). An injected MAME
+  gameplay frame renders the **actual scene** (church / GAME-OVER / steps / railings) —
+  BG + OBJ + palette all correct (`tools/check_render.py`). Bugs fixed along the way:
+  `copy128`'s nonexistent `lda long,Y`; and four `STZ long,X` clears that the assembler
+  truncated to `STZ abs,X` (DBR=$7F) → they wrote $7F (corrupting work RAM) and never
+  cleared $7E (hash uncleared → hang; OAM/tilemap garbage). See [[poppy-asm-gotchas]].
+- **Stage 5 ✓** BG tile cache: open-addressing **hash dedup** (O(1)) + **per-tile VRAM
+  DMA** (no staging cap, up to 192 codes = VRAM budget). The live game now runs ~180x
+  faster than the old O(n^2) linear scan (~18 vs ~0.1 interp-steps/frame). Remaining
+  polish: OBJ tile dedup (still 64-sprite cap), cross-frame LRU, real-hardware vblank-
+  timed DMA, and pixel-diff vs MAME at a synced frame.
 - **Stage 5 ◐** BG has a sequential decode-once-per-frame tile cache (64 slots). Remaining:
   OBJ dedup, cross-frame LRU, larger BG cache (one frame has ~120 distinct BG codes > 64),
   per-frame decode cap.
