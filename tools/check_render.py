@@ -40,7 +40,7 @@ try:
         m.write_memory("snesWorkRam", 0x4000, bswap(cod).hex())   # SHADOW_COD  $E0 (sprite+BG)
         m.write_memory("snesWorkRam", 0x3000, bytes(ybuf).hex())  # SHADOW_D0   sprite Y
         m.write_memory("snesWorkRam", 0x10000, "01")  # go-flag $7F:0000
-        m.run_frames(90)  # render once (vid_bg is slow) then halt
+        m.run_frames(200) # render once (vid_bg is slow) then halt
         # structure
         on = sum(1 for n in range(128) if m.read_memory("snesSpriteRam", n*4+1, 1)[0] < 224)
         bgm = m.read_memory("snesVideoRam", 0, 0x800)

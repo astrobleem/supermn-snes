@@ -10855,9 +10855,10 @@ vid_init:
     php
     rep #$30
     stz $C0
+    lda #$0000           ; (no STZ long,X on 65816 -> use sta with A=0)
     ldx #$2000           ; clear shadow + staging $7E:2000-$7E:9FFE
 viclr:
-    stz $7E0000,x
+    sta $7E0000,x
     inx
     inx
     cpx #$A000
@@ -11016,9 +11017,10 @@ vid_obj:
     php
     rep #$30
     ; --- init OAM staging: all 128 sprites Y=$F0 (off), attrs 0; hi-table 0 ---
+    lda #$0000           ; (no STZ long,X -> sta with A=0)
     ldx #$0000
 voi_oami:
-    stz $7E8600,x        ; X=0, Y=0 (fixed below)
+    sta $7E8600,x        ; X=0, Y=0 (fixed below)
     inx
     inx
     cpx #$0220
@@ -11440,30 +11442,39 @@ obj_upload:
 ; SNES tiles s*4..s*4+3), so decode_tile's output copies straight in. BG palettes
 ; -> CGRAM 0-127. Staging: tiles $7E:D000 (8KB), tilemap $7E:F000 (4KB).
 ; =============================================================================
-BGTILE=$D000
-BGMAP=$F000
+BGMAP=$9000             ; $7E BG tilemap staging (4KB)
+HTCODE=$A000            ; $7E BG code->slot hash: code words (512), 0 = empty
+HTSLOT=$A400            ; $7E BG code->slot hash: slot words (512)
 vid_bg:
     php
     rep #$30
-    ldx #$0000           ; clear tilemap staging (4KB)
+    lda #$0000           ; (no STZ long,X -> sta with A=0)
+    ldx #$0000           ; clear tilemap staging (4KB) at $9000
 vb_mclr:
-    stz $7EF000,x
+    sta $7E9000,x
     inx
     inx
     cpx #$1000
     bne vb_mclr
-    ldx #$0000           ; clear decoded-flags (64) + BG bank table (32)->$FF
+    ldx #$0000           ; BG bank table (32) -> $FF
 vb_dclr:
     sep #$20
-    stz $7E8900,x
     lda #$FF
     sta $7E8940,x
     rep #$30
     inx
-    cpx #$0040
+    cpx #$0020
     bne vb_dclr
+    lda #$0000           ; (no STZ long,X -> sta with A=0)
+    ldx #$0000           ; clear code->slot hash code table (512 words) to 0
+vb_hclr:
+    sta $7EA000,x
+    inx
+    inx
+    cpx #$0400
+    bne vb_hclr
     stz $E6              ; BG palslot counter
-    stz $DC              ; BG tile-slot count*2 (sequential dedup)
+    stz $DC              ; BG tile-slot count
     stz $E0              ; i*2 = 0
 vb_loop:
     ldx $E0
@@ -11566,59 +11577,91 @@ vb_done:
 ; bg_ent: write one BG tilemap entry. tx=$D0, ty=$D2, tilenum=A. ent = (tile&$3FF) |
 ; (bgpal $F0 <<10) | flipX($4000 if code $F6 bit15) | flipY($8000 if bit14).
 ; map_index = (tx>=32?$400:0) + (ty&31)*32 + (tx&31); store word at BGMAP+mi*2.
-; bg_slot — sequential tile-slot dedup for BG. in $E4=code(0-13). out $DA=slot.
-; First-come assignment into a 64-slot table ($7E:8B00 codes, count*2 in $DC); decodes
-; the tile into BGTILE+slot*128 on first sight. Overflow (>64 distinct codes) -> slot 0.
+; bg_slot — code->slot dedup for BG via an open-addressing hash table (O(1) avg, vs
+; the old O(n^2) linear scan). in $E4=code. out $DA=slot. On a new code (cap 192,
+; the BG VRAM budget at char base word $1000) it allocates the next slot, decodes the
+; tile, and DMAs it straight to VRAM word $1000+slot*64 (no big staging buffer).
 bg_slot:
     rep #$30
-    ldx #$0000
-bs_srch:
-    cpx $DC
-    beq bs_new
-    lda $7E8B00,x
+    lda $E4
+    and #$01FF           ; hash = code & $1FF
+    asl a                ; word index *2
+    sta $D8
+bs_probe:
+    ldx $D8
+    lda $7EA000,x        ; htab_code[h]
+    beq bs_ins           ; 0 = empty
     cmp $E4
-    beq bs_found
+    beq bs_hit
     inx
     inx
-    bra bs_srch
-bs_found:
     txa
-    lsr a
-    sta $DA              ; slot = k (found)
+    and #$03FF           ; wrap (512 words)
+    sta $D8
+    bra bs_probe
+bs_hit:
+    ldx $D8
+    lda $7EA400,x        ; htab_slot[h]
+    sta $DA
     rts
-bs_new:
+bs_ins:
     lda $DC
-    cmp #$0080           ; 64-slot cap
-    bcc bs_assign
+    cmp #$00C0           ; 192-slot cap (VRAM word $1000-$3FFF)
+    bcc bs_alloc
     stz $DA              ; overflow -> slot 0
     rts
-bs_assign:
+bs_alloc:
+    ldx $D8
     lda $E4
-    sta $7E8B00,x        ; slotcode[count] = code
-    txa
-    lsr a
-    sta $DA              ; slot = count
+    sta $7EA000,x        ; htab_code[h] = code
+    lda $DC
+    sta $7EA400,x        ; htab_slot[h] = slot
+    sta $DA
+    inc $DC              ; count++
     lda $E4
     sta $C4
     jsr decode_tile      ; -> $7E:8400
+    jsr bg_tile_dma      ; DMA decoded tile -> VRAM word $1000 + slot*64
+    rts
+
+; bg_tile_dma — DMA the 128-byte decoded tile ($7E:8400) to VRAM word $1000+($DA*64).
+bg_tile_dma:
+    php
+    rep #$30
     lda $DA
     asl a
     asl a
     asl a
     asl a
     asl a
-    asl a
-    asl a
+    asl a                ; slot*64
     clc
-    adc #BGTILE          ; dst = BGTILE + slot*128
-    sta $D4
-    lda #$007E
-    sta $D6
-    jsr copy128
-    lda $DC
-    clc
-    adc #$0002
-    sta $DC
+    adc #$1000
+    sta $D0              ; VRAM word addr
+    sep #$20
+    lda #$80
+    sta VMAIN
+    lda $D0
+    sta VMADDL
+    lda $D1
+    sta VMADDH
+    lda #$01
+    sta DMAP0            ; mode 1 (VMDATAL/H)
+    lda #$18
+    sta BBAD0
+    lda #$00
+    sta A1T0L
+    lda #$84
+    sta A1T0H            ; src $8400
+    lda #$7E
+    sta A1B0
+    lda #$80
+    sta DAS0L
+    lda #$00
+    sta DAS0H            ; 128 bytes
+    lda #$01
+    sta MDMAEN
+    plp
     rts
 
 bg_ent:
@@ -11674,7 +11717,7 @@ bge_lo:
     asl $FC              ; mi*2 (byte offset)
     ldx $FC
     lda $FA
-    sta $7EF000,x        ; tilemap entry word
+    sta $7E9000,x        ; tilemap entry word (BGMAP staging)
     pla
     rts
 
@@ -11756,8 +11799,8 @@ bps_have:
     rep #$30
     rts
 
-; bg_upload: DMA BG tilemap ($7E:F000, 4KB) -> VRAM word $0000, BG tiles ($7E:D000,
-; 8KB) -> VRAM word $1000, set BG mode/regs/scroll.
+; bg_upload: DMA BG tilemap ($7E:9000, 4KB) -> VRAM word $0000, set BG mode/regs/
+; scroll. (BG tiles were already DMA'd per-tile to word $1000+ in bg_slot.)
 bg_upload:
     sep #$20
     lda #$01
@@ -11776,31 +11819,13 @@ bg_upload:
     lda #$18
     sta BBAD0
     stz A1T0L
-    lda #$F0
-    sta A1T0H            ; src $F000
+    lda #$90
+    sta A1T0H            ; src $9000 (BGMAP)
     lda #$7E
     sta A1B0
     stz DAS0L
     lda #$10
     sta DAS0H            ; 4096 bytes
-    lda #$01
-    sta MDMAEN
-    ; BG tiles -> word $1000
-    stz VMADDL
-    lda #$10
-    sta VMADDH
-    lda #$01
-    sta DMAP0
-    lda #$18
-    sta BBAD0
-    stz A1T0L
-    lda #$D0
-    sta A1T0H            ; src $D000
-    lda #$7E
-    sta A1B0
-    stz DAS0L
-    lda #$20
-    sta DAS0H            ; 8192 bytes
     lda #$01
     sta MDMAEN
     ; scroll: place playfield at (126,8) like the validated scene (hofs -126, vofs -8)
