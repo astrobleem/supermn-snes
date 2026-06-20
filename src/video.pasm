@@ -125,6 +125,7 @@ viclr:
     sep #$20
     stz TM               ; no layers yet (Stage 2 shows backdrop only)
     rep #$30
+    jsr bg_hclr          ; clear the persistent cross-frame BG tile cache (one-time)
     plp
     rts
 
@@ -312,6 +313,7 @@ voi_bti:
     inx
     cpx #$0020
     bne voi_bti
+    jsr obj_hclr         ; clear OBJ code->slot hash ($A000) + tile-slot count ($DC)
     ; counters
     stz $E0              ; i = 0 (shadow index, steps 0,2,..)
     stz $E2              ; n = 0 (output sprite count)
@@ -384,13 +386,12 @@ vchk6:
     lda $F6
     and #$3FFF
     sta $C4
-    jsr decode_tile      ; -> $7E:8400
-    jsr obj_place        ; quads -> OBJVRAM grid; $E4 = tile T
+    jsr obj_slot         ; dedup: decode+place tile only on first sight; $E4 = tile T
     jsr obj_oam          ; OAM entry n
     lda $E2
     inc a
     sta $E2
-    cmp #$0040           ; cap 64 sprites
+    cmp #$0080           ; cap 128 sprites (OAM limit; dedup shares tiles)
     beq voi_done
 voi_next:
     lda $E0
@@ -728,16 +729,19 @@ vb_dclr:
     inx
     cpx #$0020
     bne vb_dclr
-    lda #$0000           ; (no STZ long,X -> sta with A=0)
-    ldx #$0000           ; clear code->slot hash code table (512 words) to 0
-vb_hclr:
-    sta $7EA000,x
-    inx
-    inx
-    cpx #$0400
-    bne vb_hclr
+    ; Cross-frame BG tile cache (polish item 2): the hash ($7E:A000) and its decoded
+    ; VRAM tiles PERSIST across frames, so a code already cached just reuses its slot
+    ; (bg_slot's hit path skips decode+DMA -> the per-game-frame render is much cheaper
+    ; for a static playfield). Evict by full-clear only when the cache is nearly full
+    ; (>=160 of 192 slots), so accumulating codes from scene changes are eventually
+    ; flushed. (The tilemap + palettes are still rebuilt every frame; only the
+    ; expensive tile decode/DMA is cached.)
+    lda $DC
+    cmp #$00A0           ; 160
+    bcc vb_keep
+    jsr bg_hclr          ; cache full -> evict all (clear hash + count)
+vb_keep:
     stz $E6              ; BG palslot counter
-    stz $DC              ; BG tile-slot count
     stz $E0              ; i*2 = 0
 vb_loop:
     ldx $E0
@@ -1119,3 +1123,143 @@ vidtest_wait:
 vidtest_halt:
     bra vidtest_halt     ; render ONCE then halt -> stable VRAM/OAM/screen to read
 
+
+; =============================================================================
+; OBJ tile dedup (polish item 1) — appended in the roomy $E9 bank so it shifts
+; nothing. Mirrors bg_slot: a code->tile-slot hash ($7E:A000, shared with vid_bg
+; which runs first and has already DMA'd its BG tiles) lets multiple sprites share
+; one OBJ tile, so up to 128 sprites (OAM limit) need only <=64 distinct tiles.
+; =============================================================================
+obj_hclr:                ; clear OBJ code->slot hash (512 words) + tile-slot count
+    rep #$30
+    lda #$0000
+    ldx #$0000
+ohc_l:
+    sta $7EA800,x
+    inx
+    inx
+    cpx #$0400
+    bne ohc_l
+    stz $DE
+    rts
+
+obj_slot:                ; in $C4=code. out $E4=T (grid tile index). decode+place if new.
+    rep #$30
+    lda $C4
+    and #$01FF
+    asl a
+    sta $D8
+oss_p:
+    ldx $D8
+    lda $7EA800,x
+    beq oss_ins
+    cmp $C4
+    beq oss_hit
+    inx
+    inx
+    txa
+    and #$03FF
+    sta $D8
+    bra oss_p
+oss_hit:
+    ldx $D8
+    lda $7EAC00,x
+    sta $D8
+    jsr obj_T
+    rts
+oss_ins:
+    lda $DE
+    cmp #$0040           ; 64 tile-slot cap (one 256-tile OBJ name table)
+    bcc oss_alloc
+    stz $D8              ; overflow -> slot 0
+    jsr obj_T
+    rts
+oss_alloc:
+    ldx $D8
+    lda $C4
+    sta $7EA800,x        ; htab_code[h] = code
+    lda $DE
+    sta $7EAC00,x        ; htab_slot[h] = slot
+    sta $D8
+    inc $DE
+    jsr decode_tile      ; $C4 = code -> $7E:8400
+    jsr obj_place_at     ; place 4 quads at grid(slot $D8)
+    rts
+
+obj_T:                   ; 16-wide-grid top-left tile index for slot $D8 -> $E4
+    rep #$30
+    lda $D8
+    and #$0007
+    asl a
+    sta $E4
+    lda $D8
+    lsr a
+    lsr a
+    lsr a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc $E4
+    sta $E4
+    rts
+
+obj_place_at:            ; copy 4 quads ($7E:8400) to OBJVRAM grid for slot $D8; $E4=T
+    rep #$30
+    jsr obj_T
+    lda $E4
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a                ; T*32
+    clc
+    adc #OBJVRAM
+    sta $F2
+    lda #$007E
+    sta $D2
+    sta $D6
+    lda #$8400
+    sta $D0
+    lda $F2
+    sta $D4
+    jsr copy32
+    lda #$8420
+    sta $D0
+    lda $F2
+    clc
+    adc #$0020
+    sta $D4
+    jsr copy32
+    lda #$8440
+    sta $D0
+    lda $F2
+    clc
+    adc #$0200
+    sta $D4
+    jsr copy32
+    lda #$8460
+    sta $D0
+    lda $F2
+    clc
+    adc #$0220
+    sta $D4
+    jsr copy32
+    rts
+
+; bg_hclr — clear the persistent BG code->slot hash ($7E:A000, 512 words) + count.
+; Called once at reset (vid_init) and as the cross-frame cache's overflow eviction.
+bg_hclr:
+    rep #$30
+    lda #$0000
+    ldx #$0000
+bhc_l:
+    sta $7EA000,x
+    inx
+    inx
+    cpx #$0400
+    bne bhc_l
+    stz $DC
+    rts
