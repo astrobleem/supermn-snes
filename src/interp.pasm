@@ -2517,6 +2517,8 @@ op_movl_anp_anp:         ; move.l (An)+,(An)+ : copy 4 bytes (I/O-aware src) ; P
     adc #4
     sta $00,x            ; src An += 4
     jsr regdstA          ; dst An slot
+    lda $02,x
+    sta $5E              ; dst high16 (gate: only $00F0 work RAM is real; $B00000 etc = I/O)
     lda $00,x
     sta $6A              ; dst addr (running)
     clc
@@ -2526,11 +2528,15 @@ op_movl_anp_anp:         ; move.l (An)+,(An)+ : copy 4 bytes (I/O-aware src) ; P
 mll_loop:
     jsr readbyte         ; reads from $52(top16)/$54(low16); ROM or RAM
     sta $50              ; byte
+    lda $5E
+    cmp #$00F0
+    bne mll_nowrite      ; dst is I/O (sprite RAM $B00000 etc.) -> no-op the write
     ldx $6A
     sep #$20
     lda $50
     sta $7F0000,x        ; write byte to dst (work RAM)
     rep #$20
+mll_nowrite:
     inc $54              ; src low16++
     inc $6A              ; dst low16++
     iny
