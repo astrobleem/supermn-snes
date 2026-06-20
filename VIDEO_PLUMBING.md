@@ -147,17 +147,19 @@ must keep replaying `cchip_boot_response.bin` — don't break it (see
   colors. NB: MAME can't be screenshotted through the headless MCP (`-video none`), so a
   per-pixel MAME diff isn't available here; palette→CGRAM (byte-exact) and decode_tile
   (128/128) are the quantitative checks, plus this visual integration match.
-- **OBJ tile dedup ◻ (designed, blocked on space)** A hash-dedup `obj_slot` (mirroring
-  `bg_slot`, OBJ codes -> 16-wide grid, 64 tile-slots, sprite cap raised to 128) was
-  prototyped but reverted: the interp bank ($8000-$FFFF) is **full** (~126 B free) and
-  inserting it mid-bank wraps a relative branch. Low value (real frames have ~52-64
-  sprites, so the 64-sprite/no-dedup path is adequate). To land it: free space by sharing
-  the near-identical `bg_slot`/`obj_slot` probes and `bg_palslot`/`obj_palslot`, or
-  relocate the per-frame render routines to a second ROM bank (JSL/RTL; keep hot-path
-  `map_snes` in-bank). See [[poppy-asm-gotchas]] (never insert mid-bank).
-- **Cross-frame LRU cache ◻ (deferred)** Same bank-space blocker; it's a perf
-  optimization (avoid re-decoding unchanged tiles every game-frame) best done alongside
-  the transpile/perf phase, after the render routines are relocated for room.
+- **OBJ tile dedup ✓** `obj_slot` (own hash $7E:A800, 16-wide tile grid) lets multiple
+  sprites share one decoded tile, so up to 128 sprites (OAM limit) need <=64 distinct
+  tiles. Injected MAME frame renders 98 sprites (was 52), incl. the flying Superman.
+- **Cross-frame BG tile cache ✓** The BG hash ($7E:A000) + its decoded VRAM tiles persist
+  across game-frames; `bg_slot` hits skip decode+DMA, so a static playfield is nearly
+  free to re-render. Eviction = full-clear when >=160/192 slots used; one-time clear at
+  `vid_init`. The tilemap and palettes are still rebuilt every frame (cheap).
+
+**Both required a one-time enabler: the render subsystem was relocated to ROM bank $E9**
+(`src/video.pasm`, assembled @ $8000 -> placed @ $E9:8000 = file $298000) because the
+interp bank was full. The interp keeps hot-path `map_snes` + a `test_or_vid` stub and
+reaches the moved code via 3 `jsl`/`jml` wrappers (VID_FRAME=$E98000 / VID_INIT=$E98004 /
+VIDTEST=$E98008) that bridge `rts`<->`rtl`. Interp bank free: 126 B -> 1930 B.
 - **Stage 5 ◐** BG has a sequential decode-once-per-frame tile cache (64 slots). Remaining:
   OBJ dedup, cross-frame LRU, larger BG cache (one frame has ~120 distinct BG codes > 64),
   per-frame decode cap.
