@@ -1,5 +1,27 @@
 # 68000 Interpreter Spike — Result: GREEN
 
+> **UPDATE (June 19, 2026): IT'S ALIVE — boots to the live per-frame game loop.**
+> The interpreter now boots Superman all the way into its **live cooperative
+> scheduler + per-frame game loop** on real SNES hardware. Past `$0818`: it creates
+> both scheduler tasks (`tmask=$0003`, matches MAME), downloads and executes the
+> C-Chip **GWK RAM-resident routine** (`$F01B20`), runs init, and cycles through
+> 26+ game PCs/sec with the per-frame counter (`$F01C56`) incrementing and work RAM
+> evolving every frame.
+>
+> The multi-session `$0818` freeze root cause was a chain: (1) VBLANK cadence too
+> fast (`$8A $1800→$7000`) interrupted trap#1 task creation; (2) a reset-time
+> `($F00006)` bootstrap hack corrupted A5; (3) **the keystone: `op_movb_d16_d16`
+> never set the Z flag** — the VBLANK ISR's `move.b ($0,A5),($1,A5); bne` relied on
+> it, so a stale Z drove the ISR into a context-save that splattered the task mask
+> (`$0001→$16CC`) and the scheduler could never find slot0. Setting Z unblocked the
+> switch. Then ~20 boot-exercised addressing modes were added one at a time (jmp
+> (d16,An) + work-RAM-PC fetch, cmpi.b/.l, several move.l/.w/.b modes, movem.w, clr
+> variants, an addq/subq `(d16,An)` dispatch-mask fix, a sprite-copy `$B00000`
+> bank-gate, and move.w (An)+,(An) which was the final freeze). The cooperative
+> scheduler / `$F0xxxx` task model and the video-write findings are in
+> **`VIDEO_PLUMBING.md`**; debugging memory in `phase-a-blocker.md`. Next phase is
+> video plumbing (the game runs blind — hardware-bank writes are no-op'd).
+
 > **UPDATE (June 18, 2026): the spike graduated into a complete interpreter.**
 > What began as a 5-opcode reset-handler spike is now the **full legal MC68000
 > instruction set** — 47/47 operation groups, implemented and validated one at a

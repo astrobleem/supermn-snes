@@ -1,6 +1,6 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 18, 2026. Single source of "where we're at." Per-area detail
+Last updated: June 19, 2026. Single source of "where we're at." Per-area detail
 lives in the linked docs.
 
 ## TL;DR
@@ -9,10 +9,13 @@ the arcade, real SNES PPU for the target). The graphics path is reproduced
 end-to-end; the 68K→SA-1 transpiler is de-risked with a working differential
 harness (gate G2 green); disassembly coverage (G1) has a reliable trace-driven
 pipeline and a full beat-the-game playthrough trace. **The 68000 interpreter now
-implements the complete legal MC68000 instruction set — 47/47 op groups,
-154/154 differential tests green vs MAME, booting Superman on real SNES** — so
-the interpret-cold/transpile-hot hybrid is fully de-risked on the "cold" side.
-Not yet started: bulk transpilation, audio conversion.
+boots Superman all the way to its live per-frame game loop on real SNES hardware**
+— past the cooperative scheduler, the C-Chip GWK routine download, and full init;
+both scheduler tasks run (`tmask=$0003`, matches MAME), the per-frame frame counter
+increments, and work RAM evolves every frame. The interpret-cold/transpile-hot
+hybrid is fully de-risked on the "cold" side. **Next: video plumbing** — the game
+is running blind because 68K writes to the video/sprite hardware banks are still
+no-op'd (see `VIDEO_PLUMBING.md`). Not yet started: bulk transpilation, audio.
 
 ## Workstream status
 
@@ -21,7 +24,7 @@ Not yet started: bulk transpilation, audio conversion.
 | **Graphics pipeline** | ✅ validated on real SNES PPU vs MAME | `PALETTE_VERDICT.md` |
 | **Transpiler design (D1–D4)** | ✅ settled | `TRANSPILER_DESIGN.md` |
 | **Transpiler spike (gate G2)** | ✅ GREEN — 2 functions differentially verified | `SPIKE_RESULT.md` |
-| **68K interpreter** | ✅ **COMPLETE legal MC68000 ISA** — 47/47 op groups, 154/154 single-instruction differential tests green vs MAME, boots Superman on real SNES (steady-state PC `$0818`). Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md` |
+| **68K interpreter** | ✅ **BOOTS TO LIVE GAME LOOP** on real SNES — past the cooperative scheduler, C-Chip GWK routine download, and init; both tasks run (`tmask=$0003`), per-frame counter increments, PC cycles 26+ game addresses/sec. Legal MC68000 ISA + the boot-exercised addressing modes added this session. Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md`, `VIDEO_PLUMBING.md` |
 | **Disassembly coverage (gate G1)** | ⬆ in progress — reliable pipeline + full playthrough | `COVERAGE_G1.md` |
 | **Tooling (MAME/Mesen MCP, trace/CDL)** | ✅ built & validated | below |
 | **C-Chip** | ✅ SOLVED — patch + input mailbox + **boot handshake replay**, still **no MCU emulation** | `CCHIP_BOOT_HANDSHAKE.md`, `CCHIP_FIRMWARE.md` |
@@ -81,10 +84,11 @@ The interpret-cold/transpile-hot **hybrid is fully de-risked on the cold side**
 (the interpreter is now a complete, MAME-verified MC68000). The strategy: boot
 and run on the interpreter, then transpile hot paths. Detailed plan in
 **[ROADMAP.md](ROADMAP.md)**. In short:
-1. **Drive the interpreter to an end-to-end in-game frame**: wire video (VDP/X1
-   writes → the validated SNES PPU path), inputs (mailbox), and per-frame IRQ;
-   confirm a playable frame matches MAME. The instruction set is done — this is
-   now I/O plumbing + frame loop, not opcodes.
+1. **Video plumbing** (the boot + frame loop now run — see `VIDEO_PLUMBING.md`):
+   route the 68K hardware-bank writes (sprites `$B00000`, tilemaps/regs
+   `$300000/$400000/$600000`) — currently no-op'd — to the validated SNES PPU
+   path, and wire real inputs into the C-Chip mailbox (`$900001/3/5`). This is
+   I/O plumbing, not opcodes. Confirm a frame matches MAME.
 2. **Profile, then transpile hot paths** to native 65816 (generalize the spike's
    hand-transpilation into a tool); expand G2 across the D1 branch matrix.
 3. Finish G1 coverage + the G4 endianness manifest; convert audio (YM2610→TAD)
