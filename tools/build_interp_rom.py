@@ -21,6 +21,9 @@ ROM = bytearray(0x400000)                            # 4MB HiROM
 ROM[0x8000:0x10000] = INTERP                         # interpreter + vectors @ $00/$C0:8000
 ROM[0x10000:0x90000] = IMG                           # 68K image @ $C1:0000 (flat $C10000+A)
 ROM[0x90000:0x290000] = GFX                          # arcade tiles @ $C9:0000 (flat $C90000+off)
+VID = Path("src/video.bin").read_bytes()             # video subsystem (assembled @ $8000)
+assert len(VID) <= 0x8000, len(VID)
+ROM[0x298000:0x298000+len(VID)] = VID                # @ $E9:8000 (file $298000); jsl/jml VID_*
 
 # HiROM cartridge header at file $FFC0 (= CPU $00:FFC0)
 H = 0xFFC0

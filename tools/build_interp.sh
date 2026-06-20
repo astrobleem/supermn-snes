@@ -7,4 +7,5 @@ export PATH="$DOTNET_ROOT:$PATH"
 POPPY=/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll
 cd "$(dirname "$0")/.."
 dotnet "$POPPY" -t snes -I . -o src/interp.bin src/interp.pasm
+dotnet "$POPPY" -t snes -I . -o src/video.bin src/video.pasm
 python3 tools/build_interp_rom.py
