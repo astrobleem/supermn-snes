@@ -10881,10 +10881,14 @@ vid_frame:
     lda $7F0002
     cmp #$0300
     bne vf_noobj
+    sep #$20
+    lda #$80
+    sta INIDISP          ; forced blank: VRAM/OAM/CGRAM DMA is only legal in blank
+    rep #$30             ; (real hardware drops writes during active display)
     jsr vid_bg           ; build + upload BG1 playfield from shadow ($E00800/$E00C00)
     jsr vid_obj          ; build + upload OBJ sprites from shadow ($E0/$D0)
 vf_noobj:
-    jsr ppu_dma_flush
+    jsr ppu_dma_flush    ; DMAs CGRAM, then INIDISP=$0F (screen back on)
     rts
 
 ; decode_tile: $C4 = arcade tile code (14-bit) -> four SNES 4bpp 8x8 tiles at
