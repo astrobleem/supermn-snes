@@ -11678,11 +11678,15 @@ bge_lo:
     pla
     rts
 
-copy128:                 ; $7E:8400 -> $7E:($D4) (128 bytes, 16-bit)
-    rep #$30
+copy128:                 ; $7E:8400 -> $7E:($D4) (128 bytes, 16-bit).
+    rep #$30             ; NB: the 65816 has no `lda long,Y`, so the source must be
+    lda #$8400           ; an indirect-long pointer [$D0],y (not `lda $7E8400,y`).
+    sta $D0
+    lda #$007E
+    sta $D2
     ldy #$0000
 c128l:
-    lda $7E8400,y
+    lda [$D0],y
     sta [$D4],y
     iny
     iny
