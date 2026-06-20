@@ -124,12 +124,12 @@ must keep replaying `cchip_boot_response.bin` — don't break it (see
   limits: no tile dedup (per-sprite tiles, 64-sprite cap) and 8 OBJ palettes (excess
   banks fall back to palette 0 → some sprites show wrong colors). `vid_obj` is gated on
   liveness (`tmask==$0003`) so it never runs on garbage shadow during boot.
-- **Stage 4 ◐** BG playfield implemented (`vid_bg`: tilemap + tiles + scroll + sequential
-  64-slot tile dedup), renders and boot stays alive — but a **render-validation pass found
-  a BG-specific bug**: BG tile staging (`$7E:D000`) comes out garbage even though
-  `decode_tile` is validated 128/128 in isolation and OBJ (same decoder) renders cleanly.
-  Staging also doesn't match the DMA'd VRAM. The bug is isolated to the
-  `bg_slot`→`decode_tile`→`copy128`→`bg_upload` path — next lead.
+- **Stage 4 ◐** BG playfield (`vid_bg`: tilemap + tiles + scroll + sequential tile dedup),
+  renders and boot stays alive. The BG-staging bug found by render-validation is **FIXED**:
+  `copy128` used a nonexistent `lda long,Y` mode (garbage reads) — now uses `lda [$D0],y`;
+  BG staging verified == `decode_tile($0100)`. Remaining (Stage-5/perf, not a correctness
+  bug): real frames have ~120 distinct BG codes vs the 64-slot cache (overflow → residual
+  noise), and `vid_bg`'s per-game-frame linear-search dedup makes the live game very slow.
 - **Stage 5 ◐** BG has a sequential decode-once-per-frame tile cache (64 slots). Remaining:
   OBJ dedup, cross-frame LRU, larger BG cache (one frame has ~120 distinct BG codes > 64),
   per-frame decode cap.
