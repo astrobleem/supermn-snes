@@ -132,9 +132,32 @@ must keep replaying `cchip_boot_response.bin` — don't break it (see
   cleared $7E (hash uncleared → hang; OAM/tilemap garbage). See [[poppy-asm-gotchas]].
 - **Stage 5 ✓** BG tile cache: open-addressing **hash dedup** (O(1)) + **per-tile VRAM
   DMA** (no staging cap, up to 192 codes = VRAM budget). The live game now runs ~180x
-  faster than the old O(n^2) linear scan (~18 vs ~0.1 interp-steps/frame). Remaining
-  polish: OBJ tile dedup (still 64-sprite cap), cross-frame LRU, real-hardware vblank-
-  timed DMA, and pixel-diff vs MAME at a synced frame.
+  faster than the old O(n^2) linear scan (~18 vs ~0.1 interp-steps/frame).
+
+## Polish status (the four follow-ups)
+
+- **Vblank-timed DMA ✓** `vid_frame` forces blank (INIDISP=$80) around the per-frame
+  VRAM/OAM/CGRAM uploads, then restores $0F — legal on real hardware (was DMAing during
+  active display, Mesen-only). `vidtest` already ran under reset's forced blank.
+- **Pixel-diff vs MAME ✓ (integration validated)** `tools/render_arcade_ref.py` is a
+  pure-Python (no numpy/PIL) port of the validated `render_full_frame.py` decode; it
+  renders the same `c_*.bin` to `/tmp/arcade_ref.png` (47 colors, matching MAME). The
+  interp's `check_render.py` output is a 256-wide SNES crop of that exact scene (church
+  doors / arched window / brick wall / GAME-OVER / steps / status bar) with matching
+  colors. NB: MAME can't be screenshotted through the headless MCP (`-video none`), so a
+  per-pixel MAME diff isn't available here; palette→CGRAM (byte-exact) and decode_tile
+  (128/128) are the quantitative checks, plus this visual integration match.
+- **OBJ tile dedup ◻ (designed, blocked on space)** A hash-dedup `obj_slot` (mirroring
+  `bg_slot`, OBJ codes -> 16-wide grid, 64 tile-slots, sprite cap raised to 128) was
+  prototyped but reverted: the interp bank ($8000-$FFFF) is **full** (~126 B free) and
+  inserting it mid-bank wraps a relative branch. Low value (real frames have ~52-64
+  sprites, so the 64-sprite/no-dedup path is adequate). To land it: free space by sharing
+  the near-identical `bg_slot`/`obj_slot` probes and `bg_palslot`/`obj_palslot`, or
+  relocate the per-frame render routines to a second ROM bank (JSL/RTL; keep hot-path
+  `map_snes` in-bank). See [[poppy-asm-gotchas]] (never insert mid-bank).
+- **Cross-frame LRU cache ◻ (deferred)** Same bank-space blocker; it's a perf
+  optimization (avoid re-decoding unchanged tiles every game-frame) best done alongside
+  the transpile/perf phase, after the render routines are relocated for room.
 - **Stage 5 ◐** BG has a sequential decode-once-per-frame tile cache (64 slots). Remaining:
   OBJ dedup, cross-frame LRU, larger BG cache (one frame has ~120 distinct BG codes > 64),
   per-frame decode cap.
