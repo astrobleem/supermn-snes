@@ -1174,8 +1174,8 @@ kbad_pea:
     bne kbad_halt
     jmp op_pea_g
 kbad_halt:
-    lda #$DEAD           ; unknown opcode -> stop (e.g. $2B18 clr.w D0)
-    sta $4E
+    jmp kbad_aq2         ; SAME-SIZE swap of `lda #$DEAD` (3 bytes) -> route ADDQ.B then halt
+    sta $4E              ; (dead: kbad_aq2 sets $4E and jmp idone for the non-ADDQ.B case)
     jmp idone
 
 ; --- helpers: extract reg (bits 11-9) -> A, and (bits 2-0) -> A ---
@@ -11314,6 +11314,73 @@ op_tst_g:
     adc #$0000
     sta $42
     jmp inext
+
+; op_addsubq_g — ADDQ.B/SUBQ.B #data,(d16,An): [An+d16].b +/- data ; Z ; PC+=4. Direct
+; work-RAM access (mirrors the proven op_addq_w_d16). Routed for $522D = ADDQ.B (d16,A5)
+; (the coin/credit counter increment), the byte (d16,An) gap the word handler misses.
+; PLACED AT $FD00 (after cpu5a22_boot at $FC00): the $FA00 handler block fills to ~$FBE0,
+; so adding here would overflow $FC00 and be overwritten by cpu5a22_boot -> executing it
+; would run into `jml CPU5A22_VIDEO` and wedge the SA-1 into the 5A22 supervisor.
+.org $FD00
+op_addsubq_g:
+    rep #$30
+    jsr addq_data        ; $50 = data (1-8)
+    jsr rdw2
+    sta $52              ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; An slot
+    lda $00,x
+    clc
+    adc $52
+    sta $52              ; addr = An.lo + d16
+    tax
+    lda $44
+    and #$0100            ; bit 8: 0 = ADDQ, 1 = SUBQ
+    bne aqg_sub
+    sep #$20
+    lda $400000,x
+    clc
+    adc $50
+    sta $400000,x
+    rep #$30
+    bra aqg_z
+aqg_sub:
+    sep #$20
+    lda $400000,x
+    sec
+    sbc $50
+    sta $400000,x
+    rep #$30
+aqg_z:
+    sep #$20
+    lda $400000,x
+    rep #$30
+    and #$00FF
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+
+; kbad_aq2 — reached by kbad_halt's `jmp kbad_aq2` (a same-size swap of `lda #$DEAD`, so the
+; dispatch never shifts -> no Poppy branch-wrap). Routes ADDQ.B/SUBQ.B #data,(d16,An)
+; ($5028/$5128) to op_addsubq_g; anything else is a genuine unknown opcode -> stop ($DEAD).
+kbad_aq2:
+    lda $44
+    and #$F0F8
+    cmp #$5028
+    bne kaq2_halt
+    jmp op_addsubq_g
+kaq2_halt:
+    lda #$DEAD
+    sta $4E
+    jmp idone
 
 ; ---- 5A22 bootstrap (Phase A2) ----
 ; cpu5a22_boot runs on the 5A22 (its reset vector points here, via the LoROM mirror at
