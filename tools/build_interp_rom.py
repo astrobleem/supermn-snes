@@ -25,14 +25,38 @@ VID = Path("src/video.bin").read_bytes()             # video subsystem (assemble
 assert len(VID) <= 0x8000, len(VID)
 ROM[0x298000:0x298000+len(VID)] = VID                # @ $E9:8000 (file $298000); jsl/jml VID_*
 
+# --- SA-1 LoROM mirror of the interpreter ---
+# Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style
+# (32KB/bank): $00:8000-FFFF -> FILE $0-$7FFF, so $00:FFFC (reset) -> FILE $7FFC and the
+# interp's DBR=$00 abs reads of its own ROM data (e.g. RESP1, the C-Chip response) -> FILE
+# $0-$7FFF. Plain HiROM mirrored ROM file $8000-FFFF into $00:8000 there; the SA-1 map does
+# not. Restore that by mirroring the 32KB interp into FILE $0-$7FFF, so $00:8000 presents a
+# full copy of the interpreter + data tables + vectors exactly as the interp was designed
+# for (DBR=$00). The 5A22 boots into it at $00:8000 with NO interp.pasm changes; the interp
+# also stays reachable at $C0:8000 (HiROM-linear) for when it moves to the SA-1 (Phase A2).
+ROM[0x0000:0x8000] = INTERP                          # interp mirror @ $00-$1F:8000 (LoROM)
+# A2 boot-flow swap: the 5A22 reset vector ($00:FFFC -> file $7FFC) points at cpu5a22_boot
+# ($FC00), NOT the interp reset. The 5A22 bootstraps the SA-1 (CRV=$8000 = interp reset)
+# then halts; the SA-1 runs the interpreter. (The mirror set $7FFC = interp reset $8000;
+# override it here.)
+ROM[0x7FFC] = 0x00; ROM[0x7FFD] = 0xFC               # 5A22 reset vector = $FC00 (cpu5a22_boot)
+
 # HiROM cartridge header at file $FFC0 (= CPU $00:FFC0)
 H = 0xFFC0
 title = b"SUPERMAN INTERP H>SNES"[:21].ljust(21, b" ")
 ROM[H:H+21] = title
-ROM[H+0x15] = 0x31      # map mode: HiROM + FastROM
-ROM[H+0x16] = 0x00      # cart type: ROM only
+# Extended header at $FFB0 (recognized because DeveloperId $FFDA below = $33):
+# ExpansionRamSize $FFBD = $06 -> SA-1 BW-RAM = 1024<<6 = 64KB (the shared RAM at
+# SNES $40:0000, reachable by both the 5A22 and the SA-1). Without this byte the
+# coprocessor RAM is 0 and $40:0000 is unmapped (BaseCartridge.cpp:244).
+ROM[0xFFBD] = 0x07      # SA-1 BW-RAM size: 128 KB ($40:0000 work RAM + $41:0000 shadow)
+ROM[H+0x15] = 0x31      # map mode: HiROM + FastROM (SA-1 keeps the $C0-$FF linear ROM map)
+ROM[H+0x16] = 0x33      # cart type: SA-1 ((RomType&0xF0)>>4==3 -> CoprocessorType::SA1)
 ROM[H+0x17] = 0x0C      # ROM size: 4MB (2^12 KB)
-ROM[H+0x18] = 0x00      # SRAM size: none
+ROM[H+0x18] = 0x07      # SRAM size = 128 KB: for SA-1 this IS the BW-RAM (the save RAM,
+                        # sized by SramSize $FFD8 -> _saveRamSize; BaseCartridge.cpp:259).
+                        # mapSram=false for SA-1 so no conflict; Sa1::Init maps it to
+                        # $40-$5F (SA-1) / $40-$4F (5A22). $40:0000=work RAM, $41:0000=shadow.
 ROM[H+0x19] = 0x01      # country
 ROM[H+0x1A] = 0x33      # licensee
 ROM[H+0x1B] = 0x00      # version

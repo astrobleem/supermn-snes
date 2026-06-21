@@ -24,9 +24,46 @@ cross-frame BG tile cache (persistent hash + VRAM, skips re-decode), vblank-safe
 forced-blank DMA, and the integration validation. The render subsystem was relocated to
 ROM bank `$E9` (`src/video.pasm`) to free interp-bank space; `map_snes` (hot store
 dispatch) stays in-bank, reached + 3 `jsl`/`jml` wrappers. See `VIDEO_PLUMBING.md`.
-**Next: inputs** (wire SNES pad → C-Chip mailbox so the game responds) and **speed**
-(profile + transpile hot paths — the interpreter runs ~18 interp-steps per real frame).
-Not yet started: bulk transpilation, audio.
+**Inputs are wired**: a manual `$4016` joypad read (`joy_read`) feeds the C-Chip input
+mailbox — `$900001`→P1 (active-low Up/Down/Left/Right/Btn1=B·Y/Btn2=A·X/Start),
+`$900005`→Coin (SNES Select). `readbyte` routes those addresses to the mappers once the
+boot handshake completes (`$A8`=1 input phase, command `$62`≠1). Validated end-to-end on
+real SNES (Mesen): injecting a coin flips the game's own mailbox copies (`$F016BD/C1/C5`,
+`$F01C50/54`) `$FF`→`$FE`; idle stays clean `$FF`. A harness-only virtual-controller word
+at `$00:0200` (cleared at reset; OR'd into `joy_read`) injects input in emulation since
+Mesen `set_input` doesn't reach the manual read path here — harmless on hardware (`$4016`
+is the real source).
+
+**Speed work — SA-1 enablement underway** (the interpreter runs ~14 68K-instr/real-frame,
+~2,000× too slow; transpiling the per-frame path on the SA-1's 10.74 MHz CPU is the only
+path to realtime — see `expressive-jumping-sparrow` plan). **A0 DONE**: the ROM is now a
+real SA-1 cart (RomType `$FFD6=$33`, BW-RAM via SramSize `$FFD8=$07`=128 KB) and the 5A22
+still boots the interpreter via a LoROM mirror of the interp into ROM `$0-$7FFF` (the SA-1
+map exposes `$00:8000` as LoROM, breaking the HiROM layout otherwise). **A1 DONE**: the
+SA-1 coprocessor is fully brought up and verified — it runs code from the mirror, writes
+shared IRAM, write/reads BW-RAM (`$40` work RAM + `$41` shadow, both CPUs coherent), reads
+high ROM banks (`$C1`/`$C9`/`$E9`), and the 5A22 still boots (`tmask=$0003`). Five fixes
+cracked it (CIWP `$222A=$FF` first; Poppy 8-bit immediates via `sep #$20`; SA-1 `stp` to
+free the ROM bus; BW-RAM via SramSize not ExpansionRamSize; SBWE `$2226=$80`). Added a
+`get_cpu_state` tool to the Mesen MCP (SA-1 PC/regs) — decisive for debugging. **A2 DONE**:
+the interpreter now RUNS ON THE SA-1 (work RAM `$7F→$40` BW-RAM, 65816 stack in IRAM, the
+5A22 bootstraps the SA-1 then idles) and boots to the live loop **~5.7× faster** (80 vs 14
+68K-steps/frame) with zero transpilation. **A3 in progress**: the video shadow moved
+`$7E→$41` BW-RAM (SA-1 writes it), a 5A22 supervisor reads `$41` and drives the PPU on an
+IRAM frame-signal — the dual-CPU render works (CGRAM/VRAM populated). Found+fixed a real
+pre-existing bug (op_bitop BTST/etc. used the iloop's `$88/$8A` IRQ/countdown as scratch →
+spurious frame IRQs kept the game in attract; moved iloop state to private `$AA/$AC`). The
+fix advances the game far past attract. **A3 grind (June 21): fixed a MAJOR cross-bank
+return bug** — `push32` hard-coded the pushed return's high 16 bits to `$00` and `op_rts`
+did `stz $42`, truncating 68K addresses to bank 0; any `jsr`/`bsr` returning into banks
+1-7 (the program is 512 KB) crashed on RTS. Fixed via `push32r` (return bank = PC bank
+`$42` + carry) + `op_rts` popping the bank byte; added general EA-engine handlers
+(`op_move_g`/`op_clr_g`/`op_pea_g`/`op_cmpib_g`). **The game now runs 165k → 718k
+68K-instructions, reaches a steady IRQ-driven idle loop (`$0818`), and executes BANK-1 code
+(`$01:370C`) — impossible before.** Next halt: `$066D` = `ADDI.W #imm,(d16,An)` (keep
+grinding general ADDI/SUBI/etc.). Known follow-up: `op_jsr_abs`/`op_jsr_an` still force the
+JSR *target* to bank 0 — needed for direct cross-bank calls. Then A3 cadence, then Phase B
+(hybrid hook + transpiler). See `sa1-bringup`. Not started: audio.
 
 ROM layout (4 MB HiROM): interp `$C0:8000` · 68K image `$C1:0000`–`$C8` · arcade tiles
 `gfx1` `$C9:0000`–`$E8` · video subsystem `$E9:8000` (file `$298000`).

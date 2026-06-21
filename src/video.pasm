@@ -37,18 +37,21 @@ STAGING_CGRAM=$8000
 .bank 0
 .org $8000
 ; entry wrappers (interp: jsl $E90000 vid_frame, jsl $E90004 vid_init, jml $E90008 vidtest)
-    jsr vid_frame
-    rtl
-    jsr vid_init
-    rtl
-    jmp vidtest_init
+    inc $3300            ; $8000 VID_FRAME: the SA-1's interp calls this each game-frame
+    rtl                  ;   boundary -> signals FRAME_REQ++ in shared IRAM ($00:3000).
+    rtl                  ; $8004 VID_INIT: SA-1 no-op (the 5A22 runs vid_init in the
+    nop                  ;   supervisor). pad keeps VIDTEST at $8008.
+    nop
+    nop
+    jmp vidtest_init     ; $8008 VIDTEST
+    jmp cpu5a22_video    ; $800B CPU5A22_VIDEO: 5A22 supervisor (cpu5a22_boot jml's here)
 
 ppu_build:
     php
     rep #$30
     ldx #$0000
 pf_cg:
-    lda $7E2000,x        ; shadow palette word (byte-swapped: hi | lo<<8)
+    lda $412000,x        ; shadow palette word (byte-swapped: hi | lo<<8)
     xba                  ; -> W (arcade xRGB555)
     jsr snes_color       ; -> A = SNES xBGR555
     sta $7E8000,x        ; CGRAM staging (LE byte order = CGDATA write order)
@@ -115,15 +118,23 @@ vid_init:
     rep #$30
     stz $C0
     lda #$0000           ; (no STZ long,X on 65816 -> use sta with A=0)
-    ldx #$2000           ; clear shadow + staging $7E:2000-$7E:9FFE
+    ldx #$2000           ; clear derived buffers/staging $7E:2000-$7E:9FFE (5A22 WRAM)
 viclr:
     sta $7E0000,x
     inx
     inx
     cpx #$A000
     bne viclr
+    ldx #$2000           ; clear the raw shadow $41:2000-$41:7FFE (BW-RAM; the SA-1 fills it)
+viclr41:
+    sta $410000,x
+    inx
+    inx
+    cpx #$8000
+    bne viclr41
     sep #$20
     stz TM               ; no layers yet (Stage 2 shows backdrop only)
+    stz NMITIMEN         ; auto-joypad off; inputs use a manual $4016 serial read
     rep #$30
     jsr bg_hclr          ; clear the persistent cross-frame BG tile cache (one-time)
     plp
@@ -135,10 +146,12 @@ viclr:
 ; game-frames, so any single mid-frame CGRAM glitch is imperceptible.
 vid_frame:
     jsr ppu_build
-    ; Only build sprites once the game is alive (scheduler tmask $F00002 == $0003,
-    ; byte-swapped $0300). During boot the shadow holds garbage and the heavy OBJ
-    ; build would cripple the (already slow) boot.
-    lda $7F0002
+    ; Only build sprites once the game is alive (core scheduler tasks 0+1 active:
+    ; 68K tmask $F00002 bits 0,1 = byte-swapped $0300). Early boot = garbage shadow.
+    ; Was an EXACT `cmp #$0300`; past attract the game activates more tasks (e.g.
+    ; tmask $03C0) so mask to bits 0,1 -> later states still render.
+    lda $400002
+    and #$0300
     cmp #$0300
     bne vf_noobj
     sep #$20
@@ -321,7 +334,7 @@ voi_bti:
 voi_loop:
     ; code = shadow word $7E:4000+i (byte-swapped back to arcade order via xba)
     ldx $E0
-    lda $7E4000,x
+    lda $414000,x
     xba
     sta $F6
     and #$3FFF
@@ -334,13 +347,13 @@ vchk1:
     jmp voi_next
 vchk2:
     ldx $E0
-    lda $7E4400,x
+    lda $414400,x
     xba
     sta $E8              ; xcolor word
     ldx $E0
     inx
     sep #$20
-    lda $7E3000,x        ; arcade low byte = Y
+    lda $413000,x        ; arcade low byte = Y
     rep #$30
     and #$00FF
     sta $EC              ; sy
@@ -745,7 +758,7 @@ vb_keep:
     stz $E0              ; i*2 = 0
 vb_loop:
     ldx $E0
-    lda $7E4800,x        ; tilemap code (byte-swapped)
+    lda $414800,x        ; tilemap code (byte-swapped)
     xba
     sta $F6
     and #$3FFF
@@ -754,7 +767,7 @@ vb_loop:
 vb_c1:
     sta $E4              ; c = code & $3FFF
     ldx $E0
-    lda $7E4C00,x        ; color word
+    lda $414C00,x        ; color word
     xba
     sta $E8
     jsr bg_slot          ; sequential dedup: $DA = tile slot (decodes if new)
@@ -1114,7 +1127,7 @@ vidtest_init:
     rep #$30
     jsr vid_init
 vidtest_wait:
-    lda $7F0000          ; wait for harness go-flag (so shadow is injected first)
+    lda $400000          ; wait for harness go-flag (so shadow is injected first)
     beq vidtest_wait
     jsr ppu_build
     jsr vid_bg
@@ -1263,3 +1276,22 @@ bhc_l:
     bne bhc_l
     stz $DC
     rts
+
+; cpu5a22_video — the 5A22's video supervisor (Phase A3). cpu5a22_boot jml's here
+; ($E9:800B) after bootstrapping the SA-1, instead of stp. The SA-1 runs the interpreter
+; and writes the raw arcade shadow into BW-RAM $41; at each game-frame boundary it bumps
+; FRAME_REQ (IRAM $00:3000) via the VID_FRAME wrapper. This loop polls that counter and,
+; on a new frame, rebuilds CGRAM/OAM/BG from the $41 shadow and DMAs to the PPU. (Spin-poll
+; like OutRun's WaitForSa1Done; a vblank-NMI wake is a later contention optimization.)
+cpu5a22_video:
+    jsr vid_init         ; clear derived $7E + raw shadow $41, TM=0, screen off
+    rep #$30
+    stz $3302            ; FRAME_ACK = 0 (IRAM; 5A22 IRAM writes enabled via SIWP)
+cv_loop:
+    rep #$30
+    lda $3300            ; FRAME_REQ (the SA-1 increments it once per game-frame)
+    cmp $3302            ; FRAME_ACK
+    beq cv_loop          ; no new game-frame -> spin
+    sta $3302            ; ack this frame
+    jsr vid_frame        ; build CGRAM/OAM/BG from $41 shadow + DMA to PPU (forced blank)
+    bra cv_loop

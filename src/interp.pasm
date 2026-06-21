@@ -5,7 +5,7 @@
 ; addressing modes. Reaching $4008 (first opcode after the RAM test) proves real
 ; data-dependent 68K code runs correctly on real SNES.
 ;
-; Memory: 68K work RAM $F0xxxx -> SNES bank $7F ($7F0000,x). Other writes no-op.
+; Memory: 68K work RAM $F0xxxx -> SNES bank $7F ($400000,x). Other writes no-op.
 ; 68K regs in direct page (D2): Dn @ $00+4n (lo@+0, hi@+2), An @ $20+4n.
 ; PC@$40, opcode@$44, scratch@$50/$52, log idx@$48, step@$4A (32-bit), stop@$4C,
 ; Z-flag@$60. 68K ROM slice at CPU $A000 (ROM off $2000); PC log -> $0800.
@@ -40,15 +40,24 @@ SLICE_BASE=$3E00
 VID_FRAME=$E98000
 VID_INIT=$E98004
 VIDTEST=$E98008
+CPU5A22_VIDEO=$E9800B
 
 .bank 0
 .org $8000
 reset:
+    sep #$20             ; reset = 8-bit emulation on both CPUs; explicit for Poppy.
+    lda #$FF
+    sta $222A            ; CIWP: the SA-1 enables its OWN IRAM writes FIRST (the $2200
+                         ; release zeroed it; only Sa1RegisterWrite handles $222A, so the
+                         ; 5A22 can't set it). The interp's DP regfile / 65816 stack / vc /
+                         ; ring all live in the SA-1's bank-$00 IRAM -> must be writable
+                         ; before any of them is touched. (On the 5A22 $222A is ignored.)
     clc
     xce
     rep #$30
-    ldx #$1fff
-    txs
+    ldx #$07ff           ; 65816 stack in bank-$00 low RAM. On the SA-1 (which runs the
+    txs                  ; interp) bank $00 is 2KB IRAM ($0000-07FF); stack grows down
+                         ; from $07FF, clear of DP ($00-FF), vc ($0200), ring ($0400).
     sep #$20
     lda #$80
     sta INIDISP
@@ -60,10 +69,12 @@ reset:
     lda #$0000
     ldx #$0000
 wramclr:
-    sta $7F0000,x        ; abs-long,x ($9F): clears 2 bytes
+    sta $400000,x        ; abs-long,x ($9F): clears 2 bytes
     inx
     inx
     bne wramclr          ; X: 0,2,..,FFFE -> wrap to 0 -> done (full 64KB)
+    sta $000200          ; clear the virtual-controller test-injection word (A=0 here).
+                         ; $00:0200 = interp-private WRAM (not 68K $7F / not video $7E).
     ; ---- TEST-MODE entry (optest.py differential harness) ----
     ; If ROM TESTFLAG ($00:F400) != 0 (baked into a test .sfc), enter single-step
     ; poll-idle. The harness pokes DP regs ($00-$3F), PC ($40/$42), flags
@@ -72,9 +83,9 @@ wramclr:
     ; exactly one op (op baked in the ROM image) and returns. Production = TESTFLAG 0.
     lda $F400
     beq notest
-    stz $88              ; no pending IRQ
+    stz $AA              ; no pending IRQ (countdown/pending moved off $88/$8A; see iloop)
     lda #$7FFF
-    sta $8A              ; huge countdown: no IRQ during the single step
+    sta $AC              ; huge countdown: no IRQ during the single step
     lda #$0001
     sta $7E              ; single-step ON
     stz $A0              ; go-flag clear
@@ -123,9 +134,9 @@ rclr:
     stz $72              ; V flag
     lda #$0007
     sta $7C              ; SR interrupt mask = 7 (IRQs masked during boot)
-    stz $88              ; IRQ pending = 0
+    stz $AA              ; IRQ pending = 0 (moved off $88/$8A; see iloop note)
     lda #$7000
-    sta $8A              ; vblank IRQ countdown (instr/frame); ~28k matches MAME 16MHz/57Hz
+    sta $AC              ; vblank IRQ countdown (instr/frame); ~28k matches MAME 16MHz/57Hz
     jsl VID_INIT         ; clear $7E shadow/staging, screen off, TM=0 (production)
     ; NOTE: a prior reset-time bootstrap of ($F00006)=$00F0000A was REMOVED. With the
     ; corrected VBLANK cadence ($8A=$7000), trap#1 ($0466) now runs to completion and
@@ -141,17 +152,20 @@ iloop:
     ; so it polls HVBJOY many times per frame and reliably catches the edge.
     ; (BISECT: iloop-top hook removed; flush now happens at the $8A reload below.)
     ; ---- vblank IRQ: countdown -> pending; take if mask < 6 (level-6 autovector $6C4)
-    lda $8A
+    ; NOTE: countdown/pending live at $AC/$AA, NOT $8A/$88 -- op_bitop and two other
+    ; handlers use $88/$8A/$8C as scratch, which would otherwise corrupt the frame pacing
+    ; (a BTST setting $8A=mask -> spurious frame IRQ every bit-op). $AA/$AC are private.
+    lda $AC
     dec a
-    sta $8A
+    sta $AC
     bne irq_chk
     lda #$7000
-    sta $8A              ; reload frame countdown (~28k matches MAME cadence)
+    sta $AC              ; reload frame countdown (~28k matches MAME cadence)
     lda #$0001
-    sta $88              ; raise vblank pending
+    sta $AA              ; raise vblank pending
     jsl VID_FRAME        ; game-frame boundary: rebuild CGRAM from shadow + DMA
 irq_chk:
-    lda $88
+    lda $AA
     beq irq_none
     lda $7C
     and #$0007
@@ -165,7 +179,7 @@ irq_none:
     lda $42
     cmp #$00F0           ; 68K work-RAM PC ($F0xxxx)? execute from SNES $7F bank
     bne ifetch_rom
-    lda #$007F
+    lda #$0040
     sta $58              ; ptr bank = $7F (work RAM); RAM-resident routines
     bra ifetch_go
 ifetch_rom:
@@ -177,12 +191,13 @@ ifetch_go:
     lda [$56],y
     xba                  ; A = big-endian opcode word
     sta $44
-    ; ring buffer: last 64 PCs (4 bytes each: low16,high16) at $0800; idx $48 wraps $100
+    ; ring buffer: last 64 PCs (4 bytes each: low16,high16) at $0400; idx $48 wraps $100.
+    ; ($0400 not $0800: on the SA-1, bank-$00 IRAM is 2KB and $0800 mirrors $0000=DP.)
     ldy $48
     lda $40
-    sta $0800,y
+    sta $0400,y
     lda $42
-    sta $0802,y
+    sta $0402,y
     tya
     clc
     adc #4
@@ -271,9 +286,15 @@ k17: cmp #$4E75
     bne k18
     jmp op_rts
 k18: cmp #$0C39          ; cmpi.b #imm,(xxx).L  (.L = $0C39; .W would be $0C38)
-    bne k18b
+    bne k18g
     jmp op_cmpib_abs
-k18b: pha
+k18g: lda $44
+    and #$FFC0
+    cmp #$0C00           ; cmpi.b #imm,<ea> (byte size, any mode; abs.L caught above) -> general
+    bne k18b
+    jmp op_cmpib_g
+k18b: lda $44              ; reload (k18g clobbered A; k18b/k19 need the raw opcode)
+    pha
     and #$FFF8
     cmp #$0C00           ; cmpi.b #imm,Dn  ($0C00|Dn)
     bne k18b2
@@ -473,6 +494,15 @@ k61: cmp #$1000            ; move.b Dn,Dn
     bne k62
     jmp op_movb_dn_dn
 k62: lda $44
+    and #$FF00
+    cmp #$0600            ; ADDI #imm,<ea> family ($06xx)?
+    bne k62m
+    lda $44
+    and #$0038            ; mode field (bits 5-3)
+    cmp #$0010            ; mode >= 2 (memory EA) -> general handler; mode 0/1 -> specific
+    bcc k62m
+    jmp op_addi_g
+k62m: lda $44
     and #$FFF8
     cmp #$0600            ; addi.b #imm,Dn
     bne k63
@@ -1113,6 +1143,26 @@ kb8_uspf: cmp #$4E68        ; MOVE USP,An
     bne kbad
     jmp op_move_usp_an
 kbad:
+    lda $44              ; general MOVE fallback: any unmatched $1xxx/$2xxx/$3xxx is a
+    and #$C000           ; move/movea EA variant -> op_move_g (EA engine). bits 15-14==00
+    bne kbad_mv0         ; not $0-3xxx -> try CLR
+    lda $44
+    and #$3000           ; bits 13-12 != 00 identifies a MOVE (vs $0xxx ORI/ANDI/...)
+    beq kbad_mv0
+    jmp op_move_g
+kbad_mv0:
+    lda $44              ; CLR.size <ea> = $42xx -> op_clr_g (EA engine, any EA mode)
+    and #$FF00
+    cmp #$4200
+    bne kbad_pea
+    jmp op_clr_g
+kbad_pea:
+    lda $44              ; PEA <ea> = $4840-$487F (SWAP $4840-47 already matched) -> op_pea_g
+    and #$FFC0
+    cmp #$4840
+    bne kbad_halt
+    jmp op_pea_g
+kbad_halt:
     lda #$DEAD           ; unknown opcode -> stop (e.g. $2B18 clr.w D0)
     sta $4E
     jmp idone
@@ -1275,7 +1325,7 @@ op_movb_dn_anp:          ; move.b Dn,(An)+ : dstAn=(11-9), srcDn=(2-0); PC += 2
     ldx $52              ; X = mem offset (use long,X — no long,Y exists)
     sep #$20
     lda $50
-    sta $7F0000,x        ; write byte to work RAM
+    sta $400000,x        ; write byte to work RAM
     rep #$20
     lda $40
     clc
@@ -1304,7 +1354,7 @@ op_movb_dn_d16:          ; move.b Dn,(d16,An) : [An+d16]=Dn.b (work RAM); Z ; PC
     tax                  ; dst addr = An.low16 + d16
     sep #$20
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 mbdd_skip:
     lda $50
@@ -1335,7 +1385,7 @@ op_movb_dn_predec:       ; move.b Dn,-(An) : An-=1; [An]=Dn.b (work RAM); Z ; PC
     tax
     sep #$20
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 mdp_skip:
     lda $50
@@ -1361,7 +1411,7 @@ op_movb_imm_predec:      ; move.b #imm,-(An) : An-=1; [An]=imm.b ; Z ; PC += 4
     tax
     sep #$20
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 mip_skip:
     lda $50
@@ -1388,7 +1438,7 @@ op_movb_dn_an:           ; move.b Dn,(An) : work-RAM only (I/O = no-op) ; PC += 
     tax
     sep #$20
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 mdn_skip:
     lda $40
@@ -1411,7 +1461,7 @@ op_cmpb_anp:             ; cmp.b (An)+,Dn : Z=(mem==Dn.b); An++; PC += 2
     sta $00,x            ; An++
     ldx $52
     sep #$20
-    lda $7F0000,x        ; mem byte
+    lda $400000,x        ; mem byte
     sta $50
     rep #$20
     jsr regdst           ; X = Dn slot
@@ -1437,7 +1487,7 @@ op_cmpb_an:              ; cmp.b (An),Dn : no increment ; PC += 2
     lda $00,x            ; An low16 -> X
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $50
     rep #$20
     jsr regdst
@@ -1614,7 +1664,7 @@ op_jsr_abs:              ; jsr (xxx).L : push PC+6, PC = target ; (work-RAM stac
     clc
     adc #6
     sta $54              ; return addr low16
-    jsr push32
+    jsr push32r
     lda $52
     sta $40              ; PC = target low16 (bank stays $00)
     stz $42
@@ -1631,7 +1681,7 @@ op_bsr:                  ; bsr : disp8 (short) or, if disp8==0, disp16 (word for
     clc
     adc #4
     sta $54              ; return addr = PC+4
-    jsr push32
+    jsr push32r
     lda $40
     clc
     adc #2
@@ -1649,7 +1699,7 @@ bsr_pos:
     clc
     adc #2
     sta $54              ; return addr = PC+2
-    jsr push32
+    jsr push32r
     lda $40
     clc
     adc #2
@@ -1658,23 +1708,19 @@ bsr_pos:
     sta $40
     jmp inext
 
-op_rts:                  ; rts : PC = pop32 (low 16) ; A7 += 4
+op_rts:                  ; rts : PC = pop 24-bit return (bank byte1 -> $42) ; A7 += 4
     ldx $3C              ; A7 low16
     sep #$20
-    lda $7F0002,x        ; ret byte2 (PC bits 8-15)
-    xba
-    lda $7F0003,x        ; ret byte3 (PC bits 0-7)
-    rep #$20
+    lda $400001,x        ; byte1 = PC bits 16-23 (bank) -- was discarded (stz $42),
+    rep #$20             ; truncating cross-bank returns to bank 0
     and #$00FF
-    sta $50
+    sta $42              ; PC high16 = bank
     sep #$20
-    lda $7F0002,x
-    rep #$20
-    and #$00FF
+    lda $400002,x        ; byte2 = PC bits 8-15 -> A.hi
     xba
-    ora $50              ; PC low16 = byte2<<8 | byte3
-    sta $40
-    stz $42
+    lda $400003,x        ; byte3 = PC bits 0-7  -> A.lo
+    rep #$20
+    sta $40              ; PC low16 = byte2<<8 | byte3
     lda $3C
     clc
     adc #4
@@ -1818,7 +1864,7 @@ op_movw_imm_d16:         ; move.w #imm,(d16,An) : work-RAM word write (big-endia
     tax                  ; X = An.low16 + d16 (assume An high $F0)
     lda $50
     xba                  ; store big-endian: hi at offset, lo at offset+1
-    sta $7F0000,x
+    sta $400000,x
     lda $40
     clc
     adc #6               ; move.w #imm,(d16,An) is 6 bytes
@@ -1840,10 +1886,10 @@ op_movw_d16_predec:      ; move.w (d16,An),-(An) : push word from (srcAn+d16); Z
     adc $52
     tax                  ; src addr
     sep #$20
-    lda $7F0000,x        ; src bits15-8
+    lda $400000,x        ; src bits15-8
     sta $51
     inx
-    lda $7F0000,x        ; src bits7-0
+    lda $400000,x        ; src bits7-0
     sta $50
     rep #$20
     jsr regdstA          ; X = dst An slot (bits 11-9)
@@ -1854,10 +1900,10 @@ op_movw_d16_predec:      ; move.w (d16,An),-(An) : push word from (srcAn+d16); Z
     tax                  ; dst addr (stack work RAM)
     sep #$20
     lda $51
-    sta $7F0000,x        ; high byte
+    sta $400000,x        ; high byte
     inx
     lda $50
-    sta $7F0000,x        ; low byte
+    sta $400000,x        ; low byte
     rep #$20
     lda $50
     jsr setz_from_a
@@ -1884,12 +1930,12 @@ op_movw_dn_predec:       ; move.w Dn,-(An) : An-=2; [An]=Dn.w (big-endian); Z ; 
     lda $50
     xba
     sep #$20
-    sta $7F0000,x        ; high byte
+    sta $400000,x        ; high byte
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x        ; low byte
+    sta $400000,x        ; low byte
     rep #$20
     lda $50
     jsr setz_from_a
@@ -1911,12 +1957,12 @@ op_movw_imm_pre:         ; move.w #imm,-(An) : An-=2 ; [An]=imm (big-endian) ; P
     lda $50
     xba
     sep #$20
-    sta $7F0000,x        ; high byte
+    sta $400000,x        ; high byte
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x        ; low byte
+    sta $400000,x        ; low byte
     rep #$20
     lda $40
     clc
@@ -1983,10 +2029,10 @@ op_movw_d16_dn:          ; move.w (d16,An),Dn : Dn.lo = [An+d16] (big-endian) ; 
     adc $52
     tax                  ; X = addr low16 (work RAM)
     sep #$20
-    lda $7F0000,x        ; high byte
+    lda $400000,x        ; high byte
     sta $51
     inx
-    lda $7F0000,x        ; low byte
+    lda $400000,x        ; low byte
     sta $50
     rep #$20
     jsr regdst           ; X = Dn slot
@@ -2016,12 +2062,12 @@ op_movw_dn_d16:          ; move.w Dn,(d16,An) : [An+d16] = Dn.lo (big-endian) ; 
     lda $50
     xba
     sep #$20
-    sta $7F0000,x        ; high byte
+    sta $400000,x        ; high byte
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x        ; low byte
+    sta $400000,x        ; low byte
     rep #$20
     lda $40
     clc
@@ -2052,7 +2098,7 @@ op_movb_an_anp:          ; move.b (An),(An)+ : [dstAn++]=read(srcAn) (I/O-aware 
     ldx $52
     sep #$20
     lda $50
-    sta $7F0000,x        ; write to work RAM
+    sta $400000,x        ; write to work RAM
     rep #$20
     lda $40
     clc
@@ -2124,7 +2170,7 @@ op_jsr_pcrel:            ; jsr (d16,PC) : push PC+4 ; PC = PC+2+d16
     clc
     adc #4
     sta $54              ; return addr = PC+4
-    jsr push32
+    jsr push32r
     lda $40
     clc
     adc #2
@@ -2285,22 +2331,22 @@ op_movl_imm_d16:         ; move.l #imm,(d16,An) : [An+d16]=imm32 (big-endian) ; 
     tax                  ; addr low16
     sep #$20
     lda $51
-    sta $7F0000,x        ; bits 24-31
+    sta $400000,x        ; bits 24-31
     rep #$20
     inx
     sep #$20
     lda $50
-    sta $7F0000,x        ; bits 16-23
+    sta $400000,x        ; bits 16-23
     rep #$20
     inx
     sep #$20
     lda $53
-    sta $7F0000,x        ; bits 8-15
+    sta $400000,x        ; bits 8-15
     rep #$20
     inx
     sep #$20
     lda $52
-    sta $7F0000,x        ; bits 0-7
+    sta $400000,x        ; bits 0-7
     rep #$20
     lda $40
     clc
@@ -2344,7 +2390,7 @@ op_btst_imm_d16:         ; btst #bit,(d16,An) : Z=!(byte bit set) ; PC += 6
     adc $52
     tax                  ; addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     rep #$20
     and #$00FF
     sta $54              ; byte
@@ -2381,9 +2427,9 @@ op_clrw_d16:             ; clr.w (d16,An) : [An+d16]=0 ; Z=1 ; PC += 4
     tax                  ; addr
     sep #$20
     lda #$00
-    sta $7F0000,x
+    sta $400000,x
     inx
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda #$0001
     sta $60
@@ -2405,16 +2451,16 @@ op_pea:                  ; pea (xxx).L : push 32-bit abs address ; PC += 6
     tax
     sep #$20
     lda $51
-    sta $7F0000,x        ; bits 24-31
+    sta $400000,x        ; bits 24-31
     inx
     lda $50
-    sta $7F0000,x        ; bits 16-23
+    sta $400000,x        ; bits 16-23
     inx
     lda $53
-    sta $7F0000,x        ; bits 8-15
+    sta $400000,x        ; bits 8-15
     inx
     lda $52
-    sta $7F0000,x        ; bits 0-7
+    sta $400000,x        ; bits 0-7
     rep #$20
     lda $40
     clc
@@ -2453,16 +2499,16 @@ ped_hi:
     tax                  ; A7 low16
     sep #$20
     lda $57              ; EA bits31-24
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $56              ; bits23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $55              ; bits15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54              ; bits7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -2513,10 +2559,10 @@ op_movw_an_d16:          ; move.w (An),(d16,An) : [dstAn+d16]=[srcAn] (big-end) 
     lda $00,x
     tax                  ; src addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $51              ; high byte
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $50              ; low byte
     rep #$20
     jsr regdstA          ; dst An
@@ -2526,10 +2572,10 @@ op_movw_an_d16:          ; move.w (An),(d16,An) : [dstAn+d16]=[srcAn] (big-end) 
     tax                  ; dst addr
     sep #$20
     lda $51
-    sta $7F0000,x        ; high
+    sta $400000,x        ; high
     inx
     lda $50
-    sta $7F0000,x        ; low
+    sta $400000,x        ; low
     rep #$20
     lda $40
     clc
@@ -2574,14 +2620,14 @@ mll_loop:
     ldx $6A              ; mode 1 -> shadow RAM $7E
     sep #$20
     lda $50
-    sta $7E0000,x        ; mirror byte into video shadow
+    sta $410000,x        ; mirror byte into video shadow
     rep #$20
     bra mll_nowrite
 mll_work:
     ldx $6A
     sep #$20
     lda $50
-    sta $7F0000,x        ; write byte to dst (work RAM)
+    sta $400000,x        ; write byte to dst (work RAM)
     rep #$20
 mll_nowrite:
     inc $54              ; src low16++
@@ -2686,16 +2732,16 @@ op_link:                 ; link An,#disp16 : push An; An=A7; A7+=signext(disp16)
     ldx $3C              ; X = A7 low16 (work RAM $7F)
     sep #$20
     lda $53              ; An bits31-24
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $52              ; An bits23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $55              ; An bits15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54              ; An bits7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     ; An = A7 (low16 from $3C, high16 = A7 high = $3E)
     lda $44
@@ -2745,16 +2791,16 @@ op_unlk:                 ; unlk An : A7=An; An=pop32; A7+=4 ; PC+=2
     sta $3E              ; A7 high16 = An high16
     ldx $3C              ; X = A7 (work RAM)
     sep #$20
-    lda $7F0000,x        ; bits31-24
+    lda $400000,x        ; bits31-24
     sta $53
     inx
-    lda $7F0000,x        ; bits23-16
+    lda $400000,x        ; bits23-16
     sta $52
     inx
-    lda $7F0000,x        ; bits15-8
+    lda $400000,x        ; bits15-8
     sta $55
     inx
-    lda $7F0000,x        ; bits7-0
+    lda $400000,x        ; bits7-0
     sta $54
     rep #$20
     lda $44
@@ -2817,16 +2863,16 @@ mp_loop:
     tax                  ; X = An addr (work RAM $7F)
     sep #$20
     lda $57              ; bits31-24
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $56              ; bits23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $55              ; bits15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54              ; bits7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 mp_skip:
     iny
@@ -2869,10 +2915,10 @@ mpw_loop:
     tax                  ; An addr (work RAM $7F)
     sep #$20
     lda $55              ; bits15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54              ; bits7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 mpw_skip:
     iny
@@ -2908,10 +2954,10 @@ mqw_loop:
     lda $00,x
     tax                  ; An addr
     sep #$20
-    lda $7F0000,x        ; bits15-8
+    lda $400000,x        ; bits15-8
     sta $55
     inx
-    lda $7F0000,x        ; bits7-0
+    lda $400000,x        ; bits7-0
     sta $54
     rep #$20
     ldx $6C
@@ -2965,16 +3011,16 @@ mq_loop:
     lda $00,x
     tax                  ; X = An addr
     sep #$20
-    lda $7F0000,x        ; bits31-24
+    lda $400000,x        ; bits31-24
     sta $53
     inx
-    lda $7F0000,x        ; bits23-16
+    lda $400000,x        ; bits23-16
     sta $52
     inx
-    lda $7F0000,x        ; bits15-8
+    lda $400000,x        ; bits15-8
     sta $55
     inx
-    lda $7F0000,x        ; bits7-0
+    lda $400000,x        ; bits7-0
     sta $54
     rep #$20
     ; An += 4
@@ -3014,16 +3060,16 @@ op_movea_l_d16:         ; movea.l (d16,An),An : dst = [srcAn+d16] (direct $7F) ;
     adc $52
     tax                  ; src addr low16 ($7F)
     sep #$20
-    lda $7F0000,x        ; bits31-24
+    lda $400000,x        ; bits31-24
     sta $53
     inx
-    lda $7F0000,x        ; bits23-16
+    lda $400000,x        ; bits23-16
     sta $52
     inx
-    lda $7F0000,x        ; bits15-8
+    lda $400000,x        ; bits15-8
     sta $55
     inx
-    lda $7F0000,x        ; bits7-0
+    lda $400000,x        ; bits7-0
     sta $54
     rep #$20
     jsr regdstA          ; dst An slot
@@ -3074,20 +3120,20 @@ op_movw_anp_an:         ; move.w (An)+,(An) : [dstAn]=[srcAn] (ROM-aware src, ga
     ldx $6A              ; work RAM $7F
     sep #$20
     lda $51
-    sta $7F0000,x        ; high byte
+    sta $400000,x        ; high byte
     inx
     lda $50
-    sta $7F0000,x        ; low byte
+    sta $400000,x        ; low byte
     rep #$20
     bra mwaa_skip
 mwaa_shadow:
     ldx $6A
     sep #$20
     lda $51
-    sta $7E0000,x        ; high byte (video shadow)
+    sta $410000,x        ; high byte (video shadow)
     inx
     lda $50
-    sta $7E0000,x        ; low byte
+    sta $410000,x        ; low byte
     rep #$20
 mwaa_skip:
     lda $50
@@ -3217,21 +3263,21 @@ op_or_l_d16:            ; or.l Dn,(d16,An) : [An+d16] |= Dn (32, work RAM) ; PC+
     adc $6A
     tax                  ; addr low16 ($7F)
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     ora $53              ; bits31-24
-    sta $7F0000,x
+    sta $400000,x
     inx
-    lda $7F0000,x
+    lda $400000,x
     ora $52              ; bits23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
-    lda $7F0000,x
+    lda $400000,x
     ora $51              ; bits15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
-    lda $7F0000,x
+    lda $400000,x
     ora $50              ; bits7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -3251,7 +3297,7 @@ op_movb_imm_anp:        ; move.b #imm,(An)+ : [An]=imm.b (work RAM); An+=1 ; PC+
     ldx $52
     sep #$20
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -3284,7 +3330,7 @@ op_movb_anp_anp:        ; move.b (An)+,(An)+ : [dst]=read(src) (ROM-aware); both
     ldx $52
     sep #$20
     lda $50
-    sta $7F0000,x        ; write to work RAM
+    sta $400000,x        ; write to work RAM
     rep #$20
     lda $40
     clc
@@ -3408,7 +3454,7 @@ op_clrb_an:            ; clr.b (An) : [An]=0 (work RAM only); Z=1 ; PC+=2
     lda $00,x
     tax
     sep #$20
-    stz $7F0000,x
+    stz $400000,x
     rep #$20
 cba_noff:
     lda #$0001
@@ -3434,7 +3480,7 @@ op_clrb_anp:           ; clr.b (An)+ : [An]=0 (work RAM); An+=1; Z=1 ; PC+=2
     ldx $52
     sep #$20
     lda #$00
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda #$0001
     sta $60             ; Z = 1
@@ -3465,16 +3511,16 @@ op_movl_an_d16:        ; move.l An,(d16,An) : [dstAn+d16]=srcAn (32, work RAM bi
     tax                 ; dst addr (work RAM)
     sep #$20
     lda $55             ; src bits31-24
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54             ; bits23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51             ; bits15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50             ; bits7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -3564,7 +3610,7 @@ op_movb_abs_d16:       ; move.b (xxx).L,(d16,An) : [An+d16]=read(abs) (I/O/ROM-a
     tax                 ; addr = An + d16
     sep #$20
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -3662,16 +3708,16 @@ op_movl_an_d16dst:     ; move.l (An),(d16,An) : [dstAn+d16]=read32(srcAn) (ROM-a
     tax                 ; dst addr
     sep #$20
     lda $6D
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $6C
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -3766,10 +3812,10 @@ op_cmpiw_d16:          ; cmpi.w #imm,(d16,An) : Z=(mem.w==imm) ; PC+=6
     adc $52
     tax                ; addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $53            ; high byte
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $52            ; low byte
     rep #$20
     lda $52            ; mem word = $53:$52
@@ -3801,10 +3847,10 @@ op_addib_d16:          ; addi.b #imm,(d16,An) : [An+d16]+=imm.b ; Z ; PC+=6
     adc $52
     tax                ; addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     clc
     adc $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     and #$00FF
     jsr setz_from_a
@@ -3829,10 +3875,10 @@ op_cmpw_d16_dn:        ; cmp.w (d16,An),Dn : Z=(Dn.lo == mem.w) ; PC+=4
     adc $52
     tax                ; addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $51            ; high byte
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $50            ; low byte
     rep #$20
     jsr regdst         ; Dn slot
@@ -4036,7 +4082,7 @@ op_movb_d16_dn:        ; move.b (d16,An),Dn : Dn.b = [An+d16] (work RAM) ; PC+=4
     adc $52
     tax                ; addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $50
     rep #$20
     jsr regdst         ; Dn slot
@@ -4130,12 +4176,12 @@ op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end, work RAM) ; PC+=2
     lda $50
     xba
     sep #$20
-    sta $7F0000,x      ; high byte
+    sta $400000,x      ; high byte
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x      ; low byte
+    sta $400000,x      ; low byte
     rep #$20
     lda $40
     clc
@@ -4265,48 +4311,54 @@ ix_long:
 writebyte:
     lda $52
     cmp #$00F0
-    bne wb_done
+    bne wb_vid
     ldx $54
     sep #$20
     lda $80
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 wb_done:
     rts
+wb_vid:
+    jmp store_vid_byte   ; $B0/$D0/$E0 -> $41 shadow (else dropped); rts to caller
 writeword:
     lda $52
     cmp #$00F0
-    bne ww_done
+    bne ww_vid
     ldx $54
     sep #$20
     lda $81              ; high byte first (big-endian)
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $80              ; low byte
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 ww_done:
     rts
+ww_vid:
+    jmp store_vid_word   ; $B0/$D0/$E0 -> $41 shadow (else dropped); rts to caller
 writelong:
     lda $52
     cmp #$00F0
-    bne wl_done
+    bne wl_vid
     ldx $54
     sep #$20
     lda $83              ; bits 31-24
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $82              ; bits 23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $81              ; bits 15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $80              ; bits 7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 wl_done:
     rts
+wl_vid:
+    jmp store_vid_long   ; $B0/$D0/$E0 -> $41 shadow (else dropped); rts to caller
 
 op_movw_dn_dn:         ; move.w Dn,Dn : dst.lo = src.lo ; Z ; PC+=2
     lda $44
@@ -4341,10 +4393,10 @@ op_or_w_d16:           ; or.w (d16,An),Dn : Dn.lo |= [An+d16].w ; Z ; PC+=4
     adc $52
     tax                ; src addr low16
     sep #$20
-    lda $7F0000,x      ; bits15-8
+    lda $400000,x      ; bits15-8
     sta $51
     inx
-    lda $7F0000,x      ; bits7-0
+    lda $400000,x      ; bits7-0
     sta $50
     rep #$20
     jsr regdst         ; dst Dn slot
@@ -4494,16 +4546,16 @@ op_movl_dn_an:         ; move.l Dn,(An) : [An]=Dn (32, work RAM big-end) ; PC+=2
     tax
     sep #$20
     lda $53
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $52
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -4736,16 +4788,16 @@ op_movl_idx_d16:       ; move.l (d8,An,Xn),(d16,An) : [dstAn+d16]=read32(ea) ; P
     tax
     sep #$20
     lda $6B
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $6A
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -4773,7 +4825,7 @@ op_bchg_dn_d16:        ; bchg Dn,(d16,An) : toggle bit (Dn&7) in [An+d16].b ; Z=
     tax                ; addr
     stx $54            ; save addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $52            ; byte
     rep #$20
     ldy $50
@@ -4792,7 +4844,7 @@ bcd_t:
     eor $56            ; toggle
     ldx $54
     sep #$20
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -4843,10 +4895,10 @@ op_ori_w_idx:          ; ori.w #imm,(d8,An,Xn) : [ea].w |= imm (work RAM) ; Z ; 
     jsr idx_ea         ; $54=ea low16
     ldx $54
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $51
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $50
     rep #$20
     lda $50
@@ -4856,10 +4908,10 @@ op_ori_w_idx:          ; ori.w #imm,(d8,An,Xn) : [ea].w |= imm (work RAM) ; Z ; 
     ldx $54
     sep #$20
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -4908,16 +4960,16 @@ op_movl_dn_idx:        ; move.l Dn,(d8,An,Xn) : [ea]=Dn (32, work RAM big-end) ;
     ldx $54
     sep #$20
     lda $59            ; Dn bits31-24 (high byte of $58)
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $58            ; bits23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51            ; bits15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50            ; bits7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -4945,16 +4997,16 @@ op_movl_an_idx:        ; move.l An,(d8,An,Xn) : [ea]=An (32, work RAM) ; PC+=4
     ldx $54
     sep #$20
     lda $59
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $58
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5019,16 +5071,16 @@ op_movl_d16_pre:       ; move.l (d16,An),-(An) : dst An-=4; [dst]=[srcAn+d16] (3
     adc $52
     tax                ; src addr ($7F)
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $59
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $58
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $51
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $50
     rep #$20
     jsr regdstA        ; dst An slot
@@ -5039,16 +5091,16 @@ op_movl_d16_pre:       ; move.l (d16,An),-(An) : dst An-=4; [dst]=[srcAn+d16] (3
     tax                ; dst addr
     sep #$20
     lda $59
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $58
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5071,16 +5123,16 @@ op_movl_d16_dn:        ; move.l (d16,An),Dn : Dn = [An+d16] (32, work RAM) ; PC+
     adc $52
     tax                ; src addr low16 (An assumed $F0xxxx -> $7F)
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $53            ; bits 31-24
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $52            ; bits 23-16
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $55            ; bits 15-8
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $54            ; bits 7-0
     rep #$20
     jsr regdst         ; X = dest Dn slot (bits 11-9)
@@ -5119,16 +5171,16 @@ op_movl_dn_d16:        ; move.l Dn,(d16,An) : [An+d16]=Dn (32, work RAM); Z ; PC
     tax                ; dst addr
     sep #$20
     lda $57
-    sta $7F0000,x      ; bits31-24
+    sta $400000,x      ; bits31-24
     inx
     lda $56
-    sta $7F0000,x      ; bits23-16
+    sta $400000,x      ; bits23-16
     inx
     lda $55
-    sta $7F0000,x      ; bits15-8
+    sta $400000,x      ; bits15-8
     inx
     lda $54
-    sta $7F0000,x      ; bits7-0
+    sta $400000,x      ; bits7-0
     rep #$20
 mldd_skip:
     lda $54
@@ -5172,16 +5224,16 @@ mrp_src:
     tax                ; An low16 -> work-RAM offset
     sep #$20
     lda $57            ; bits 31-24
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $56            ; bits 23-16
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $55            ; bits 15-8
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54            ; bits 7-0
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5200,16 +5252,16 @@ op_movl_an_pre:        ; move.l (An),-(An) : dst An-=4; [dst]=[srcAn] (32, $7F) 
     lda $00,x
     tax                ; src addr
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $59
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $58
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $51
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $50
     rep #$20
     jsr regdstA
@@ -5220,16 +5272,16 @@ op_movl_an_pre:        ; move.l (An),-(An) : dst An-=4; [dst]=[srcAn] (32, $7F) 
     tax
     sep #$20
     lda $59
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $58
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5278,7 +5330,7 @@ op_movb_d16_d16:       ; move.b (d16,An),(d16,An) : work RAM ; PC+=6
     adc $50
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $54
     rep #$20
     jsr regdstA
@@ -5288,7 +5340,7 @@ op_movb_d16_d16:       ; move.b (d16,An),(d16,An) : work RAM ; PC+=6
     tax
     sep #$20
     lda $54
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $54
     and #$00FF
@@ -5316,10 +5368,10 @@ op_movw_d16_d16:       ; move.w (d16,An),(d16,An) : work RAM ; Z ; PC+=6
     adc $50
     tax                ; src addr
     sep #$20
-    lda $7F0000,x      ; src bits15-8
+    lda $400000,x      ; src bits15-8
     sta $55
     inx
-    lda $7F0000,x      ; src bits7-0
+    lda $400000,x      ; src bits7-0
     sta $54
     rep #$20
     jsr regdstA        ; dst An slot
@@ -5329,10 +5381,10 @@ op_movw_d16_d16:       ; move.w (d16,An),(d16,An) : work RAM ; Z ; PC+=6
     tax                ; dst addr
     sep #$20
     lda $55
-    sta $7F0000,x      ; high byte
+    sta $400000,x      ; high byte
     inx
     lda $54
-    sta $7F0000,x      ; low byte
+    sta $400000,x      ; low byte
     rep #$20
     lda $54
     jsr setz_from_a
@@ -5359,16 +5411,16 @@ op_movl_an_an:         ; move.l An,(An) : [dstAn]=srcAn (32, work RAM) ; PC+=2
     tax
     sep #$20
     lda $53
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $52
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5493,12 +5545,12 @@ op_movw_dn_anp:        ; move.w Dn,(An)+ : [An]=Dn.lo (big-end); An+=2 ; PC+=2
     lda $50
     xba
     sep #$20
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5520,10 +5572,10 @@ op_movw_pre_pre:       ; move.w -(An),-(An) : src/dst predecrement (work RAM) ; 
     sta $00,x
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $51
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $50
     rep #$20
     jsr regdstA
@@ -5534,10 +5586,10 @@ op_movw_pre_pre:       ; move.w -(An),-(An) : src/dst predecrement (work RAM) ; 
     tax
     sep #$20
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5595,12 +5647,12 @@ op_movw_imm_anp:       ; move.w #imm,(An)+ : [An]=imm (big-end); An+=2 ; PC+=4
     lda $50
     xba
     sep #$20
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -5633,12 +5685,12 @@ op_movw_dn_abs:        ; move.w Dn,(xxx).L : work RAM ($F0) write; else I/O no-o
     lda $50
     xba
     sep #$20
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     bra mwa_io
 mwa_shadow:
@@ -5646,12 +5698,12 @@ mwa_shadow:
     lda $50
     xba
     sep #$20
-    sta $7E0000,x        ; high byte (video shadow)
+    sta $410000,x        ; high byte (video shadow)
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7E0000,x        ; low byte
+    sta $410000,x        ; low byte
     rep #$20
 mwa_io:
     lda $40
@@ -5692,7 +5744,7 @@ op_clrb_d16:           ; clr.b (d16,An) : [An+d16]=0; Z=1 ; PC+=4
     adc $52
     tax
     sep #$20
-    stz $7F0000,x
+    stz $400000,x
     rep #$20
     lda #$0001
     sta $60
@@ -5717,9 +5769,9 @@ op_clrw_anp:           ; clr.w (An)+ : [An]=0 (work RAM only); An+=2; Z=1 ; PC+=
     phx                ; save An slot
     tax                ; X = work-RAM offset
     sep #$20
-    stz $7F0000,x
+    stz $400000,x
     inx
-    stz $7F0000,x
+    stz $400000,x
     rep #$20
     plx                ; restore An slot
 caw_noff:
@@ -5749,9 +5801,9 @@ op_clrw_pre:           ; clr.w -(An) : An-=2; [An]=0; Z=1 ; PC+=2
     sta $00,x
     tax
     sep #$20
-    stz $7F0000,x
+    stz $400000,x
     inx
-    stz $7F0000,x
+    stz $400000,x
     rep #$20
     lda #$0001
     sta $60
@@ -5776,7 +5828,7 @@ op_tstb_d16:           ; tst.b (d16,An) : Z=([An+d16].b==0) ; PC+=4
     adc $52
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     rep #$20
     and #$00FF
     jsr setz_from_a
@@ -5801,10 +5853,10 @@ op_tstw_d16:           ; tst.w (d16,An) : Z=([An+d16].w==0) ; PC+=4
     adc $52
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $51
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $50
     rep #$20
     lda $50
@@ -5849,7 +5901,7 @@ op_jsr_an:             ; jsr (An) : push PC+2; PC = An.low16 ; (bank 0)
     clc
     adc #2
     sta $54            ; return = PC+2
-    jsr push32
+    jsr push32r
     lda $52
     sta $40
     stz $42
@@ -5908,9 +5960,9 @@ op_orib_an:            ; ori.b #imm,(An) : [An].b |= imm (work RAM) ; Z ; PC+=4
     lda $00,x
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     ora $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     and #$00FF
     jsr setz_from_a
@@ -6038,10 +6090,10 @@ op_addq_w_d16:         ; addq.w #data,(d16,An) : [An+d16].w += data ; Z ; PC+=4
     sta $52            ; addr
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $55
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $54
     rep #$20
     lda $54
@@ -6052,10 +6104,10 @@ op_addq_w_d16:         ; addq.w #data,(d16,An) : [An+d16].w += data ; Z ; PC+=4
     ldx $52
     sep #$20
     lda $55
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -6080,10 +6132,10 @@ op_subq_w_d16:         ; subq.w #data,(d16,An) : [An+d16].w -= data ; Z ; PC+=4
     sta $52
     tax
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     sta $55
     inx
-    lda $7F0000,x
+    lda $400000,x
     sta $54
     rep #$20
     sec
@@ -6094,10 +6146,10 @@ op_subq_w_d16:         ; subq.w #data,(d16,An) : [An+d16].w -= data ; Z ; PC+=4
     ldx $52
     sep #$20
     lda $55
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $54
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -6190,16 +6242,16 @@ op_movl_imm_abs:       ; move.l #imm,(xxx).L : work RAM ($F0) write; else I/O no
     ldx $58
     sep #$20
     lda $51
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $53
-    sta $7F0000,x
+    sta $400000,x
     inx
     lda $52
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
 mia_io:
     lda $40
@@ -6251,7 +6303,7 @@ op_movb_imm_d16:       ; move.b #imm,(d16,An) : [An+d16]=imm.b (work RAM) ; PC+=
     tax
     sep #$20
     lda $50
-    sta $7F0000,x
+    sta $400000,x
     rep #$20
     lda $40
     clc
@@ -6272,16 +6324,16 @@ op_movl_imm_pre:       ; move.l #imm,-(An) : An-=4; [An]=imm32 (big-end) ; PC+=6
     tax                ; An addr
     sep #$20
     lda $51
-    sta $7F0000,x      ; bits31-24
+    sta $400000,x      ; bits31-24
     inx
     lda $50
-    sta $7F0000,x      ; bits23-16
+    sta $400000,x      ; bits23-16
     inx
     lda $53
-    sta $7F0000,x      ; bits15-8
+    sta $400000,x      ; bits15-8
     inx
     lda $52
-    sta $7F0000,x      ; bits7-0
+    sta $400000,x      ; bits7-0
     rep #$20
     lda $40
     clc
@@ -6304,16 +6356,16 @@ op_trap:               ; TRAP #n : push PC+2 + SR ; PC = vector[32+n] ($80+n*4);
     sta $3C
     tax
     sep #$20
-    stz $7F0000,x      ; 31-24 = 0
+    stz $400000,x      ; 31-24 = 0
     inx
     lda $52
-    sta $7F0000,x      ; 23-16
+    sta $400000,x      ; 23-16
     inx
     lda $51
-    sta $7F0000,x      ; 15-8
+    sta $400000,x      ; 15-8
     inx
     lda $50
-    sta $7F0000,x      ; 7-0
+    sta $400000,x      ; 7-0
     rep #$20
     jsr sr_build
     sta $50
@@ -6325,12 +6377,12 @@ op_trap:               ; TRAP #n : push PC+2 + SR ; PC = vector[32+n] ($80+n*4);
     lda $50
     xba
     sep #$20
-    sta $7F0000,x      ; SR hi
+    sta $400000,x      ; SR hi
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x      ; SR lo
+    sta $400000,x      ; SR lo
     rep #$20
     ; read vector[32+n] from ROM (table at $0)
     lda $44
@@ -6498,10 +6550,10 @@ op_move_imm_sr:        ; move #imm,SR : SR = imm ; PC+=4
 op_rte:                ; rte : SR = pop.w ; PC = pop.l
     ldx $3C
     sep #$20
-    lda $7F0000,x        ; SR hi byte
+    lda $400000,x        ; SR hi byte
     sta $51
     inx
-    lda $7F0000,x        ; SR lo byte
+    lda $400000,x        ; SR lo byte
     sta $50
     rep #$20
     lda $50              ; $51:$50 = SR word
@@ -6512,16 +6564,16 @@ op_rte:                ; rte : SR = pop.w ; PC = pop.l
     sta $3C
     ldx $3C
     sep #$20
-    lda $7F0000,x        ; PC bits31-24 (ignored)
+    lda $400000,x        ; PC bits31-24 (ignored)
     inx
-    lda $7F0000,x        ; bits23-16
+    lda $400000,x        ; bits23-16
     sta $42
     stz $43              ; PC high16 top byte = 0
     inx
-    lda $7F0000,x        ; bits15-8
+    lda $400000,x        ; bits15-8
     sta $41
     inx
-    lda $7F0000,x        ; bits7-0
+    lda $400000,x        ; bits7-0
     sta $40
     rep #$20
     lda $3C
@@ -6533,23 +6585,23 @@ op_rte:                ; rte : SR = pop.w ; PC = pop.l
 ; take_irq: simulate a level-6 (vblank) interrupt -> push PC.l + SR.w, mask=6,
 ; PC = autovector $6C4. Called from iloop when pending and mask<6.
 take_irq:
-    stz $88              ; clear pending
+    stz $AA              ; clear pending (IRQ pending moved off $88; see iloop note)
     lda $3C
     sec
     sbc #4
     sta $3C              ; A7 -= 4 (push PC long)
     tax
     sep #$20
-    stz $7F0000,x        ; PC bits31-24 = 0
+    stz $400000,x        ; PC bits31-24 = 0
     inx
     lda $42
-    sta $7F0000,x        ; bits23-16
+    sta $400000,x        ; bits23-16
     inx
     lda $41
-    sta $7F0000,x        ; bits15-8
+    sta $400000,x        ; bits15-8
     inx
     lda $40
-    sta $7F0000,x        ; bits7-0
+    sta $400000,x        ; bits7-0
     rep #$20
     jsr sr_build         ; A = SR
     sta $50
@@ -6561,12 +6613,12 @@ take_irq:
     lda $50
     xba
     sep #$20
-    sta $7F0000,x        ; SR hi byte
+    sta $400000,x        ; SR hi byte
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x        ; SR lo byte
+    sta $400000,x        ; SR lo byte
     rep #$20
     lda #$0006
     sta $7C              ; mask = 6
@@ -6662,24 +6714,24 @@ sa_n0:
     rts
 
 ; --- subroutines ---
-push32:                  ; push 32-bit ($00:$54) onto 68K stack at A7 (work RAM)
+push32:                  ; push 32-bit ($56:$54) onto 68K stack at A7 (work RAM)
     lda $3C
     sec
     sbc #4
     sta $3C              ; A7 -= 4
     tax                  ; X = A7 low16
     sep #$20
-    lda #$00
-    sta $7F0000,x        ; byte0 (bits 24-31)
+    lda $57
+    sta $400000,x        ; byte0 (bits 24-31)
     inx
-    lda #$00
-    sta $7F0000,x        ; byte1 (bits 16-23)
+    lda $56
+    sta $400000,x        ; byte1 (bits 16-23)
     inx
     lda $55
-    sta $7F0000,x        ; byte2 (bits 8-15)
+    sta $400000,x        ; byte2 (bits 8-15)
     inx
     lda $54
-    sta $7F0000,x        ; byte3 (bits 0-7)
+    sta $400000,x        ; byte3 (bits 0-7)
     rep #$20
     rts
 
@@ -6689,7 +6741,7 @@ readbyte:                ; addr $52(top16)/$54(low16) -> A.low = byte (I/O aware
     bne rb_io
     ldx $54
     sep #$20
-    lda $7F0000,x
+    lda $400000,x
     rep #$20
     and #$00FF
     rts
@@ -6735,16 +6787,20 @@ rb_cc_inputs:
     beq rb_cc_dp         ; so later input polls see $62!=1 and fall through to $FF).
     lda $54
     cmp #$0001
-    beq rb_cc_ff
+    beq rb_jp1           ; $900001 P1 -> live SNES controller
     cmp #$0003
-    beq rb_cc_ff
+    beq rb_cc_ff         ; $900003 P2 -> idle (single player)
     cmp #$0005
-    beq rb_cc_ff
+    beq rb_jp5           ; $900005 coins/service -> Select = insert coin
 rb_cc_dp:
     jmp rb_data          ; other C-Chip addrs -> data-port replay
 rb_cc_ff:
     lda #$00FF
     rts
+rb_jp1:
+    jmp input_p1         ; abs jmp: input_p1/input_coins live in the $F800 free block
+rb_jp5:
+    jmp input_coins
 rb_chk50:
     cmp #$0050           ; $500000 DIP/input space -> $0F (idle, MAME ground truth)
     bne rb_chk80
@@ -9811,16 +9867,16 @@ trap_to:
     sta $3C
     tax
     sep #$20
-    stz $7F0000,x        ; PC 31-24 = 0
+    stz $400000,x        ; PC 31-24 = 0
     inx
     lda $52
-    sta $7F0000,x        ; PC 23-16
+    sta $400000,x        ; PC 23-16
     inx
     lda $51
-    sta $7F0000,x        ; PC 15-8
+    sta $400000,x        ; PC 15-8
     inx
     lda $50
-    sta $7F0000,x        ; PC 7-0
+    sta $400000,x        ; PC 7-0
     rep #$20
     jsr sr_build
     sta $50
@@ -9832,12 +9888,12 @@ trap_to:
     lda $50
     xba
     sep #$20
-    sta $7F0000,x        ; SR hi
+    sta $400000,x        ; SR hi
     rep #$20
     inx
     lda $50
     sep #$20
-    sta $7F0000,x        ; SR lo
+    sta $400000,x        ; SR lo
     rep #$20
     lda $58
     asl a
@@ -10319,9 +10375,9 @@ op_stop:                 ; STOP #imm ($4E72): SR = imm; (halt modeled as continu
 op_rtr:                  ; RTR ($4E77): CCR = pop.w (low byte only); PC = pop.l
     ldx $3C
     sep #$20
-    lda $7F0000,x        ; CCR word hi (ignored)
+    lda $400000,x        ; CCR word hi (ignored)
     inx
-    lda $7F0000,x        ; CCR word lo
+    lda $400000,x        ; CCR word lo
     sta $50
     rep #$20
     lda $50
@@ -10332,16 +10388,16 @@ op_rtr:                  ; RTR ($4E77): CCR = pop.w (low byte only); PC = pop.l
     sta $3C
     ldx $3C
     sep #$20
-    lda $7F0000,x        ; PC 31-24 (ignored)
+    lda $400000,x        ; PC 31-24 (ignored)
     inx
-    lda $7F0000,x        ; 23-16
+    lda $400000,x        ; 23-16
     sta $42
     stz $43
     inx
-    lda $7F0000,x        ; 15-8
+    lda $400000,x        ; 15-8
     sta $41
     inx
-    lda $7F0000,x        ; 7-0
+    lda $400000,x        ; 7-0
     sta $40
     rep #$20
     lda $3C
@@ -10797,6 +10853,462 @@ test_or_vid:
     jml VIDTEST          ; $E98008 -> vidtest_init (no return)
 tov_idle:
     jmp test_idle
+
+; =============================================================================
+; INPUTS — map the live SNES controller into the arcade C-Chip input mailbox.
+; Reads JOY1 with a MANUAL serial read of $4016 (auto-joypad / $4218 didn't update
+; in this harness). readbyte routes $900001 -> input_p1, $900005 -> input_coins.
+; Arcade mailbox is active-LOW (idle $FF, pressed bit=0).
+;   JOY1 (16-bit, MSB first): B(15) Y(14) Select(13) Start(12) Up(11) Down(10)
+;                             Left(9) Right(8) A(7) X(6) L(5) R(4)
+;   arcade P1 $900001: Up(0) Down(1) Left(2) Right(3) Btn1(4) Btn2(5) Start(7)
+;   arcade coins $900005: Coin1(0)
+; Scratch: $64 (arcade byte), $66 (JOY1). Returns 16-bit A = byte (low 8).
+; =============================================================================
+joy_read:                ; -> $66 = 16-bit JOY1. strobe + clock 16 bits off $4016.
+    php
+    rep #$30
+    stz $66
+    sep #$20
+    lda #$01
+    sta $4016            ; latch controllers
+    stz $4016            ; begin serial shift
+    ldx #$0010
+jr_l:
+    lda $4016            ; D0 = current button bit (1 = pressed)
+    lsr a                ; -> carry
+    rep #$30
+    rol $66              ; shift into 16-bit result (first bit -> bit15)
+    sep #$20
+    dex
+    bne jr_l
+    rep #$30
+    lda $000200          ; OR in a pokeable "virtual controller" word at $00:0200
+    ora $66              ; (cleared at reset; harness input injection -- $4016 is the
+    sta $66              ; real source on hardware; $00 = interp-private WRAM).
+    plp
+    rts
+
+input_p1:
+    jsr joy_read
+    rep #$30
+    stz $64              ; arcade_active (pressed = 1)
+    lda $66
+    and #$0800           ; Up -> bit0
+    beq ip_1
+    lda $64
+    ora #$0001
+    sta $64
+ip_1:
+    lda $66
+    and #$0400           ; Down -> bit1
+    beq ip_2
+    lda $64
+    ora #$0002
+    sta $64
+ip_2:
+    lda $66
+    and #$0200           ; Left -> bit2
+    beq ip_3
+    lda $64
+    ora #$0004
+    sta $64
+ip_3:
+    lda $66
+    and #$0100           ; Right -> bit3
+    beq ip_4
+    lda $64
+    ora #$0008
+    sta $64
+ip_4:
+    lda $66
+    and #$1000           ; Start -> bit7
+    beq ip_5
+    lda $64
+    ora #$0080
+    sta $64
+ip_5:
+    lda $66
+    and #$C000           ; B or Y -> Btn1 (bit4)
+    beq ip_6
+    lda $64
+    ora #$0010
+    sta $64
+ip_6:
+    lda $66
+    and #$00C0           ; A or X -> Btn2 (bit5)
+    beq ip_7
+    lda $64
+    ora #$0020
+    sta $64
+ip_7:
+    lda $64
+    eor #$00FF           ; active-low
+    and #$00FF
+    rts
+
+input_coins:
+    jsr joy_read
+    rep #$30
+    lda $66
+    and #$2000           ; SNES Select -> Coin 1 (active-low bit0)
+    beq ic_idle
+    lda #$00FE
+    rts
+ic_idle:
+    lda #$00FF
+    rts
+
+; push32r: push a RETURN address (24-bit). The high16 ($56) = current PC bank ($42)
+; plus the carry from the caller's `$54 = PC + offset` add (callers leave carry set
+; after `adc`; do NOT clc before jsr). 68K addrs are 24-bit so $57 ends up $00.
+; Used by op_jsr_abs/op_bsr/op_jsr_pcrel/op_jsr_an in place of push32 so returns into
+; banks >=1 (the 512KB program spans $00-$07xxxx) keep their bank — else RTS truncates
+; to bank 0 and lands in unrelated/zero code (the cross-bank crash past attract).
+push32r:
+    lda $42
+    adc #$0000           ; + carry from caller's low16 add
+    sta $56
+    jmp push32           ; push $57:$56:$55:$54, then rts to the caller
+
+; store_vid_{byte,word,long}: generic-write fallback for the video banks ($B0/$D0/$E0).
+; writebyte/word/long only handle work RAM ($F0); the live game also writes the arcade
+; video banks via generic MOVE handlers (op_move_g etc.) -- those were DROPPED, so the BG
+; playfield / OBJ never reached the $41 shadow. Route them through map_snes -> $41 shadow
+; (same big-endian convention as op_movw_anp_an's mwa_shadow). Value in $80..$83, addr
+; $52:$54. map_snes preserves $50/$51 and X; it does not touch $80-$83.
+store_vid_word:
+    lda $54
+    sta $6A
+    lda $52
+    jsr map_snes
+    lda $C2
+    cmp #$0001
+    bne svw_done
+    ldx $6A
+    sep #$20
+    lda $81
+    sta $410000,x
+    inx
+    lda $80
+    sta $410000,x
+    rep #$20
+svw_done:
+    rts
+store_vid_long:
+    lda $54
+    sta $6A
+    lda $52
+    jsr map_snes
+    lda $C2
+    cmp #$0001
+    bne svl_done
+    ldx $6A
+    sep #$20
+    lda $83
+    sta $410000,x
+    inx
+    lda $82
+    sta $410000,x
+    inx
+    lda $81
+    sta $410000,x
+    inx
+    lda $80
+    sta $410000,x
+    rep #$20
+svl_done:
+    rts
+store_vid_byte:
+    lda $54
+    sta $6A
+    lda $52
+    jsr map_snes
+    lda $C2
+    cmp #$0001
+    bne svb_done
+    ldx $6A
+    sep #$20
+    lda $80
+    sta $410000,x
+    rep #$20
+svb_done:
+    rts
+
+; op_move_g — general MOVE/MOVEA <ea>,<ea> via the EA engine. Fallback from kbad for any
+; $1xxx/$2xxx/$3xxx not matched by a specific handler (the game past attract hits move EA
+; combos the attract-only validation never exercised, e.g. $2B6E move.l (d16,Ay),(d16,Ax)).
+; Skips flags, matching the existing move handlers. dest mode/reg are SWAPPED in the move
+; encoding (reg=bits11-9, mode=bits8-6); source=bits5-0.
+.org $FA00
+op_move_g:
+    rep #$30
+    lda $44              ; size: bits 13-12  01=B,10=L,11=W -> $5E (0=B,1=W,2=L)
+    and #$3000
+    cmp #$1000
+    bne mvg_nb
+    stz $5E
+    bra mvg_sz
+mvg_nb:
+    cmp #$2000
+    bne mvg_w
+    lda #$0002
+    sta $5E
+    bra mvg_sz
+mvg_w:
+    lda #$0001
+    sta $5E
+mvg_sz:
+    lda #$0002
+    sta $46              ; PC delta (ea_resolve advances it as ext words are consumed)
+    lda $44              ; --- source EA = op bits 5-0 ---
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_read          ; $80/$82 = source value
+    lda $44              ; flags: MOVE sets N/Z, V=C=0; MOVEA (dest mode 1) sets none.
+    and #$01C0           ; (the existing specific move handlers skip flags -- a latent bug
+    cmp #$0040           ; the attract path never exposed; needed once the game branches on
+    beq mvg_noflag       ; a move result.)
+    jsr set_nz
+    stz $72              ; V = 0
+    stz $6E              ; C = 0
+mvg_noflag:
+    lda $44              ; --- dest EA = (mode bits 8-6) | (reg bits 11-9) ---
+    and #$01C0
+    lsr a
+    lsr a
+    lsr a                ; mode -> $9C bits 5-3
+    sta $84
+    lda $44
+    and #$0E00
+    xba
+    lsr a                ; reg bits 11-9 -> bits 2-0
+    and #$0007
+    ora $84
+    sta $9C
+    jsr ea_resolve
+    jsr ea_write         ; dst <- $80/$82
+    lda $40              ; PC += $46
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+; op_clr_g — general CLR.size <ea> = 0 (Z=1,N=V=C=0) via the EA engine. Fallback from kbad
+; for $42xx CLR variants with EA modes the specific handlers miss (e.g. $42B4 mode 6).
+op_clr_g:
+    rep #$30
+    lda $44              ; size bits 7-6: 00=B,01=W,10=L -> $5E
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E
+    lda #$0002
+    sta $46
+    stz $80              ; value = 0
+    stz $82
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_write
+    lda #$0001
+    sta $60              ; Z = 1
+    stz $70              ; N = 0
+    stz $72              ; V = 0
+    stz $6E              ; C = 0
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+; op_pea_g — general PEA <ea>: push the 32-bit effective address ($52top16:$54low16 from
+; ea_resolve) onto the 68K stack (A7). Fallback for PEA EA modes the specific op_pea/
+; op_pea_d16 miss (e.g. $4850 = PEA (A0), mode 2).
+op_pea_g:
+    rep #$30
+    lda #$0002
+    sta $46
+    lda #$0002
+    sta $5E
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve       ; $52:$54 = EA address (control modes -> kind 0 memory)
+    lda $3C
+    sec
+    sbc #4
+    sta $3C              ; A7 -= 4
+    tax
+    sep #$20
+    lda $53              ; bits 31-24
+    sta $400000,x
+    inx
+    lda $52              ; bits 23-16
+    sta $400000,x
+    inx
+    lda $55              ; bits 15-8
+    sta $400000,x
+    inx
+    lda $54              ; bits 7-0
+    sta $400000,x
+    rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+; op_cmpib_g — general CMPI.B #imm,<ea>: mem.b - imm.b, set N/Z/C (V=0) via the EA engine.
+; Covers CMPI.B modes the specific handlers miss (e.g. $0C29 = (d16,An)); also handles Dn.
+; abs.L ($0C39) stays on op_cmpib_abs (caught earlier). imm word @PC+2 (low byte used),
+; EA ext words @PC+4.
+op_cmpib_g:
+    rep #$30
+    stz $5E              ; byte size
+    jsr rdw2
+    and #$00FF
+    sta $50              ; imm byte
+    lda #$0004
+    sta $46              ; PC delta: opcode(2)+imm(2); EA ext starts at +4
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_read          ; $80 low byte = mem byte
+    sep #$20
+    lda $80
+    sec
+    sbc $50              ; mem - imm (byte); 65816 C = !borrow
+    sta $51              ; result byte
+    rep #$20
+    bcs cbg_noc
+    lda #$0001
+    sta $6E              ; C (68k borrow) = 1
+    bra cbg_z
+cbg_noc:
+    stz $6E
+cbg_z:
+    lda $51
+    and #$00FF
+    bne cbg_nz
+    lda #$0001
+    sta $60              ; Z = 1
+    bra cbg_n
+cbg_nz:
+    stz $60
+cbg_n:
+    lda $51
+    and #$0080
+    beq cbg_npos
+    lda #$0001
+    sta $70              ; N = 1
+    bra cbg_v
+cbg_npos:
+    stz $70
+cbg_v:
+    stz $72              ; V = 0
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+; op_addi_g — general ADDI.B/W/L #imm,<ea>: mem += imm, full N/Z/V/C (+X=C) via addflags
+; and the EA engine. Routed for ADDI memory modes (>=2) the specific Dn/byte handlers miss
+; (e.g. $066D = ADDI.W #imm,(d16,A5)). imm word(s) @PC+2; EA ext after (offset 4 B/W, 6 L).
+op_addi_g:
+    rep #$30
+    lda $44
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E              ; size 0=B,1=W,2=L
+    cmp #$0002
+    beq addg_long
+    jsr rdw2
+    sta $74              ; imm low16 (B/W)
+    stz $76
+    lda #$0004
+    sta $46
+    bra addg_ea
+addg_long:
+    jsr rdw2
+    sta $76              ; imm high16
+    jsr rdw4
+    sta $74              ; imm low16
+    lda #$0006
+    sta $46
+addg_ea:
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_read          ; $80/$82 = mem (dest)
+    jsr addflags         ; $80/$82 = mem + imm($74/$76); N/Z/V/C
+    lda $6E
+    sta $A2              ; X = C
+    jsr ea_write         ; store result
+    rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+; ---- 5A22 bootstrap (Phase A2) ----
+; cpu5a22_boot runs on the 5A22 (its reset vector points here, via the LoROM mirror at
+; $00:FC00 = file $7C00). It does NOT run the interpreter -- it brings up the SA-1 to run
+; the interpreter (CRV=$8000 = the interp reset, reached by the SA-1 at $00:8000 = file $0
+; mirror), enabling the shared BW-RAM/IRAM, then halts (A2: no video; A3 gives the 5A22 a
+; video shim instead of stp). Runs 8-bit emulation (5A22 reset default); sep #$20 keeps
+; Poppy emitting 8-bit immediates.
+.org $FC00
+cpu5a22_boot:
+    sep #$20
+    lda #$FF
+    sta $2229            ; SIWP: 5A22 IRAM writes enabled
+    lda #$80
+    sta $2226            ; SBWE: BW-RAM writes enabled (both CPUs)
+    lda #$00
+    sta $2228            ; BWPA: no BW-RAM write protect
+    lda #$00
+    sta $2203            ; CRV low  ($8000)
+    lda #$80
+    sta $2204            ; CRV high ($8000 = the interp reset entry)
+    lda #$20
+    sta $2200            ; assert SA-1 reset (explicit edge)
+    stz $2200            ; release -> SA-1 runs the interpreter from $00:8000
+    clc
+    xce                  ; 5A22 -> native mode for the 16-bit video code
+    rep #$30
+    jml CPU5A22_VIDEO    ; A3: 5A22 becomes the video supervisor (reads $41 shadow, drives
+                         ; the PPU on each SA-1 frame signal). Never returns.
 
 .org $FFE0
 .word $0000,$0000,irq,irq,$0000,nmi,reset,irq
