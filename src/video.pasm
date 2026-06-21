@@ -1287,11 +1287,32 @@ cpu5a22_video:
     jsr vid_init         ; clear derived $7E + raw shadow $41, TM=0, screen off
     rep #$30
     stz $3302            ; FRAME_ACK = 0 (IRAM; 5A22 IRAM writes enabled via SIWP)
+    stz $410000          ; input mailbox = idle (SA-1 joy_read reads this; 5A22 fills it)
+    stz $410002          ; virtual-controller injection word (harness pokes; OR'd in)
 cv_loop:
     rep #$30
+    jsr joy5a22          ; refresh the JOY1 mailbox ($41:0000) -- the SA-1 can't read $4016
     lda $3300            ; FRAME_REQ (the SA-1 increments it once per game-frame)
     cmp $3302            ; FRAME_ACK
     beq cv_loop          ; no new game-frame -> spin
     sta $3302            ; ack this frame
     jsr vid_frame        ; build CGRAM/OAM/BG from $41 shadow + DMA to PPU (forced blank)
     bra cv_loop
+
+; joy5a22 — 5A22-side manual JOY1 read into the BW-RAM input mailbox $41:0000. The interp
+; runs on the SA-1, which cannot touch $4016 (CPU-bus I/O) or $00:0200 (WRAM); so the 5A22
+; reads the pad here and the SA-1's joy_read just loads $41:0000. active-high (1=pressed),
+; first serial bit -> bit15 (matches the old in-interp joy_read so input_p1/_coins are
+; unchanged). Auto-joypad is off (NMITIMEN=0), so strobe + clock 16 bits manually.
+; NOTE: this Mesen harness does not drive $4016 (a real pad), and its open-bus read
+; returns garbage (~$F943) that the game consumes as held coin/start/buttons -> crash.
+; So for now the mailbox = ONLY the harness virtual-controller word ($41:0002), giving
+; clean idle ($0000) by default + pokeable injection. TODO(hardware): OR in a real
+; manual $4016 serial read here (the old in-interp joy_read body) once a pad is wired.
+joy5a22:
+    php
+    rep #$30
+    lda $410002
+    sta $410000
+    plp
+    rts

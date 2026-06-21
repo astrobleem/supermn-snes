@@ -510,7 +510,18 @@ k62m: lda $44
 k63: cmp #$0440            ; subi.w #imm,Dn
     bne k64
     jmp op_subi_w
-k64: cmp #$4A40            ; tst.w Dn
+k64: lda $44
+    and #$FF00
+    cmp #$4A00            ; $4Axx = TST/TAS group?
+    bne k64x
+    lda $44
+    and #$00C0
+    cmp #$00C0            ; size 11 = TAS (not TST) -> skip
+    beq k64x
+    jmp op_tst_g          ; general TST.B/W/L <ea> (all modes, incl Dn)
+k64x: lda $44
+    and #$FFF8           ; restore the masked opcode for the checks below
+    cmp #$4A40            ; tst.w Dn
     bne k64b
     jmp op_tst_w
 k64b: cmp #$4A80           ; tst.l Dn
@@ -1657,8 +1668,10 @@ bra_go:
     sta $40
     jmp inext
 
-op_jsr_abs:              ; jsr (xxx).L : push PC+6, PC = target ; (work-RAM stack)
-    jsr rdw4             ; target low16 (top word @+2 is high bank = $0000 here)
+op_jsr_abs:              ; jsr (xxx).L : push PC+6, PC = 24-bit target ; (work-RAM stack)
+    jsr rdw2             ; target high16 (bank) @ PC+2 -- was DISCARDED (stz $42), forcing
+    sta $50              ; bank 0 so cross-bank jsr (e.g. JSR $024AA8) crashed into bank 0
+    jsr rdw4             ; target low16 @ PC+4
     sta $52
     lda $40
     clc
@@ -1666,8 +1679,9 @@ op_jsr_abs:              ; jsr (xxx).L : push PC+6, PC = target ; (work-RAM stac
     sta $54              ; return addr low16
     jsr push32r
     lda $52
-    sta $40              ; PC = target low16 (bank stays $00)
-    stz $42
+    sta $40              ; PC low16 = target low16
+    lda $50
+    sta $42              ; PC high16 = target bank
     jmp inext
 
 op_bsr:                  ; bsr : disp8 (short) or, if disp8==0, disp16 (word form)
@@ -4189,10 +4203,11 @@ op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end, work RAM) ; PC+=2
     sta $40
     jmp inext
 
-op_jmp_abs:            ; jmp (xxx).L : PC = target (low16; bank 0)
-    jsr rdw4           ; target low16 (top word @+2 = bank = 0000)
+op_jmp_abs:            ; jmp (xxx).L : PC = 24-bit target (was forced to bank 0)
+    jsr rdw2           ; target high16 (bank) @ PC+2
+    sta $42
+    jsr rdw4           ; target low16 @ PC+4
     sta $40
-    stz $42
     jmp inext
 
 op_jmp_d16_an:         ; jmp (d16,An) : PC = An + signext(d16) ; (RAM-resident routines)
@@ -5897,6 +5912,8 @@ op_jsr_an:             ; jsr (An) : push PC+2; PC = An.low16 ; (bank 0)
     tax
     lda $00,x
     sta $52            ; target low16
+    lda $02,x
+    sta $50            ; target high16 (An bank) -- was discarded (stz $42)
     lda $40
     clc
     adc #2
@@ -5904,7 +5921,8 @@ op_jsr_an:             ; jsr (An) : push PC+2; PC = An.low16 ; (bank 0)
     jsr push32r
     lda $52
     sta $40
-    stz $42
+    lda $50
+    sta $42            ; PC bank = An bank
     jmp inext
 
 op_cmpiw_dn:           ; cmpi.w #imm,Dn : full CCR ; PC+=4
@@ -10865,27 +10883,11 @@ tov_idle:
 ;   arcade coins $900005: Coin1(0)
 ; Scratch: $64 (arcade byte), $66 (JOY1). Returns 16-bit A = byte (low 8).
 ; =============================================================================
-joy_read:                ; -> $66 = 16-bit JOY1. strobe + clock 16 bits off $4016.
-    php
-    rep #$30
-    stz $66
-    sep #$20
-    lda #$01
-    sta $4016            ; latch controllers
-    stz $4016            ; begin serial shift
-    ldx #$0010
-jr_l:
-    lda $4016            ; D0 = current button bit (1 = pressed)
-    lsr a                ; -> carry
-    rep #$30
-    rol $66              ; shift into 16-bit result (first bit -> bit15)
-    sep #$20
-    dex
-    bne jr_l
-    rep #$30
-    lda $000200          ; OR in a pokeable "virtual controller" word at $00:0200
-    ora $66              ; (cleared at reset; harness input injection -- $4016 is the
-    sta $66              ; real source on hardware; $00 = interp-private WRAM).
+joy_read:                ; -> $66 = 16-bit JOY1 (active-high). On the SA-1 build the interp
+    php                  ; can't touch $4016 or $00:0200 WRAM, so the 5A22 (joy5a22) reads
+    rep #$30             ; the pad into the BW-RAM mailbox $41:0000 each frame; just load it.
+    lda $410000
+    sta $66
     plp
     rts
 
@@ -11272,6 +11274,38 @@ addg_ea:
     sta $A2              ; X = C
     jsr ea_write         ; store result
     rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+; op_tst_g — general TST.B/W/L <ea>: Z=(ea==0), N=msb, V=C=0 via the EA engine. Covers all
+; TST modes incl Dn, so it supersedes the specific tst handlers (e.g. $4A9F TST.L (A7)+).
+op_tst_g:
+    rep #$30
+    lda $44
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E              ; size 0=B,1=W,2=L
+    lda #$0002
+    sta $46
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_read          ; $80/$82 = operand
+    jsr set_nz           ; N/Z size-aware
+    stz $72              ; V = 0
+    stz $6E              ; C = 0
     lda $40
     clc
     adc $46
