@@ -11375,12 +11375,58 @@ kbad_aq2:
     lda $44
     and #$F0F8
     cmp #$5028
-    bne kaq2_halt
+    bne kaq2_or
     jmp op_addsubq_g
+kaq2_or:
+    lda $44              ; OR.B Dn,(d16,An) = $8128 (dir1, byte, mode 5) -> op_orb_d16
+    and #$F1F8
+    cmp #$8128
+    bne kaq2_halt
+    jmp op_orb_d16
 kaq2_halt:
     lda #$DEAD
     sta $4E
     jmp idone
+
+; op_orb_d16 — OR.B Dn,(d16,An): [An+d16].b |= Dn.b ; N/Z, V=C=0 ; PC+=4. Direct work-RAM.
+op_orb_d16:
+    rep #$30
+    stz $5E              ; byte size (for set_nz)
+    jsr rdw2
+    sta $52              ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; An slot
+    lda $00,x
+    clc
+    adc $52
+    sta $52              ; addr = An.lo + d16
+    jsr regdst           ; X = Dn slot
+    sep #$20
+    lda $00,x            ; Dn.b
+    sta $50
+    rep #$30
+    ldx $52              ; addr
+    sep #$20
+    lda $400000,x
+    ora $50              ; |= Dn.b
+    sta $400000,x        ; write back; A = result byte
+    rep #$30
+    and #$00FF
+    sta $80
+    stz $82
+    jsr set_nz           ; N/Z (size $5E=0)
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
 
 ; ---- 5A22 bootstrap (Phase A2) ----
 ; cpu5a22_boot runs on the 5A22 (its reset vector points here, via the LoROM mirror at
