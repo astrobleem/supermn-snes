@@ -758,7 +758,8 @@ vb_keep:
     stz $E0              ; i*2 = 0
 vb_loop:
     ldx $E0
-    lda $414800,x        ; tilemap code (byte-swapped)
+    lda $414800,x        ; tilemap code from the clean $41:4800 shadow (op_movw_dn_an2 mirrors
+                         ; $E00800 there; work RAM never writes $41, so no collision)
     xba
     sta $F6
     and #$3FFF
@@ -767,7 +768,7 @@ vb_loop:
 vb_c1:
     sta $E4              ; c = code & $3FFF
     ldx $E0
-    lda $414C00,x        ; color word
+    lda $414C00,x        ; color word from the clean $41:4C00 shadow ($E00C00 mirrored there)
     xba
     sta $E8
     jsr bg_slot          ; sequential dedup: $DA = tile slot (decodes if new)

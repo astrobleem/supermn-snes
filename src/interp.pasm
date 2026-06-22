@@ -611,7 +611,7 @@ k80: cmp #$0100            ; btst Dn,Dn  (dynamic)
     jmp op_btst_dn_dn
 k81: cmp #$3080            ; move.w Dn,(An)
     bne k82
-    jmp op_movw_dn_an
+    jmp op_movw_dn_an2     ; dual-write: $40 (aliasing the attract needs) + $41 shadow (clean BG)
 k82: lda $44
     and #$FFF8
     cmp #$0640            ; addi.w #imm,Dn
@@ -780,7 +780,8 @@ k115: cmp #$4228           ; clr.b (d16,An)
     jmp op_clrb_d16
 k116: cmp #$4260           ; clr.w -(An)
     bne k117
-    jmp op_clrw_pre
+    jmp op_clr_g           ; was op_clrw_pre (left the pushed param stale -> 1P start-check
+                           ; read $8(A6)!=0; general EA-engine clear is correct). DEBUG.
 k117: cmp #$4A28           ; tst.b (d16,An)
     bne k118
     jmp op_tstb_d16
@@ -831,8 +832,11 @@ k130: lda $44
     bne k131
     jmp op_tstw_abs
 k131: cmp #$0839           ; btst #imm,(xxx).L
-    bne k132
+    bne k131s
     jmp op_btst_imm_abs
+k131s: cmp #$08F9          ; bset #imm,(xxx).L (start handshake; op_bitop (xxx).L crashes)
+    bne k132
+    jmp op_bset_imm_abs
 k132: cmp #$23FC           ; move.l #imm,(xxx).L
     bne k133
     jmp op_movl_imm_abs
@@ -4176,7 +4180,7 @@ op_addi_w:            ; addi.w #imm,Dn : Dn.lo += imm ; Z ; PC+=4
     sta $40
     jmp inext
 
-op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end, work RAM) ; PC+=2
+op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end, work RAM) ; PC+=2 (kept; dead)
     lda $44
     and #$0007
     asl a
@@ -6811,7 +6815,8 @@ rb_cc_inputs:
     cmp #$0005
     beq rb_jp5           ; $900005 coins/service -> Select = insert coin
 rb_cc_dp:
-    jmp rb_cc_evn        ; C-Chip status bytes ($900000/4/6 post-boot) then data-port replay
+    jmp rb_cc_ev2        ; even-addr C-Chip: phase-1 P1/P2/coins/status (rb_cc_ev2 @ $FC40);
+                         ; phase-0 falls through to rb_data (signature/RESP1 replay)
 rb_cc_ff:
     lda #$00FF
     rts
@@ -11037,6 +11042,62 @@ store_vid_byte:
 svb_done:
     rts
 
+; cc_status — C-Chip status byte ($900006/$900007). MAME ground truth (trace_cchip_superman
+; coin_start): the attract->game check at $3D78 does BTST #0,$900007; the status reads $03
+; normally, $02 (bit0 cleared) when 1P START is pressed. Our input stub returned a fixed $03,
+; so START was never seen. Return $02 when JOY START is in the mailbox, else $03. (Placed in
+; the $F964-$FA00 gap; reached via rb_cc_ev2 for both $900006 and $900007.)
+.org $F970
+cc_status:
+    jsr joy_read         ; $66 = 16-bit JOY1 (active-high)
+    lda $66
+    and #$1000           ; JOY START bit
+    bne ccs_start
+    lda #$0003
+    rts
+ccs_start:
+    lda #$0002           ; START pressed -> clear bit0 (the $3D78 BTST sees it)
+    rts
+
+; op_bset_imm_abs — BSET #bit,(xxx).L ($08F9). The start handshake at $3D9A does
+; BSET #0,$900007; op_bitop's generic (xxx).L path crashed the SA-1 here (same reason
+; BTST #imm,(xxx).L needed the dedicated op_btst_imm_abs). Self-contained, modeled on it:
+; read bit + 24-bit addr via rdw2/4/6, set the bit (Z=!old), write back. Z=!(old bit).
+; $900007 writes drop (store_vid_byte); $F0 writes hit $40. PC+=8. (In the $F9xx gap.)
+op_bset_imm_abs:
+    jsr rdw2
+    and #$0007
+    sta $50            ; bit mod 8
+    jsr rdw4
+    sta $52            ; abs hi16
+    jsr rdw6
+    sta $54            ; abs lo16
+    jsr readbyte
+    and #$00FF
+    sta $58            ; old byte
+    ldy $50            ; mask = 1 << bit
+    lda #$0001
+bsia_sh:
+    cpy #0
+    beq bsia_t
+    asl a
+    dey
+    bra bsia_sh
+bsia_t:
+    sta $5A            ; mask
+    and $58            ; old & mask
+    jsr setz_from_a    ; Z = !(old bit)
+    lda $58
+    ora $5A            ; new = old | mask
+    and #$00FF
+    sta $80            ; byte to write (writebyte uses $52/$54, still set)
+    jsr writebyte
+    lda $40
+    clc
+    adc #8
+    sta $40
+    jmp inext
+
 ; op_move_g — general MOVE/MOVEA <ea>,<ea> via the EA engine. Fallback from kbad for any
 ; $1xxx/$2xxx/$3xxx not matched by a specific handler (the game past attract hits move EA
 ; combos the attract-only validation never exercised, e.g. $2B6E move.l (d16,Ay),(d16,Ax)).
@@ -11384,7 +11445,7 @@ kaq2_or:
     bne kaq2_halt
     jmp op_orb_d16
 kaq2_halt:
-    lda #$DEAD
+    jmp kaq2_orw         ; check OR.W Dn,(d16,An) first; kaq2_orw halts ($DEAD) if no match
     sta $4E
     jmp idone
 
@@ -11428,32 +11489,244 @@ op_orb_d16:
     sta $40
     jmp inext
 
-; rb_cc_evn — post-boot C-Chip status bytes the attract/game state machine polls each frame
-; (MAME ground truth: $900000->$47, $900004->$FF, $900006->$03). Only in the input phase
-; ($A8 set); during boot fall through to rb_data (RESP1/signature replay). $54 = C-Chip lo16.
-; Reached by rb_cc_dp's `jmp rb_cc_evn` (same-size swap of `jmp rb_data`, so no dispatch shift).
-rb_cc_evn:
-    lda $A8
-    and #$00FF
-    beq rce_data
+; kaq2_orw + op_orw_d16 — OR.W Dn,(d16,An) = $8x6D ($44 & $F1F8 == $8168). Reached via
+; kaq2_halt's `jmp kaq2_orw`. Word analog of op_orb_d16 (direct work RAM, 68K big-endian).
+; (Overwrites the now-dead rb_cc_evn; rb_cc_dp jmps to rb_cc_ev2 instead.)
+kaq2_orw:
+    cmp #$8168
+    bne kaq2_orw_n
+    jmp op_orw_d16       ; OR.W Dn,(d16,An)
+kaq2_orw_n:
+    lda $44              ; ORI #imm,<ea> ($00xx, memory EA modes 2-6) -> op_ori_g (EA engine)
+    and #$FF00
+    bne kaq2_realhalt
+    lda $44
+    and #$0038
+    cmp #$0010
+    bcc kaq2_realhalt    ; mode 0/1 -> specific ORI handlers (shouldn't reach here)
+    cmp #$0038
+    bcs kaq2_realhalt    ; mode 7 -> abs/CCR/SR (specific)
+    jmp op_ori_g
+kaq2_realhalt:
+    lda $44
+    cmp #$4EFB           ; jmp (d8,PC,Xn) -> op_jmp_pcidx
+    bne kaq2_finalhalt
+    jmp op_jmp_pcidx
+kaq2_finalhalt:
+    lda $44
+    and #$F1F8
+    cmp #$D0E8           ; ADDA.W (d16,An),Am -> op_addaw_d16
+    bne kaq2_finalhalt2
+    jmp op_addaw_d16
+kaq2_finalhalt2:
+    lda $44
+    and #$FFF8
+    cmp #$4ED0           ; jmp (An) -> op_jmp_anx
+    bne kaq2_finalhalt3
+    jmp op_jmp_anx
+kaq2_finalhalt3:
+    lda $44
+    and #$F1FF
+    cmp #$90FC           ; suba.w #imm,An -> op_suba_w_imm
+    bne kaq2_finalhalt4
+    jmp op_suba_w_imm
+kaq2_finalhalt4:
+    lda #$DEAD
+    sta $4E
+    jmp idone
+op_suba_w_imm:           ; suba.w #imm,An : An -= signext(imm16) ; PC+=4
+    rep #$30
+    jsr rdw2
+    sta $50
+    bpl swi_pos
+    lda #$FFFF
+    sta $52
+    bra swi_dst
+swi_pos:
+    stz $52
+swi_dst:
+    jsr regdstA
+    sec
+    lda $00,x
+    sbc $50
+    sta $00,x
+    lda $02,x
+    sbc $52
+    sta $02,x
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+op_jmp_anx:              ; jmp (An) = $4ED0|An : PC = An (24-bit)
+    rep #$30
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax
+    lda $00,x
+    sta $40
+    lda $02,x
+    sta $42
+    jmp inext
+op_addaw_d16:           ; adda.w (d16,An),Am : Am += signext([An.lo+d16].w) ; PC+=4
+    rep #$30
+    jsr rdw2
+    sta $52              ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax
+    lda $00,x
+    clc
+    adc $52
+    sta $52              ; addr = An.lo + d16
+    ldx $52
+    sep #$20
+    lda $400000,x        ; hi byte (68K big-endian)
+    xba
+    inx
+    lda $400000,x        ; lo byte -> A = BE word
+    rep #$30
+    sta $50              ; operand word
+    bpl awd_pos
+    lda #$FFFF
+    sta $54
+    bra awd_dst
+awd_pos:
+    stz $54              ; sign-ext high = 0
+awd_dst:
+    jsr regdstA          ; X = dest Am slot
+    clc
+    lda $00,x
+    adc $50
+    sta $00,x            ; Am.lo += operand.lo
+    lda $02,x
+    adc $54
+    sta $02,x            ; Am.hi += sign-ext
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+kaq2_dorw:
+    jmp op_orw_d16
+op_jmp_pcidx:            ; jmp (d8,PC,Xn) = $4EFB : PC = ext-word-addr + signext(d8) + Xn
+    rep #$30
+    lda #$0002
+    sta $46              ; extension word at PC+2 (ea_pcbase base)
+    lda #$003B
+    sta $9C              ; EA mode 7 reg 3 (d8,PC,Xn)
+    jsr ea_resolve       ; $52/$54 = target hi16/lo16
     lda $54
-    cmp #$0000
-    beq rce_47
-    cmp #$0004
-    beq rce_ff
-    cmp #$0006
-    beq rce_03
-rce_data:
-    jmp rb_data
-rce_47:
-    lda #$0047
-    rts
-rce_ff:
-    lda #$00FF
-    rts
-rce_03:
-    lda #$0003
-    rts
+    sta $40
+    lda $52
+    sta $42
+    jmp inext
+op_ori_g:                ; general ORI.B/W/L #imm,<ea> (memory EA). Modeled on op_addi_g.
+    rep #$30
+    lda $44
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E              ; size 0=B,1=W,2=L
+    cmp #$0002
+    beq orig_long
+    jsr rdw2
+    sta $74              ; imm low16 (B/W)
+    stz $76
+    lda #$0004
+    sta $46
+    bra orig_ea
+orig_long:
+    jsr rdw2
+    sta $76              ; imm high16
+    jsr rdw4
+    sta $74              ; imm low16
+    lda #$0006
+    sta $46
+orig_ea:
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_read          ; $80/$82 = mem (dest)
+    lda $80
+    ora $74
+    sta $80              ; |= imm low16
+    lda $82
+    ora $76
+    sta $82              ; |= imm high16
+    jsr set_nz           ; N/Z size-aware ($5E)
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    jsr ea_write
+    rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+op_orw_d16:
+    rep #$30
+    lda #$0001
+    sta $5E              ; word size for set_nz
+    jsr rdw2
+    sta $52              ; d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; An slot
+    lda $00,x
+    clc
+    adc $52
+    sta $52              ; addr = An.lo + d16 (work RAM)
+    jsr regdst           ; X = Dn slot
+    rep #$30
+    lda $00,x            ; Dn.w
+    sta $50
+    ldx $52
+    sep #$20
+    lda $400000,x        ; [addr] hi byte (68K big-endian)
+    xba
+    inx
+    lda $400000,x        ; [addr+1] lo byte -> A = BE word
+    rep #$30
+    ora $50              ; |= Dn.w
+    sta $80
+    stz $82
+    ldx $52
+    sep #$20
+    lda $81              ; result hi byte
+    sta $400000,x
+    inx
+    lda $80              ; result lo byte
+    sta $400000,x
+    rep #$30
+    jsr set_nz           ; N/Z (size $5E=1)
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
 
 ; ---- 5A22 bootstrap (Phase A2) ----
 ; cpu5a22_boot runs on the 5A22 (its reset vector points here, via the LoROM mirror at
@@ -11483,6 +11756,88 @@ cpu5a22_boot:
     rep #$30
     jml CPU5A22_VIDEO    ; A3: 5A22 becomes the video supervisor (reads $41 shadow, drives
                          ; the PPU on each SA-1 frame signal). Never returns.
+
+; rb_cc_ev2 — corrected even-address C-Chip handler (replaces the old rb_cc_evn, which served
+; inputs at the WRONG odd addresses). MAME ground truth (read-tap, system=superman): the game
+; reads P1/coins/start from EVEN C-Chip bytes, NOT odd: $900000=P1 (Start=bit7, dirs/btns),
+; $900002=P2 (idle $FF), $900004=coins (Coin1=bit0), $900006=status $03. Phase 1 ($A8 set)
+; serves live inputs; phase 0 (boot) falls through to rb_data so the GWK/RESP1 handshake is
+; unchanged. Lives in the $FC30-$FD00 gap (after cpu5a22_boot). 16-bit mode (set by readbyte).
+.org $FC40
+rb_cc_ev2:
+    lda $A8
+    and #$00FF
+    beq re2_data         ; phase 0 -> signature/RESP1 replay
+    lda $54
+    cmp #$0000
+    beq re2_p1           ; $900000 -> P1 (incl Start bit7)
+    cmp #$0002
+    beq re2_ff           ; $900002 -> P2 idle $FF
+    cmp #$0004
+    beq re2_coin         ; $900004 -> coins (Coin1 bit0)
+    cmp #$0006
+    beq re2_03           ; $900006 -> status (START-aware)
+    cmp #$0007
+    beq re2_03           ; $900007 -> status low byte (BTST #0 START gate)
+re2_data:
+    jmp rb_data
+re2_p1:
+    jmp input_p1
+re2_coin:
+    jmp input_coins
+re2_ff:
+    lda #$00FF
+    rts
+re2_03:
+    jmp cc_status        ; $03 normal / $02 when START pressed
+
+; op_movw_dn_an2 (move.w Dn,(An)) -- relocated into the $FC70-$FD00 gap (the $FD00 block
+; was full and this overflowed into the vector table at $FFE0, crashing the SA-1). $E0 (BG)
+; -> clean $41 shadow (offset lo16|$4000); everything else (work RAM $F0) -> $40:lo16.
+; Inline big-endian store ($51=hi byte, $50=lo byte); uses only $50/$51/X -- NEVER $52/$54
+; (the per-frame routine relies on those across the MOVE.W; clobbering them wedged the attract).
+.org $FC70
+op_movw_dn_an2:
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tax
+    lda $00,x
+    sta $50            ; Dn low16 = value ($50=lo byte, $51=hi byte)
+    jsr regdstA
+    lda $02,x          ; An high16
+    cmp #$00E0
+    beq mde0           ; $E0 -> $41 shadow (tiny hop over the jmp)
+    jmp mwork          ; else -> work RAM $40 (absolute, wrap-proof)
+mde0:
+    lda $00,x
+    ora #$4000         ; $41 shadow offset (BG tilemap lo16 < $4000, so | $4000 == map_snes)
+    tax
+    sep #$20
+    lda $51
+    sta $410000,x      ; $41 high byte (big-endian)
+    inx
+    lda $50
+    sta $410000,x      ; $41 low byte
+    rep #$20
+    jmp mdan_pc
+mwork:
+    lda $00,x
+    tax
+    sep #$20
+    lda $51
+    sta $400000,x      ; $40 high byte
+    inx
+    lda $50
+    sta $400000,x      ; $40 low byte
+    rep #$20
+mdan_pc:
+    lda $40
+    clc
+    adc #2
+    sta $40
+    jmp inext
 
 .org $FFE0
 .word $0000,$0000,irq,irq,$0000,nmi,reset,irq
