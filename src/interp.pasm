@@ -73,6 +73,12 @@ wramclr:
     inx
     inx
     bne wramclr          ; X: 0,2,..,FFFE -> wrap to 0 -> done (full 64KB)
+    ldx #$F000           ; clear C-Chip shared RAM $41:F000-$41:FFFF (game scratch backing;
+ccramclr:                ; else random power-on values break the start handshake readback)
+    sta $410000,x
+    inx
+    inx
+    bne ccramclr
     sta $000200          ; clear the virtual-controller test-injection word (A=0 here).
                          ; $00:0200 = interp-private WRAM (not 68K $7F / not video $7E).
     ; ---- TEST-MODE entry (optest.py differential harness) ----
@@ -136,7 +142,12 @@ rclr:
     sta $7C              ; SR interrupt mask = 7 (IRQs masked during boot)
     stz $AA              ; IRQ pending = 0 (moved off $88/$8A; see iloop note)
     lda #$7000
-    sta $AC              ; vblank IRQ countdown (instr/frame); ~28k matches MAME 16MHz/57Hz
+    sta $AC              ; vblank IRQ countdown, in INTERP INSTRUCTIONS. Real 68K is 8 MHz
+                         ; (16MHz_XTAL/2, TMP68000N-8) @ 57.43 Hz = 13299 MAME instr/frame, BUT
+                         ; this interp is instruction-paced and its busy-wait poll loops burn
+                         ; many more instructions/frame than MAME's cycles, so the IRQ must not
+                         ; fire mid-frame-work: $7000=28672 is the empirically-tuned budget
+                         ; (13299 fires too early -> scheduler corruption -> boot crash @ $30).
     jsl VID_INIT         ; clear $7E shadow/staging, screen off, TM=0 (production)
     ; NOTE: a prior reset-time bootstrap of ($F00006)=$00F0000A was REMOVED. With the
     ; corrected VBLANK cadence ($8A=$7000), trap#1 ($0466) now runs to completion and
@@ -160,7 +171,7 @@ iloop:
     sta $AC
     bne irq_chk
     lda #$7000
-    sta $AC              ; reload frame countdown (~28k matches MAME cadence)
+    sta $AC              ; reload frame countdown = 28672 interp-instr/frame (see reset note)
     lda #$0001
     sta $AA              ; raise vblank pending
     jsl VID_FRAME        ; game-frame boundary: rebuild CGRAM from shadow + DMA
@@ -206,6 +217,107 @@ ifetch_go:
     sty $48
 nolog:
     ; ---- decode (bne-skip + jmp; reach unlimited) ----
+    ; General ADDQ/SUBQ #d,<ea> FIRST (all modes/sizes), via the EA engine so every
+    ; addressing mode incl. memory RMW is correct. $5xxx with ss(bits7-6)!=11 (ss==11
+    ; is Scc/DBcc). bit8: 0=ADDQ, 1=SUBQ. The old loose-mask fast paths (op_addq_w/
+    ; op_subq_w/op_addq_l/...) mis-decoded memory modes as Dn/An and are now dead.
+    lda $44
+    and #$F000
+    cmp #$5000
+    bne dsp_imm         ; not $5xxx -> try immediate ALU
+    lda $44
+    and #$00C0
+    cmp #$00C0
+    bne dsp_x0
+    jmp dsp0           ; $5xxx ss==11 -> Scc/DBcc (main dispatch; far -> jmp)
+dsp_x0:
+    lda $44
+    and #$0100
+    bne dsp_subq
+    jmp op_addq_g
+dsp_subq:
+    jmp op_subq_g
+    ; General immediate ALU through the EA engine. SUBI $04xx / CMPI $0Cxx: no CCR/SR
+    ; form, route all EA modes. ANDI $02xx / ORI $00xx: exclude ea(bits5-0)==$3C (the
+    ; #imm-dest = ANDI/ORI #,CCR/SR, routed to the specific handlers later).
+dsp_imm:
+    lda $44
+    and #$FF00
+    cmp #$0400
+    bne dsp_i1
+    jmp op_subi_g
+dsp_i1:
+    cmp #$0C00
+    bne dsp_i1b
+    jmp op_cmpi_g
+dsp_i1b:
+    cmp #$0600
+    bne dsp_i2
+    jmp op_addi_g       ; route ADDI Dn too (the specific op_addi_b/w skipped X=C)
+dsp_i2:
+    cmp #$0200
+    bne dsp_i3
+    lda $44
+    and #$003F
+    cmp #$003C
+    bne dsp_x1
+    jmp dsp0
+dsp_x1:
+    jmp op_andi_g
+dsp_i3:
+    cmp #$0000
+    bne dsp_or
+    lda $44
+    and #$003F
+    cmp #$003C
+    bne dsp_x2
+    jmp dsp0
+dsp_x2:
+    jmp op_ori_g
+    ; General OR ($8xxx): ss!=11 (DIVU/DIVS), and not dir1+ea-mode<2 (SBCD).
+dsp_or:
+    lda $44
+    and #$F000
+    cmp #$8000
+    bne dsp0            ; REVERTED dsp_move/dsp_clr: routing MOVE/CLR through op_move_g/
+                        ; op_clr_g bypassed specific handlers' side effects (e.g. the $900C01
+                        ; C-Chip command write -> $62), breaking the boot handshake. MOVE/CLR
+                        ; keep their specific handlers; their flag-setting is fixed in-place.
+    lda $44
+    and #$00C0
+    cmp #$00C0
+    beq dsp0            ; ss==11 -> DIVU/DIVS
+    lda $44
+    and #$0100
+    beq dsp_or_go       ; dir0 -> OR
+    lda $44
+    and #$0038
+    cmp #$0010
+    bcc dsp0            ; dir1 ea-mode<2 -> SBCD/PACK
+dsp_or_go:
+    jmp op_or_g
+    ; MOVE/MOVEA = $1xxx/$2xxx/$3xxx (the only ops in that range) -> general handler
+    ; (op_move_g sets N/Z, V=C=0 for MOVE, none for MOVEA; the specific fast paths
+    ; skipped flags). CLR = $42xx (ss!=11) -> op_clr_g (specifics mishandled some modes).
+dsp_move:
+    lda $44
+    and #$C000
+    bne dsp_clr
+    lda $44
+    and #$3000
+    beq dsp_clr        ; $0xxx (immediate group) -> not MOVE
+    jmp op_move_g
+dsp_clr:
+    lda $44
+    and #$FF00
+    cmp #$4200
+    bne dsp0
+    lda $44
+    and #$00C0
+    cmp #$00C0
+    beq dsp0           ; $42C0 ss==11 -> not CLR (illegal on 68000)
+    jmp op_clr_g
+dsp0:
     lda $44
     and #$F1FF
     cmp #$41F9
@@ -1475,12 +1587,17 @@ op_cmpb_anp:             ; cmp.b (An)+,Dn : Z=(mem==Dn.b); An++; PC += 2
     lda $400000,x        ; mem byte
     sta $50
     rep #$20
+    lda $50
+    and #$00FF
+    sta $74              ; src = mem.b
+    stz $76
     jsr regdst           ; X = Dn slot
-    sep #$20
     lda $00,x
-    cmp $50
-    rep #$20
-    jsr setz_from_eq
+    and #$00FF
+    sta $80              ; dest = Dn.b
+    stz $82
+    stz $5E              ; byte -> full N/Z/V/C (X untouched); CMP has no write-back
+    jsr subflags
     lda $40
     clc
     adc #2
@@ -1501,12 +1618,17 @@ op_cmpb_an:              ; cmp.b (An),Dn : no increment ; PC += 2
     lda $400000,x
     sta $50
     rep #$20
+    lda $50
+    and #$00FF
+    sta $74              ; src = mem.b
+    stz $76
     jsr regdst
-    sep #$20
     lda $00,x
-    cmp $50
-    rep #$20
-    jsr setz_from_eq
+    and #$00FF
+    sta $80              ; dest = Dn.b
+    stz $82
+    stz $5E              ; full N/Z/V/C (X untouched); CMP has no write-back
+    jsr subflags
     lda $40
     clc
     adc #2
@@ -4326,13 +4448,31 @@ ix_long:
 writebyte:
     lda $52
     cmp #$00F0
-    bne wb_vid
+    bne wb_io
     ldx $54
     sep #$20
     lda $80
     sta $400000,x
     rep #$20
 wb_done:
+    rts
+wb_io:
+    cmp #$0090           ; C-Chip space $900000-$9007FF is SHARED RAM (the game uses it as
+    bne wb_vid           ; scratch: e.g. the start handshake BSET/BTST $900007). Back it with
+    lda $54              ; BW-RAM $41:F000+lo16 so writes persist and read back. $900C01 also
+    cmp #$0C01           ; sets $62 (command selector). (The C-Chip overlays inputs $900001/3/5
+    bne wb_ram           ; + signature on READ; those reads ignore this RAM -- see rb_data.)
+    sep #$20
+    lda $80
+    sta $62              ; command port
+    rep #$20
+    rts
+wb_ram:
+    ldx $54
+    sep #$20
+    lda $80
+    sta $41F000,x        ; C-Chip shared RAM
+    rep #$20
     rts
 wb_vid:
     jmp store_vid_byte   ; $B0/$D0/$E0 -> $41 shadow (else dropped); rts to caller
@@ -5637,12 +5777,21 @@ op_subw_anp_dn:        ; sub.w (An)+,Dn : Dn.lo -= [srcAn].w (ROM-aware); An+=2;
     sep #$20
     sta $50
     rep #$20
+    lda $50
+    sta $74              ; src = mem.w
+    stz $76
     jsr regdst
-    sec
     lda $00,x
-    sbc $50
-    sta $00,x
-    jsr setz_from_a
+    sta $80              ; dest = Dn.w
+    stz $82
+    lda #$0001
+    sta $5E              ; word -> full N/Z/V/C
+    jsr subflags         ; $80 = Dn - mem
+    lda $6E
+    sta $A2              ; X = C
+    jsr regdst
+    lda $80
+    sta $00,x            ; Dn.w = result (high word preserved)
     lda $40
     clc
     adc #2
@@ -6857,7 +7006,14 @@ rb_data:                 ; data port: response[cmd][(low16>>1)&FF]
     beq rb_cmd1
     cmp #$0002
     beq rb_cmd2
-    bra rb_zero
+    bra rb_cram          ; not a boot command -> shared C-Chip RAM (game scratch, e.g. $900007)
+rb_cram:
+    ldx $54
+    sep #$20
+    lda $41F000,x
+    rep #$20
+    and #$00FF
+    rts
 rb_cmd1:                 ; command 1 -> 256-byte downloaded block
     ldx $64
     sep #$20
@@ -10779,8 +10935,13 @@ docap:
 idone:
     lda $48
     sta $5E              ; expose logged byte count (separate from stop @ $4E)
-ispin:
-    bra ispin
+    lda $7E              ; TEST-HARNESS recovery: in single-step mode a halt ($DEAD/$CAFE)
+    and #$00FF           ; must NOT wedge the session -- return to the poll loop so the next
+    bne idone_test       ; vector still runs. The halt value stays in $4E for the harness to
+ispin:                   ; read as an "unimplemented op" finding. (No effect in production:
+    bra ispin            ; $7E=0 there, so production halts spin as before.)
+idone_test:
+    jmp test_idle
 
 ; test_idle: single-step poll loop (test mode only). Wait for the harness to set
 ; the go-flag $A0, then run exactly one op (the $7E hook returns here after it).
@@ -11483,6 +11644,248 @@ cpu5a22_boot:
     rep #$30
     jml CPU5A22_VIDEO    ; A3: 5A22 becomes the video supervisor (reads $41 shadow, drives
                          ; the PPU on each SA-1 frame signal). Never returns.
+
+; General ADDQ/SUBQ #data,<ea> via the EA engine (replaces the loose-mask Dn/An fast
+; paths that mis-decoded memory modes). data = bits 11-9 (0->8). An dest = full 32-bit,
+; no flags; all other dests = sized add/sub with N/Z/V/C and X=C. Modeled on op_addi_g.
+.org $FE00
+op_addq_g:
+    rep #$30
+    jsr addq_data        ; $50 = data (1-8)
+    lda $50
+    sta $74              ; addend = data
+    stz $76
+    lda #$0002
+    sta $46              ; op word; ea_extw adds EA ext words
+    lda $44
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E              ; size 0/1/2
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    lda $9E
+    cmp #$0002
+    beq aqg_an
+    jsr ea_read
+    jsr addflags         ; $80/$82 += data ; N/Z/V/C
+    lda $6E
+    sta $A2              ; X = C
+    jsr ea_write
+    bra aqg_pc
+aqg_an:
+    lda #$0002
+    sta $5E              ; An: full 32-bit, no flags
+    jsr ea_read
+    rep #$30
+    lda $80
+    clc
+    adc $74
+    sta $80
+    lda $82
+    adc #$0000
+    sta $82
+    jsr ea_write
+aqg_pc:
+    rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+op_subq_g:
+    rep #$30
+    jsr addq_data
+    lda $50
+    sta $74
+    stz $76
+    lda #$0002
+    sta $46
+    lda $44
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    lda $9E
+    cmp #$0002
+    beq sqg_an
+    jsr ea_read
+    jsr subflags         ; $80/$82 -= data ; N/Z/V/C
+    lda $6E
+    sta $A2
+    jsr ea_write
+    bra sqg_pc
+sqg_an:
+    lda #$0002
+    sta $5E
+    jsr ea_read
+    rep #$30
+    lda $80
+    sec
+    sbc $74
+    sta $80
+    lda $82
+    sbc #$0000
+    sta $82
+    jsr ea_write
+sqg_pc:
+    rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+; General immediate ALU via EA engine (SUBI/ANDI/ORI/CMPI), modeled on op_addi_g.
+; Prologue (size + imm into $74/$76 + $46) is shared via imm_prologue. SUBI/CMPI use
+; subflags; ANDI/ORI use logflags (N/Z, V=C=0, X kept). CMPI does NOT write back or
+; touch X. Replaces the trace-driven Dn-only specifics that skipped flags / memory modes.
+imm_prologue:            ; -> $5E size, $74/$76 imm, $46 pcdelta, $9C EA ; A/X 16-bit
+    rep #$30
+    lda $44
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E
+    cmp #$0002
+    beq imp_long
+    jsr rdw2
+    sta $74
+    stz $76
+    lda #$0004
+    sta $46
+    bra imp_ea
+imp_long:
+    jsr rdw2
+    sta $76
+    jsr rdw4
+    sta $74
+    lda #$0006
+    sta $46
+imp_ea:
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    rts
+imm_pc:                  ; PC += $46 ; jmp inext
+    rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
+
+op_subi_g:
+    jsr imm_prologue
+    jsr ea_read
+    jsr subflags
+    lda $6E
+    sta $A2              ; X = C
+    jsr ea_write
+    jmp imm_pc
+
+op_cmpi_g:
+    jsr imm_prologue
+    jsr ea_read
+    jsr subflags         ; N/Z/V/C only; no write-back, X untouched
+    jmp imm_pc
+
+op_andi_g:
+    jsr imm_prologue
+    jsr ea_read
+    lda $80
+    and $74
+    sta $80
+    lda $82
+    and $76
+    sta $82
+    jsr logflags         ; N/Z; V=C=0; X kept
+    jsr ea_write
+    jmp imm_pc
+
+op_ori_g:
+    jsr imm_prologue
+    jsr ea_read
+    lda $80
+    ora $74
+    sta $80
+    lda $82
+    ora $76
+    sta $82
+    jsr logflags
+    jsr ea_write
+    jmp imm_pc
+
+; General OR <ea>,Dn (dir0) / Dn,<ea> (dir1) via the EA engine. result = EA | Dn (sized);
+; logical flags (N/Z, V=C=0, X kept). dir0 -> Dn, dir1 -> EA (RMW). Dispatch excludes
+; DIVU/DIVS (ss=11) and SBCD (dir1 ea-mode<2). Replaces the partial OR.W-only specifics.
+op_or_g:
+    rep #$30
+    lda $44
+    and #$00C0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $5E
+    lda #$0002
+    sta $46
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_read          ; $80/$82 = EA operand
+    jsr regdst           ; X = Dn slot (bits 11-9 *4)
+    lda $00,x
+    ora $80
+    sta $80
+    lda $02,x
+    ora $82
+    sta $82
+    jsr logflags         ; N/Z from result; V=C=0; X kept
+    lda $44
+    and #$0100
+    beq oror_dir0
+    jsr ea_write         ; dir1: result -> EA (uses $9E/$94 from ea_resolve)
+    jmp imm_pc
+oror_dir0:
+    jsr regdst
+    stx $94
+    lda #$0001
+    sta $9E              ; kind = Dn direct -> ea_write does the sized Dn writeback
+    jsr ea_write
+    jmp imm_pc
 
 .org $FFE0
 .word $0000,$0000,irq,irq,$0000,nmi,reset,irq
