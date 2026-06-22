@@ -6811,7 +6811,7 @@ rb_cc_inputs:
     cmp #$0005
     beq rb_jp5           ; $900005 coins/service -> Select = insert coin
 rb_cc_dp:
-    jmp rb_data          ; other C-Chip addrs -> data-port replay
+    jmp rb_cc_evn        ; C-Chip status bytes ($900000/4/6 post-boot) then data-port replay
 rb_cc_ff:
     lda #$00FF
     rts
@@ -11427,6 +11427,33 @@ op_orb_d16:
     adc #4
     sta $40
     jmp inext
+
+; rb_cc_evn — post-boot C-Chip status bytes the attract/game state machine polls each frame
+; (MAME ground truth: $900000->$47, $900004->$FF, $900006->$03). Only in the input phase
+; ($A8 set); during boot fall through to rb_data (RESP1/signature replay). $54 = C-Chip lo16.
+; Reached by rb_cc_dp's `jmp rb_cc_evn` (same-size swap of `jmp rb_data`, so no dispatch shift).
+rb_cc_evn:
+    lda $A8
+    and #$00FF
+    beq rce_data
+    lda $54
+    cmp #$0000
+    beq rce_47
+    cmp #$0004
+    beq rce_ff
+    cmp #$0006
+    beq rce_03
+rce_data:
+    jmp rb_data
+rce_47:
+    lda #$0047
+    rts
+rce_ff:
+    lda #$00FF
+    rts
+rce_03:
+    lda #$0003
+    rts
 
 ; ---- 5A22 bootstrap (Phase A2) ----
 ; cpu5a22_boot runs on the 5A22 (its reset vector points here, via the LoROM mirror at
