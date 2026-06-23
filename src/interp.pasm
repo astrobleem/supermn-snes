@@ -1497,7 +1497,7 @@ op_movb_dn_d16:          ; move.b Dn,(d16,An) : [An+d16]=Dn.b (work RAM); Z ; PC
     rep #$20
 mbdd_skip:
     lda $50
-    jsr setz_from_a
+    jsr setnz_b
     lda $40
     clc
     adc #4
@@ -1528,7 +1528,7 @@ op_movb_dn_predec:       ; move.b Dn,-(An) : An-=1; [An]=Dn.b (work RAM); Z ; PC
     rep #$20
 mdp_skip:
     lda $50
-    jsr setz_from_a
+    jsr setnz_b
     lda $40
     clc
     adc #2
@@ -1554,7 +1554,7 @@ op_movb_imm_predec:      ; move.b #imm,-(An) : An-=1; [An]=imm.b ; Z ; PC += 4
     rep #$20
 mip_skip:
     lda $50
-    jsr setz_from_a
+    jsr setnz_b
     lda $40
     clc
     adc #4
@@ -2090,7 +2090,7 @@ op_movw_dn_predec:       ; move.w Dn,-(An) : An-=2; [An]=Dn.w (big-endian); Z ; 
     sta $400000,x        ; low byte
     rep #$20
     lda $50
-    jsr setz_from_a
+    jsr setnz_w
     lda $40
     clc
     adc #2
@@ -3290,7 +3290,7 @@ mwaa_shadow:
     rep #$20
 mwaa_skip:
     lda $50
-    jsr setz_from_a
+    jsr setnz_w
     lda $40
     clc
     adc #2
@@ -3506,7 +3506,7 @@ op_movb_dn_dn:          ; move.b Dn,Dn : dst.b = src.b ; Z ; PC+=2
     sta $00,x            ; dst low byte
     rep #$20
     lda $50
-    jsr setz_from_a
+    jsr setnz_b
     lda $40
     clc
     adc #2
@@ -3925,7 +3925,7 @@ mvq_hipos:
     stz $02,x
 mvq_z:
     lda $50
-    jsr setz_from_a
+    jsr setnz_w
     lda $40
     clc
     adc #2
@@ -4559,7 +4559,7 @@ op_movw_dn_dn:         ; move.w Dn,Dn : dst.lo = src.lo ; Z ; PC+=2
     jsr regdst
     lda $50
     sta $00,x
-    jsr setz_from_a
+    jsr setnz_w
     lda $40
     clc
     adc #2
@@ -5532,7 +5532,7 @@ op_movb_d16_d16:       ; move.b (d16,An),(d16,An) : work RAM ; PC+=6
     rep #$20
     lda $54
     and #$00FF
-    jsr setz_from_a      ; move.b sets Z from the moved byte (was missing -> $06CE bne mis-fell-through)
+    jsr setnz_b      ; move.b sets Z from the moved byte (was missing -> $06CE bne mis-fell-through)
     lda $40
     clc
     adc #6
@@ -11071,7 +11071,7 @@ op_mw_d16d16_v2:
     sta $400000,x      ; low byte
     rep #$20
     lda $50
-    jsr setz_from_a
+    jsr setnz_w
     lda $40
     clc
     adc #6
@@ -11108,7 +11108,7 @@ op_mw_d16dn_v2:
     jsr regdst           ; Dn slot
     lda $50              ; word = $51<<8 | $50
     sta $00,x            ; Dn low16
-    jsr setz_from_a
+    jsr setnz_w
     lda $40
     clc
     adc #4
@@ -11155,12 +11155,36 @@ op_mw_d16pre_v2:
     sta $400000,x        ; low byte
     rep #$20
     lda $50
-    jsr setz_from_a
+    jsr setnz_w
     lda $40
     clc
     adc #4
     sta $40
     jmp inext
+; setnz_b / setnz_w / setnz_l — MOVE flag helpers: set N($70)/Z($60) size-aware, V($72)=
+; C($6E)=0, X kept (full 68K MOVE CCR). The specific MOVE handlers set Z-only via
+; setz_from_a; swapping that call to these completes them. setnz_b/w take the value in A;
+; setnz_l takes $80=lo16 / $82=hi16 preset by the caller.
+setnz_b:
+    and #$00FF
+    sta $80
+    stz $82
+    stz $5E              ; size byte
+    bra setnz_fin
+setnz_w:
+    sta $80
+    stz $82
+    lda #$0001
+    sta $5E              ; size word
+    bra setnz_fin
+setnz_l:
+    lda #$0002
+    sta $5E              ; size long ($80/$82 preset by caller)
+setnz_fin:
+    jsr set_nz           ; N($70)/Z($60) from $80/$82 by size; V/C/X untouched
+    stz $72              ; V = 0
+    stz $6E              ; C = 0
+    rts
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
