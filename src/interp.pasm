@@ -223,7 +223,11 @@ nolog:
     ; op_clr_g ea_write goes through writebyte/writeword, preserving $900xxx side effects, so
     ; (unlike op_move_g) this does not bypass the C-Chip boot handshake.
     lda $44
-    and #$FF00
+    jmp move_dispatch_check  ; route ALL MOVE/MOVEA ($1/$2/$3xxx) to op_move_g (complete
+                             ; N/Z+V/C, ROM-aware read, video/C-Chip/work-RAM write); the
+                             ; trace-driven specific MOVE handlers (incomplete flags) are now
+                             ; dead. Non-MOVE returns to dsp_clr_cont. (Zero-shift jmp-swap.)
+dsp_clr_cont:
     cmp #$4200
     bne dsp_notclr
     lda $44
@@ -11185,6 +11189,21 @@ setnz_fin:
     stz $72              ; V = 0
     stz $6E              ; C = 0
     rts
+
+; move_dispatch_check — A=$44 (opcode). MOVE/MOVEA = $1/$2/$3xxx (bits15-14==00 AND
+; bits13-12 != 00); route those to op_move_g. Everything else returns to dsp_clr_cont
+; (the CLR-check `cmp #$4200`, A reloaded + `and #$FF00` as the original instruction did).
+move_dispatch_check:
+    and #$C000
+    bne mdc_no           ; bits15-14 != 00 -> not $0-3xxx
+    lda $44
+    and #$3000
+    beq mdc_no           ; bits13-12 == 00 -> $0xxx immediate, not MOVE
+    jmp op_move_g
+mdc_no:
+    lda $44
+    and #$FF00
+    jmp dsp_clr_cont
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
