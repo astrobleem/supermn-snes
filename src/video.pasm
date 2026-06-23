@@ -473,9 +473,10 @@ obj_pal_fill:
     clc
     adc #$8100
     sta $D4              ; dst ptr lo16 (bank $7E in $D6)
+    lda #$0041
+    sta $D2              ; src bank = $41 (SA-1 BW-RAM palette shadow; was stale $7E WRAM)
     lda #$007E
-    sta $D2
-    sta $D6
+    sta $D6              ; dst bank = $7E (CGRAM staging in WRAM)
     ldy #$0000
 opf_l:
     lda [$D0],y          ; arcade color word (shadow, byte-swapped)
@@ -755,6 +756,9 @@ vb_dclr:
     jsr bg_hclr          ; cache full -> evict all (clear hash + count)
 vb_keep:
     stz $E6              ; BG palslot counter
+    stz $F0              ; clear bgpal slot (16-bit): $F1 high byte is uninit DP -> the fill's
+                         ; `lda $F0` (16-bit) would read a stale high byte -> garbage dst -> the
+                         ; bank->slot palette fill landed off-target (bricks kept ppu_build's bank0)
     stz $E0              ; i*2 = 0
 vb_loop:
     ldx $E0
@@ -1060,9 +1064,10 @@ bps_assign:
     clc
     adc #$8000
     sta $D4
+    lda #$0041
+    sta $D2              ; src bank = $41 (SA-1 BW-RAM palette shadow; was stale $7E WRAM)
     lda #$007E
-    sta $D2
-    sta $D6
+    sta $D6              ; dst bank = $7E (CGRAM staging in WRAM)
     ldy #$0000
 bps_fl:
     lda [$D0],y
