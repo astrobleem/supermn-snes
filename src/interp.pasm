@@ -4314,7 +4314,7 @@ op_addi_w:            ; addi.w #imm,Dn : Dn.lo += imm ; Z ; PC+=4
     sta $40
     jmp inext
 
-op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end, work RAM) ; PC+=2
+op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end) ; PC+=2
     lda $44
     and #$0007
     asl a
@@ -4323,6 +4323,9 @@ op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end, work RAM) ; PC+=2
     lda $00,x
     sta $50            ; Dn low16
     jsr regdstA        ; An slot
+    lda $02,x          ; An.high16: route arcade video banks to the $41 shadow. THE BG-BUILD
+    cmp #$00F0         ; ($2742) writes $E00800 via MOVE.W D1,(A0) -> this handler. Without
+    bne mwdan_vid      ; routing it lands in $40 work RAM and the playfield never renders.
     lda $00,x
     tax                ; addr
     lda $50
@@ -4335,6 +4338,19 @@ op_movw_dn_an:        ; move.w Dn,(An) : [An]=Dn.lo (big-end, work RAM) ; PC+=2
     sep #$20
     sta $400000,x      ; low byte
     rep #$20
+    lda $40
+    clc
+    adc #2
+    sta $40
+    jmp inext
+mwdan_vid:
+    lda $00,x
+    sta $54            ; addr low16 (no postincrement for (An))
+    lda $02,x
+    sta $52            ; bank -> map_snes routes $B0/$D0/$E0 -> $41
+    lda $50
+    sta $80            ; value (big-end via store_vid_word)
+    jsr store_vid_word
     lda $40
     clc
     adc #2
@@ -5707,6 +5723,9 @@ op_movw_dn_anp:        ; move.w Dn,(An)+ : [An]=Dn.lo (big-end); An+=2 ; PC+=2
     lda $00,x
     sta $50
     jsr regdstA
+    lda $02,x          ; An.high16: route arcade video banks to the $41 shadow (sprite builders)
+    cmp #$00F0
+    bne mwdanp_vid
     lda $00,x
     sta $52
     clc
@@ -5723,6 +5742,22 @@ op_movw_dn_anp:        ; move.w Dn,(An)+ : [An]=Dn.lo (big-end); An+=2 ; PC+=2
     sep #$20
     sta $400000,x
     rep #$20
+    lda $40
+    clc
+    adc #2
+    sta $40
+    jmp inext
+mwdanp_vid:
+    lda $00,x
+    sta $54            ; addr low16
+    clc
+    adc #2
+    sta $00,x          ; An += 2
+    lda $02,x
+    sta $52            ; bank
+    lda $50
+    sta $80            ; value
+    jsr store_vid_word
     lda $40
     clc
     adc #2
@@ -7053,6 +7088,20 @@ rb_c2_2:
     lda #$004B
     rts
 rb_zero:
+    lda $54
+    sta $6A
+    lda $52
+    jsr map_snes         ; video banks $B0/$D0/$E0 -> read BACK the $41 shadow (builders read
+    lda $C2              ; $E0 sprite RAM). mode 1 = video (offset $6A); else 0.
+    cmp #$0001
+    bne rbz_0
+    ldx $6A
+    sep #$20
+    lda $410000,x
+    rep #$20
+    and #$00FF
+    rts
+rbz_0:
     lda #$0000
     rts
 
