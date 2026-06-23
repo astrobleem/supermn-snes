@@ -5539,9 +5539,9 @@ op_movb_d16_d16:       ; move.b (d16,An),(d16,An) : work RAM ; PC+=6
     sta $40
     jmp inext
 
-op_movw_d16_d16:       ; move.w (d16,An),(d16,An) : work RAM ; Z ; PC+=6
-    jsr rdw2
-    sta $50            ; src d16
+op_movw_d16_d16:       ; move.w (d16,An),(d16,An): ROM-aware src -> jmp to v2 (free block)
+    jmp op_mw_d16d16_v2
+    sta $50            ; src d16 (dead tail; kept to avoid shifting following handlers)
     jsr rdw4
     sta $52            ; dst d16
     lda $44
@@ -11026,6 +11026,57 @@ irq:
 
 ; C-Chip command-1 boot response (256 bytes of downloaded 68K code), captured
 ; from MAME (data/cchip_boot_response.bin). Read at $00:F700 via DBR=$00.
+.org $E000
+; op_mw_d16d16_v2 — MOVE.W (d16,An),(d16,An) with a ROM-AWARE source read. The original
+; read src from $40 work RAM unconditionally; but e.g. $8D86 `move.w $4(a1),$2930(a5)` has
+; a1=$6AB4 (ROM table) -> it read $40 garbage (0) -> the level palette index $2930 stayed 0
+; -> the fade ramped to the wrong (gray) palette. readbyte routes $F0->$40 else ROM/IO.
+op_mw_d16d16_v2:
+    jsr rdw2
+    sta $50            ; src d16
+    jsr rdw4
+    sta $56            ; dst d16
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                ; src An slot
+    lda $02,x
+    sta $52            ; src high16 (readbyte ROM-awareness)
+    lda $00,x
+    clc
+    adc $50
+    sta $54            ; src low16 + d16 ($54/$55 = src addr; keep intact for inc)
+    jsr readbyte       ; high byte (big-endian)
+    sep #$20
+    sta $51            ; data high (NOT $55 -> that is the addr high byte)
+    rep #$20
+    inc $54
+    jsr readbyte       ; low byte
+    sep #$20
+    sta $50            ; data low
+    rep #$20
+    jsr regdstA        ; dst An slot
+    lda $00,x
+    clc
+    adc $56
+    tax                ; dst addr (work RAM)
+    sep #$20
+    lda $51
+    sta $400000,x      ; high byte
+    inx
+    lda $50
+    sta $400000,x      ; low byte
+    rep #$20
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #6
+    sta $40
+    jmp inext
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
