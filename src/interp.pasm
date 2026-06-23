@@ -216,6 +216,22 @@ ifetch_go:
     tay
     sty $48
 nolog:
+    ; CLR <ea> ($42xx, ss!=11) via the correct general handler. The specific CLR handlers
+    ; no-op'd / omitted memory modes (op_clr = no-op for (An)+; no CLR -(An) handler at all),
+    ; so e.g. CLR.W -(A7) at $8AC8 (pushing a 0 player-index arg) left a STALE stack word ->
+    ; [A6+8]=$4290 garbage -> the credit/start routine took the P2-input path -> START masked.
+    ; op_clr_g ea_write goes through writebyte/writeword, preserving $900xxx side effects, so
+    ; (unlike op_move_g) this does not bypass the C-Chip boot handshake.
+    lda $44
+    and #$FF00
+    cmp #$4200
+    bne dsp_notclr
+    lda $44
+    and #$00C0
+    cmp #$00C0
+    beq dsp_notclr       ; ss==11 -> $42C0 (illegal), not CLR
+    jmp op_clr_g
+dsp_notclr:
     ; ---- decode (bne-skip + jmp; reach unlimited) ----
     ; General ADDQ/SUBQ #d,<ea> FIRST (all modes/sizes), via the EA engine so every
     ; addressing mode incl. memory RMW is correct. $5xxx with ss(bits7-6)!=11 (ss==11
@@ -1286,7 +1302,7 @@ kbad_pea:
     bne kbad_halt
     jmp op_pea_g
 kbad_halt:
-    jmp kbad_aq2         ; SAME-SIZE swap of `lda #$DEAD` (3 bytes) -> route ADDQ.B then halt
+    jmp kbad_chkidx      ; SAME-SIZE swap (3 bytes): check indexed JMP/JSR -> else kbad_aq2
     sta $4E              ; (dead: kbad_aq2 sets $4E and jmp idone for the non-ADDQ.B case)
     jmp idone
 
@@ -11644,6 +11660,138 @@ cpu5a22_boot:
     rep #$30
     jml CPU5A22_VIDEO    ; A3: 5A22 becomes the video supervisor (reads $41 shadow, drives
                          ; the PPU on each SA-1 frame signal). Never returns.
+
+; op_jmp_idx / op_jsr_idx — indexed/PC-relative control transfers the specific handlers
+; miss: JMP/JSR (d8,An,Xn) $4EF0-7/$4EB0-7, (d16,PC) $4EFA, (d8,PC,Xn) $4EFB/$4EBB.
+; In the $FC00 free block, reached via the kbad catch-all (no mid-file dispatch insertion
+; -> no branch wrap). ea_resolve with $46=2 reads the extension word after the 2-byte opcode.
+op_jmp_idx:
+    rep #$30
+    lda $44
+    and #$003F
+    sta $9C
+    lda #$0002
+    sta $46
+    stz $5E
+    jsr ea_resolve
+    lda $54
+    sta $40
+    lda $52
+    and #$00FF
+    sta $42
+    jmp inext
+op_jsr_idx:
+    rep #$30
+    lda $44
+    and #$003F
+    sta $9C
+    lda #$0002
+    sta $46
+    stz $5E
+    jsr ea_resolve
+    lda $52
+    sta $58              ; save target hi16
+    lda $54
+    sta $50              ; save target lo16
+    lda $40
+    clc
+    adc #4
+    sta $54              ; return = PC+4 (carry -> $56 in push32r)
+    jsr push32r
+    lda $50
+    sta $40
+    lda $58
+    and #$00FF
+    sta $42
+    jmp inext
+; kbad_chkidx — free-space tail of the kbad catch-all: route indexed/PC-rel JMP/JSR, else
+; fall through to kbad_aq2. Reached only via the same-size jmp swap at kbad_halt.
+kbad_chkidx:
+    lda $44
+    and #$FFC0
+    cmp #$4EC0           ; JMP <ea> (any EA mode reaching kbad = no specific handler)
+    beq kci_jmp
+    cmp #$4E80           ; JSR <ea>
+    beq kci_jsr
+    lda $44              ; ADDA.W/L <ea>,An ($D0C0) / SUBA.W/L <ea>,An ($90C0): memory-source
+    and #$F0C0           ; EA modes the #imm/Dn specific handlers miss
+    cmp #$D0C0
+    beq kci_adda
+    cmp #$90C0
+    beq kci_suba
+    jmp kbad_aq2         ; not handled here -> original halt chain
+kci_jmp:
+    jmp op_jmp_idx
+kci_jsr:
+    jmp op_jsr_idx
+kci_adda:
+    jmp op_adda_g
+kci_suba:
+    jmp op_suba_g
+
+; op_adda_g / op_suba_g — ADDA/SUBA.W/L <ea>,An for memory-source EA modes (the specific
+; handlers only cover #imm and Dn sources). No flags; word source sign-extended to 32-bit.
+adsa_src:                ; common: $80/$82 = sign/zero-extended source; $46 = PC delta
+    rep #$30
+    lda $44
+    and #$003F
+    sta $9C
+    lda #$0002
+    sta $46
+    lda $44
+    and #$0100            ; bit8: 0=word, 1=long
+    bne adsa_l
+    lda #$0001
+    sta $5E
+    bra adsa_rd
+adsa_l:
+    lda #$0002
+    sta $5E
+adsa_rd:
+    jsr ea_resolve
+    jsr ea_read          ; $80/$82 = zero-extended source
+    lda $5E
+    cmp #$0002
+    beq adsa_done        ; long: use as-is
+    lda $80              ; word: sign-extend into $82
+    bpl adsa_pos
+    lda #$FFFF
+    sta $82
+    rts
+adsa_pos:
+    stz $82
+adsa_done:
+    rts
+op_adda_g:
+    jsr adsa_src
+    jsr regdstA          ; X = dst An slot (bits 11-9)
+    lda $00,x
+    clc
+    adc $80
+    sta $00,x
+    lda $02,x
+    adc $82
+    sta $02,x
+    bra adsa_pc
+op_suba_g:
+    jsr adsa_src
+    jsr regdstA
+    lda $00,x
+    sec
+    sbc $80
+    sta $00,x
+    lda $02,x
+    sbc $82
+    sta $02,x
+adsa_pc:
+    lda $40
+    clc
+    adc $46
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jmp inext
 
 ; General ADDQ/SUBQ #data,<ea> via the EA engine (replaces the loose-mask Dn/An fast
 ; paths that mis-decoded memory modes). data = bits 11-9 (0->8). An dest = full 32-bit,
