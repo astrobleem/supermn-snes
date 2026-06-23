@@ -2023,9 +2023,9 @@ op_movw_imm_d16:         ; move.w #imm,(d16,An) : work-RAM word write (big-endia
     sta $40
     jmp inext
 
-op_movw_d16_predec:      ; move.w (d16,An),-(An) : push word from (srcAn+d16); Z ; PC+=4
-    jsr rdw2
-    sta $52              ; src d16
+op_movw_d16_predec:      ; move.w (d16,An),-(An) : ROM-aware src -> jmp v2 (free block)
+    jmp op_mw_d16pre_v2
+    sta $52              ; src d16 (dead tail; kept to avoid shifting following handlers)
     lda $44
     and #$0007
     asl a
@@ -2166,9 +2166,9 @@ adw_done:
     sta $40
     jmp inext
 
-op_movw_d16_dn:          ; move.w (d16,An),Dn : Dn.lo = [An+d16] (big-endian) ; PC+=4
-    jsr rdw2
-    sta $52              ; d16
+op_movw_d16_dn:          ; move.w (d16,An),Dn : ROM-aware src -> jmp v2 (free block)
+    jmp op_mw_d16dn_v2
+    sta $52              ; d16 (dead tail; kept to avoid shifting following handlers)
     lda $44
     and #$0007
     asl a
@@ -11075,6 +11075,90 @@ op_mw_d16d16_v2:
     lda $40
     clc
     adc #6
+    sta $40
+    jmp inext
+
+; op_mw_d16dn_v2 — MOVE.W (d16,An),Dn with ROM-aware source (was $40-only; ROM-table
+; sources via (d16,An) misread as work RAM). readbyte routes $F0->$40 else ROM/IO.
+op_mw_d16dn_v2:
+    jsr rdw2
+    sta $50              ; src d16 (reused as data-low later)
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; src An slot
+    lda $02,x
+    sta $52              ; src high16
+    lda $00,x
+    clc
+    adc $50
+    sta $54              ; src low16 + d16
+    jsr readbyte         ; high byte
+    sep #$20
+    sta $51
+    rep #$20
+    inc $54
+    jsr readbyte         ; low byte
+    sep #$20
+    sta $50
+    rep #$20
+    jsr regdst           ; Dn slot
+    lda $50              ; word = $51<<8 | $50
+    sta $00,x            ; Dn low16
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+
+; op_mw_d16pre_v2 — MOVE.W (d16,An),-(An) with ROM-aware source (dst stack is work RAM).
+op_mw_d16pre_v2:
+    jsr rdw2
+    sta $50              ; src d16 (reused as data-low later)
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; src An slot
+    lda $02,x
+    sta $52              ; src high16
+    lda $00,x
+    clc
+    adc $50
+    sta $54              ; src low16 + d16
+    jsr readbyte         ; high byte
+    sep #$20
+    sta $51
+    rep #$20
+    inc $54
+    jsr readbyte         ; low byte
+    sep #$20
+    sta $50
+    rep #$20
+    jsr regdstA          ; dst An slot (bits 11-9)
+    lda $00,x
+    sec
+    sbc #2
+    sta $00,x            ; An -= 2
+    tax                  ; dst addr (stack work RAM)
+    sep #$20
+    lda $51
+    sta $400000,x        ; high byte
+    inx
+    lda $50
+    sta $400000,x        ; low byte
+    rep #$20
+    lda $50
+    jsr setz_from_a
+    lda $40
+    clc
+    adc #4
     sta $40
     jmp inext
 .org $F700
