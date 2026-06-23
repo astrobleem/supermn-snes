@@ -2190,6 +2190,7 @@ op_movw_d16_dn:          ; move.w (d16,An),Dn : Dn.lo = [An+d16] (big-endian) ; 
     jsr regdst           ; X = Dn slot
     lda $50              ; word = $51<<8 | $50
     sta $00,x            ; Dn low16
+    jsr setz_from_a      ; MOVE.W sets Z (was missing -> stale Z broke `move.w (d16,An),Dn / bne`)
     lda $40
     clc
     adc #4
