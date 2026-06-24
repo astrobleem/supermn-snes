@@ -579,15 +579,20 @@ obj_oam:
     sep #$20
     sta $7E0000,x        ; byte0 = X low
     rep #$30
-    ; py = 224 - ((sy+14) & $FF)
+    ; py = 256 - ((sy+14) & $FF)   [256 = MAME screen.height(); x1_001 draw_foreground uses
+    ; screen_y = max_y - (sy+yoffs).  The old 224 shifted every sprite up 32px (a hack to drag
+    ; the bottom HUD into the 224-line frame) -> gameplay sprites floated 32px above the BG
+    ; (which sits at bitmap_y via vofs=-8). 256 lands them on the floor; only the bottom HUD's
+    ; lowest ~24px clips off -- the unavoidable arcade-240 -> SNES-224 loss.
     lda $EC
     clc
     adc #$000E
     and #$00FF
     sta $F2
-    lda #$00E0           ; 224
-    sec
-    sbc $F2
+    jsr obj_pyfix        ; py = 256-(sy+14), with bottom-HUD wrap (byte-neutral: jsr+3 nop
+    nop                  ; replaces the old lda #$0100/sec/sbc $F2 -> no downstream shift)
+    nop
+    nop
     inx
     sep #$20
     sta $7E0000,x        ; byte1 = Y
@@ -955,10 +960,10 @@ bg_ent:
     sta $FA              ; tile bits
     lda $F0              ; bgpal<<10
     asl a
-    asl a
-    xba                  ; <<8 ... need <<10: after xba (<<8) then asl asl
-    asl a
-    asl a
+    asl a                ; s<<2
+    xba                  ; s<<2<<8 = s<<10 (ALREADY correct; the two asl below were the bug:
+    nop                  ; they pushed it to s<<12 so slot1 -> pal4=gray. byte-neutral nop swap.)
+    nop
     and #$1C00
     ora $FA
     sta $FA
@@ -1113,15 +1118,21 @@ bg_upload:
     sta DAS0H            ; 4096 bytes
     lda #$01
     sta MDMAEN
-    ; scroll: place playfield at (126,8) like the validated scene (hofs -126, vofs -8)
-    lda #$82
-    sta BG1HOFS
-    lda #$03
-    sta BG1HOFS          ; hofs = $382 = (-126 & $3FF)
+    ; scroll: H derived from the live scroll shadow (bg_hscroll); V = -8 (validated).
+    ; (byte-neutral swap: jsr(3)+7*nop = the 10 bytes the old hofs block used, so no
+    ;  downstream code shifts -> avoids the Poppy relative-branch-wrap hazard.)
+    jsr bg_hscroll       ; BG1HOFS = ((spritectrl[2].bit0<<8) - scrollx[0]) & $3FF
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     lda #$F8
     sta BG1VOFS
     lda #$03
-    sta BG1VOFS          ; vofs = $3F8 = (-8 & $3FF)
+    sta BG1VOFS          ; vofs = $3F8 = (-8 & $3FF) (validated)
     rep #$30
     rts
 
@@ -1319,5 +1330,56 @@ joy5a22:
     rep #$30
     lda $410002
     sta $410000
+    plp
+    rts
+
+; bg_hscroll — set BG1HOFS from the live arcade scroll shadow instead of a fixed value.
+; The X1-001 "type0" playfield is a continuous H-scroll: tilemap column c sits at true
+; pixel T[c] = (T[0] + c*32) mod 512, and vid_bg already lays columns out sequentially
+; (col c at BG pixel c*32), so a single BG1HOFS = -T[0] reproduces the arcade exactly.
+;   T[0]  = (scrollx[0] - (upper.bit0 ? 256 : 0)) & $1FF   (per x1_001.cpp draw_background)
+;   hofs  = (-T[0]) & $3FF  ==  ((upper.bit0<<8) - scrollx[0]) & $3FF
+; scrollx[0] = low byte of word @ $D00408 (shadow $41:3408 -> low byte $41:3409);
+; upper.bit0 = bit0 of spritectrl[2] @ $D00604 (shadow $41:3604 -> low byte $41:3605).
+; (xoffs=0, and the scrolly/yoffs path nets the existing vofs=-8, so V is left hardcoded.)
+; obj_pyfix — compute the SNES OAM Y from $F2 (=(sy+14)&$FF), then keep the bottom HUD on
+; screen. Faithful gameplay Y = 256 - (sy+14) (matches x1_001 draw_foreground, screen.height
+; =256), so gameplay sprites sit on the BG (which is at bitmap_y via vofs=-8). The arcade
+; bottom-strip HUD (energy bar / credit, arcade y>216) lands at py>=224 = off the 224-line
+; SNES bottom; wrap it up 24px so it shows at the very bottom edge (~y208) while gameplay
+; stays grounded. Gameplay never sits below the floor (py<=~216), so py>=224 is HUD-only.
+obj_pyfix:
+    rep #$30
+    lda #$0100           ; 256 (screen.height)
+    sec
+    sbc $F2              ; py = 256 - ((sy+14)&$FF)
+    cmp #$00E0           ; >= 224 ? -> bottom-strip HUD, off the SNES screen bottom
+    bcc oy_done
+    sec
+    sbc #$0018           ; -24 -> lands ~y208 (visible bottom edge)
+oy_done:
+    rts
+
+bg_hscroll:
+    php
+    rep #$30
+    sep #$20             ; 8-bit A
+    lda $413409          ; scrollx[0] (low byte of the big-endian shadow word)
+    rep #$20             ; 16-bit A
+    and #$00FF
+    sta $D0              ; scratch (free after vb_loop)
+    sep #$20
+    lda $413605          ; spritectrl[2] low byte
+    and #$01             ; upper bit for column 0
+    rep #$20
+    and #$00FF
+    xba                  ; A = bit0<<8  ($0100 or $0000)
+    sec
+    sbc $D0              ; (upper.bit0<<8) - scrollx[0]
+    and #$03FF
+    sep #$20
+    sta BG1HOFS          ; low byte
+    xba
+    sta BG1HOFS          ; high byte
     plp
     rts
