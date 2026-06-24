@@ -11645,11 +11645,18 @@ bhp_e1:                  ; -- $00CB9E -> entry_cb9e --  (A still = target lo16)
     jmp entry_cb9e
 bhp_e2:                  ; -- $0015B4 -> entry_15b4 --  (A still = target lo16)
     cmp #$15B4
-    bne bhp_push
+    bne bhp_e3
     lda $54
     sta $40
     pla
     jmp entry_15b4
+bhp_e3:                  ; -- $003E6A -> entry_3e6a --  (A still = target lo16)
+    cmp #$3E6A
+    bne bhp_push
+    lda $54
+    sta $40
+    pla
+    jmp entry_3e6a
 bhp_push:                ; MISS: push the 24-bit return. push32r derives the return bank
     ; from the caller's carry (PC+len add) which we clobbered -> derive it ourselves.
     lda $54
@@ -12173,6 +12180,76 @@ e15_nw:
     bne e15_byte
     dec $9C
     bne e15_long
+    jmp inext
+
+; entry_3e6a — native $003E6A (2-bit classifier, SAFE-LEAF, bsr-reached). 68K:
+;   clr.w d2 ; btst.l d3,d1: set -> d2+=1 ; btst.l d3,d0: clear -> d2+=2 ; move.w d2,(a0)
+;   (d0/d1 saved+restored via movem = unchanged; a0 a work-RAM dest). bit = d3 & 31 selects
+;   d1/d0 low or high word. Sets d2.lo16 + CCR (N/Z from d2, C=V=0). Scratch $90/$92. jmp inext.
+entry_3e6a:
+    rep #$30
+    inc $0722                ; hit counter
+    lda $0C
+    and #$001F
+    sta $90                  ; bit = d3 & 31
+    and #$000F
+    tay
+    lda #$0001
+e3_msk:
+    cpy #$0000
+    beq e3_mskd
+    asl a
+    dey
+    bra e3_msk
+e3_mskd:
+    sta $92                  ; mask = 1 << (bit & 15)
+    stz $08                  ; d2.lo16 = 0 (clr.w d2; hi16 preserved)
+    ; btst.l d3,d1 -> if set, d2 += 1
+    lda $90
+    cmp #$0010
+    bcc e3_d1lo
+    lda $06                  ; d1.hi16
+    bra e3_d1t
+e3_d1lo:
+    lda $04                  ; d1.lo16
+e3_d1t:
+    and $92
+    beq e3_d0
+    inc $08                  ; d2 += 1
+e3_d0:
+    ; btst.l d3,d0 -> if clear, d2 += 2
+    lda $90
+    cmp #$0010
+    bcc e3_d0lo
+    lda $02                  ; d0.hi16
+    bra e3_d0t
+e3_d0lo:
+    lda $00                  ; d0.lo16
+e3_d0t:
+    and $92
+    bne e3_wr
+    lda $08
+    clc
+    adc #$0002
+    sta $08                  ; d2 += 2
+e3_wr:
+    ldx $20                  ; a0.lo16 (work-RAM dest)
+    lda $08
+    jsr wrw40                ; [a0] = d2.lo16
+    ; CCR = move.w d2,(a0): N/Z from d2, C=V=0
+    lda $08
+    bne e3_nz
+    lda #$0001
+    sta $60
+    bra e3_n
+e3_nz:
+    stz $60
+e3_n:
+    lda $08
+    and #$8000
+    sta $70
+    stz $6E
+    stz $72
     jmp inext
 
 ; jsrabs_hook2 — native-escape dispatch for op_jsr_abs (jsr.l). Target $50(hi):$52(lo),

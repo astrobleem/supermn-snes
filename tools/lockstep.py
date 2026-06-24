@@ -60,6 +60,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
     w16(0x071C, 0)                   # entry412 hit counter reset
     w16(0x071E, 0)                   # entry_cb9e hit counter reset
     w16(0x0720, 0)                   # entry_15b4 hit counter reset
+    w16(0x0722, 0)                   # entry_3e6a hit counter reset
     print('  (native-escape hook $071A = %d)' % HOOK)
     # work RAM 16KB -> BW-RAM $40:0000
     wh(0x400000, wramA.hex(), 'snesMemory')
@@ -91,6 +92,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
     print('  entry412 native hits this frame = %d' % r16('Sa1Memory', 0x071C))
     print('  entry_cb9e native hits this frame = %d' % r16('Sa1Memory', 0x071E))
     print('  entry_15b4 native hits this frame = %d' % r16('Sa1Memory', 0x0720))
+    print('  entry_3e6a native hits this frame = %d' % r16('Sa1Memory', 0x0722))
     print('  $AC at B1 = %04X (reload const $7000=28672); $AA=%X' % (r16('Sa1Memory', 0xAC), r16('Sa1Memory', 0xAA)))
     # dump the streamed full-frame PC list ($40:8000+, $0718 = byte count)
     nbytes = r16('Sa1Memory', 0x0718)
