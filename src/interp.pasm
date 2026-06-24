@@ -204,17 +204,27 @@ ifetch_go:
     sta $44
     ; ring buffer: last 64 PCs (4 bytes each: low16,high16) at $0400; idx $48 wraps $100.
     ; ($0400 not $0800: on the SA-1, bank-$00 IRAM is 2KB and $0800 mirrors $0000=DP.)
-    ldy $48
-    lda $40
-    sta $0400,y
-    lda $42
-    sta $0402,y
-    tya
-    clc
-    adc #4
-    and #$00FF
-    tay
-    sty $48
+    jsr dbg_fetch        ; ring-log 68K PC + optional debug-freeze (was inline ring write)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 nolog:
     ; CLR <ea> ($42xx, ss!=11) via the correct general handler. The specific CLR handlers
     ; no-op'd / omitted memory modes (op_clr = no-op for (An)+; no CLR -(An) handler at all),
@@ -341,8 +351,11 @@ dsp0:
     lda $44
     and #$F1FF
     cmp #$41F9
-    bne k1
+    bne dsp0w
     jmp op_lea_abs
+dsp0w: cmp #$41F8           ; lea (xxx).W,An  (abs-short; was unimplemented -> hang)
+    bne k1
+    jmp op_lea_abs_w
 k1: cmp #$303C
     bne k2
     jmp op_movw_imm_dn
@@ -581,8 +594,11 @@ k51: cmp #$4E58            ; unlk An
     bne k52
     jmp op_unlk
 k52: cmp #$48E0            ; movem.l <list>,-(An)
-    bne k52w
+    bne k52d
     jmp op_movem_pre
+k52d: cmp #$48E8           ; movem.l <list>,(d16,An)  (was unimplemented -> hang)
+    bne k52w
+    jmp op_movem_d16_store
 k52w: cmp #$48A0           ; movem.w <list>,-(An)
     bne k53
     jmp op_movem_w_pre
@@ -590,8 +606,11 @@ k53: cmp #$4CD8            ; movem.l (An)+,<list>
     bne k53w
     jmp op_movem_post
 k53w: cmp #$4C98           ; movem.w (An)+,<list>
-    bne k54
+    bne k53d
     jmp op_movem_w_post
+k53d: cmp #$4CE8           ; movem.l (d16,An),<list>  (was unimplemented -> hang)
+    bne k54
+    jmp op_movem_d16
 k54: lda $44
     and #$F1F8
     cmp #$2068            ; movea.l (d16,An),An  (frame/stack -> direct $7F)
@@ -1675,13 +1694,18 @@ op_dbra:                 ; dbra Dn,disp
     sta $00,x
     cmp #$FFFF
     beq dbra_fall
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 dbra_fall:
     lda $40
     clc
@@ -1774,13 +1798,18 @@ op_bne:                  ; bne disp8 : if Z==0 branch PC+2+disp else PC+=2
     ora #$FF00
 bne_pos:
     sta $50
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 bne_fall:
     lda $40
     clc
@@ -1802,13 +1831,18 @@ bra_short:
 bra_pos:
     sta $50
 bra_go:
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 op_jsr_abs:              ; jsr (xxx).L : push PC+6, PC = 24-bit target ; (work-RAM stack)
     jsr rdw2             ; target high16 (bank) @ PC+2 -- was DISCARDED (stz $42), forcing
@@ -1819,7 +1853,7 @@ op_jsr_abs:              ; jsr (xxx).L : push PC+6, PC = 24-bit target ; (work-R
     clc
     adc #6
     sta $54              ; return addr low16
-    jsr push32r
+    jsr jsrabs_hook      ; pushes return (push32r); LOCKSTEP-HARNESS halt at 2nd $3A92 when armed
     lda $52
     sta $40              ; PC low16 = target low16
     lda $50
@@ -1838,13 +1872,18 @@ op_bsr:                  ; bsr : disp8 (short) or, if disp8==0, disp16 (word for
     adc #4
     sta $54              ; return addr = PC+4
     jsr push32r
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 bsr_short:
     cmp #$0080
     bcc bsr_pos
@@ -1856,13 +1895,18 @@ bsr_pos:
     adc #2
     sta $54              ; return addr = PC+2
     jsr push32r
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 op_rts:                  ; rts : PC = pop 24-bit return (bank byte1 -> $42) ; A7 += 4
     ldx $3C              ; A7 low16
@@ -1893,13 +1937,18 @@ op_beq:                  ; beq disp8 : if Z(set) branch
     ora #$FF00
 beq_pos:
     sta $50
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 beq_fall:
     lda $40
     clc
@@ -2328,13 +2377,18 @@ op_jsr_pcrel:            ; jsr (d16,PC) : push PC+4 ; PC = PC+2+d16
     adc #4
     sta $54              ; return addr = PC+4
     jsr push32r
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 op_movb_abs_dn:          ; move.b (xxx).L,Dn : Dn.lobyte = read(abs) ; PC += 6
     jsr rdw2
@@ -4188,26 +4242,36 @@ bcc_eval:
     bne bcc_d8
     jsr rdw2            ; disp16 form
     sta $50
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 bcc_d8:
     cmp #$0080
     bcc bcc_d8p
     ora #$FF00
 bcc_d8p:
     sta $50
-    lda $40
-    clc
-    adc #2
-    clc
-    adc $50
-    sta $40
-    jmp inext
+    jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 bcc_fall:
     lda $44
     and #$00FF
@@ -7030,10 +7094,11 @@ rb_chk50:
     lda #$000F
     rts
 rb_chk80:
-    cmp #$0080           ; $800000 sound-latch status -> $04 (ACK bit set; MAME ground truth)
+    cmp #$0080           ; $800000 sound-latch status
     bne rb_rom
-    lda #$0004
-    rts
+    jmp rb_sound         ; $800003 = TC0140SYT sound comm: replicate MAME's [04,04,01,0E] read
+    nop                  ; cycle so COMB alternates $44/$E1 (sound-ready) -> watchdog $1C49 resets
+                         ; like MAME. Other $800000 reads still return $04. (byte-neutral swap.)
 rb_rom:
     cmp #$0008           ; high16 < 8 => 68K ROM ($00000-$7FFFF) at $C10000+addr
     bcs rb_zero
@@ -11204,6 +11269,308 @@ mdc_no:
     lda $44
     and #$FF00
     jmp dsp_clr_cont
+
+; =============================================================================
+; jsrabs_hook — op_jsr_abs return-push, plus a LOCK-STEP VALIDATION HALT.
+; Normally just tail-does push32r (push the 24-bit return) and rts. When the
+; harness arm flag (SA-1 IRAM $0500, 0 in production) is set, it freezes the
+; interpreter the instant the IRQ handler calls GAME_TICK ($00003A92) -- i.e. at
+; a per-frame boundary identical to MAME's `bpset 3a92`. The harness injects
+; MAME's frame-N state, arms, runs one game-frame, and reads work RAM here to
+; diff vs MAME's frame N+1. $0502 = done marker (harness polls it).
+; Production-safety: relies on IRAM $0500 powering up 0 (true in Mesen). For a
+; shipping build, clear $0500 at reset before enabling the hook.
+; =============================================================================
+.org $E200
+jsrabs_hook:
+    jsr push32r          ; do the normal return-push FIRST (stack must match MAME wramB)
+    rep #$30
+    lda $0700            ; armed?  (flags moved $05xx->$07xx; ring now fills $0400-$05FF, 128 entries)
+    beq jh_ret
+    lda $50              ; target bank
+    bne jh_ret
+    lda $52              ; target low16
+    cmp #$3A92
+    bne jh_ret
+    lda $40              ; gate on the call SITE (IRQ handler $0708) so interp B0->B1 and MAME's
+    cmp #$0708           ; hit-to-hit pair the SAME logical interval (the two $3A92 call sites
+    bne jh_ret           ; $06F0/$0708 make "consecutive $3A92" an ambiguous unit otherwise)
+    lda #$0001
+    sta $0702            ; done marker (harness sees the freeze)
+    stz $0704            ; clear release pulse
+jh_spin:
+    lda $0704            ; wait here (clean inter-op point) for the harness release pulse
+    beq jh_spin
+    jmp iloop            ; released -> resume fetch at $40 (harness injected the new PC/state)
+jh_ret:
+    rts
+
+; rb_sound — $800003 TC0140SYT sound-comm read. MAME's $2E06 reads it twice per poll and
+; forms COMB=(read2<<4)|(read1&$F); the observed sequence alternates (04,04)->$44 and
+; (01,0E)->$E1 (sound busy/ready). Replicate that [04,04,01,0E] cycle via a per-read counter
+; ($0506 IRAM, 0 at boot) so the game's sound watchdog ($1C49 reload @ $2DB0) resets like MAME
+; instead of timing out. Other $800000 reads keep the $04 ACK status.
+rb_sound:
+    lda $54
+    cmp #$0003
+    bne rbs_04
+    lda $0706
+    inc a
+    sta $0706            ; counter++ (per $800003 read)
+    dec a                ; A = pre-increment counter
+    and #$0003
+    cmp #$0002
+    bcc rbs_04           ; 0,1 -> $04
+    beq rbs_01           ; 2   -> $01
+    lda #$000E           ; 3   -> $0E
+    rts
+rbs_01:
+    lda #$0001
+    rts
+rbs_04:
+    lda #$0004
+    rts
+
+; branch_apply — bank-correct relative-branch target. Callers set $50 = signed
+; disp16 (sign-extended) and `jmp branch_apply`; this computes the FULL 24-bit
+; PC = (PC+2) + sign_extend(disp16), propagating carry/borrow into the bank byte
+; ($42). The old per-site tails added only the low16 ($40), so a relative branch
+; whose target lay in a different 24-bit bank kept the wrong bank: e.g. the
+; backward `bsr.w $00CC10` at $0114EE (disp $B720 = -$48E0) wrongly landed at
+; $01CC10 and ran off into bank-$01 data ($F02A4C). 16-bit A on entry/exit.
+branch_apply:
+    lda $40
+    clc
+    adc #2
+    sta $40
+    lda $42
+    adc #$0000          ; PC += 2, carry -> bank
+    sta $42
+    lda $40
+    clc
+    adc $50             ; low16 += disp16 ; C = carry-out
+    sta $40
+    lda $50
+    bmi ba_neg          ; (LDA/BMI preserve C)
+    lda $42
+    adc #$0000          ; disp >= 0: bank += carry
+    sta $42
+    jmp inext
+ba_neg:
+    lda $42
+    adc #$FFFF          ; disp <  0: bank += carry - 1 (sign-extend high = $FFFF)
+    sta $42
+    jmp inext
+
+; dbg_fetch — per-instruction debug hook (replaces the inline 68K-PC ring write).
+; Always logs the 68K PC to the 128-entry ring at $0400 (idx $48). Additionally, if
+; the debug-freeze target $0710 is non-zero and equals the current 68K PC low16 ($40),
+; it freezes (sets $0712=1, spins on $0714) so the harness can read the interp register
+; file mid-routine -- the $3A92 jsr-hook can't reach non-jsr PCs like the task loops.
+; One-shot: clears $0710 on release. 16-bit A; preserves X (decode needs it).
+dbg_fetch:
+    phx
+    ldy $48
+    lda $40
+    sta $0400,y
+    lda $42
+    sta $0402,y
+    tya
+    clc
+    adc #4
+    and #$01FF
+    tay
+    sty $48
+    ; stream ALL frame PCs to BW-RAM $40:8000+ (non-wrapping; byte ptr $0718; cap ~16k).
+    ; Enabled when the harness sets $0718=0 at B0; production leaves $0718=$FFF8 -> capped.
+    ldx $0718
+    cpx #$FFF8
+    bcs ds_skip
+    lda $40
+    sta $408000,x
+    lda $42
+    sta $408002,x
+    txa
+    clc
+    adc #4
+    tax
+    stx $0718
+ds_skip:
+    lda $0710           ; debug-freeze target low16 (0 = disabled)
+    beq df_ret
+    cmp $40
+    bne df_ret
+    lda $0716           ; target bank (must also match $42)
+    cmp $42
+    bne df_ret
+    lda #$0001
+    sta $0712           ; frozen marker (harness polls)
+    stz $0714
+df_spin:
+    lda $0714
+    beq df_spin
+    stz $0710           ; one-shot: don't re-freeze the same PC next iteration
+df_ret:
+    plx
+    rts
+
+; op_movem_d16 — movem.l (d16,An),<list> : load regs from [An + sign_ext(d16)],
+; ROM/work-RAM-aware via readbyte, ascending, An NOT updated ; PC += 6.
+; This addressing mode (opcode $4CE8|An) was UNIMPLEMENTED -> the coroutine/context
+; restore `movem.l ($34ca,A5),A1` at $1C99E fell through every dispatch and HUNG the
+; interpreter mid-busy-frame. Modeled on op_movem_abs. (bit0=D0..bit15=A7; slot=i*4.)
+op_movem_d16:
+    jsr rdw2
+    sta $50              ; mask
+    jsr rdw4
+    sta $56              ; d16 (signed)
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; An slot
+    lda $00,x            ; An low16
+    clc
+    adc $56              ; EA.low16 = An.low16 + d16 ; C = carry
+    sta $54
+    lda $02,x            ; An high16
+    ldy $56
+    bmi md_neg           ; (LDA/LDY preserve C)
+    adc #$0000           ; d16 >= 0: high += carry
+    bra md_sethi
+md_neg:
+    adc #$FFFF           ; d16 <  0: high += carry - 1 (sign extend)
+md_sethi:
+    sta $52              ; EA high16 (readbyte src)
+    ldy #$0000
+md_loop:
+    lda $50
+    lsr a
+    sta $50
+    bcc md_skip
+    jsr readbyte         ; bits31-24
+    sep #$20
+    sta $8F
+    rep #$20
+    inc $54
+    jsr readbyte         ; bits23-16
+    sep #$20
+    sta $8E
+    rep #$20
+    inc $54
+    jsr readbyte         ; bits15-8
+    sep #$20
+    sta $8D
+    rep #$20
+    inc $54
+    jsr readbyte         ; bits7-0
+    sep #$20
+    sta $8C
+    rep #$20
+    inc $54
+    tya
+    asl a
+    asl a
+    tax                  ; reg slot = i*4
+    lda $8C              ; low16 = $8D:$8C
+    sta $00,x
+    lda $8E              ; high16 = $8F:$8E
+    sta $02,x
+md_skip:
+    iny
+    cpy #$0010
+    bne md_loop
+    lda $40
+    clc
+    adc #6
+    sta $40
+    jmp inext
+
+; op_lea_abs_w — lea (xxx).W,An : An = sign_extend16(word) ; PC += 4. Absolute-SHORT
+; addressing ($41F8|An<<9) was unimplemented -> `lea $36b2.w,a4` at $1C1A4 (a sprite-table
+; base lookup, hit when Superman moves) hung the interp mid-gameplay-frame.
+op_lea_abs_w:
+    jsr rdw2
+    sta $54              ; abs16
+    jsr regdstA          ; X = An slot (bits 11-9)
+    lda $54
+    sta $00,x            ; An low16
+    bmi law_neg          ; (STA preserves N from LDA)
+    lda #$0000
+    bra law_hi
+law_neg:
+    lda #$FFFF
+law_hi:
+    sta $02,x            ; An high16 = sign extension
+    lda $40
+    clc
+    adc #4
+    sta $40
+    jmp inext
+
+; op_movem_d16_store — movem.l <list>,(d16,An) : store D0..A7 (forward, by mask) to
+; [An + sign_ext(d16)], An NOT updated ; PC += 6. Work-RAM dest ($40), like op_movem_pre.
+; Was UNIMPLEMENTED ($48E8|An) -> the coroutine context SAVE `movem.l a1,$34ca(a5)` at
+; $1C986 hung the interp. Pairs with op_movem_d16 (the load side).
+op_movem_d16_store:
+    jsr rdw2
+    sta $50              ; mask (bit0=D0..bit15=A7)
+    jsr rdw4
+    sta $58              ; d16 (signed)
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; An slot
+    lda $00,x            ; An low16
+    clc
+    adc $58
+    sta $58              ; running dst = An.low16 + d16 (work-RAM low16)
+    ldy #$0000
+ms_loop:
+    lda $50
+    lsr a
+    sta $50
+    bcc ms_skip
+    tya
+    asl a
+    asl a
+    tax                  ; reg slot = i*4
+    lda $00,x
+    sta $54              ; reg low16  ($55:$54)
+    lda $02,x
+    sta $56              ; reg high16 ($57:$56)
+    ldx $58
+    sep #$20
+    lda $57              ; bits31-24 (big-endian store)
+    sta $400000,x
+    inx
+    lda $56              ; bits23-16
+    sta $400000,x
+    inx
+    lda $55              ; bits15-8
+    sta $400000,x
+    inx
+    lda $54              ; bits7-0
+    sta $400000,x
+    rep #$20
+    lda $58
+    clc
+    adc #4
+    sta $58              ; dst += 4
+ms_skip:
+    iny
+    cpy #$0010
+    bne ms_loop
+    lda $40
+    clc
+    adc #6
+    sta $40
+    jmp inext
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
