@@ -170,7 +170,7 @@ hardware-validated graphics path (`PALETTE_VERDICT.md`).
 | `$D00400` | — | scroll RAM (really one continuous scroll) | BG H/V scroll regs | **VALIDATED** (bg finding) |
 | `$D00600–$D00607` | — | X1-001 video control | PPU reg / port setup | **trace-confirmed** addr |
 | `$E00000–$E03FFF` | 16KB | sprite code + X+color (type1) / code+color (type0) | shadow OAM + BG tilemap (VRAM) | **VALIDATED** (both paths) |
-| `$F00000–$F0FFFF(?)` | ≤64KB | Work RAM | SA-1 BW-RAM `$40:0000+` | extent CONFIRM vs driver/trace |
+| `$F00000–$F03FFF` | **16KB (CONFIRMED)** | Work RAM | SA-1 BW-RAM `$40:0000+` (big-endian) | **CONFIRMED 16KB** — not 64KB; `$F0FF00` etc. are UNMAPPED |
 
 Confidence legend: **VALIDATED** = reproduced on real SNES PPU matching MAME;
 **trace-confirmed** = address verified by a working MAME trace tap; **inferred**
@@ -180,6 +180,53 @@ Confidence legend: **VALIDATED** = reproduced on real SNES PPU matching MAME;
 `$300000/$400000/$500000/$600000/$700000` between inputs, DSW, C-Chip and frame
 strobes (GAME_LOGIC's labels are static guesses — confirm by trace, same
 discipline that corrected the palette work).
+
+---
+
+## D5 — Native-escape hook mechanism (the bulk-transpile interface) — BUILT (June 24)
+
+Phase B replaced the "transpiler tool emits a whole program" model with a **hybrid
+native-escape hook**: the interpreter runs everything; for a hooked 68K subroutine, a
+hand-/tool-transpiled native 65816 routine runs *instead*. This is what bulk transpilation
+extends. It supersedes D2's earlier H7 "reserve hardware S for a transpiled call/return
+convention" — escapes do NOT use a call/return convention; they REPLACE the routine and fall
+back into the interpreter's fetch loop. The contract (also in `src/interp.pasm`, before
+`bsr_hookpush`):
+
+**Dispatch.** `bsr_hookpush` byte-neutrally replaces `op_bsr`/`op_jsr_pcrel`'s `jsr push32r`.
+It resolves the 24-bit call target; if the hook is enabled (`$071A`!=0) and the target is in
+an INLINE immediate-compare chain, it sets the 68K PC to the return address and `jmp`s the
+native routine. Otherwise it does the normal 68K-stack push. (An abs-indexed jump table was
+tried and abandoned — DBR/PBR-fragile on the SA-1; use the immediate chain.)
+
+**Six rules for adding an escape (each = one more transpiled function):**
+1. **SAFETY** — only hook targets that `tools/leaf_check.py` reports **SAFE-LEAF** (a STATIC
+   all-paths CFG walk: no call / indirect jmp / device I/O on ANY path). The trace-based leaf
+   flag in `analyze_trace68k.py` is UNSOUND for this — it marked `$24D98` (trap) and `$25110`/
+   `$0129C6` (calls) as leaves because one trace only hit their leaf path.
+2. **STACK** — the native routine must end `jmp inext` and NEVER `rts`/touch the 68K stack. On
+   a HIT the dispatch `pla`s op_bsr's 65816 return so S stays balanced. (The earlier
+   `jsr hook_check; jmp native` form leaked 4 bytes/hit → crash after ~64; `multi_hit.py` is
+   the stress test.)
+3. **SCRATCH** — native routines use ONLY transient DP `$80–$9E`. NEVER clobber the 68K
+   register file `$00–$3F` (except the result regs the real routine writes — per D2 layout),
+   the flags `$60–$7F`, or `$A0–$AC`. Read/write work RAM via `$40:xxxx` long addressing; ROM
+   via `readbyte`.
+4. **FLAGS** — set the interp CCR slots the routine's last flag-setting op would (Z@`$60`
+   nonzero=set, C@`$6E`, N@`$70`, V@`$72`) per D1, if the caller consumes them.
+5. **ENABLE** — `$071A`=0 (off) by default so the lock-step hook-off/on differential works
+   (`lockstep.py` argv3). Production sets `$071A`=1 once (e.g. at boot).
+6. **VALIDATE** — every new escape: hook-off vs hook-on differential must be **bit-identical**
+   (work RAM + reg file), and `multi_hit.py` must stay balanced across many hits. Measure the
+   win with `speedup_bench.py` (NOTE: `$4A` per-frame is `$AC`-gated — the main-loop spin
+   absorbs freed steps — so the metric is wall-clock/cycles, and only HOT leaves show a number).
+
+**Reference escape:** `entry412` = `$000412` Lehmer RNG, reusing the G2-verified `rng_core`
+math with scratch relocated to `$80–$94`. Bit-identical hook off/on.
+
+**Target selection:** `tools/rank_hot.py` joins per-entry trace cost (inv×icount) + the live
+PC-ring histogram + the SAFE-LEAF flag. First bulk target: `$00CB9E` (SAFE-LEAF, 31 instr,
+~10 calls/frame, `bsr`-called).
 
 ---
 

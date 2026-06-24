@@ -1,7 +1,29 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 20, 2026. Single source of "where we're at." Per-area detail
+Last updated: June 24, 2026. Single source of "where we're at." Per-area detail
 lives in the linked docs.
+
+## CURRENT STATE (June 24) — supersedes older detail below
+- **Interpreter is BIT-EXACT vs MAME** on busy attract AND deep active gameplay (frames
+  400/450/900/1500; Superman moving, 14 active actors incl. enemies) — modulo only 1-2
+  unmodeled sound-CPU bytes. Validated via a frame-boundary **lock-step differential harness**
+  (`tools/lockstep.py`: inject MAME's 68K state, run one game-frame, diff work RAM). 4 real
+  opcode bugs found+fixed this way (relative-branch bank carry; `movem.l (d16,An)` load+store;
+  `lea (xxx).W`) — all invisible to the op×mode sweep.
+- **Correctness gate is `opsweep` 782/782** (`tools/opsweep.py`, SA-1-aware). NOTE: the older
+  `optest 154/154` claim is DEAD — optest predates the SA-1 move and reads `snesWorkRam`; it
+  fails build-wide and is deprecated. Use opsweep.
+- **Phase A (SA-1) DONE** and **Phase B (hybrid native-escape) DONE**: a PC-hook
+  (`bsr_hookpush`) routes a hooked 68K call to a native 65816 routine (ends `jmp inext`, never
+  touches the 68K stack); `$000412` RNG runs natively, **bit-identical** hook off/on. Profiler
+  (`rank_hot.py`/`sample_pcring.py`/`analyze_trace68k.py`) + live save-state + speedup harness
+  built. Foundation HARDENED for bulk transpile: a latent per-hit stack leak fixed; sound
+  STATIC leaf classifier (`tools/leaf_check.py`); FOUNDATION CONTRACT documented in
+  `interp.pasm`. See `TRANSPILER_DESIGN.md` §D5.
+- **NEXT = bulk transpilation**: hand-transpile `rank_hot`'s hot SAFE-LEAFs (first: `$00CB9E`),
+  add each to the escape chain, validate hook off/on, measure speedup. The interpreter is the
+  cold-path fallback. Open: cycle-aware `$AC` for self-paced realtime; the sound CPU model.
+- Inputs are WIRED + validated (held Right drives Superman bit-identically to MAME).
 
 ## TL;DR
 Discovery/validation phase is done and *grounded against ground truth* (MAME for
@@ -75,13 +97,15 @@ ROM layout (4 MB HiROM): interp `$C0:8000` · 68K image `$C1:0000`–`$C8` · ar
 | **Graphics pipeline** | ✅ validated on real SNES PPU vs MAME | `PALETTE_VERDICT.md` |
 | **Transpiler design (D1–D4)** | ✅ settled | `TRANSPILER_DESIGN.md` |
 | **Transpiler spike (gate G2)** | ✅ GREEN — 2 functions differentially verified | `SPIKE_RESULT.md` |
-| **68K interpreter** | ✅ **BOOTS TO LIVE GAME LOOP** on real SNES — past the cooperative scheduler, C-Chip GWK routine download, and init; both tasks run (`tmask=$0003`), per-frame counter increments. Legal MC68000 ISA (optest 154/154). Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md` |
+| **68K interpreter** | ✅ **BIT-EXACT vs MAME** on busy attract + active gameplay (lock-step diff; 4 opcode bugs fixed). Runs on the **SA-1**. Correctness gate **opsweep 782/782** (`tools/opsweep.py`). (optest is deprecated — pre-SA-1, reads `snesWorkRam`.) Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md`, `lockstep-harness-progress` memory |
+| **Phase A — SA-1** | ✅ **DONE** — cart runs on SA-1 (work RAM in BW-RAM `$40`, shadow `$41`, dual-CPU video). | `sa1-bringup` memory |
+| **Phase B — native-escape hook** | ✅ **DONE** — PC-hook routes hooked 68K calls to native 65816; `$412` RNG native, bit-identical. Profiler + save-state + speedup harness. Foundation hardened (leak fixed, `leaf_check.py`, FOUNDATION CONTRACT). | `TRANSPILER_DESIGN.md` §D5 |
 | **Video plumbing** | ✅ **COMPLETE** — 68K video-bank writes → `$7E` shadow → real PPU each game-frame. Palette byte-exact, tile decode 128/128, OBJ+BG render the correct arcade frame; OBJ/BG tile dedup, cross-frame BG cache, vblank-safe DMA. Render subsystem in ROM bank `$E9` (`src/video.pasm`). | `VIDEO_PLUMBING.md` |
 | **Disassembly coverage (gate G1)** | ⬆ in progress — reliable pipeline + full playthrough | `COVERAGE_G1.md` |
 | **Tooling (MAME/Mesen MCP, trace/CDL)** | ✅ built & validated | below |
 | **C-Chip** | ✅ SOLVED — patch + input mailbox + **boot handshake replay**, still **no MCU emulation** | `CCHIP_BOOT_HANDSHAKE.md`, `CCHIP_FIRMWARE.md` |
 | **Audio (YM2610→TAD)** | 🔬 analyzed; `vgm-to-tad-mml` skill exists | `CONVERTSOUND.md`, `SOUNDHARDWARE.md` |
-| **Bulk game-logic port** | ⬜ not started (gated on G1) | `PORT_PLAN.md` |
+| **Bulk transpilation (native escapes)** | ⬅ **NEXT** — mechanism BUILT (Phase B); hand-transpile hot SAFE-LEAFs into the escape chain. The interpreter is the cold-path fallback (no ≥85% coverage prerequisite for the hybrid). | `TRANSPILER_DESIGN.md` §D5 |
 
 ## Graphics — done
 Arcade palette decode (`xRGB555` big-endian) and the **two X1-001 draw paths**

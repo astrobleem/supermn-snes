@@ -1,7 +1,25 @@
 # Roadmap — where we're heading next
 
-Last updated: June 18, 2026. Companion to [STATUS.md](STATUS.md) (current state)
+Last updated: June 24, 2026. Companion to [STATUS.md](STATUS.md) (current state)
 and [METHODOLOGY.md](METHODOLOGY.md) (the reusable recipe).
+
+## STATUS UPDATE (June 24) — Phases A & B below are DONE
+The phase plan below was written June 18. Since then:
+- **Phase A (drive to a live frame) — DONE.** Video plumbing complete; inputs wired +
+  validated; per-frame IRQ works; the interpreter is **bit-exact vs MAME** on busy attract
+  AND active gameplay (Superman moving, enemies on screen), modulo 1-2 unmodeled sound bytes.
+  Verified by the lock-step differential harness; 4 opcode bugs fixed along the way.
+  Correctness gate is now **opsweep 782/782** (optest is deprecated — pre-SA-1).
+- **Phase B (performance: hybrid hook) — DONE (mechanism).** The native-escape PC-hook works
+  (`$412` RNG native, bit-identical), the hot-path profiler (`rank_hot.py`) ranks targets,
+  and the foundation is hardened (per-hit stack-leak fixed; static `leaf_check.py`; FOUNDATION
+  CONTRACT in `interp.pasm`; §D5 of TRANSPILER_DESIGN.md).
+- **NEXT: BULK TRANSPILATION** — hand-transpile `rank_hot`'s hot SAFE-LEAFs (first `$00CB9E`),
+  add each to the escape chain, validate hook off/on, measure speedup with `speedup_bench.py`.
+  The interpreter remains the cold-path fallback. Still open: cycle-aware `$AC` IRQ pacing for
+  unattended realtime; the sound-CPU model (the 1-2 byte residual); level-completion validation.
+
+The detailed (historical) phase plan follows.
 
 ## Context: what just got finished
 

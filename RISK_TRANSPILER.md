@@ -117,6 +117,21 @@ This converts "the whole game must transpile perfectly before anything boots"
 Recommend at least prototyping the interpreter — it's the cheapest path to a
 playable build and a second golden reference for the transpiler.
 
+## UPDATE (June 24): hybrid native-escape built; gates partly reframed
+The "transpile the bulk, hand-optimize hot paths" model became a **hybrid native-escape
+hook** (`TRANSPILER_DESIGN.md` §D5): the MAME-verified interpreter runs everything, and hot
+SAFE-LEAF subroutines are replaced by native 65816 one at a time. Consequences for the gates:
+- **G1 (≥85% coverage) is NOT a prerequisite for the hybrid** — the interpreter is the cold
+  fallback, so uncovered code still runs correctly. G1 matters only for a full static
+  transpile (not the current plan).
+- **G2 is now LIVE**, not just isolated spikes: `$412` runs through the hook in the live game,
+  bit-identical hook off/on. The differential harness is `tools/lockstep.py` (whole-frame) +
+  the hook-off/on diff. The interpreter itself is **bit-exact vs MAME** across gameplay.
+- **G3 (cycle budget):** still open, and note `$4A` per-frame is `$AC`-gated (the main-loop
+  spin absorbs steps a native escape frees), so the metric is wall-clock/cycles via
+  `speedup_bench.py`, meaningful only once HOT leaves are hooked.
+- The "14% coverage" line below is stale (see G1 = 10.2% confirmed floor).
+
 ## Acceptance gates (don't advance until green) — status June 17, 2026
 - **G1 — Coverage** ≥85% executed code separated from data, via MAME-trace CDL.
   ⬆ IN PROGRESS. Reliable trace-driven pipeline built (`tools/build_cdl.py`); a
