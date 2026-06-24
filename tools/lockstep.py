@@ -59,6 +59,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
     w16(0x071A, HOOK)                # native-escape hook enable (0=off interp, 1=on entry412)
     w16(0x071C, 0)                   # entry412 hit counter reset
     w16(0x071E, 0)                   # entry_cb9e hit counter reset
+    w16(0x0720, 0)                   # entry_15b4 hit counter reset
     print('  (native-escape hook $071A = %d)' % HOOK)
     # work RAM 16KB -> BW-RAM $40:0000
     wh(0x400000, wramA.hex(), 'snesMemory')
@@ -89,6 +90,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
     print('  RNG state $40:170E after frame = %02X%02X' % (rng[0], rng[1]))
     print('  entry412 native hits this frame = %d' % r16('Sa1Memory', 0x071C))
     print('  entry_cb9e native hits this frame = %d' % r16('Sa1Memory', 0x071E))
+    print('  entry_15b4 native hits this frame = %d' % r16('Sa1Memory', 0x0720))
     print('  $AC at B1 = %04X (reload const $7000=28672); $AA=%X' % (r16('Sa1Memory', 0xAC), r16('Sa1Memory', 0xAA)))
     # dump the streamed full-frame PC list ($40:8000+, $0718 = byte count)
     nbytes = r16('Sa1Memory', 0x0718)
@@ -99,6 +101,10 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
     print('streamed %d interp PCs -> interp_pcs.txt' % len(spcs))
     out = m.read_memory('snesMemory', 0x400000, 0x4000)   # interp frame-301 work RAM
     open(S + '/interp_out.bin', 'wb').write(bytes(out))
+    # $41 video shadow ($D0 region @ $41:3000-3FFF) — escapes that write video banks
+    # (e.g. entry_15b4) land here, NOT in $40 work RAM, so dump it for hook-off/on diffing.
+    shadow = m.read_memory('snesMemory', 0x413000, 0x1000)
+    open(S + '/interp_shadow.bin', 'wb').write(bytes(shadow))
     # exclude $3F00-$3F47: MAME's extraction clobbered that region to stash regs, so
     # wramB is dirty there (not a real interp/MAME divergence).
     diff = [i for i in range(0x4000) if out[i] != wramB[i] and not (0x3F00 <= i < 0x3F48)]

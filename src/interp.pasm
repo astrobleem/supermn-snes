@@ -11638,11 +11638,18 @@ bhp_tb:
     jmp entry412
 bhp_e1:                  ; -- $00CB9E -> entry_cb9e --  (A still = target lo16)
     cmp #$CB9E
-    bne bhp_push
+    bne bhp_e2
     lda $54
     sta $40
     pla
     jmp entry_cb9e
+bhp_e2:                  ; -- $0015B4 -> entry_15b4 --  (A still = target lo16)
+    cmp #$15B4
+    bne bhp_push
+    lda $54
+    sta $40
+    pla
+    jmp entry_15b4
 bhp_push:                ; MISS: push the 24-bit return. push32r derives the return bank
     ; from the caller's carry (PC+len add) which we clobbered -> derive it ourselves.
     lda $54
@@ -12066,6 +12073,106 @@ cbe_n:
     sta $70
     stz $6E
     stz $72
+    jmp inext
+
+; entry_15b4 — native $0015B4: 255x `move.l (a0)+,(a1)+` block copy (1020 bytes), SAFE-LEAF.
+; The interp's op_movl_anp_anp copies BYTE-WISE (src via readbyte, dst via map_snes routing,
+; NO flag update). Captured live: a0=work RAM ($F0), a1=$D0 video shadow ($41). Fast path =
+; direct word copy $40:(a0.lo) -> $41:((a1.lo&$0FFF)|$3000) (raw byte positions preserved by
+; 16-bit moves). Fallback = faithful op_movl_anp_anp x255 for any other bank combo. a0/a1
+; post-increment by 1020. No flag update (matches the interp). Scratch $96-$9E. Ends jmp inext.
+entry_15b4:
+    rep #$30
+    inc $0720                ; hit counter
+    lda $22
+    cmp #$00F0               ; src must be work RAM for the fast path
+    bne e15_slow
+    lda $26
+    cmp #$00D0               ; dst must be the $D0 shadow region
+    bne e15_slow
+    ; ---- FAST: word copy 1020 bytes, $40:(a0.lo) -> $41:SHADOW_D0+(a1.lo&$0FFF) ----
+    lda $20
+    sta $96                  ; src ptr lo16 = a0.lo ($96/$97)
+    sep #$20
+    lda #$40
+    sta $98                  ; src bank $40 (work RAM)
+    rep #$20
+    lda $24
+    and #$0FFF
+    ora #$3000               ; SHADOW_D0
+    sta $9C                  ; dst ptr lo16 ($9C/$9D)
+    sep #$20
+    lda #$41
+    sta $9E                  ; dst bank $41 (video shadow)
+    rep #$20
+    ldy #$0000
+e15_fast:
+    lda [$96],y
+    sta [$9C],y
+    iny
+    iny
+    cpy #$03FC               ; 1020 bytes
+    bne e15_fast
+    lda $20
+    clc
+    adc #$03FC
+    sta $20                  ; a0 += 1020
+    lda $24
+    clc
+    adc #$03FC
+    sta $24                  ; a1 += 1020
+    jmp inext
+e15_slow:
+    ; ---- FALLBACK: faithful op_movl_anp_anp x255 (any bank combo, byte-wise) ----
+    lda #$00FF               ; 255 longs
+    sta $9C                  ; long counter
+e15_long:
+    lda $22
+    sta $52
+    lda $20
+    sta $54                  ; src = a0 (running)
+    lda $20
+    clc
+    adc #$0004
+    sta $20                  ; a0 += 4
+    lda $26
+    sta $5E
+    lda $24
+    sta $6A                  ; dst = a1 (running)
+    lda $24
+    clc
+    adc #$0004
+    sta $24                  ; a1 += 4
+    lda $5E
+    jsr map_snes
+    ldy #$0000
+e15_byte:
+    jsr readbyte
+    sta $50
+    lda $C2
+    beq e15_w
+    cmp #$0001
+    bne e15_nw               ; mode 2 -> no-op
+    ldx $6A
+    sep #$20
+    lda $50
+    sta $410000,x            ; mode 1 -> $41 shadow
+    rep #$20
+    bra e15_nw
+e15_w:
+    ldx $6A
+    sep #$20
+    lda $50
+    sta $400000,x            ; mode 0 -> work RAM $40
+    rep #$20
+e15_nw:
+    inc $54
+    inc $6A
+    iny
+    cpy #$0004
+    bne e15_byte
+    dec $9C
+    bne e15_long
     jmp inext
 .org $F700
 RESP1:
