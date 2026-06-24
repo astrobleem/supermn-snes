@@ -1853,7 +1853,7 @@ op_jsr_abs:              ; jsr (xxx).L : push PC+6, PC = 24-bit target ; (work-R
     clc
     adc #6
     sta $54              ; return addr low16
-    jsr jsrabs_hook      ; pushes return (push32r); LOCKSTEP-HARNESS halt at 2nd $3A92 when armed
+    jsr jsrabs_hook2     ; native-escape dispatch (jsr.l call path); miss -> jsrabs_hook
     lda $52
     sta $40              ; PC low16 = target low16
     lda $50
@@ -12174,6 +12174,45 @@ e15_nw:
     dec $9C
     bne e15_long
     jmp inext
+
+; jsrabs_hook2 — native-escape dispatch for op_jsr_abs (jsr.l). Target $50(hi):$52(lo),
+; return $54. Same call-path as bsr_hookpush but for absolute-long jsr. HIT: pla (drop our
+; jsr return -> stack back to inext level), PC=return, jmp the native entry. MISS: tail-jmp
+; jsrabs_hook (the original push32r + lockstep-halt). $42 (return bank) stays the PC bank.
+jsrabs_hook2:
+    php                  ; preserve carry (op_jsr_abs's adc #6) -- jsrabs_hook's push32r needs it
+    lda $071A
+    beq jah2_miss
+    lda $50
+    bne jah2_miss        ; all escape targets are bank 0
+    lda $52
+    cmp #$0412
+    beq jah2_e412
+    cmp #$CB9E
+    beq jah2_ecb9e
+    cmp #$15B4
+    beq jah2_e15b4
+jah2_miss:
+    plp                  ; restore carry for push32r
+    jmp jsrabs_hook
+jah2_e412:
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry412
+jah2_ecb9e:
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry_cb9e
+jah2_e15b4:
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry_15b4
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
