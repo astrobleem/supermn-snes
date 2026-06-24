@@ -6187,7 +6187,7 @@ op_jsr_an:             ; jsr (An) : push PC+2; PC = An.low16 ; (bank 0)
     clc
     adc #2
     sta $54            ; return = PC+2
-    jsr push32r
+    jsr jsrabs_hook2   ; native-escape dispatch (jsr (An) indirect path); miss -> jsrabs_hook
     lda $52
     sta $40
     lda $50
