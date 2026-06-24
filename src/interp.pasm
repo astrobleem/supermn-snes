@@ -11574,11 +11574,27 @@ ms_skip:
 
 ; =============================================================================
 ; Phase B: native-escape hook + entry412 (route live $000412 RNG to native 65816)
-; bsr_hookpush REPLACES op_bsr's `jsr push32r` (byte-neutral): it resolves the bsr
-; target and, if the hook is enabled ($071A!=0) and the target is hooked, sets the
-; 68K PC to the return address and JMPs the native routine (which ends `jmp inext`,
-; never touching the 68K stack). Otherwise it does the normal push32r. Toggle $071A
-; for hook-off vs hook-on differential validation. (IRAM powers up 0 -> off/safe.)
+; bsr_hookpush REPLACES op_bsr/op_jsr_pcrel's `jsr push32r` (byte-neutral): it resolves
+; the target and, if the hook is enabled ($071A!=0) and the target is in the dispatch
+; chain, sets the 68K PC to the return address and JMPs the native routine (which ends
+; `jmp inext`, never touching the 68K stack). Otherwise it does the normal push.
+;
+; --- FOUNDATION CONTRACT for bulk transpilation (add native escapes safely) ---
+; 1. SAFETY: only hook targets that tools/leaf_check.py reports SAFE-LEAF (no call /
+;    indirect jmp / device I/O on ANY path). The trace leaf flag is unsound -- $24D98
+;    and $25110 "looked" like leaves in one trace but are not.
+; 2. STACK: each native entry must end `jmp inext` and NEVER rts/touch the 68K stack.
+;    On a HIT the chain `pla`s op_bsr's 65816 return so S stays balanced (the earlier
+;    `jsr hook_check;jmp native` form leaked 4 bytes/hit -> crash after ~64).
+; 3. SCRATCH: native entries use ONLY transient DP $80-$9E. They must NOT clobber the
+;    68K register file $00-$3F (except the result regs the real routine writes), the
+;    flags $60-$7F, or $A0-$AC. Read/write work RAM via $40:xxxx (long), ROM via readbyte.
+; 4. ENABLE: $071A=0 (off) by default so the lockstep hook-off/on differential works
+;    (lockstep.py argv3). Production sets $071A=1 once (e.g. at boot) to use the escapes.
+; 5. VALIDATE every new escape with the hook-off/on differential (bit-identical work RAM
+;    + reg file) and multi_hit.py (stack stays balanced across many hits).
+; 6. EXTEND: add an immediate-compare block in bsr_hookpush (not an abs table -- that was
+;    DBR/PBR-fragile) sending its `bne` to the next block; add the native entry routine.
 ; =============================================================================
 bsr_hookpush:            ; in: $50=signed disp, $54=return lo16 ; out: (miss) push32r+rts
     lda $40
@@ -11602,9 +11618,26 @@ bhp_neg:
     adc #$FFFF
 bhp_tb:
     sta $5E              ; target = $5E:$5C
-    jsr hook_check       ; hit: PC=$54, jmp native (no return); miss: rts
-    ; MISS: push the 24-bit return. push32r derives the return bank from the CALLER's
-    ; carry (PC+len add), which we clobbered computing the target -> derive it ourselves.
+    ; --- escape dispatch: INLINE immediate-compare chain (no jsr -> a HIT only has op_bsr's
+    ; RET1 on the 65816 stack to drop). HIT: set 68K PC=return, `pla` to drop RET1 (the
+    ; native ends `jmp inext`, never rts -> else 4 bytes/hit leak -> crash after ~64), then
+    ; jmp the native entry. Immediate compares (not an abs table) keep this DBR/PBR-safe.
+    ; EXTEND for bulk: per leaf_check.py-verified SAFE-LEAF target, add a block like the
+    ; $0412 one, sending its `bne` to the next block's label and ending the chain at bhp_push.
+    lda $071A            ; hook enable (0 = off)
+    beq bhp_push
+    ; -- $000412 -> entry412 --
+    lda $5E
+    bne bhp_push         ; (next-entry label goes here when the chain grows)
+    lda $5C
+    cmp #$0412
+    bne bhp_push
+    lda $54
+    sta $40              ; 68K PC = return addr (bank $42 unchanged)
+    pla                  ; drop RET1 -> 65816 S back at the iloop dispatch level
+    jmp entry412
+bhp_push:                ; MISS: push the 24-bit return. push32r derives the return bank
+    ; from the caller's carry (PC+len add) which we clobbered -> derive it ourselves.
     lda $54
     cmp $40              ; C set if return-lo16 >= PC-lo16 (i.e. no bank wrap)
     lda $42
@@ -11613,20 +11646,6 @@ bhp_tb:
 bhp_nob:
     sta $56              ; return bank
     jmp push32           ; push $57:$56:$55:$54, then rts -> op_bsr -> branch_apply
-
-hook_check:              ; in: $5C=target lo16, $5E=target bank, $54=return lo16
-    lda $071A            ; hook enable (0 = off)
-    beq hc_miss
-    lda $5E
-    bne hc_miss          ; $000412 is bank 0
-    lda $5C
-    cmp #$0412
-    bne hc_miss
-    lda $54
-    sta $40              ; PC = 68K return addr (bank $42 unchanged)
-    jmp entry412
-hc_miss:
-    rts
 
 ; entry412 — native $000412 (Lehmer RNG, 16-bit state @ [A5+$170E]).
 ; state(->1 if 0); D7=(state*176)/32749 signed; new state = remainder.
