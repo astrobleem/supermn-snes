@@ -11626,16 +11626,23 @@ bhp_tb:
     ; $0412 one, sending its `bne` to the next block's label and ending the chain at bhp_push.
     lda $071A            ; hook enable (0 = off)
     beq bhp_push
+    lda $5E              ; both escape targets are bank 0
+    bne bhp_push
     ; -- $000412 -> entry412 --
-    lda $5E
-    bne bhp_push         ; (next-entry label goes here when the chain grows)
     lda $5C
     cmp #$0412
-    bne bhp_push
+    bne bhp_e1
     lda $54
     sta $40              ; 68K PC = return addr (bank $42 unchanged)
     pla                  ; drop RET1 -> 65816 S back at the iloop dispatch level
     jmp entry412
+bhp_e1:                  ; -- $00CB9E -> entry_cb9e --  (A still = target lo16)
+    cmp #$CB9E
+    bne bhp_push
+    lda $54
+    sta $40
+    pla
+    jmp entry_cb9e
 bhp_push:                ; MISS: push the 24-bit return. push32r derives the return bank
     ; from the caller's carry (PC+len add) which we clobbered -> derive it ourselves.
     lda $54
@@ -11798,6 +11805,268 @@ neg32_n:                 ; $8C/$8E = -$8C/$8E
     sbc $8E
     sta $8E
     rts
+
+; rdw40 / wrw40 — big-endian 16-bit word read/write of 68K work RAM ($F0xxxx) in
+; BW-RAM $40. in: X = work-RAM offset (aN.lo + disp). rdw40 -> A=word. wrw40: A=word
+; in. 16-bit A on entry/exit; preserve X. (work RAM stores big-endian: [X]=hi,[X+1]=lo.)
+rdw40:
+    sep #$20
+    lda $400000,x        ; hi byte
+    xba
+    lda $400001,x        ; lo byte
+    rep #$20
+    rts
+wrw40:
+    sep #$20
+    xba                  ; A.lo = hi byte
+    sta $400000,x
+    xba                  ; A.lo = lo byte
+    sta $400001,x
+    rep #$20
+    rts
+; rdw_a0 — ROM/IO/work-RAM-aware big-endian word read of [a0+Y]. in: Y=byte disp.
+;   out: A=word (hi:lo). a0 may point at ROM ($00-$07xxxx) or work RAM, so route through
+;   readbyte (NOT $40 direct). readbyte preserves Y,$52,$54 and clobbers $66,$68; $90 scratch.
+rdw_a0:
+    lda $22
+    sta $52              ; a0.hi16
+    tya
+    clc
+    adc $20
+    sta $54              ; a0.lo + disp
+    jsr readbyte         ; A.lo = [a0+disp] hi byte
+    xba
+    sta $90              ; hi:00
+    inc $54              ; a0.lo + disp + 1 (readbyte preserved $52/$54)
+    jsr readbyte         ; A.lo = [a0+disp+1] lo byte
+    ora $90              ; A = hi:lo
+    rts
+; rdb_a0 — ROM-aware byte read of [a0+Y]. in: Y=disp. out: A=byte (hi=0).
+rdb_a0:
+    lda $22
+    sta $52
+    tya
+    clc
+    adc $20
+    sta $54
+    jmp readbyte         ; tail-call (returns A.lo=byte, A.hi=0)
+
+; entry_cb9e — native $00CB9E (sprite-position update, SAFE-LEAF, ~10 calls/frame).
+; 68K (a0/a1/a6 ptrs; a2=[a6-$54]):
+;   tst.w (a1); ble rts                         ; signed early-out, regs untouched
+;   (a1+6)=(a6-$22)+(a0+6) ; (a1+8)=(a6-$22)+(a0+8)
+;   d0=(a0+2); d1=(a0+4); d2.b=(a0+c)
+;   btst#7,(a6-$24): set -> d1=(a0+2);d0=(a0+4); neg d0;neg d1;neg.w d2; d2.b+=$80
+;   (a1+2)=(a6-$1e)+d0 ; (a1+4)=(a6-$1e)+d1 ; (a1+c).b=d2.b
+;   a2=(a6-$54); (a2)=1; (a2+4)=(a1+4); (a2+2)=(a1+2)
+; .w ops preserve reg-file high words; d2 mixes .b/.w. Scratch $80-$8C. CCR from the
+; exit op (tst.w on early-out; move.w (a1+2) on the normal path). Ends jmp inext.
+entry_cb9e:
+    rep #$30
+    inc $071E            ; cb9e hit counter (validation)
+    ldx $24              ; a1.lo  -> X = (a1+0) offset
+    jsr rdw40
+    sta $80              ; [a1+0] ; sets N/Z
+    beq cb_e0            ; signed <= 0 -> early-out (near trampoline to far cb_early)
+    bmi cb_e0
+    bra cb_norm
+cb_e0:
+    jmp cb_early
+cb_norm:
+    ; ---- normal path ----
+    ; (a) d0 = [a6-$22] + [a0+6] ; [a1+6] = d0
+    lda $38
+    clc
+    adc #$FFDE           ; -$22
+    tax
+    jsr rdw40
+    sta $82              ; m22 = [a6-$22]
+    ldy #$0006
+    jsr rdw_a0           ; [a0+6] (a0=ROM)
+    clc
+    adc $82
+    sta $00              ; d0.lo
+    lda $24
+    clc
+    adc #$0006
+    tax
+    lda $00
+    jsr wrw40            ; [a1+6] = d0
+    ; (b) d0 = [a6-$22] + [a0+8] ; [a1+8] = d0
+    ldy #$0008
+    jsr rdw_a0           ; [a0+8] (a0=ROM)
+    clc
+    adc $82
+    sta $00
+    lda $24
+    clc
+    adc #$0008
+    tax
+    lda $00
+    jsr wrw40            ; [a1+8] = d0
+    ; (c) base: d0=[a0+2],d1=[a0+4],d2.b=[a0+c]  -> $84/$86, d2 byte (a0=ROM)
+    ldy #$0002
+    jsr rdw_a0
+    sta $84              ; [a0+2]
+    ldy #$0004
+    jsr rdw_a0
+    sta $86              ; [a0+4]
+    ldy #$000C
+    jsr rdb_a0           ; [a0+c] byte
+    sep #$20
+    sta $08              ; d2 byte0 (preserve d2 bits 8-31)
+    rep #$20
+    ; (d) btst #7,[a6-$24].b
+    lda $38
+    clc
+    adc #$FFDC           ; -$24
+    tax
+    sep #$20
+    lda $400000,x
+    and #$80
+    rep #$20
+    bne cb_neg
+    ; bit clear: d0=[a0+2], d1=[a0+4] (d2 already = [a0+c])
+    lda $84
+    sta $00
+    lda $86
+    sta $04
+    bra cb_after
+cb_neg:
+    ; bit set: d0=-[a0+4], d1=-[a0+2], d2=-(d2.lo16) then byte0+=$80
+    lda $86
+    eor #$FFFF
+    inc a
+    sta $00              ; d0 = -[a0+4]
+    lda $84
+    eor #$FFFF
+    inc a
+    sta $04              ; d1 = -[a0+2]
+    lda $08
+    eor #$FFFF
+    inc a
+    sta $08              ; neg.w d2
+    sep #$20
+    lda $08
+    clc
+    adc #$80
+    sta $08              ; d2.b += $80
+    rep #$20
+cb_after:
+    ; (e) d3 = [a6-$1e] + d0 ; [a1+2] = d3
+    lda $38
+    clc
+    adc #$FFE2           ; -$1e
+    tax
+    jsr rdw40
+    sta $8A              ; m1e = [a6-$1e]
+    clc
+    adc $00
+    sta $0C              ; d3
+    lda $24
+    clc
+    adc #$0002
+    tax
+    lda $0C
+    jsr wrw40            ; [a1+2] = d3
+    ; (f) d3 = [a6-$1e] + d1 ; [a1+4] = d3
+    lda $8A
+    clc
+    adc $04
+    sta $0C
+    lda $24
+    clc
+    adc #$0004
+    tax
+    lda $0C
+    jsr wrw40            ; [a1+4] = d3
+    ; (g) [a1+c].b = d2.b
+    lda $24
+    clc
+    adc #$000C
+    tax
+    sep #$20
+    lda $08
+    sta $400000,x        ; [a1+c] byte
+    rep #$20
+    ; (h) a2 = [a6-$54] (long, big-endian) ; [a2]=1 ; [a2+4]=[a1+4] ; [a2+2]=[a1+2]
+    lda $38
+    clc
+    adc #$FFAC           ; -$54
+    tax
+    sep #$20
+    lda $400000,x        ; b0
+    xba
+    lda $400001,x        ; b1
+    rep #$20
+    sta $2A              ; a2.hi16
+    inx
+    inx
+    sep #$20
+    lda $400000,x        ; b2
+    xba
+    lda $400001,x        ; b3
+    rep #$20
+    sta $28              ; a2.lo16
+    ldx $28
+    lda #$0001
+    jsr wrw40            ; [a2+0] = 1
+    lda $24
+    clc
+    adc #$0004
+    tax
+    jsr rdw40            ; [a1+4]
+    pha
+    lda $28
+    clc
+    adc #$0004
+    tax
+    pla
+    jsr wrw40            ; [a2+4] = [a1+4]
+    lda $24
+    clc
+    adc #$0002
+    tax
+    jsr rdw40            ; [a1+2]
+    sta $8C              ; for CCR
+    pha
+    lda $28
+    clc
+    adc #$0002
+    tax
+    pla
+    jsr wrw40            ; [a2+2] = [a1+2]
+    ; CCR = move.w (a1+2): N/Z from [a1+2], V=C=0
+    lda $8C
+    bne cbn_nz
+    lda #$0001
+    sta $60
+    bra cbn_n
+cbn_nz:
+    stz $60
+cbn_n:
+    lda $8C
+    and #$8000
+    sta $70
+    stz $6E
+    stz $72
+    jmp inext
+cb_early:
+    ; CCR = tst.w (a1): N/Z from [a1+0] ($80), V=C=0 ; regs untouched
+    lda $80
+    bne cbe_nz
+    lda #$0001
+    sta $60
+    bra cbe_n
+cbe_nz:
+    stz $60
+cbe_n:
+    lda $80
+    and #$8000
+    sta $70
+    stz $6E
+    stz $72
+    jmp inext
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
