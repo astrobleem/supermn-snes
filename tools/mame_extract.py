@@ -11,9 +11,13 @@ Writes <outdir>/regsA.bin (D0-D7,A0-A6,A7,USP,SR big-endian longs), wramA.bin, w
 (16KB each). Fresh boot hangs at $0818 (see memory mame-fresh-boot-hang), so a gameplay
 save state is required.
 
-NOTE: this is the SPATIAL triple. lockstep.py also needs $AC (the 68K instruction count
-per game-tick) for its instruction-paced IRQ — not yet captured here; determine it from a
-MAME 68K trace of the tick (tools/mame-trace/trace68k.lua) until the bridge can count it.
+$AC (the 68K instr/tick the interp's IRQ is paced to): determine it EMPIRICALLY, not via a
+MAME trace (a -debug noloop trace can't run after a state-load in MAME 0.287 -- execution
+stalls). Run lockstep.py on the extracted triple; it prints "interp 68K instr count B0->B1
+= N" (the tick length). Set $AC = N - 4 (the IRQ fires ~4 instrs before the $3A92 boundary).
+For gameplay ticks this is ~0x2F60 and is stable across ticks. VALIDATED: combat1000 tick 3
+round-trips through lockstep.py at $AC=0x2F60 with a 4-byte diff (all sound/sub-CPU residual,
+no logic divergence) -- i.e. the interp reproduces MAME's next frame, confirming the triple.
 """
 import sys, struct
 from pathlib import Path
