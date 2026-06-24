@@ -46,7 +46,7 @@ class Frame:
         self.hi = entry if isinstance(entry, int) else None
 
 
-def main(path):
+def analyze(path):
     # per-entry aggregate
     agg = defaultdict(lambda: {"inv": 0, "calls_ever": 0, "indirect_ever": 0,
                                "io": set(), "icount_min": 1 << 30, "icount_max": 0,
@@ -134,13 +134,7 @@ def main(path):
     for caller, callees in callgraph.items():
         agg[caller]["callees"] |= callees
 
-    print(f"trace lines parsed: {n}")
-    print(f"distinct executed instruction addresses: {len(pcs)}")
-    in_rom = sum(1 for p in pcs if p < ROM_END)
-    print(f"  of which in program ROM (<$80000): {in_rom}")
-    print()
-
-    # pure leaf candidates
+    # pure leaf candidates (no calls, no indirect, no device I/O)
     leaves = []
     for entry, a in agg.items():
         if not isinstance(entry, int) or entry >= ROM_END:
@@ -150,14 +144,23 @@ def main(path):
         if a["calls_ever"] == 0 and a["indirect_ever"] == 0 and not a["io"]:
             extent = (a["hi"] - a["lo"]) if a["hi"] >= a["lo"] else 0
             leaves.append((entry, a["inv"], a["icount_min"], a["icount_max"], extent))
-
     leaves.sort(key=lambda t: (-t[1], t[4]))   # most-invoked, then smallest
+    return {"agg": agg, "leaves": leaves, "indirect_sites": indirect_sites, "pcs": pcs, "n": n}
+
+
+def main(path):
+    r = analyze(path)
+    agg, leaves, indirect_sites, pcs, n = r["agg"], r["leaves"], r["indirect_sites"], r["pcs"], r["n"]
+    print(f"trace lines parsed: {n}")
+    print(f"distinct executed instruction addresses: {len(pcs)}")
+    in_rom = sum(1 for p in pcs if p < ROM_END)
+    print(f"  of which in program ROM (<$80000): {in_rom}")
+    print()
     print(f"PURE LEAF candidates (no calls, no indirect, no device I/O): {len(leaves)}")
     print(f"{'entry':>8} {'invocs':>7} {'imin':>5} {'imax':>5} {'extent':>7}")
     for entry, inv, imn, imx, ext in leaves[:25]:
         print(f"{entry:08X} {inv:7d} {imn:5d} {imx:5d} {ext:7d}")
     print()
-
     print(f"indirect/computed control-flow sites (H6 jump tables): {len(indirect_sites)}")
     for pc, c in sorted(indirect_sites.items(), key=lambda t: -t[1])[:15]:
         print(f"  {pc:08X}  x{c}")

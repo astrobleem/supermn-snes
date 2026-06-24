@@ -55,6 +55,10 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
     print('  (injected $AC = %04X)' % AC)
     w16(0x4A, 0); w16(0x4C, 0)       # step counter reset (avoid cap)
     w16(0x0718, 0xFFF8)              # disable PC streaming (speed) -- already captured
+    HOOK = int(sys.argv[3], 0) if len(sys.argv) > 3 else 0
+    w16(0x071A, HOOK)                # native-escape hook enable (0=off interp, 1=on entry412)
+    w16(0x071C, 0)                   # entry412 hit counter reset
+    print('  (native-escape hook $071A = %d)' % HOOK)
     # work RAM 16KB -> BW-RAM $40:0000
     wh(0x400000, wramA.hex(), 'snesMemory')
     # input (argv[2] = JOY1 active-high bits, e.g. 0x0100=Right); matches MAME's held input
@@ -80,6 +84,9 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
 
     instr = r16('Sa1Memory', 0x4A) | (r16('Sa1Memory', 0x4C) << 16)
     print('interp 68K instr count B0->B1 = %d  (MAME noloop frame-450 = 12209)' % instr)
+    rng = m.read_memory('snesMemory', 0x40170E, 2)   # $F0170E RNG state (big-endian)
+    print('  RNG state $40:170E after frame = %02X%02X' % (rng[0], rng[1]))
+    print('  entry412 native hits this frame = %d' % r16('Sa1Memory', 0x071C))
     print('  $AC at B1 = %04X (reload const $7000=28672); $AA=%X' % (r16('Sa1Memory', 0xAC), r16('Sa1Memory', 0xAA)))
     # dump the streamed full-frame PC list ($40:8000+, $0718 = byte count)
     nbytes = r16('Sa1Memory', 0x0718)

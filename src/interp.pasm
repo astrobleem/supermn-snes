@@ -1871,7 +1871,7 @@ op_bsr:                  ; bsr : disp8 (short) or, if disp8==0, disp16 (word for
     clc
     adc #4
     sta $54              ; return addr = PC+4
-    jsr push32r
+    jsr bsr_hookpush     ; native-escape check (else push32r); byte-neutral swap
     jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
     nop
     nop
@@ -1894,7 +1894,7 @@ bsr_pos:
     clc
     adc #2
     sta $54              ; return addr = PC+2
-    jsr push32r
+    jsr bsr_hookpush     ; native-escape check (else push32r); byte-neutral swap
     jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
     nop
     nop
@@ -2376,7 +2376,7 @@ op_jsr_pcrel:            ; jsr (d16,PC) : push PC+4 ; PC = PC+2+d16
     clc
     adc #4
     sta $54              ; return addr = PC+4
-    jsr push32r
+    jsr bsr_hookpush     ; native-escape check (else push32r); byte-neutral swap
     jmp branch_apply     ; bank-correct PC = (PC+2) + sign_ext(disp16)
     nop
     nop
@@ -11571,6 +11571,214 @@ ms_skip:
     adc #6
     sta $40
     jmp inext
+
+; =============================================================================
+; Phase B: native-escape hook + entry412 (route live $000412 RNG to native 65816)
+; bsr_hookpush REPLACES op_bsr's `jsr push32r` (byte-neutral): it resolves the bsr
+; target and, if the hook is enabled ($071A!=0) and the target is hooked, sets the
+; 68K PC to the return address and JMPs the native routine (which ends `jmp inext`,
+; never touching the 68K stack). Otherwise it does the normal push32r. Toggle $071A
+; for hook-off vs hook-on differential validation. (IRAM powers up 0 -> off/safe.)
+; =============================================================================
+bsr_hookpush:            ; in: $50=signed disp, $54=return lo16 ; out: (miss) push32r+rts
+    lda $40
+    clc
+    adc #2
+    sta $5C
+    lda $42
+    adc #$0000
+    sta $5E              ; (PC+2) 24-bit
+    lda $5C
+    clc
+    adc $50              ; + disp16 low
+    sta $5C
+    lda $50
+    bmi bhp_neg
+    lda $5E
+    adc #$0000
+    bra bhp_tb
+bhp_neg:
+    lda $5E
+    adc #$FFFF
+bhp_tb:
+    sta $5E              ; target = $5E:$5C
+    jsr hook_check       ; hit: PC=$54, jmp native (no return); miss: rts
+    ; MISS: push the 24-bit return. push32r derives the return bank from the CALLER's
+    ; carry (PC+len add), which we clobbered computing the target -> derive it ourselves.
+    lda $54
+    cmp $40              ; C set if return-lo16 >= PC-lo16 (i.e. no bank wrap)
+    lda $42
+    bcs bhp_nob
+    inc a                ; return crossed into the next bank
+bhp_nob:
+    sta $56              ; return bank
+    jmp push32           ; push $57:$56:$55:$54, then rts -> op_bsr -> branch_apply
+
+hook_check:              ; in: $5C=target lo16, $5E=target bank, $54=return lo16
+    lda $071A            ; hook enable (0 = off)
+    beq hc_miss
+    lda $5E
+    bne hc_miss          ; $000412 is bank 0
+    lda $5C
+    cmp #$0412
+    bne hc_miss
+    lda $54
+    sta $40              ; PC = 68K return addr (bank $42 unchanged)
+    jmp entry412
+hc_miss:
+    rts
+
+; entry412 — native $000412 (Lehmer RNG, 16-bit state @ [A5+$170E]).
+; state(->1 if 0); D7=(state*176)/32749 signed; new state = remainder.
+; mirrors: [A5+$170E].w=rem ; D7=(quotient<<16)|rem ; CCR from move.w(rem). jmp inext.
+; rng scratch relocated to $80-$94 (transient) so the live reg file $00-$3F is safe.
+entry412:
+    rep #$30
+    inc $071C            ; hit counter (proof the native escape fired)
+    lda $34              ; A5 low16
+    clc
+    adc #$170E
+    sta $9A              ; work-RAM offset of state
+    tax
+    sep #$20
+    lda $400000,x        ; state hi byte (big-endian)
+    xba
+    lda $400001,x        ; state lo byte
+    rep #$20
+    and #$FFFF
+    sta $80              ; rng input
+    jsr rng_core_n       ; -> rem $82, quotient $84
+    ldx $9A
+    lda $82
+    sep #$20
+    xba
+    sta $400000,x        ; new state hi
+    xba
+    sta $400001,x        ; new state lo
+    rep #$20
+    lda $82
+    sta $1C              ; D7 low16 = remainder (= new state)
+    lda $84
+    sta $1E              ; D7 high16 = quotient
+    lda $82              ; CCR from `move.w D7,(...)` = remainder
+    bne e412_nz
+    lda #$0001
+    sta $60              ; Z set (nonzero=set)
+    bra e412_n
+e412_nz:
+    stz $60              ; Z clear
+e412_n:
+    lda $82
+    and #$8000
+    sta $70              ; N = rem bit15
+    stz $6E              ; C = 0
+    stz $72              ; V = 0
+    jmp inext
+
+rng_core_n:              ; in $80 ; out rem $82, quotient $84 (scratch $86-$94)
+    rep #$30
+    lda $80
+    bne rcn_nz
+    lda #1
+rcn_nz:
+    bpl rcn_xpos
+    ldy #1
+    eor #$FFFF
+    clc
+    adc #1
+    bra rcn_store
+rcn_xpos:
+    ldy #0
+rcn_store:
+    sty $92              ; sign of x
+    sta $86              ; ma_lo = |x|
+    stz $88              ; ma_hi = 0
+    lda #176
+    sta $8A              ; mb
+    jsr umul16_n         ; $8C/$8E = |x|*176
+    lda $92
+    beq rcn_pp
+    jsr neg32_n
+rcn_pp:
+    lda $8E
+    bpl rcn_dp
+    ldy #1
+    jsr neg32_n
+    bra rcn_ds
+rcn_dp:
+    ldy #0
+rcn_ds:
+    sty $92
+    lda #32749
+    sta $90              ; divisor
+    jsr udiv32_16_n      ; quotient $8C/$8E, rem $94
+    lda $92
+    beq rcn_sp
+    lda $8C
+    eor #$FFFF
+    clc
+    adc #1
+    sta $8C
+    lda $94
+    eor #$FFFF
+    clc
+    adc #1
+    sta $94
+rcn_sp:
+    lda $94
+    sta $82              ; remainder
+    lda $8C
+    sta $84              ; quotient
+    rts
+
+umul16_n:                ; ma $86/$88 * mb $8A -> $8C/$8E
+    stz $8C
+    stz $8E
+    ldx #16
+umn_l:
+    lsr $8A
+    bcc umn_s
+    clc
+    lda $8C
+    adc $86
+    sta $8C
+    lda $8E
+    adc $88
+    sta $8E
+umn_s:
+    asl $86
+    rol $88
+    dex
+    bne umn_l
+    rts
+
+udiv32_16_n:             ; dividend $8C/$8E, divisor $90 -> quotient $8C/$8E, rem $94
+    stz $94
+    ldx #32
+udn_l:
+    asl $8C
+    rol $8E
+    rol $94
+    lda $94
+    cmp $90
+    bcc udn_s
+    sbc $90
+    sta $94
+    inc $8C
+udn_s:
+    dex
+    bne udn_l
+    rts
+
+neg32_n:                 ; $8C/$8E = -$8C/$8E
+    sec
+    lda #0
+    sbc $8C
+    sta $8C
+    lda #0
+    sbc $8E
+    sta $8E
+    rts
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
