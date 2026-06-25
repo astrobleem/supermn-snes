@@ -12453,6 +12453,20 @@ ce_fill:
     cmp #$FFFF
     bne ce_fill
 ce_done:
+    ldx #$0000              ; replicate `movem.w (a7)+,d0-d6` SIGN-EXTENSION (caller may read hi16)
+ce_sext:
+    lda $00,x
+    and #$8000
+    beq ce_sx0
+    lda #$FFFF
+ce_sx0:
+    sta $02,x
+    inx
+    inx
+    inx
+    inx
+    cpx #$001C
+    bne ce_sext
     lda #$FFFF              ; reg d7 = $0000FFFF (function's final d7; arg8>=0 -> hi16=0)
     sta $1C
     stz $1E
@@ -12477,6 +12491,202 @@ ce_rdw_lo:
     ora $98
     rts
 
+; entry_111a — native $00111A: 2-stream sprite builder (~5.9%), sibling of $000CE4 reached via
+; jsr(An). link a6 + movem.l a0-a4 + movem.w d0-d6 (caller-preserved -> DP scratch only). 2 streams:
+; X @ $1cf6(a5)+arg8 (a4, write d4), Y @ $20f2(a5)+arg8 (a3, READ-MODIFY-WRITE [a3]=([a3]&$f800)|(d3&$1ff)).
+; arg8 is a WORD offset (adda.w, no ext.l). a0=[a7+8] ROM src (ce_rdw). Entry value (a1) only 0-tested.
+; Scratch: $80 d0 $82 d1 $84 d2 $86 d3 $88 d6(runY) $8A d5 $8C d4 $8E d7 ; $90 a4off $92 a3off
+;          $96 a1off $98 temp $9A a0.hi16 $9C a0.lo16 $9E temp
+entry_111a:
+    rep #$30
+    inc $0726               ; hit counter
+    ldx $3C
+    jsr rdw40               ; arg8 = [a7+0] (word)
+    clc
+    adc $34                 ; + a5.lo
+    sta $98                 ; base
+    clc
+    adc #$1CF6
+    sta $90                 ; a4off (X)
+    lda $98
+    clc
+    adc #$20F2
+    sta $92                 ; a3off (Y)
+    lda $3C                 ; a0 (long) [a7+8]
+    clc
+    adc #$0008
+    tax
+    jsr rdw40
+    sta $9A                 ; a0.hi16
+    lda $3C
+    clc
+    adc #$000A
+    tax
+    jsr rdw40
+    sta $9C                 ; a0.lo16
+    lda $3C                 ; d7 = [a7+12] (count)
+    clc
+    adc #$000C
+    tax
+    jsr rdw40
+    sta $8E
+    ldy #$0000              ; d0 = [a0+0]
+    jsr ce_rdw
+    sta $80
+    lda $3C                 ; d1 = $EA - [a7+4]
+    clc
+    adc #$0004
+    tax
+    jsr rdw40
+    sta $98
+    lda #$00EA
+    sec
+    sbc $98
+    sta $82
+    lda #$0004              ; a1off = 4
+    sta $96
+e11a_outer:
+    lda #$00FA              ; d5 = $FA ; if -5<=d1<=$F9 -> d5=d1
+    sta $8A
+    lda $82
+    cmp #$00FA
+    bvs e11a_ova
+    bpl e11a_d15e
+    bra e11a_cklo
+e11a_ova:
+    bmi e11a_d15e
+e11a_cklo:
+    lda $82
+    cmp #$FFFA
+    beq e11a_d15e
+    bvs e11a_ovb
+    bmi e11a_d15e
+    bra e11a_clamp
+e11a_ovb:
+    bpl e11a_d15e
+e11a_clamp:
+    lda $82
+    sta $8A
+e11a_d15e:
+    ldy #$0002              ; d2 = [a0+2]
+    jsr ce_rdw
+    sta $84
+    lda $3C                 ; d6 = d3 = [a7+6]
+    clc
+    adc #$0006
+    tax
+    jsr rdw40
+    sta $88
+e11a_inner:
+    lda $88                 ; d3 = d6 (running Y)
+    sta $86
+    ldy $96                 ; tst [a1]+ ; a1off += 2
+    jsr ce_rdw
+    inc $96
+    inc $96
+    cmp #$0000
+    bne e11a_dowr
+    jmp e11a_d196           ; [a1]==0 -> skip (far)
+e11a_dowr:
+    lda $8A                 ; d4 = d5
+    sta $8C
+    lda $86                 ; if d3<=-16 || d3>=$180 -> d4=$FA
+    cmp #$FFF0
+    beq e11a_xfa
+    bvs e11a_ovc
+    bmi e11a_xfa
+    bra e11a_ckhi
+e11a_ovc:
+    bpl e11a_xfa
+e11a_ckhi:
+    lda $86
+    cmp #$0180
+    bvs e11a_ovd
+    bmi e11a_d184
+    bra e11a_xfa
+e11a_ovd:
+    bpl e11a_d184
+e11a_xfa:
+    lda #$00FA
+    sta $8C
+e11a_d184:
+    lda $8E                 ; tst d7 ; if d7<0 -> done
+    bpl e11a_wrx
+    jmp e11a_done
+e11a_wrx:
+    lda $8C                 ; (a4)+ = d4 (X stream)
+    ldx $90
+    jsr wrw40
+    inc $90
+    inc $90
+    ldx $92                 ; [a3] = ([a3] & $f800) | (d3 & $1ff)
+    jsr rdw40
+    and #$F800
+    sta $9E
+    lda $86
+    and #$01FF
+    ora $9E
+    ldx $92
+    jsr wrw40
+    inc $92
+    inc $92
+    dec $8E                 ; d7 -= 1
+e11a_d196:
+    lda $88                 ; d6 += $10
+    clc
+    adc #$0010
+    sta $88
+    lda $84                 ; dbra d2
+    dec a
+    sta $84
+    cmp #$FFFF
+    beq e11a_d2x
+    jmp e11a_inner
+e11a_d2x:
+    lda $82                 ; d1 -= $10
+    sec
+    sbc #$0010
+    sta $82
+    lda $80                 ; dbra d0
+    dec a
+    sta $80
+    cmp #$FFFF
+    beq e11a_d0x
+    jmp e11a_outer
+e11a_d0x:
+    lda $8E                 ; if d7<0 done, else fill
+    bmi e11a_done
+e11a_fill:
+    lda #$00FA
+    ldx $90
+    jsr wrw40
+    inc $90
+    inc $90
+    lda $8E                 ; dbra d7
+    dec a
+    sta $8E
+    cmp #$FFFF
+    bne e11a_fill
+e11a_done:
+    ldx #$0000              ; replicate `movem.w (a7)+,d0-d6`: each restored word is SIGN-EXTENDED
+e11a_sext:                  ; to 32 bits -> d0-d6.hi16 = (lo16 & $8000) ? $FFFF : $0000
+    lda $00,x
+    and #$8000
+    beq e11a_sx0
+    lda #$FFFF
+e11a_sx0:
+    sta $02,x
+    inx
+    inx
+    inx
+    inx
+    cpx #$001C
+    bne e11a_sext
+    lda #$FFFF              ; reg d7 = $0000FFFF (clobbered; arg8>=0 -> hi16=0)
+    sta $1C
+    stz $1E
+    jmp inext
+
 ; jsrabs_hook2 — native-escape dispatch for op_jsr_abs (jsr.l). Target $50(hi):$52(lo),
 ; return $54. Same call-path as bsr_hookpush but for absolute-long jsr. HIT: pla (drop our
 ; jsr return -> stack back to inext level), PC=return, jmp the native entry. MISS: tail-jmp
@@ -12496,6 +12706,8 @@ jsrabs_hook2:
     beq jah2_e15b4
     cmp #$0CE4
     beq jah2_ece4
+    cmp #$111A
+    beq jah2_e111a
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -12523,6 +12735,12 @@ jah2_ece4:
     lda $54
     sta $40
     jmp entry_ce4
+jah2_e111a:
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry_111a
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
