@@ -48,5 +48,6 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',
         n_on, xfa_on, on = one_tick(1, ac)
         print("AC=%04X | ON  (native):      N=%d  off-screen-tiles=%d  ON-vs-MAME=%d" % (ac, n_on, xfa_on, cmp_mame(on)), flush=True)
         n_off, xfa_off, off = one_tick(0, ac)
-        onoff = sum(1 for i in range(0x4000) if on[i] != off[i])
-        print("AC=%04X | OFF (interpreted): N=%d  OFF-vs-MAME=%d ; ON-vs-OFF=%d" % (ac, n_off, cmp_mame(off), onoff), flush=True)
+        offs = [i for i in range(0x4000) if on[i] != off[i]]
+        print("AC=%04X | OFF (interpreted): N=%d  OFF-vs-MAME=%d ; ON-vs-OFF=%d" % (ac, n_off, cmp_mame(off), len(offs)), flush=True)
+        print("  ON-vs-OFF:", [("$%04X" % i, "ON=%02X/OFF=%02X" % (on[i], off[i])) for i in offs], flush=True)
