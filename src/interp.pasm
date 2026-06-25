@@ -11095,6 +11095,4141 @@ irq:
 
 ; C-Chip command-1 boot response (256 bytes of downloaded 68K code), captured
 ; from MAME (data/cchip_boot_response.bin). Read at $00:F700 via DBR=$00.
+.org $D1ED
+; --- transpiled from $025110 (545 instrs) by tools/transpile.py ---
+entry_25110:
+    rep #$30
+    inc $072A
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsr push32
+    lda $34
+    clc
+    adc #$2932
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$0002
+    bne _25110_t1
+    jmp L25110_25774
+_25110_t1:
+    lda #$001E
+    sta $1C
+    lda $34
+    clc
+    adc #$3A74
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+L25110_25122:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t2
+    bmi _25110_t2
+    bra _25110_t3
+_25110_t2:
+    jmp L25110_25322
+_25110_t3:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BF
+    bne _25110_t4
+    jmp L25110_25322
+_25110_t4:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BD
+    bne _25110_t5
+    jmp L25110_25322
+_25110_t5:
+    lda $1C
+    sta $18
+    lda $18
+    sec
+    sbc #$0001
+    sta $18
+    bvs _25110_t6
+    bmi _25110_t7
+    bra _25110_t8
+_25110_t6:
+    bpl _25110_t7
+    bra _25110_t8
+_25110_t7:
+    jmp L25110_25322
+_25110_t8:
+    lda $20
+    clc
+    adc #$0010
+    sta $24
+    lda $22
+    adc #$0000
+    sta $26
+    lda #$0000
+    sta $14
+L25110_2514c:
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t9
+    bmi _25110_t9
+    bra _25110_t10
+_25110_t9:
+    jmp L25110_25318
+_25110_t10:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BF
+    bne _25110_t11
+    jmp L25110_25318
+_25110_t11:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BD
+    bne _25110_t12
+    jmp L25110_25318
+_25110_t12:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t15
+    bvs _25110_t13
+    bpl _25110_t14
+    bra _25110_t15
+_25110_t13:
+    bmi _25110_t14
+    bra _25110_t15
+_25110_t14:
+    jmp L25110_25318
+_25110_t15:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t16
+    bmi _25110_t17
+    bra _25110_t18
+_25110_t16:
+    bpl _25110_t17
+    bra _25110_t18
+_25110_t17:
+    jmp L25110_25318
+_25110_t18:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t21
+    bvs _25110_t19
+    bpl _25110_t20
+    bra _25110_t21
+_25110_t19:
+    bmi _25110_t20
+    bra _25110_t21
+_25110_t20:
+    jmp L25110_25318
+_25110_t21:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t22
+    bmi _25110_t23
+    bra _25110_t24
+_25110_t22:
+    bpl _25110_t23
+    bra _25110_t24
+_25110_t23:
+    jmp L25110_25318
+_25110_t24:
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t25
+    bmi _25110_t26
+    bra _25110_t27
+_25110_t25:
+    bpl _25110_t26
+    bra _25110_t27
+_25110_t26:
+    jmp L25110_251d6
+_25110_t27:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t28
+    bmi _25110_t29
+    bra _25110_t30
+_25110_t28:
+    bpl _25110_t29
+    bra _25110_t30
+_25110_t29:
+    jmp L25110_25208
+_25110_t30:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t31
+    jmp L25110_251c4
+_25110_t31:
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_251c4:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t32
+    jmp L25110_252a8
+_25110_t32:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25220
+L25110_251d6:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t35
+    bvs _25110_t33
+    bpl _25110_t34
+    bra _25110_t35
+_25110_t33:
+    bmi _25110_t34
+    bra _25110_t35
+_25110_t34:
+    jmp L25110_25208
+_25110_t35:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t36
+    jmp L25110_251f6
+_25110_t36:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_251f6:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t37
+    jmp L25110_252a8
+_25110_t37:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25220
+L25110_25208:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t38
+    jmp L25110_25214
+_25110_t38:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_25214:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t39
+    jmp L25110_252a8
+_25110_t39:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_25220:
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t40
+    bmi _25110_t41
+    bra _25110_t42
+_25110_t40:
+    bpl _25110_t41
+    bra _25110_t42
+_25110_t41:
+    jmp L25110_2525e
+_25110_t42:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t43
+    bmi _25110_t44
+    bra _25110_t45
+_25110_t43:
+    bpl _25110_t44
+    bra _25110_t45
+_25110_t44:
+    jmp L25110_25290
+_25110_t45:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t46
+    jmp L25110_2524c
+_25110_t46:
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_2524c:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t47
+    jmp L25110_252a8
+_25110_t47:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_252a8
+L25110_2525e:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t50
+    bvs _25110_t48
+    bpl _25110_t49
+    bra _25110_t50
+_25110_t48:
+    bmi _25110_t49
+    bra _25110_t50
+_25110_t49:
+    jmp L25110_25290
+_25110_t50:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t51
+    jmp L25110_2527e
+_25110_t51:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_2527e:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t52
+    jmp L25110_252a8
+_25110_t52:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_252a8
+L25110_25290:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t53
+    jmp L25110_2529c
+_25110_t53:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_2529c:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t54
+    jmp L25110_252a8
+_25110_t54:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_252a8:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8001
+    bne _25110_t55
+    jmp L25110_252d0
+_25110_t55:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8002
+    bne _25110_t56
+    jmp L25110_252d0
+_25110_t56:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8001
+    bne _25110_t57
+    jmp L25110_252d0
+_25110_t57:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8002
+    beq _25110_t58
+    jmp L25110_252e4
+_25110_t58:
+L25110_252d0:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t59
+    bpl _25110_t60
+    bra _25110_t61
+_25110_t59:
+    bmi _25110_t60
+    bra _25110_t61
+_25110_t60:
+    jmp L25110_25318
+_25110_t61:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t62
+    bpl _25110_t63
+    bra _25110_t64
+_25110_t62:
+    bmi _25110_t63
+    bra _25110_t64
+_25110_t63:
+    jmp L25110_25318
+_25110_t64:
+L25110_252e4:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t65
+    bpl _25110_t66
+    bra _25110_t67
+_25110_t65:
+    bmi _25110_t66
+    bra _25110_t67
+_25110_t66:
+    jmp L25110_252f8
+_25110_t67:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t68
+    bpl _25110_t69
+    bra _25110_t70
+_25110_t68:
+    bmi _25110_t69
+    bra _25110_t70
+_25110_t69:
+    jmp L25110_252fe
+_25110_t70:
+L25110_252f8:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $24
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+L25110_252fe:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t71
+    bpl _25110_t72
+    bra _25110_t73
+_25110_t71:
+    bmi _25110_t72
+    bra _25110_t73
+_25110_t72:
+    jmp L25110_25312
+_25110_t73:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t74
+    bpl _25110_t75
+    bra _25110_t76
+_25110_t74:
+    bmi _25110_t75
+    bra _25110_t76
+_25110_t75:
+    jmp L25110_25318
+_25110_t76:
+L25110_25312:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+L25110_25318:
+    lda $24
+    clc
+    adc #$0010
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq _25110_t77
+    jmp L25110_2514c
+_25110_t77:
+L25110_25322:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _25110_t78
+    jmp L25110_25122
+_25110_t78:
+    lda #$0001
+    sta $1C
+    lda $34
+    clc
+    adc #$3A54
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    jmp L25110_25338
+L25110_25338:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t79
+    bmi _25110_t79
+    bra _25110_t80
+_25110_t79:
+    jmp L25110_254ae
+_25110_t80:
+    lda #$001F
+    sta $18
+    lda $34
+    clc
+    adc #$3A74
+    sta $24
+    lda $36
+    adc #$0000
+    sta $26
+    lda #$0000
+    sta $14
+L25110_2534a:
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t81
+    bmi _25110_t81
+    bra _25110_t82
+_25110_t81:
+    jmp L25110_254a4
+_25110_t82:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BF
+    bne _25110_t83
+    jmp L25110_254a4
+_25110_t83:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BF
+    bne _25110_t84
+    jmp L25110_254a4
+_25110_t84:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BE
+    bne _25110_t85
+    jmp L25110_254a4
+_25110_t85:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t86
+    bpl _25110_t87
+    bra _25110_t88
+_25110_t86:
+    bmi _25110_t87
+    bra _25110_t88
+_25110_t87:
+    jmp L25110_254a4
+_25110_t88:
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    bpl _25110_t89
+    jmp L25110_254a4
+_25110_t89:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t92
+    bvs _25110_t90
+    bpl _25110_t91
+    bra _25110_t92
+_25110_t90:
+    bmi _25110_t91
+    bra _25110_t92
+_25110_t91:
+    jmp L25110_254a4
+_25110_t92:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t93
+    bmi _25110_t94
+    bra _25110_t95
+_25110_t93:
+    bpl _25110_t94
+    bra _25110_t95
+_25110_t94:
+    jmp L25110_254a4
+_25110_t95:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t98
+    bvs _25110_t96
+    bpl _25110_t97
+    bra _25110_t98
+_25110_t96:
+    bmi _25110_t97
+    bra _25110_t98
+_25110_t97:
+    jmp L25110_254a4
+_25110_t98:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t99
+    bmi _25110_t100
+    bra _25110_t101
+_25110_t99:
+    bpl _25110_t100
+    bra _25110_t101
+_25110_t100:
+    jmp L25110_254a4
+_25110_t101:
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t102
+    bmi _25110_t103
+    bra _25110_t104
+_25110_t102:
+    bpl _25110_t103
+    bra _25110_t104
+_25110_t103:
+    jmp L25110_253e6
+_25110_t104:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t105
+    bmi _25110_t106
+    bra _25110_t107
+_25110_t105:
+    bpl _25110_t106
+    bra _25110_t107
+_25110_t106:
+    jmp L25110_25410
+_25110_t107:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t108
+    jmp L25110_253dc
+_25110_t108:
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_253dc:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25420
+L25110_253e6:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t111
+    bvs _25110_t109
+    bpl _25110_t110
+    bra _25110_t111
+_25110_t109:
+    bmi _25110_t110
+    bra _25110_t111
+_25110_t110:
+    jmp L25110_25410
+_25110_t111:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t112
+    jmp L25110_25406
+_25110_t112:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_25406:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25420
+L25110_25410:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t113
+    jmp L25110_2541c
+_25110_t113:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_2541c:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_25420:
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t114
+    bmi _25110_t115
+    bra _25110_t116
+_25110_t114:
+    bpl _25110_t115
+    bra _25110_t116
+_25110_t115:
+    jmp L25110_25456
+_25110_t116:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t117
+    bmi _25110_t118
+    bra _25110_t119
+_25110_t117:
+    bpl _25110_t118
+    bra _25110_t119
+_25110_t118:
+    jmp L25110_25480
+_25110_t119:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t120
+    jmp L25110_2544c
+_25110_t120:
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_2544c:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25490
+L25110_25456:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t123
+    bvs _25110_t121
+    bpl _25110_t122
+    bra _25110_t123
+_25110_t121:
+    bmi _25110_t122
+    bra _25110_t123
+_25110_t122:
+    jmp L25110_25480
+_25110_t123:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t124
+    jmp L25110_25476
+_25110_t124:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_25476:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25490
+L25110_25480:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t125
+    jmp L25110_2548c
+_25110_t125:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_2548c:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_25490:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $24
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t126
+    jmp L25110_254a4
+_25110_t126:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+L25110_254a4:
+    lda $24
+    clc
+    adc #$0010
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq _25110_t127
+    jmp L25110_2534a
+_25110_t127:
+L25110_254ae:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _25110_t128
+    jmp L25110_25338
+_25110_t128:
+    lda #$0001
+    sta $1C
+    lda $34
+    clc
+    adc #$3A54
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    jmp L25110_254c4
+L25110_254c4:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t129
+    bmi _25110_t129
+    bra _25110_t130
+_25110_t129:
+    jmp L25110_25602
+_25110_t130:
+    lda #$0003
+    sta $18
+    lda $34
+    clc
+    adc #$3C74
+    sta $24
+    lda $36
+    adc #$0000
+    sta $26
+    lda #$0000
+    sta $14
+L25110_254d6:
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t131
+    bmi _25110_t131
+    bra _25110_t132
+_25110_t131:
+    jmp L25110_255f8
+_25110_t132:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t135
+    bvs _25110_t133
+    bpl _25110_t134
+    bra _25110_t135
+_25110_t133:
+    bmi _25110_t134
+    bra _25110_t135
+_25110_t134:
+    jmp L25110_255f8
+_25110_t135:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t136
+    bmi _25110_t137
+    bra _25110_t138
+_25110_t136:
+    bpl _25110_t137
+    bra _25110_t138
+_25110_t137:
+    jmp L25110_255f8
+_25110_t138:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t141
+    bvs _25110_t139
+    bpl _25110_t140
+    bra _25110_t141
+_25110_t139:
+    bmi _25110_t140
+    bra _25110_t141
+_25110_t140:
+    jmp L25110_255f8
+_25110_t141:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t142
+    bmi _25110_t143
+    bra _25110_t144
+_25110_t142:
+    bpl _25110_t143
+    bra _25110_t144
+_25110_t143:
+    jmp L25110_255f8
+_25110_t144:
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t145
+    bmi _25110_t146
+    bra _25110_t147
+_25110_t145:
+    bpl _25110_t146
+    bra _25110_t147
+_25110_t146:
+    jmp L25110_25542
+_25110_t147:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t148
+    bmi _25110_t149
+    bra _25110_t150
+_25110_t148:
+    bpl _25110_t149
+    bra _25110_t150
+_25110_t149:
+    jmp L25110_2556c
+_25110_t150:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t151
+    jmp L25110_255ec
+_25110_t151:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_2557c
+L25110_25542:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t154
+    bvs _25110_t152
+    bpl _25110_t153
+    bra _25110_t154
+_25110_t152:
+    bmi _25110_t153
+    bra _25110_t154
+_25110_t153:
+    jmp L25110_2556c
+_25110_t154:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t155
+    jmp L25110_255ec
+_25110_t155:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_2557c
+L25110_2556c:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t156
+    jmp L25110_255ec
+_25110_t156:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_2557c:
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t157
+    bmi _25110_t158
+    bra _25110_t159
+_25110_t157:
+    bpl _25110_t158
+    bra _25110_t159
+_25110_t158:
+    jmp L25110_255b2
+_25110_t159:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t160
+    bmi _25110_t161
+    bra _25110_t162
+_25110_t160:
+    bpl _25110_t161
+    bra _25110_t162
+_25110_t161:
+    jmp L25110_255dc
+_25110_t162:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t163
+    jmp L25110_255ec
+_25110_t163:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_255ec
+L25110_255b2:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t166
+    bvs _25110_t164
+    bpl _25110_t165
+    bra _25110_t166
+_25110_t164:
+    bmi _25110_t165
+    bra _25110_t166
+_25110_t165:
+    jmp L25110_255dc
+_25110_t166:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t167
+    jmp L25110_255ec
+_25110_t167:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_255ec
+L25110_255dc:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    lda $24
+    clc
+    adc #$000E
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t168
+    jmp L25110_255ec
+_25110_t168:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_255ec:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $24
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+L25110_255f8:
+    lda $24
+    clc
+    adc #$0010
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq _25110_t169
+    jmp L25110_254d6
+_25110_t169:
+L25110_25602:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _25110_t170
+    jmp L25110_254c4
+_25110_t170:
+    lda #$0003
+    sta $1C
+    lda $34
+    clc
+    adc #$3C74
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    jmp L25110_25618
+L25110_25618:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t171
+    bmi _25110_t171
+    bra _25110_t172
+_25110_t171:
+    jmp L25110_2576a
+_25110_t172:
+    lda #$001F
+    sta $18
+    lda $34
+    clc
+    adc #$3A74
+    sta $24
+    lda $36
+    adc #$0000
+    sta $26
+    lda #$0000
+    sta $14
+L25110_2562a:
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t173
+    bmi _25110_t173
+    bra _25110_t174
+_25110_t173:
+    jmp L25110_25760
+_25110_t174:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8001
+    bne _25110_t175
+    jmp L25110_25760
+_25110_t175:
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8002
+    bne _25110_t176
+    jmp L25110_25760
+_25110_t176:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t179
+    bvs _25110_t177
+    bpl _25110_t178
+    bra _25110_t179
+_25110_t177:
+    bmi _25110_t178
+    bra _25110_t179
+_25110_t178:
+    jmp L25110_25760
+_25110_t179:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t180
+    bmi _25110_t181
+    bra _25110_t182
+_25110_t180:
+    bpl _25110_t181
+    bra _25110_t182
+_25110_t181:
+    jmp L25110_25760
+_25110_t182:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t185
+    bvs _25110_t183
+    bpl _25110_t184
+    bra _25110_t185
+_25110_t183:
+    bmi _25110_t184
+    bra _25110_t185
+_25110_t184:
+    jmp L25110_25760
+_25110_t185:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t186
+    bmi _25110_t187
+    bra _25110_t188
+_25110_t186:
+    bpl _25110_t187
+    bra _25110_t188
+_25110_t187:
+    jmp L25110_25760
+_25110_t188:
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t189
+    bmi _25110_t190
+    bra _25110_t191
+_25110_t189:
+    bpl _25110_t190
+    bra _25110_t191
+_25110_t190:
+    jmp L25110_256aa
+_25110_t191:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t192
+    bmi _25110_t193
+    bra _25110_t194
+_25110_t192:
+    bpl _25110_t193
+    bra _25110_t194
+_25110_t193:
+    jmp L25110_256d4
+_25110_t194:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t195
+    jmp L25110_256a0
+_25110_t195:
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_256a0:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_256e4
+L25110_256aa:
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t198
+    bvs _25110_t196
+    bpl _25110_t197
+    bra _25110_t198
+_25110_t196:
+    bmi _25110_t197
+    bra _25110_t198
+_25110_t197:
+    jmp L25110_256d4
+_25110_t198:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t199
+    jmp L25110_256ca
+_25110_t199:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_256ca:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_256e4
+L25110_256d4:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t200
+    jmp L25110_256e0
+_25110_t200:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_256e0:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrb40
+L25110_256e4:
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t201
+    bmi _25110_t202
+    bra _25110_t203
+_25110_t201:
+    bpl _25110_t202
+    bra _25110_t203
+_25110_t202:
+    jmp L25110_2571a
+_25110_t203:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs _25110_t204
+    bmi _25110_t205
+    bra _25110_t206
+_25110_t204:
+    bpl _25110_t205
+    bra _25110_t206
+_25110_t205:
+    jmp L25110_25744
+_25110_t206:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t207
+    jmp L25110_25710
+_25110_t207:
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_25710:
+    lda #$0000
+    sec
+    sbc $00
+    sta $00
+    lda $00
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25754
+L25110_2571a:
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq _25110_t210
+    bvs _25110_t208
+    bpl _25110_t209
+    bra _25110_t210
+_25110_t208:
+    bmi _25110_t209
+    bra _25110_t210
+_25110_t209:
+    jmp L25110_25744
+_25110_t210:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $04
+    clc
+    adc #$0001
+    sta $04
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t211
+    jmp L25110_2573a
+_25110_t211:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_2573a:
+    lda #$0000
+    sec
+    sbc $04
+    sta $04
+    lda $04
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+    jmp L25110_25754
+L25110_25744:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t212
+    jmp L25110_25750
+_25110_t212:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_25750:
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$000D
+    tax
+    pla
+    jsr wrb40
+L25110_25754:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $24
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+    lda $24
+    clc
+    adc #$000A
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+L25110_25760:
+    lda $24
+    clc
+    adc #$0010
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq _25110_t213
+    jmp L25110_2562a
+_25110_t213:
+L25110_2576a:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _25110_t214
+    jmp L25110_25618
+_25110_t214:
+L25110_25774:
+    lda #$000B
+    sta $1C
+    lda $34
+    clc
+    adc #$3734
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $34
+    clc
+    adc #$3C74
+    sta $24
+    lda $36
+    adc #$0000
+    sta $26
+L25110_25780:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t215
+    bmi _25110_t215
+    bra _25110_t216
+_25110_t215:
+    jmp L25110_257f2
+_25110_t216:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    bpl _25110_t217
+    jmp L25110_257f2
+_25110_t217:
+    lda $24
+    sta $28
+    lda $26
+    sta $2A
+    lda #$0003
+    sta $18
+L25110_25796:
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t218
+    bmi _25110_t218
+    bra _25110_t219
+_25110_t218:
+    jmp L25110_257e8
+_25110_t219:
+    lda $28
+    clc
+    adc #$000E
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    bpl _25110_t220
+    jmp L25110_257e8
+_25110_t220:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0004
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t223
+    bvs _25110_t221
+    bpl _25110_t222
+    bra _25110_t223
+_25110_t221:
+    bmi _25110_t222
+    bra _25110_t223
+_25110_t222:
+    jmp L25110_257e8
+_25110_t223:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0002
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t224
+    bmi _25110_t225
+    bra _25110_t226
+_25110_t224:
+    bpl _25110_t225
+    bra _25110_t226
+_25110_t225:
+    jmp L25110_257e8
+_25110_t226:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0008
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t229
+    bvs _25110_t227
+    bpl _25110_t228
+    bra _25110_t229
+_25110_t227:
+    bmi _25110_t228
+    bra _25110_t229
+_25110_t228:
+    jmp L25110_257e8
+_25110_t229:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0006
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t230
+    bmi _25110_t231
+    bra _25110_t232
+_25110_t230:
+    bpl _25110_t231
+    bra _25110_t232
+_25110_t231:
+    jmp L25110_257e8
+_25110_t232:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $28
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+    lda $28
+    clc
+    adc #$000A
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $28
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrw40
+L25110_257e8:
+    lda $28
+    clc
+    adc #$0010
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq _25110_t233
+    jmp L25110_25796
+_25110_t233:
+L25110_257f2:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _25110_t234
+    jmp L25110_25780
+_25110_t234:
+    lda #$0001
+    sta $14
+L25110_25800:
+    lda $14
+    beq _25110_t235
+    jmp L25110_25816
+_25110_t235:
+    lda #$000B
+    sta $1C
+    lda $34
+    clc
+    adc #$3734
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $34
+    clc
+    adc #$3A74
+    sta $24
+    lda $36
+    adc #$0000
+    sta $26
+    jmp L25110_2582a
+L25110_25816:
+    lda #$001F
+    sta $1C
+    lda $34
+    clc
+    adc #$37F4
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $34
+    clc
+    adc #$39F4
+    sta $24
+    lda $36
+    adc #$0000
+    sta $26
+    lda $24
+    sta $2C
+    lda $26
+    sta $2E
+    lda $2C
+    clc
+    adc #$0030
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+L25110_2582a:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t236
+    bmi _25110_t236
+    bra _25110_t237
+_25110_t236:
+    jmp L25110_259ba
+_25110_t237:
+    lda $24
+    sta $28
+    lda $26
+    sta $2A
+    lda $14
+    beq _25110_t238
+    jmp L25110_25842
+_25110_t238:
+    lda #$001F
+    sta $18
+    jmp L25110_25850
+L25110_25842:
+    lda #$0005
+    sta $18
+    lda $34
+    clc
+    adc #$3CB4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    bne _25110_t239
+    jmp L25110_25850
+_25110_t239:
+    lda $2C
+    sta $28
+    lda $2E
+    sta $2A
+L25110_25850:
+    lda $14
+    bne _25110_t240
+    jmp L25110_25868
+_25110_t240:
+    lda $34
+    clc
+    adc #$3CB4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    bne _25110_t241
+    jmp L25110_25868
+_25110_t241:
+    lda $18
+    sec
+    sbc #$0002
+    beq _25110_t242
+    jmp L25110_25868
+_25110_t242:
+    lda $24
+    sta $28
+    lda $26
+    sta $2A
+L25110_25868:
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    beq _25110_t243
+    bmi _25110_t243
+    bra _25110_t244
+_25110_t243:
+    jmp L25110_259b0
+_25110_t244:
+    lda $28
+    clc
+    adc #$000A
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BE
+    bne _25110_t245
+    jmp L25110_259b0
+_25110_t245:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00BF
+    beq _25110_t246
+    jmp L25110_25898
+_25110_t246:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8030
+    bne _25110_t247
+    jmp L25110_259b0
+_25110_t247:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8050
+    bne _25110_t248
+    jmp L25110_259b0
+_25110_t248:
+L25110_25898:
+    lda $28
+    clc
+    adc #$000E
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    bpl _25110_t249
+    jmp L25110_259b0
+_25110_t249:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0004
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t252
+    bvs _25110_t250
+    bpl _25110_t251
+    bra _25110_t252
+_25110_t250:
+    bmi _25110_t251
+    bra _25110_t252
+_25110_t251:
+    jmp L25110_259b0
+_25110_t252:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0002
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t253
+    bmi _25110_t254
+    bra _25110_t255
+_25110_t253:
+    bpl _25110_t254
+    bra _25110_t255
+_25110_t254:
+    jmp L25110_259b0
+_25110_t255:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0008
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq _25110_t258
+    bvs _25110_t256
+    bpl _25110_t257
+    bra _25110_t258
+_25110_t256:
+    bmi _25110_t257
+    bra _25110_t258
+_25110_t257:
+    jmp L25110_259b0
+_25110_t258:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $28
+    clc
+    adc #$0006
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs _25110_t259
+    bmi _25110_t260
+    bra _25110_t261
+_25110_t259:
+    bpl _25110_t260
+    bra _25110_t261
+_25110_t260:
+    jmp L25110_259b0
+_25110_t261:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $28
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+    lda $28
+    clc
+    adc #$000A
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    jsr wrw40
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $28
+    clc
+    adc #$000C
+    tax
+    pla
+    jsr wrw40
+    lda $28
+    clc
+    adc #$000A
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$00A0
+    bvs _25110_t262
+    bpl _25110_t263
+    bra _25110_t264
+_25110_t262:
+    bmi _25110_t263
+    bra _25110_t264
+_25110_t263:
+    jmp L25110_259ba
+_25110_t264:
+    lda $20
+    clc
+    adc #$000D
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr readbyte
+    bne _25110_t265
+    jmp L25110_259ba
+_25110_t265:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8050
+    bne _25110_t266
+    jmp L25110_25944
+_25110_t266:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8051
+    bne _25110_t267
+    jmp L25110_25944
+_25110_t267:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8053
+    bne _25110_t268
+    jmp L25110_25944
+_25110_t268:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8030
+    bne _25110_t269
+    jmp L25110_25944
+_25110_t269:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8031
+    bne _25110_t270
+    jmp L25110_25944
+_25110_t270:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8033
+    bne _25110_t271
+    jmp L25110_25944
+_25110_t271:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8034
+    bne _25110_t272
+    jmp L25110_25944
+_25110_t272:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8054
+    beq _25110_t273
+    jmp L25110_259ba
+_25110_t273:
+L25110_25944:
+    lda $34
+    clc
+    adc #$1CCC
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$0008
+    bne _25110_t274
+    jmp L25110_259ba
+_25110_t274:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $04
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr readbyte
+    sep #$20
+    sta $08
+    rep #$20
+    lda $08
+    clc
+    adc #$0040
+    sta $08
+    lda $08
+    bpl _25110_t275
+    jmp L25110_25974
+_25110_t275:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $08
+    lda $08
+    sec
+    sbc $00
+    sta $08
+    lda $00
+    clc
+    adc $08
+    sta $00
+    lda $00
+    sec
+    sbc #$0010
+    sta $00
+    jmp L25110_25978
+L25110_25974:
+    lda $00
+    sec
+    sbc #$0008
+    sta $00
+L25110_25978:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$0068
+    beq _25110_t276
+    jmp L25110_25992
+_25110_t276:
+    lda $04
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    jsr wrw40
+    lda $00
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    jsr wrw40
+    ; CALL-BRIDGE jsr $184e8.l -> interpret callee, resume br25110_1
+    lda #br25110_1
+    sta $54
+    lda #$00FF
+    sta $56
+    jsr push32
+    lda #$84E8
+    sta $40
+    lda #$0001
+    sta $42
+    jmp inext
+br25110_1:
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    jmp L25110_259ba
+L25110_25992:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8034
+    bne _25110_t277
+    jmp L25110_259ba
+_25110_t277:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sec
+    sbc #$8054
+    bne _25110_t278
+    jmp L25110_259ba
+_25110_t278:
+    ; CALL-BRIDGE jsr $25a40.l -> interpret callee, resume br25110_2
+    lda #br25110_2
+    sta $54
+    lda #$00FF
+    sta $56
+    jsr push32
+    lda #$5A40
+    sta $40
+    lda #$0002
+    sta $42
+    jmp inext
+br25110_2:
+    jmp L25110_259ba
+L25110_259b0:
+    lda $28
+    clc
+    adc #$0010
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq _25110_t279
+    jmp L25110_25850
+_25110_t279:
+L25110_259ba:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _25110_t280
+    jmp L25110_2582a
+_25110_t280:
+    lda $14
+    dec a
+    sta $14
+    cmp #$FFFF
+    beq _25110_t281
+    jmp L25110_25800
+_25110_t281:
+    ldx $3C
+    jsr rdw40
+    sta $42
+    inx
+    inx
+    jsr rdw40
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jmp inext
+
 .org $E000
 ; op_mw_d16d16_v2 — MOVE.W (d16,An),(d16,An) with a ROM-AWARE source read. The original
 ; read src from $40 work RAM unconditionally; but e.g. $8D86 `move.w $4(a1),$2930(a5)` has
@@ -11838,6 +15973,33 @@ wrw40:
     sta $400001,x
     rep #$20
     rts
+rdb40:                   ; X=work-RAM byte offset -> A = byte (hi=0). transpiler byte mem load/RMW
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
+    rts
+wrb40:                   ; A.lo8 -> work-RAM byte at X. transpiler byte mem store (move.b/clr.b)
+    sep #$20
+    sta $400000,x
+    rep #$20
+    rts
+; rtl-wrappers — a BANK-$01 escape (the $18000 escape bank) reaches these bank-$00 leaf helpers
+; via `jsl <name>_l`: the wrapper jsr's the helper (within bank $00) then rtl's back to bank $01.
+rdw40_l:    jsr rdw40
+    rtl
+wrw40_l:    jsr wrw40
+    rtl
+rdb40_l:    jsr rdb40
+    rtl
+wrb40_l:    jsr wrb40
+    rtl
+push32_l:   jsr push32
+    rtl
+rdw_ea_l:   jsr rdw_ea
+    rtl
+readbyte_l: jsr readbyte
+    rtl
 ; rdw_a0 — ROM/IO/work-RAM-aware big-endian word read of [a0+Y]. in: Y=byte disp.
 ;   out: A=word (hi:lo). a0 may point at ROM ($00-$07xxxx) or work RAM, so route through
 ;   readbyte (NOT $40 direct). readbyte preserves Y,$52,$54 and clobbers $66,$68; $90 scratch.
@@ -11864,6 +16026,22 @@ rdb_a0:
     adc $20
     sta $54
     jmp readbyte         ; tail-call (returns A.lo=byte, A.hi=0)
+
+; rdw_ea — generic ROM/IO/work-RAM-aware big-endian word read. in: $52(hi16)/$54(lo16) =
+;   the full 68K address. out: A = word (hi:lo). readbyte dispatches the bank ($00F0->work
+;   RAM, $00-07->ROM, IO, else 0), so this is correct for ANY pointer (transpiler memory
+;   reads via non-frame An). Clobbers $90 + readbyte's $66/$68; preserves nothing else needed.
+rdw_ea:
+    jsr readbyte         ; A.lo = [addr] hi byte
+    xba
+    sta $90              ; hi:00
+    inc $54
+    bne rdw_ea_lo
+    inc $52
+rdw_ea_lo:
+    jsr readbyte         ; A.lo = [addr+1] lo byte
+    ora $90              ; A = hi:lo
+    rts
 
 ; entry_cb9e — native $00CB9E (sprite-position update, SAFE-LEAF, ~10 calls/frame).
 ; 68K (a0/a1/a6 ptrs; a2=[a6-$54]):
@@ -12741,7 +16919,7 @@ jsrabs_hook2:
     lda $071A
     beq jah2_miss
     lda $50
-    bne jah2_miss        ; all escape targets are bank 0
+    bne jah2_b2          ; bank!=0 -> $025110
     lda $52
     cmp #$0412
     beq jah2_e412
@@ -12753,6 +16931,8 @@ jsrabs_hook2:
     beq jah2_ece4
     cmp #$111A
     beq jah2_e111a
+    cmp #$20E8
+    beq jah2_e20e8
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -12786,6 +16966,1073 @@ jah2_e111a:
     lda $54
     sta $40
     jmp entry_111a
+jah2_e20e8:
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry_20e8
+jah2_b2:
+    cmp #$0002
+    bne jah2_b2_miss
+    lda $52
+    cmp #$5110
+    beq jah2_e25110
+jah2_b2_miss:
+    jmp jah2_miss
+jah2_e25110:
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry_25110
+; --- transpiled from $0020E8 (116 instrs) by tools/transpile.py ---
+entry_20e8:
+    rep #$30
+    inc $072C
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsr push32
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsr push32
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsr push32
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsr push32
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsr push32
+    lda $24
+    sta $54
+    lda $26
+    sta $56
+    jsr push32
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsr push32
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $18
+    jsr wrw40
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $14
+    jsr wrw40
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $10
+    jsr wrw40
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $0C
+    jsr wrw40
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $08
+    jsr wrw40
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    jsr wrw40
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $00
+    jsr wrw40
+    lda $38
+    clc
+    adc #$0008
+    tax
+    jsr rdw40
+    sta $1C
+    lda #$0C00
+    sta $30
+    lda #$00E0
+    sta $32
+    lda $1C
+    sta $9A
+    lda $9A
+    bpl _20e8_t1
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t2
+_20e8_t1:
+    stz $9C
+_20e8_t2:
+    lda $30
+    clc
+    adc $9A
+    sta $30
+    lda $32
+    adc $9C
+    sta $32
+    lda $38
+    clc
+    adc #$0014
+    tax
+    jsr rdw40
+    sta $1C
+    lda $38
+    clc
+    adc #$000A
+    tax
+    jsr rdw40
+    sta $00
+L20e8_2108:
+    lda $00
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _20e8_t3
+    jmp L20e8_2108
+_20e8_t3:
+    lda $38
+    clc
+    adc #$0008
+    tax
+    jsr rdw40
+    sta $1C
+    lda $1C
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $1C
+    lda $34
+    clc
+    adc #$28EA
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $1C
+    sta $9A
+    lda $9A
+    bpl _20e8_t4
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t5
+_20e8_t4:
+    stz $9C
+_20e8_t5:
+    lda $30
+    clc
+    adc $9A
+    sta $30
+    lda $32
+    adc $9C
+    sta $32
+    lda $38
+    clc
+    adc #$0010
+    tax
+    jsr rdw40
+    sta $2E
+    inx
+    inx
+    jsr rdw40
+    sta $2C
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $1C
+    lda $1C
+    clc
+    adc #$0001
+    sta $1C
+    lda $1C
+    lsr a
+    sta $1C
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    lda $1C
+    sta $08
+    lda #$0020
+    sta $00
+    lda $38
+    clc
+    adc #$000E
+    tax
+    jsr rdw40
+    sta $04
+    lda $04
+    sta $14
+    lda #$00F9
+    sta $0C
+    lda $38
+    clc
+    adc #$000C
+    tax
+    jsr rdw40
+    sta $9E
+    lda $0C
+    sec
+    sbc $9E
+    sta $0C
+    lda $0C
+    sta $18
+L20e8_213e:
+    lda $04
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $0C
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $04
+    clc
+    adc $00
+    sta $04
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq _20e8_t6
+    jmp L20e8_213e
+_20e8_t6:
+    lda $2C
+    clc
+    adc #$0004
+    sta $28
+    lda $2E
+    adc #$0000
+    sta $2A
+    lda $38
+    clc
+    adc #$0008
+    tax
+    jsr rdw40
+    sta $1C
+    lda #$0800
+    sta $30
+    lda #$00E0
+    sta $32
+    lda $1C
+    sta $9A
+    lda $9A
+    bpl _20e8_t7
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t8
+_20e8_t7:
+    stz $9C
+_20e8_t8:
+    lda $30
+    clc
+    adc $9A
+    sta $30
+    lda $32
+    adc $9C
+    sta $32
+    lda #$0004
+    sta $1C
+    lda #$0000
+    sta $1E
+L20e8_215a:
+    lda $30
+    sta $20
+    lda $32
+    sta $22
+    lda $14
+    sec
+    sbc #$FFE0
+    beq _20e8_t10
+    bvs _20e8_t9
+    bmi _20e8_t10
+    bra _20e8_t11
+_20e8_t9:
+    bpl _20e8_t10
+    bra _20e8_t11
+_20e8_t10:
+    jmp L20e8_2168
+_20e8_t11:
+    lda $14
+    sec
+    sbc #$0180
+    bvs _20e8_t12
+    bmi _20e8_t13
+    bra _20e8_t14
+_20e8_t12:
+    bpl _20e8_t13
+    bra _20e8_t14
+_20e8_t13:
+    jmp L20e8_2180
+_20e8_t14:
+L20e8_2168:
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $00
+    clc
+    adc #$0001
+    sta $00
+    lda $00
+    asl a
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    bpl _20e8_t15
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t16
+_20e8_t15:
+    stz $9C
+_20e8_t16:
+    lda $28
+    clc
+    adc $9A
+    sta $28
+    lda $2A
+    adc $9C
+    sta $2A
+    lda #$000F
+    sta $04
+L20e8_2176:
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $04
+    dec a
+    sta $04
+    cmp #$FFFF
+    beq _20e8_t17
+    jmp L20e8_2176
+_20e8_t17:
+    jmp L20e8_21be
+L20e8_2180:
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $0C
+    lda #$000E
+    sta $00
+    lda $00
+    sec
+    sbc $0C
+    sta $00
+    lda $18
+    sta $10
+L20e8_218c:
+    lda $10
+    sec
+    sbc #$0109
+    bvs _20e8_t18
+    bpl _20e8_t19
+    bra _20e8_t20
+_20e8_t18:
+    bmi _20e8_t19
+    bra _20e8_t20
+_20e8_t19:
+    jmp L20e8_2198
+_20e8_t20:
+    lda $10
+    sec
+    sbc #$0009
+    beq _20e8_t23
+    bvs _20e8_t21
+    bpl _20e8_t22
+    bra _20e8_t23
+_20e8_t21:
+    bmi _20e8_t22
+    bra _20e8_t23
+_20e8_t22:
+    jmp L20e8_21a0
+_20e8_t23:
+L20e8_2198:
+    lda #$0000
+    sta $04
+    lda #$0002
+    sta $9A
+    lda $9A
+    bpl _20e8_t24
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t25
+_20e8_t24:
+    stz $9C
+_20e8_t25:
+    lda $28
+    clc
+    adc $9A
+    sta $28
+    lda $2A
+    adc $9C
+    sta $2A
+    jmp L20e8_21a6
+L20e8_21a0:
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $28
+    clc
+    adc #$0002
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    pla
+    sta $04
+    lda $04
+    clc
+    adc #$2000
+    sta $04
+L20e8_21a6:
+    lda $04
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $10
+    sec
+    sbc #$0010
+    sta $10
+    lda $0C
+    dec a
+    sta $0C
+    cmp #$FFFF
+    beq _20e8_t26
+    jmp L20e8_218c
+_20e8_t26:
+    lda $00
+    bpl _20e8_t27
+    jmp L20e8_21be
+_20e8_t27:
+L20e8_21b6:
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq _20e8_t28
+    jmp L20e8_21b6
+_20e8_t28:
+L20e8_21be:
+    lda $30
+    sta $20
+    lda $32
+    sta $22
+    lda #$0002
+    sta $9A
+    lda $9A
+    bpl _20e8_t29
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t30
+_20e8_t29:
+    stz $9C
+_20e8_t30:
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $14
+    clc
+    adc #$0010
+    sta $14
+    lda $14
+    sec
+    sbc #$FFE0
+    beq _20e8_t32
+    bvs _20e8_t31
+    bmi _20e8_t32
+    bra _20e8_t33
+_20e8_t31:
+    bpl _20e8_t32
+    bra _20e8_t33
+_20e8_t32:
+    jmp L20e8_21d4
+_20e8_t33:
+    lda $14
+    sec
+    sbc #$0180
+    bvs _20e8_t34
+    bmi _20e8_t35
+    bra _20e8_t36
+_20e8_t34:
+    bpl _20e8_t35
+    bra _20e8_t36
+_20e8_t35:
+    jmp L20e8_21ec
+_20e8_t36:
+L20e8_21d4:
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $00
+    lda $00
+    clc
+    adc #$0001
+    sta $00
+    lda $00
+    asl a
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    bpl _20e8_t37
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t38
+_20e8_t37:
+    stz $9C
+_20e8_t38:
+    lda $28
+    clc
+    adc $9A
+    sta $28
+    lda $2A
+    adc $9C
+    sta $2A
+    lda #$000F
+    sta $04
+L20e8_21e2:
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $04
+    dec a
+    sta $04
+    cmp #$FFFF
+    beq _20e8_t39
+    jmp L20e8_21e2
+_20e8_t39:
+    jmp L20e8_222a
+L20e8_21ec:
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    sta $0C
+    lda #$000E
+    sta $00
+    lda $00
+    sec
+    sbc $0C
+    sta $00
+    lda $18
+    sta $10
+L20e8_21f8:
+    lda $10
+    sec
+    sbc #$0109
+    bvs _20e8_t40
+    bpl _20e8_t41
+    bra _20e8_t42
+_20e8_t40:
+    bmi _20e8_t41
+    bra _20e8_t42
+_20e8_t41:
+    jmp L20e8_2204
+_20e8_t42:
+    lda $10
+    sec
+    sbc #$0009
+    beq _20e8_t45
+    bvs _20e8_t43
+    bpl _20e8_t44
+    bra _20e8_t45
+_20e8_t43:
+    bmi _20e8_t44
+    bra _20e8_t45
+_20e8_t44:
+    jmp L20e8_220c
+_20e8_t45:
+L20e8_2204:
+    lda #$0000
+    sta $04
+    lda #$0002
+    sta $9A
+    lda $9A
+    bpl _20e8_t46
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t47
+_20e8_t46:
+    stz $9C
+_20e8_t47:
+    lda $28
+    clc
+    adc $9A
+    sta $28
+    lda $2A
+    adc $9C
+    sta $2A
+    jmp L20e8_2212
+L20e8_220c:
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsr rdw_ea
+    pha
+    lda $28
+    clc
+    adc #$0002
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    pla
+    sta $04
+    lda $04
+    clc
+    adc #$2000
+    sta $04
+L20e8_2212:
+    lda $04
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $10
+    sec
+    sbc #$0010
+    sta $10
+    lda $0C
+    dec a
+    sta $0C
+    cmp #$FFFF
+    beq _20e8_t48
+    jmp L20e8_21f8
+_20e8_t48:
+    lda $00
+    bpl _20e8_t49
+    jmp L20e8_222a
+_20e8_t49:
+L20e8_2222:
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsr writeword
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq _20e8_t50
+    jmp L20e8_2222
+_20e8_t50:
+L20e8_222a:
+    lda $14
+    clc
+    adc #$0010
+    sta $14
+    lda #$0040
+    sta $9A
+    lda $9A
+    bpl _20e8_t51
+    lda #$FFFF
+    sta $9C
+    bra _20e8_t52
+_20e8_t51:
+    stz $9C
+_20e8_t52:
+    lda $30
+    clc
+    adc $9A
+    sta $30
+    lda $32
+    adc $9C
+    sta $32
+    lda $08
+    dec a
+    sta $08
+    cmp #$FFFF
+    beq _20e8_t53
+    jmp L20e8_215a
+_20e8_t53:
+    ldx $3C
+    jsr rdw40
+    sta $00
+    lda $00
+    bpl _20e8_t54
+    lda #$FFFF
+    sta $02
+    bra _20e8_t55
+_20e8_t54:
+    stz $02
+_20e8_t55:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $04
+    lda $04
+    bpl _20e8_t56
+    lda #$FFFF
+    sta $06
+    bra _20e8_t57
+_20e8_t56:
+    stz $06
+_20e8_t57:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $08
+    lda $08
+    bpl _20e8_t58
+    lda #$FFFF
+    sta $0A
+    bra _20e8_t59
+_20e8_t58:
+    stz $0A
+_20e8_t59:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $0C
+    lda $0C
+    bpl _20e8_t60
+    lda #$FFFF
+    sta $0E
+    bra _20e8_t61
+_20e8_t60:
+    stz $0E
+_20e8_t61:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $10
+    lda $10
+    bpl _20e8_t62
+    lda #$FFFF
+    sta $12
+    bra _20e8_t63
+_20e8_t62:
+    stz $12
+_20e8_t63:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $14
+    lda $14
+    bpl _20e8_t64
+    lda #$FFFF
+    sta $16
+    bra _20e8_t65
+_20e8_t64:
+    stz $16
+_20e8_t65:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $18
+    lda $18
+    bpl _20e8_t66
+    lda #$FFFF
+    sta $1A
+    bra _20e8_t67
+_20e8_t66:
+    stz $1A
+_20e8_t67:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $22
+    inx
+    inx
+    jsr rdw40
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $26
+    inx
+    inx
+    jsr rdw40
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $2A
+    inx
+    inx
+    jsr rdw40
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $2E
+    inx
+    inx
+    jsr rdw40
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $32
+    inx
+    inx
+    jsr rdw40
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    jsr rdw40
+    sta $3A
+    inx
+    inx
+    jsr rdw40
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsr rdw40
+    sta $42
+    inx
+    inx
+    jsr rdw40
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jmp inext
+
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
