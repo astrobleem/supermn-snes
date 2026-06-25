@@ -1925,7 +1925,7 @@ op_rts:                  ; rts : PC = pop 24-bit return (bank byte1 -> $42) ; A7
     clc
     adc #4
     sta $3C              ; A7 += 4
-    jmp inext
+    jmp op_rts_sentinel  ; call-bridge: detect $FF-bank sentinel return -> native continuation
 
 op_beq:                  ; beq disp8 : if Z(set) branch
     lda $60
@@ -10713,7 +10713,7 @@ op_rtr:                  ; RTR ($4E77): CCR = pop.w (low byte only); PC = pop.l
     clc
     adc #4
     sta $3C
-    jmp inext
+    jmp op_rts_sentinel  ; call-bridge: same $FF-sentinel dispatch as op_rts
 
 op_move_an_usp:          ; MOVE An,USP ($4E60|An): USP = An
     lda $44
@@ -12490,6 +12490,51 @@ ce_rdw_lo:
     jsr readbyte           ; lo byte (A.hi=0)
     ora $98
     rts
+
+; op_rts_sentinel — CALL-BRIDGE return dispatch. op_rts/op_rtr jmp here after popping the 24-bit
+; return into $40(lo16)/$42(hi16). A native non-leaf escape bridges a 68K call by pushing a
+; sentinel return $00FF:cccc (bank $FF unused by superman; cccc = 65816 addr of its continuation),
+; then letting the interpreter run the callee. The callee's rts pops the sentinel -> here -> we
+; jmp straight to the continuation (cccc held in $40). Normal returns (bank $00-$07 ROM / $00F0
+; work RAM) fall through to inext. Cost: 3 instrs, return path only (never inext).
+op_rts_sentinel:
+    lda $42
+    cmp #$00FF
+    bne op_rts_norm
+    jmp ($0040)            ; sentinel: jmp to the native continuation address held in $40
+op_rts_norm:
+    jmp inext
+
+; entry_bridgeproof — VALIDATED CALL-BRIDGE reference template (not in the active dispatch).
+; To re-run the end-to-end proof, point jah2_e412 here instead of entry412: when $0412 (the RNG
+; leaf) is called, this BRIDGES to the INTERPRETED $0412 and resumes, which must equal interpreting
+; $0412 directly (ON-vs-OFF=0). It exercises the whole bridge path -- push a sentinel return, run
+; the callee interpreted, its rts hits op_rts_sentinel, the continuation resumes -- and is the
+; canonical sequence a transpiled non-leaf emits at each call site (see CALL_BRIDGE_DESIGN.md).
+entry_bridgeproof:
+    rep #$30
+    lda $40
+    sta $0728               ; save the caller's original return (the hook set $40 = return)
+    lda $3C                 ; a7 -= 4 (room for the sentinel return)
+    sec
+    sbc #$0004
+    sta $3C
+    tax
+    lda #$00FF              ; [a7+0..1] = $00 $FF  (byte1=$FF -> sentinel bank in $42)
+    jsr wrw40
+    inx
+    inx
+    lda #bp_cont           ; [a7+2..3] = bp_cont (16-bit) -> PC lo16 on the sentinel return
+    jsr wrw40
+    lda #$0412             ; PC = $0412 -> interpret the RNG body (NOT re-hooked: this is a fetch)
+    sta $40
+    stz $42
+    jmp inext
+bp_cont:                    ; <- op_rts_sentinel jmps here when $0412's rts pops the sentinel
+    lda $0728
+    sta $40                ; PC = the caller's original return
+    stz $42
+    jmp inext
 
 ; entry_111a — native $00111A: 2-stream sprite builder (~5.9%), sibling of $000CE4 reached via
 ; jsr(An). link a6 + movem.l a0-a4 + movem.w d0-d6 (caller-preserved -> DP scratch only). 2 streams:
