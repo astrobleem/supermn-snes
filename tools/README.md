@@ -63,8 +63,12 @@ What each tool does and how reusable it is for the **next** game. See
 - **`optimize_palettes.py`** — SUPERSEDED for sprites (per-bank dynamic model).
 
 ## MCP servers (the two oracles — the most reusable thing here)
-- **`mame`** (`/home/chad/mame-mcp`): `ping/config_check/get_ioports/trace_memory_access/
-  run_lua_script/run_lua_inline/capture_leaf_io`. Point `MAME_SYSTEM`/`MAME_ROMPATH`
+- **`mame`** (`/home/chad/mame-mcp`): **25 tools** in two families — *stateless* one-shot
+  (`ping`/`config_check`/`audit_romset`/`get_ioports`/`trace_memory_access`/`capture_leaf_io`/
+  `run_lua_script`/`run_lua_inline`/`trace_cchip_superman`) and a *live persistent session*
+  (`mame_launch` then `mame_read/write_memory`, `mame_run_frames`, `mame_get/set_reg`,
+  `mame_save/load_state`, `mame_send_input`, `mame_capture_game_tick`, `mame_drive_to_gameplay`,
+  `mame_exec_lua_live`, …). Full table in `mame-mcp/README.md`. Point `MAME_SYSTEM`/`MAME_ROMPATH`
   at any game.
 - **`mesen`**: real SNES PPU/CPU — `read/write_memory`, `run_frames`,
   `reset_emulator`, screenshots, etc.
