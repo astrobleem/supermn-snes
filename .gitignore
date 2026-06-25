@@ -44,7 +44,12 @@ snap/
 tools/mame-trace/*.bin
 tools/mame-trace/traces/
 tools/mame-trace/*.inp
-inp/
+# Input recordings: ignore the dir, but TRACK our own MAME-0.287 playthroughs (input
+# timings only, no ROM data) used by the validation pipeline. Old cross-version
+# recordings (0.185/0.193) won't replay on 0.287 and are not kept.
+inp/*
+!inp/superman_play.inp
+!inp/vplay.inp
 
 # --- Renders & screenshots (derivative arcade imagery / generated proofs) ---
 *.png

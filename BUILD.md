@@ -93,7 +93,9 @@ When moving off this (failing) drive:
 2. **Copy, don't lose** (NOT in git): the arcade ROM set (`/home/chad/superman-arcade/`), and the
    derived assets `data/superman_m68k.bin`, `tools/mame-trace/gfx1.bin`,
    `data/cchip_boot_response.bin` — OR re-derive them (above). Also worth copying: the
-   `$SUPERMN_SCRATCH` flytick/MAME-state captures (slow to re-record), and any `inp/` recordings.
+   `$SUPERMN_SCRATCH` flytick/MAME-state captures (slow to re-record). NOTE: the MAME-0.287
+   playthrough recordings (`inp/superman_play.inp`, `inp/vplay.inp`) ARE in git now; old
+   cross-version recordings (0.185/0.193) were deleted (won't replay on 0.287).
 3. **Recreate the toolchain** (table above): .NET 8 + 10; build the **Game Garden** suite (Poppy,
    Peony, + others) from its upstream; build Mesen2 from source; `pip install -e Mesen2/python`;
    install MAME **0.287** (version-critical); `pip install capstone`.
