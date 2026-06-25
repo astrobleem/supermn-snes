@@ -1,5 +1,12 @@
 # Transpiler tool — scope & plan
 
+> **STATUS: DONE (June 25, 2026).** `tools/transpile.py` is built and validated bit-exact
+> (reproduces `entry_ce4`/`entry_111a`). All milestones below are met: skeleton → reproduce the
+> oracles → bridge codegen (`$025110` collision, 2 bridged calls) → `--video` shadow stores
+> (`$0020e8`). 8 escapes deployed in bank-$00 gaps; the multi-bank fallback (risks below) proved
+> unnecessary. Live state of the tool: `transpiler-tool` memory. Forward plan: [ROADMAP.md](ROADMAP.md).
+
+
 Automate what `entry_ce4`/`entry_111a` were done by hand: emit a native 65816 escape
 (`entry_<addr>`) for a 68K function, leaf **or** non-leaf (calls via the call-bridge).
 Hand-transpilation tops out around icount ~60; the remaining hot mass is bigger

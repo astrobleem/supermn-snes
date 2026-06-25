@@ -1,9 +1,47 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 24, 2026. Single source of "where we're at." Per-area detail
+Last updated: June 25, 2026. Single source of "where we're at." Per-area detail
 lives in the linked docs.
 
-## CURRENT STATE (June 24) — supersedes older detail below
+## CURRENT STATE (June 25) — the transpiler is AUTOMATED; bulk transpilation underway
+
+The interpret-cold/transpile-hot hybrid is now a **working production pipeline**, not just a
+mechanism. An **automated 68K→65816 transpiler** (`tools/transpile.py`) replaces hand work, and
+the hottest gameplay functions are transpiled to native 65816 and **deployed in the live ROM**.
+
+- **Transpiler tool — BUILT + validated bit-exact.** Capstone-decodes a 68K function and emits a
+  native escape (`entry_<addr>`) operating on the interpreter's DP register file. It reproduces
+  the hand-written, MAME-validated oracles `entry_ce4`/`entry_111a` byte-for-behavior (flyval
+  ON-vs-OFF=0). Codegen covers the full EA matrix, the signed-branch lowering (D1), `link`/`movem`
+  (incl. the `movem.w` sign-extension), byte/word/long ops, shifts, `moveq`, `dbra`, and two
+  extension paths:
+  - **Call-bridge** (non-leaf functions): each `jsr`/`bsr` hands control back to the interpreter
+    via a `$00FF:cont` sentinel return (`op_rts_sentinel` resumes the native continuation); the
+    callee runs interpreted. Validated end-to-end.
+  - **`--video`**: non-frame stores route through `writeword`/`writebyte` → the `$41` video shadow
+    (`$B0/$D0/$E0`), `$40` for work RAM. Validated by diffing the shadow, not just work RAM.
+- **Hot functions transpiled + deployed** (all bit-exact vs the MAME-validated interpreter, all in
+  free **bank-$00 gaps** — no ROM-layout change needed):
+  | escape | 68K fn | ~%frame | kind |
+  |---|---|---|---|
+  | `entry412` | `$000412` | RNG | leaf |
+  | `entry_cb9e`/`entry_15b4`/`entry_3e6a` | sprite pos / block copy / classifier | — | leaf |
+  | `entry_ce4` | `$000CE4` | ~12.5% | hottest in-game (sprite/object builder) |
+  | `entry_111a` | `$00111A` | ~5.9% | 2-stream sprite builder |
+  | **`entry_25110`** | `$025110` | **~12.6%** | collision detect — **2 bridged `jsr.l`** |
+  | **`entry_20e8`** | `$0020e8` | **~5.9%** | video render — **`$41` shadow stores** |
+- **Validation harness:** the fresh-adjacent-tick lockstep pipeline (`flyval.py`/`val_*` +
+  `record_playthrough.sh`/`extract_flytick.py`) injects one MAME game-tick, runs it hook-ON
+  (native) vs OFF (interpreted), and requires the live state to match. KEY refinements this phase:
+  classify diffs vs the stack pointer (bridge sentinels below `a7` are dead, not a bug); compare
+  the `$41` video shadow for video functions.
+- **Profiler** (`tools/stream_profile.py`) ranks the real in-game hot set from the interpreter's
+  per-frame PC stream (MAME can't reach gameplay under `-debug`). Used to pick `$025110`/`$0020e8`.
+- **Key finding:** the **multi-bank interpreter is NOT needed** — bank $00 has ~6.7KB of free
+  gaps; the unoptimized escapes deploy there. (A multi-bank attempt is documented as superseded.)
+- **NEXT = keep transpiling the hot set toward the G3 cycle budget** (realtime) + measure it.
+
+<details><summary>Earlier CURRENT STATE (June 24) — superseded by the above</summary>
 - **Interpreter is BIT-EXACT vs MAME** on busy attract AND deep active gameplay (frames
   400/450/900/1500; Superman moving, 14 active actors incl. enemies) — modulo only 1-2
   unmodeled sound-CPU bytes. Validated via a frame-boundary **lock-step differential harness**
@@ -24,6 +62,7 @@ lives in the linked docs.
   add each to the escape chain, validate hook off/on, measure speedup. The interpreter is the
   cold-path fallback. Open: cycle-aware `$AC` for self-paced realtime; the sound CPU model.
 - Inputs are WIRED + validated (held Right drives Superman bit-identically to MAME).
+</details>
 
 ## TL;DR
 Discovery/validation phase is done and *grounded against ground truth* (MAME for
@@ -99,13 +138,14 @@ ROM layout (4 MB HiROM): interp `$C0:8000` · 68K image `$C1:0000`–`$C8` · ar
 | **Transpiler spike (gate G2)** | ✅ GREEN — 2 functions differentially verified | `SPIKE_RESULT.md` |
 | **68K interpreter** | ✅ **BIT-EXACT vs MAME** on busy attract + active gameplay (lock-step diff; 4 opcode bugs fixed). Runs on the **SA-1**. Correctness gate **opsweep 782/782** (`tools/opsweep.py`). (optest is deprecated — pre-SA-1, reads `snesWorkRam`.) Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md`, `lockstep-harness-progress` memory |
 | **Phase A — SA-1** | ✅ **DONE** — cart runs on SA-1 (work RAM in BW-RAM `$40`, shadow `$41`, dual-CPU video). | `sa1-bringup` memory |
-| **Phase B — native-escape hook** | ✅ **DONE** — PC-hook routes hooked 68K calls to native 65816; `$412` RNG native, bit-identical. Profiler + save-state + speedup harness. Foundation hardened (leak fixed, `leaf_check.py`, FOUNDATION CONTRACT). | `TRANSPILER_DESIGN.md` §D5 |
+| **Phase B — native-escape hook** | ✅ **DONE** — PC-hook routes hooked 68K calls (jsr.l / jsr(An) / bsr) to native 65816; `$412` RNG native, bit-identical. Profiler + save-state + speedup harness. Foundation hardened (leak fixed, `leaf_check.py`, FOUNDATION CONTRACT). | `TRANSPILER_DESIGN.md` §D5 |
+| **Transpiler TOOL (automated)** | ✅ **BUILT + validated** — `tools/transpile.py` emits native escapes from 68K functions; reproduces the hand oracles bit-exact. Call-bridge (non-leaf) + `--video` (shadow stores). | `TRANSPILER_TOOL_SCOPE.md`, `transpiler-tool` memory |
 | **Video plumbing** | ✅ **COMPLETE** — 68K video-bank writes → `$7E` shadow → real PPU each game-frame. Palette byte-exact, tile decode 128/128, OBJ+BG render the correct arcade frame; OBJ/BG tile dedup, cross-frame BG cache, vblank-safe DMA. Render subsystem in ROM bank `$E9` (`src/video.pasm`). | `VIDEO_PLUMBING.md` |
 | **Disassembly coverage (gate G1)** | ⬆ in progress — reliable pipeline + full playthrough | `COVERAGE_G1.md` |
 | **Tooling (MAME/Mesen MCP, trace/CDL)** | ✅ built & validated | below |
 | **C-Chip** | ✅ SOLVED — patch + input mailbox + **boot handshake replay**, still **no MCU emulation** | `CCHIP_BOOT_HANDSHAKE.md`, `CCHIP_FIRMWARE.md` |
 | **Audio (YM2610→TAD)** | 🔬 analyzed; `vgm-to-tad-mml` skill exists | `CONVERTSOUND.md`, `SOUNDHARDWARE.md` |
-| **Bulk transpilation (native escapes)** | ⬅ **NEXT** — mechanism BUILT (Phase B); hand-transpile hot SAFE-LEAFs into the escape chain. The interpreter is the cold-path fallback (no ≥85% coverage prerequisite for the hybrid). | `TRANSPILER_DESIGN.md` §D5 |
+| **Bulk transpilation (native escapes)** | ⬆ **UNDERWAY (automated)** — `transpile.py` deploys hot functions into bank-$00 gaps; 8 escapes live incl. the ~12.6% collision (bridged) + ~5.9% video (shadow). The interpreter is the cold-path fallback. | `transpiler-tool` / `bulk-transpile-phase` memory |
 
 ## Graphics — done
 Arcade palette decode (`xRGB555` big-endian) and the **two X1-001 draw paths**
@@ -156,25 +196,20 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
   single-threaded, very slow to write large disassemblies.
 
 ## Recommended next steps
-The interpret-cold/transpile-hot **hybrid is fully de-risked on the cold side**
-(the interpreter is a complete, MAME-verified MC68000) **and now renders video**.
-The boot, frame loop, and PPU output all work. Detailed plan in
+The cold side (interpreter) and the hot side (automated transpiler + bridge + video
+codegen) are both built and validated. The remaining work is **throughput** — transpile
+enough of the per-frame hot path to hit the realtime cycle budget. Detailed plan in
 **[ROADMAP.md](ROADMAP.md)**. In short, in priority order:
-1. **Inputs** — wire SNES controller state into the C-Chip input mailbox
-   (`$900001/3/5`, active-low) so the game actually responds. The read path
-   already returns `$FF` (idle) there; map the joypad to it (and keep the GWK
-   boot-handshake replay intact). This makes it interactive and is the gate for
-   any "does it play like MAME" check. I/O plumbing, not opcodes.
-2. **Speed: profile, then transpile hot paths** to native 65816. The interpreter
-   runs ~18 interp-steps per real frame — far below realtime — so reaching real
-   gameplay (and a frame-synced pixel-diff vs MAME) is gated on speed. Capture a
-   Mesen save-state at the live loop to skip the ~2200-frame boot per test, profile
-   the hot 68K paths (boot delay loops, frame-work, VBLANK ISR), and generalize the
-   `$412`/`$24D98` hand-transpilation spike into a tool. Expand G2 across the D1
-   branch matrix.
-3. Finish G1 coverage + the G4 endianness manifest; convert audio (YM2610→TAD)
-   in parallel.
-
-Video follow-ups (optional, low priority): OBJ cross-frame cache (sprites still
-re-decode each frame; BG already caches), and a frame-synced per-pixel diff vs
-MAME once the interpreter is fast enough to reach a gameplay frame.
+1. **Keep transpiling the hot set** — the profiler (`stream_profile.py`) ranks the
+   remaining in-game hot functions ($0028d4 video, $00267a, the $025xxx cluster
+   siblings, etc.). Transpile each (`transpile.py [--video]`), deploy in a bank-$00 gap,
+   validate ON-vs-OFF=0 (a7-classify stack diffs; diff `$41` for video). Mechanical now.
+2. **Measure G3 (cycle budget <150k SA-1 cycles/frame).** With the hot mass native,
+   benchmark steps/frame and the SA-1 cycle count; decide if the cold interpreter tail
+   needs a faster dispatch or more transpilation to reach realtime. Then realtime IRQ
+   pacing (cycle-aware `$AC`).
+3. **Watch bank-$00 space** — ~6.7KB of gaps, partially consumed. As more functions
+   land, either a transpiler code-size pass (An-addr caching; non-frame reads are ~6
+   instrs each) or revisit a 2nd executable bank (see `multibank-interp` memory).
+4. **Audio (YM2610→TAD)** in parallel; then **integration** — full playable ROM,
+   full-level validation vs MAME, G1 coverage + G4 manifest as needed.

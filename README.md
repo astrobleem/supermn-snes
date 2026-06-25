@@ -17,13 +17,13 @@ SNES PPU (via Mesen) for the target side.
 
 | Area | State |
 |---|---|
-| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — 47/47 op groups, 154/154 differential tests green vs MAME, boots Superman on real SNES |
-| Graphics pipeline | ✅ validated on real SNES PPU vs MAME (palette + both X1-001 draw paths) |
-| Transpiler (design + spike) | ✅ design settled; 2 functions differentially verified (gate G2) |
-| C-Chip boot handshake | ✅ solved via patch + input mailbox + 256-byte download replay (no MCU emulation) |
-| Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace |
+| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Correctness gate **opsweep 782/782**. |
+| Graphics pipeline | ✅ validated on real SNES PPU vs MAME (palette + both X1-001 draw paths); dual-CPU render on the SA-1 |
+| **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) |
+| **Bulk game-logic port** | ⬆ **underway (automated)** — 8 hot functions transpiled to native 65816 + deployed, incl. the ~12.6% collision (bridged) and ~5.9% video |
+| C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
+| Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
 | Audio (YM2610 → SNES TAD) | 🔬 analyzed; `vgm-to-tad-mml` skill exists |
-| Bulk game-logic port | ⬜ not started |
 
 See **[STATUS.md](STATUS.md)** for the authoritative, detailed state and
 **[ROADMAP.md](ROADMAP.md)** for where we're heading next.
@@ -35,21 +35,26 @@ opcodes on a real SNES (validated in Mesen against MAME as the arcade oracle).
 It now implements the **complete legal MC68000 instruction set** — not just the
 subset Superman happens to use — so it is reusable for future arcade→SNES ports.
 
-- 68000 registers live in the 65816 direct page; work RAM (`$F0xxxx`) maps to SNES
-  bank `$7F`; opcodes are fetched big-endian from the ROM image at `$C10000+PC`.
+- 68000 registers live in the 65816 direct page; on the SA-1, work RAM (`$F0xxxx`)
+  maps to BW-RAM bank `$40` (video shadow in `$41`); opcodes are fetched big-endian
+  from the ROM image at `$C10000+PC`.
 - New/generic ops route through a shared effective-address (EA) engine; the
-  original ~142 game-path handlers are left untouched.
+  original game-path handlers are left untouched.
 - Exceptions (TRAP, divide-by-zero → vec 5, CHK → vec 6, TRAPV → vec 7,
   ILLEGAL → vec 4) push correct stack frames and vector through the ROM table.
 
-**Every operation was implemented and validated one at a time** against MAME via
-the single-instruction differential harness `tools/optest.py`, with a full-boot
-regression after each batch. See **[INTERPRETER_SPIKE.md](INTERPRETER_SPIKE.md)**.
+**Validated against MAME** by a single-instruction sweep (`tools/opsweep.py`,
+**782/782**) plus a frame-boundary **lock-step differential** harness (inject MAME's
+68K state, run a game-frame, diff work RAM — this caught 4 opcode bugs the op sweep
+missed). The hot path is then migrated to native 65816 by **`tools/transpile.py`**,
+each escape lock-step-checked against the interpreter. See
+**[INTERPRETER_SPIKE.md](INTERPRETER_SPIKE.md)** and **[TRANSPILER_TOOL_SCOPE.md](TRANSPILER_TOOL_SCOPE.md)**.
 
 ## Key documents
 
 - **[STATUS.md](STATUS.md)** — single source of "where we're at"
 - **[ROADMAP.md](ROADMAP.md)** — next steps and milestones
+- **[BUILD.md](BUILD.md)** — toolchain (the "Game Garden" suite: Poppy/Peony), dependencies, and **migration guide**
 - **[METHODOLOGY.md](METHODOLOGY.md)** — the reusable arcade→SNES recipe
 - **[TRANSPILER_DESIGN.md](TRANSPILER_DESIGN.md)** — 68K→SA-1 lowering decisions
 - **[INTERPRETER_SPIKE.md](INTERPRETER_SPIKE.md)** — interpreter design & validation
@@ -71,7 +76,12 @@ regression after each batch. See **[INTERPRETER_SPIKE.md](INTERPRETER_SPIKE.md)*
    ```
 4. Run the differential test suite (needs MAME + Mesen MCP running):
    ```sh
-   python3 tools/optest.py         # 154 single-instruction tests vs MAME
+   python3 tools/opsweep.py        # SA-1-aware single-instruction sweep vs MAME (782/782)
+   ```
+5. Transpile a hot 68K function to a native escape:
+   ```sh
+   python3 tools/transpile.py 025110            # -> a native entry_25110 escape (.pasm)
+   python3 tools/transpile.py 0020e8 --video    # video function (shadow stores)
    ```
 
 ## Repository layout

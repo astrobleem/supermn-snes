@@ -1,9 +1,18 @@
 # Arcade → SNES Port Playbook
 
-How we ported (are porting) Superman (Taito X, 68000) to SNES/SA-1, written so the
-same recipe + tools apply to the **next** game. Superman is the worked example;
-the method is general. Companion: per-area docs (`PALETTE_VERDICT.md`,
-`TRANSPILER_DESIGN.md`, `SPIKE_RESULT.md`, `COVERAGE_G1.md`) and `STATUS.md`.
+Last updated: June 25, 2026. How we ported (are porting) Superman (Taito X, 68000) to
+SNES/SA-1, written so the same recipe + tools apply to the **next** game (pinned: Space
+Harrier). Superman is the worked example; the method is general. Companion: per-area docs
+(`PALETTE_VERDICT.md`, `TRANSPILER_DESIGN.md`, `INTERPRETER_SPIKE.md`,
+`TRANSPILER_TOOL_SCOPE.md`, `COVERAGE_G1.md`) and `STATUS.md`/`ROADMAP.md`.
+
+**The core method, proven end-to-end on Superman:** *interpret-cold / transpile-hot.* Build a
+complete 68000 **interpreter** in 65816 that runs the original ROM correctly on the SA-1; validate
+it **bit-exact vs MAME**; then replace only the per-frame **hot** functions with native 65816 via an
+**automated transpiler**, leaving the interpreter as the fallback for cold code. This sidesteps the
+two traps of a naive port: a pure interpreter is ~2,000× too slow, and a full static recompile of a
+512KB ROM (with computed jumps, self-modifying tables, protection) is infeasible *and* unverifiable.
+The interpreter and the transpiler are the two big reusable assets — both are largely game-agnostic.
 
 ## 0. The one rule: ground-truth validation
 Never validate a decode against the same code path that produced it (that "proves"
@@ -37,17 +46,50 @@ palette writes per frame, don't quantize offline.
 - **D4 — address map:** translate every 68K EA through one table; never let a raw
   68K address reach output. (Superman: `$B00000/$D00000/$E00000/$F00000` — confirm
   per game from the MAME driver; docs lie.)
-### 2b. Prove it on a spike before bulk work (gate G2)
-Pick ONE pure leaf, hand-transpile it, and run a **differential harness**:
-1. **MAME goldens** — `mame` MCP `capture_leaf_io` injects test inputs via a read
-   tap at the function's fixed-address read and records output+regs+CCR. MAME is
-   the oracle (no self-reference).
-2. **SNES side** — patch the transpiled bytes into the loaded ROM via Mesen
-   `write_memory(snesPrgRom,…)` (survives `reset_emulator` → iterate with NO
-   relaunch), drive inputs through WRAM, read outputs.
-3. Compare. Iterate until green across vectors incl. signed/edge cases.
-Superman: `$412` (RNG) and `$24D98` (timer/clamp) both green. See `SPIKE_RESULT.md`.
-Tip: process a batch ONCE then halt — a forever-loop re-applies in-place edits.
+### 2b. De-risk with a leaf spike (gate G2, historical first step)
+Before committing to the interpreter, prove the lowering on ONE pure leaf: hand-transpile it,
+capture **MAME goldens** (`mame` MCP `capture_leaf_io` taps the function's fixed-address read,
+records output+regs+CCR — no self-reference), patch the bytes into the loaded ROM (Mesen
+`write_memory(snesPrgRom,…)`, survives `reset_emulator`), and diff. Superman: `$412` (RNG) and
+`$24D98` (timer/clamp) green (`SPIKE_RESULT.md`). This validates D1–D4; it does NOT scale to a
+512KB ROM. The spike is the precursor to the interpreter, not the product.
+
+### 2c. Build the INTERPRETER (the cold side — the main reusable asset)
+Write a 68000 interpreter in 65816 (`src/interp.pasm`): the 68K reg file in direct page (D2),
+work RAM in BW-RAM, opcodes fetched big-endian from the ROM image, every EA through one engine.
+This is what actually runs the game; it's a complete, reusable MC68000, not a Superman subset.
+Validate it two ways:
+- **`tools/opsweep.py`** — a SA-1-aware generated **op × addressing-mode sweep** vs MAME (full
+  state diff per opcode). Superman gate: **782/782**. (Replaces the old `optest`.) This is your
+  per-opcode correctness net.
+- **Frame-boundary LOCK-STEP differential** — inject MAME's real 68K state, run ONE game-frame in
+  the interpreter, diff work RAM vs MAME. This is the decisive harness: it caught **4 opcode bugs
+  the op-sweep missed** (relative-branch bank carry; `movem.l (d16,An)` load+store; `lea (xxx).W`).
+  Run it on busy attract AND deep gameplay states.
+The interpreter boots the real ROM through its scheduler, protection handshake, and init, reaching
+the live per-frame loop — bit-exact vs MAME (modulo the unmodeled sound CPU). For a new game, the
+opcode core is unchanged; you swap the **address map + I/O handlers** (work-RAM bank, video-bank
+routing, protection mailbox, input).
+
+### 2d. Transpile the HOT path with the TOOL (interpret-cold / transpile-hot)
+The interpreter alone is far too slow (~2,000×). Make it realtime by replacing only the functions
+that dominate each frame with native 65816 "escapes," via the **automated transpiler**:
+1. **PC-hook** intercepts a hooked 68K call (`jsr.l`/`jsr(An)`/`bsr`) and jumps to the native
+   `entry_<addr>`, which ends `jmp inext` (never touches the 68K stack). One table entry per escape.
+2. **`tools/transpile.py <addr>`** capstone-decodes the function and emits the escape on the reg
+   file: full EA matrix, the D1 signed-branch lowering, `link`/`movem` (incl. the `movem.w`
+   sign-extension), byte/word/long, shifts, `moveq`, `dbra`. Two extension paths:
+   - **call-bridge** (non-leaf): each `jsr`/`bsr` hands back to the interpreter via a `$00FF:cont`
+     sentinel return; the callee runs interpreted; `op_rts_sentinel` resumes the native code.
+   - **`--video`**: non-frame stores route through the IO-aware writer to the video shadow.
+3. **Validate each escape** by the fresh-adjacent-tick **lockstep** (`flyval.py`/`val_*`): inject one
+   MAME game-tick, run hook-ON (native) vs OFF (interpreted), require the **live** state identical
+   (classify stack diffs vs `a7` — bridge sentinels below SP are dead; diff the video shadow for
+   `--video`). Pick targets with `tools/stream_profile.py` (the in-game hot-function profile).
+4. **Deploy** the escape in free **bank-$00 gaps** (no ROM-layout change needed for the foreseeable
+   hot set). Grind the ranked hot set until the per-frame path fits the realtime cycle budget (G3).
+Superman: 8 escapes live incl. the ~12.6% collision (bridged) and ~5.9% video (shadow stores).
+See `TRANSPILER_TOOL_SCOPE.md` + the `transpiler-tool`/`bulk-transpile-phase` memories.
 
 ## 3. Disassembly coverage (gate G1): the trace IS the CDL
 Static disassembly stalls on indirect/computed jumps (jump tables = hazard H6).
@@ -104,7 +146,14 @@ grind the road math in time + can you race the beam."
 ## 📌 Pinned next target: Space Harrier
 Looks tractable with the above: checkerboard **floor → Mode 7**, enemies/obstacles
 → **baked sprite ladders**, SA-1 for the per-scanline floor/scaling math. Never got
-a faithful SNES port. Revisit after Superman's toolchain is battle-tested.
+a faithful SNES port. Revisit now that Superman's toolchain (interpreter + automated
+transpiler + lock-step) is battle-tested.
+- **Reuse:** the §2 CPU toolchain (interpreter + `transpile.py` + opsweep/lock-step) carries over
+  directly — Space Harrier is 68000-based. The §1 graphics path does NOT (it's super-scaler, not
+  X1-001 — use the baked-ladder + Mode-7-floor recipe above).
+- **CPU wrinkle to plan for:** Space Harrier runs **dual 68000s** (main + sub). The interpreter is
+  single-68K today; decide early whether to run two interpreter instances (shared work RAM) or
+  model the sub-CPU's effect — this is the main new CPU-side work, separate from opcodes.
 
 ---
 
@@ -112,12 +161,31 @@ a faithful SNES port. Revisit after Superman's toolchain is battle-tested.
 1. Confirm tractability: 68000 (or simpler) + tile/sprite, moderate sprite counts,
    color depth that fits 15-bit/16-per-palette, no *required* hardware scaling
    (or budget ladders). Super-scalers OK per the recipe above.
-2. Get the ROM + MAME driver; build the address map from the driver (don't trust docs).
+2. Get the ROM + MAME driver; build the **address map from the driver** (don't trust docs).
 3. Graphics: §1 decode→reproduce→diff loop.
-4. CPU: §2 settle D1–D4, then a leaf spike + differential harness.
-5. Coverage: §3 trace-driven CDL + §4 a faithful playthrough recording.
+4. CPU: §2a settle D1–D4 → §2b a leaf spike to de-risk the lowering → **§2c bring up the
+   interpreter** (swap the address map + I/O handlers; validate `opsweep` + lock-step vs MAME)
+   → **§2d transpile the hot path** with `transpile.py`, validate each escape, deploy in gaps.
+5. Coverage: §3 trace-driven CDL + §4 a faithful playthrough recording (informs the hot set; the
+   hybrid does NOT need ≥85% coverage — the interpreter is the cold fallback).
 6. Audio §5, protection §6 in parallel.
-Reusable as-is across games: the `mame`/`mesen` MCP loops, `trace68k.lua`,
-`build_cdl.py` (`CDL_ROM=`), `measure_coverage.py`, `capture_leaf_io`, the playback
-infra. Game-specific (swap addresses/fields): the scenario injections and the
-$F0xxxx work-RAM references. See `tools/README.md`.
+
+### What's reusable (audit)
+**Game-agnostic, reuse as-is:**
+- The two oracle loops — **`mame`/`mesen` MCP servers** (point `MAME_SYSTEM`/`MAME_ROMPATH` + ROM).
+- **`src/interp.pasm`** — a *complete MC68000 interpreter*. The opcode core + EA engine + exception
+  model are general; only the address map (`map_snes`), I/O handlers (protection, video routing,
+  input), and the SA-1 boot glue are game-specific.
+- **`tools/transpile.py`** — the codegen core (EA matrix, D1 lowering, call-bridge, `--video`) is
+  general; the reg-file/work-RAM/`$41`-shadow addresses are *our SA-1 convention*, not the game's,
+  so they carry over. New games may need new opcodes added on demand (the tool fails loud).
+- **`tools/opsweep.py`** (interpreter correctness sweep), the **lock-step harness** (inject-and-diff
+  vs MAME), **`tools/stream_profile.py`** (hot-set profiler), the fresh-adjacent-tick **`flyval`**
+  escape validator, the escape-in-bank-gap deploy recipe.
+- **`build_cdl.py`** (`CDL_ROM=`), `measure_coverage.py`, `trace68k.lua`, `capture_leaf_io`, the
+  `.inp` playback infra.
+
+**Game-specific, swap per game:** the address map + work-RAM/video-bank references; the I/O handlers
+(C-Chip → another game's protection; X1-001 video → the new chip's draw model — e.g. Space Harrier
+is a super-scaler, see above, NOT X1-001); the scenario/input injections; the graphics decode. See
+`tools/README.md` for the per-tool reuse legend.

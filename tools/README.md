@@ -26,7 +26,26 @@ What each tool does and how reusable it is for the **next** game. See
 - **`measure_coverage.py`** [P] — reliable code vs data byte coverage of a Peony
   `.pasm` (real instrs vs `.db`/`dc.w`/`???`). 512KB ROM size hardcoded near top.
 
-## Differential transpiler harness (gate G2)
+## Transpiler & bulk transpilation (the hot side)
+- **`transpile.py`** [G core / S address-maps] — automated 68K→65816 transpiler.
+  `transpile.py <hexaddr>` emits a native escape (`entry_<addr>`) operating on the
+  interp's DP reg file; `--video` routes non-frame stores to the `$41` shadow;
+  `--bank1` is dead multi-bank scaffolding (unused — bank-$00 gaps suffice). The
+  codegen rules (EA matrix, D1 signed-branch lowering, call-bridge sentinel) are
+  game-agnostic; the reg-file/work-RAM/shadow addresses are the Superman SA-1 map.
+- **`stream_profile.py`** [P/S] — in-game hot-function profile from the interp's
+  per-frame PC stream (MAME can't reach gameplay under `-debug`). Injects a gameplay
+  tick, enables PC streaming (`$0718=0`), histograms by 64-byte function-region. The
+  source of the ranked hot set to transpile next.
+- **Lockstep escape validation** (fresh-adjacent-tick — NOT sparse capture):
+  `record_playthrough.sh` (record a matched-config MAME playthrough) →
+  `extract_flytick.py`/`extract_flyseq.py` (capture adjacent game-tick A/B states) →
+  `flyval.py` / `val_*` (inject tick A, run hook-ON native vs OFF interpreted, require
+  the live state to match tick B / each other). KEY: classify diffs vs `a7` (bridge
+  sentinels below SP are dead, not bugs); diff the `$41` shadow for `--video` escapes.
+  `$SUPERMN_SCRATCH` parameterizes the data dir.
+
+## Differential transpiler harness (gate G2, historical spike)
 - **`spike_harness.py` / `spike24d98_harness.py`** [S] — build WRAM input blobs +
   expected outputs from MAME goldens, and `check` Mesen output. Pattern is
   reusable; the field layouts are per-function.
