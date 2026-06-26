@@ -153,11 +153,13 @@ def _regblk(v):
 
 def _make_sweep_sfc(shots):
     data=bytearray(open(INTERP_SFC,"rb").read())
-    data[OT.MBOX]=0x01; data[OT.MBOX+1]=0x00            # TESTFLAG=1 (5A22 HiROM view $C0:F400)
-    # The interp runs on the SA-1, which reads $00:F400 via the LoROM mirror -> file $7400.
-    # Without this, the SA-1 never sees TESTFLAG and just free-runs the game (the long-
-    # standing reason the optest single-step "broke" after the SA-1 migration).
-    data[0x7400]=0x01; data[0x7401]=0x00
+    data[OT.MBOX]=0x01; data[OT.MBOX+1]=0x00            # TESTFLAG=1; OT.MBOX is the SA-1 file view ($7600)
+    # The interp runs on the SA-1, which reads the TESTFLAG ($00:F600) via the LoROM mirror
+    # -> file $7600. The flag was relocated from $00:F400 (= file $7400) because that byte fell
+    # inside the entry_20e8 escape body and was permanently nonzero, which forced test mode on
+    # and made the production cold-boot (notest) path unreachable. Without setting file $7600 the
+    # SA-1 never sees TESTFLAG and just free-runs the game.
+    data[0x7600]=0x01; data[0x7601]=0x00
     for k,s in enumerate(shots):
         s.slot=k
         off=SLOT_BASE_ROMOFF + k*SLOT_STRIDE

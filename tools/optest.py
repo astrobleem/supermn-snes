@@ -46,7 +46,12 @@ INTERP_CODE_ROMOFF = 0x10000 + INTERP_CODE_68K
 OPND = 0xF03800
 OPND_INTERP_WRAM = 0x10000 + (OPND & 0xFFFF)   # snesWorkRam offset for $7F:3800
 STACK = 0xF03F00
-MBOX = 0xF400                         # snesPrgRom offset of the test mailbox
+MBOX = 0x7600                         # ROM file offset of the TESTFLAG. The interp runs on the SA-1,
+                                      # which sees bank-$00 $8000-$FFFF LoROM-style (file = CPU-$8000),
+                                      # so CPU $00:F600 -> file $7600. (The old $F400 only "worked"
+                                      # because $00:F400 -> file $7400 was escape code, permanently
+                                      # nonzero => test mode was always-on by accident; relocating the
+                                      # flag to a genuinely-zero byte exposed that.)
 
 REGNAMES = ["D0","D1","D2","D3","D4","D5","D6","D7",
             "A0","A1","A2","A3","A4","A5","A6","A7"]

@@ -55,6 +55,25 @@ reset:
     clc
     xce
     rep #$30
+    ; ---- COLD-BOOT IRAM CLEAR ----------------------------------------------
+    ; Power-on IRAM is RANDOM on real silicon and on Nexen; Mesen merely happens
+    ; to zero it, which masked this for the whole project's life. The interp's DP
+    ; register file ($00-$FF), the virtual-controller word ($0200), the 68K-PC ring
+    ; ($0400-$05FF) and the $0700-block harness flags ALL live in this 2KB IRAM.
+    ; Uncleared garbage derails the boot within ~15 frames (-> ispin halt). The
+    ; worst offender is $0718 (PC-stream byte ptr): any value < $FFF8 makes
+    ; dbg_fetch stream every PC into BW-RAM $40:8000+, corrupting work RAM every
+    ; instruction. Clear all of IRAM here, BEFORE anything reads it, so a random-RAM
+    ; machine boots bit-identically to a zeroed-RAM one.
+    ldx #$07fe
+iramclr:
+    stz $0000,x          ; abs,x (DBR=0 -> bank-$00 IRAM); 16-bit -> clears 2 bytes
+    dex
+    dex
+    bpl iramclr          ; X: $07FE..$0000 -> dex dex -> $FFFE (neg) -> done (full 2KB)
+    lda #$FFF8
+    sta $0718            ; PC-stream OFF (capped). The ONE inert default that isn't 0;
+                         ; the harness sets $0718=0 post-boot to enable streaming.
     ldx #$07ff           ; 65816 stack in bank-$00 low RAM. On the SA-1 (which runs the
     txs                  ; interp) bank $00 is 2KB IRAM ($0000-07FF); stack grows down
                          ; from $07FF, clear of DP ($00-FF), vc ($0200), ring ($0400).
@@ -82,12 +101,18 @@ ccramclr:                ; else random power-on values break the start handshake
     sta $000200          ; clear the virtual-controller test-injection word (A=0 here).
                          ; $00:0200 = interp-private WRAM (not 68K $7F / not video $7E).
     ; ---- TEST-MODE entry (optest.py differential harness) ----
-    ; If ROM TESTFLAG ($00:F400) != 0 (baked into a test .sfc), enter single-step
+    ; If ROM TESTFLAG ($00:F600) != 0 (baked into a test .sfc), enter single-step
     ; poll-idle. The harness pokes DP regs ($00-$3F), PC ($40/$42), flags
     ; (Z$60 C$6E N$70 V$72 X$A2), SR mask $7C and the work-RAM operand directly
     ; via write_memory after boot, then sets the go-flag $A0; test_idle then runs
     ; exactly one op (op baked in the ROM image) and returns. Production = TESTFLAG 0.
-    lda $F400
+    ; NOTE: the flag lives at $00:F600, NOT the historical $F400. $F400 fell inside
+    ; the entry_20e8 escape body ($F307-$F442) once that escape was deployed, so the
+    ; SA-1's $00:F400 (LoROM -> file $7400) read escape code (always != 0) and the
+    ; production notest path was UNREACHABLE -> the interp never cold-booted. $F600
+    ; is in the free gap after the escape and is ZERO in BOTH ROM views (SA-1 file
+    ; $7600 / 5A22 file $F600), so production reads 0 and optest can bake a 1 there.
+    lda $F600
     beq notest
     stz $AA              ; no pending IRQ (countdown/pending moved off $88/$8A; see iloop)
     lda #$7FFF
@@ -97,37 +122,34 @@ ccramclr:                ; else random power-on values break the start handshake
     stz $A0              ; go-flag clear
     jmp test_or_vid      ; TESTFLAG 1 -> single-step; TESTFLAG 2 -> video render test
 notest:
-    ; fast-start at $4008; preset ALL 68K regs to MAME's exact state there
-    ; (ground truth, regs_at_4008.log): D0=$3FFE D6=$FFFF D7=$4
-    ; A0=$F00000 A1=$F03FFE A5=$F00000 A7=$0 (rest 0).
+    ; ---- COLD 68K RESET BOOT (the genuine power-on sequence) ----------------
+    ; Boot from the REAL 68K reset vector, NOT the fast-start $4008 hack. The 68K
+    ; vector gives SSP=$00F03FFE ($000000) and PC=$00003EF0 ($000004). At $3EF0 the
+    ; game does `lea $F00000,A5` then the full boot: work-RAM clear, hardware init,
+    ; C-Chip handshake (boot self-test patched $900803->$01), attract mode. All D/A
+    ; regs start cold-zero; only A7(SSP) and PC are seeded, exactly like real silicon.
+    ; The old fast-start faked D0/D6/D7/A0/A1/A5 to skip the $3EF0->$4008 init -- it
+    ; skipped real boot work, only ever ran under Mesen's zeroed RAM, and never
+    ; actually reached gameplay (ispin-halt on any real/random-RAM machine).
     ldx #$003E
 rclr:
     stz $00,x            ; zero D0-D7 ($00-$1F) + A0-A7 ($20-$3F)
     dex
     dex
     bpl rclr
-    lda #$3FFE           ; D0 = $00003FFE
-    sta $00
-    lda #$FFFF           ; D6 = $0000FFFF
-    sta $18
-    lda #$0004           ; D7 = $00000004
-    sta $1C
-    lda #$00F0           ; A0 = $00F00000
-    sta $22
-    lda #$3FFE           ; A1 = $00F03FFE
-    sta $24
+    lda #$3FFE
+    sta $3C              ; A7 = SSP = $00F03FFE  (68K reset vector @ $000000)
     lda #$00F0
-    sta $26
-    lda #$00F0           ; A5 = $00F00000
-    sta $36
-    ; A7 = $00000000 (already zeroed)
-    lda #$4008           ; PC = $4008
+    sta $3E
+    lda #$3EF0           ; PC = $00003EF0  (68K reset vector @ $000004)
     sta $40
     stz $42
     stz $48
     stz $4A
     stz $4C
     stz $4E
+    lda #$0001
+    sta $072E            ; enable the LOOP FAST-PATH (boot accel); test mode leaves it 0
     stz $7E              ; single-step test flag OFF in production
     stz $A2              ; X flag = 0
     stz $A4              ; USP low16  (Batch 8 MOVE USP)
@@ -205,19 +227,17 @@ ifetch_go:
     ; ring buffer: last 64 PCs (4 bytes each: low16,high16) at $0400; idx $48 wraps $100.
     ; ($0400 not $0800: on the SA-1, bank-$00 IRAM is 2KB and $0800 mirrors $0000=DP.)
     jsr dbg_fetch        ; ring-log 68K PC + optional debug-freeze (was inline ring write)
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
+    ; ---- LOOP FAST-PATH hook (boot accel) -----------------------------------
+    ; Collapse known hot boot loops (delay/memset/memcpy/scan) to native. The opcode
+    ; in $44 is ALREADY fetched, so when loop_hook rewrites $40 it returns C=1 and we
+    ; re-fetch via irq_none. $072E gates it (set only in notest). Fits the reserved NOP
+    ; sled exactly (13 bytes + 7 nop = 20) so nolog stays put -> no branch-shift.
+    lda $072E
+    beq lh_off
+    jsr loop_hook
+    bcc lh_off
+    jmp irq_none
+lh_off:
     nop
     nop
     nop
@@ -16935,6 +16955,8 @@ jsrabs_hook2:
     beq jah2_e20e8
     cmp #$0D96
     beq jah2_ed96
+    cmp #$0FB8
+    beq jah2_efb8
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -16943,8 +16965,14 @@ jah2_ed96:
     pla
     lda $54
     sta $40
-    jml $928000          ; ESCAPE BANK: $000D96 lives at SA-1 $92:8000 (escbank_entry), too big
-                         ; for bank-$00 gaps. Returns via `jml inext`. (Stage E0: stub.)
+    jml $928000          ; ESCAPE BANK jmptab slot 0 ($000D96 sprite builder). Too big for bank-$00
+                         ; gaps; runs at $92:8000+. Returns via `jml.l inext`.
+jah2_efb8:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $928003          ; ESCAPE BANK jmptab slot 1 ($000FB8 buffer fill).
 jah2_e412:
     plp
     pla
@@ -18042,6 +18070,32 @@ _20e8_t67:
     sta $3C
     jmp inext
 
+; =============================================================================
+; loop_hook — LOOP FAST-PATH dispatcher (boot acceleration). Lives in the free
+; $F442 gap (MUST stay below the $F600 TESTFLAG). Called per-instruction from the
+; fetch sled when $072E!=0, with the 68K PC in $40/$42. If $40 matches a known hot
+; boot-loop entry it applies the loop's NET effect natively, sets $40 to the loop
+; exit, and returns CARRY SET (caller re-fetches the new PC). No match -> CARRY
+; CLEAR (decode the already-fetched opcode as usual). 16-bit A/X; must not touch X
+; (the decoder needs it). Add more hot loops as additional cmp/beq arms here.
+; =============================================================================
+loop_hook:
+    lda $42
+    bne lh_nofire        ; only bank-$00 loops are hooked
+    lda $40
+    cmp #$3B84
+    beq lh_delay         ; $3B84: busy-wait delay (clr.w D0; subq.w/bne x65536) -> skip it
+lh_nofire:
+    clc
+    rts
+lh_delay:
+    stz $00              ; D0.w = 0 (the loop's only net effect; D0 high word unchanged)
+    lda #$3B8A
+    sta $40              ; resume right after the delay loop
+    stz $42
+    sec
+    rts
+
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
@@ -18108,7 +18162,7 @@ ms_shadow:
 ; --- video subsystem relocated to bank $E9 (src/video.pasm). map_snes stays here
 ;     (hot store path). These 3 entries are reached via jsl/jml VID_*. ---
 test_or_vid:
-    lda $F400
+    lda $F600            ; TESTFLAG (relocated from $F400; see reset note)
     cmp #$0002
     bne tov_idle
     jml VIDTEST          ; $E98008 -> vidtest_init (no return)
