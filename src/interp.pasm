@@ -16933,9 +16933,18 @@ jsrabs_hook2:
     beq jah2_e111a
     cmp #$20E8
     beq jah2_e20e8
+    cmp #$0D96
+    beq jah2_ed96
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
+jah2_ed96:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $928000          ; ESCAPE BANK: $000D96 lives at SA-1 $92:8000 (escbank_entry), too big
+                         ; for bank-$00 gaps. Returns via `jml inext`. (Stage E0: stub.)
 jah2_e412:
     plp
     pla

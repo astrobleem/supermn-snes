@@ -25,6 +25,19 @@ VID = Path("src/video.bin").read_bytes()             # video subsystem (assemble
 assert len(VID) <= 0x8000, len(VID)
 ROM[0x298000:0x298000+len(VID)] = VID                # @ $E9:8000 (file $298000); jsl/jml VID_*
 
+# --- SA-1 ESCAPE BANK ---
+# Native transpiled escapes too big for bank $00's free gaps live here. File $290000 is the
+# 32KB gap between the gfx tile ROM (ends $290000) and the video subsystem ($298000). The SA-1's
+# default MMC maps file $200000-$2FFFFF -> $80-$9F:8000-FFFF (Sa1.cpp), so file $290000 = SA-1
+# $92:8000 (segment 2, bank $80 + ($90000/$8000=18) = $92). The interp dispatches here with
+# `jml $92:8000`; escapes return `jml inext` and call bank-$00 leaf helpers via `jsl <h>_l`.
+# escbank.pasm is assembled @ .org $8000, so escbank_entry ($8000) -> file $290000 = $92:8000.
+import os.path as _osp
+if _osp.exists("src/escbank.bin"):
+    ESC = Path("src/escbank.bin").read_bytes()
+    assert len(ESC) <= 0x8000, ("escape bank %d bytes overflows the $290000..$298000 gap" % len(ESC))
+    ROM[0x290000:0x290000+len(ESC)] = ESC            # @ SA-1 $92:8000 (file $290000)
+
 # --- SA-1 LoROM mirror of the interpreter ---
 # Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style
 # (32KB/bank): $00:8000-FFFF -> FILE $0-$7FFF, so $00:FFFC (reset) -> FILE $7FFC and the

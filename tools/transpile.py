@@ -97,7 +97,10 @@ class Emit:
     def __call__(self, s): self.lines.append('    ' + s)
     def lbl(self, s): self.lines.append(s + ':')
     def cmt(self, s): self.lines.append('    ; ' + s)
-    def fresh(self): self.n += 1; return '_%s_t%d' % (self.pfx, self.n)
+    def fresh(self): self.n += 1; return 'Lf%s_%d' % (self.pfx, self.n)  # NB: no leading '_' —
+    # Poppy treats leading-underscore labels as local/anonymous and MIS-RESOLVES their forward
+    # short branches (bvs/bpl/bra) to a backward address -> infinite loops. Global-style names
+    # (like the working hand-written entry_ce4 'ce_*' labels) resolve correctly.
     def L(self, addr): return 'L%s_%x' % (self.pfx, addr)         # per-function branch label
 
 BCC = {'beq', 'bne', 'bmi', 'bpl', 'bge', 'blt', 'ble', 'bgt', 'bcc', 'bcs',
@@ -398,10 +401,15 @@ def branch_target(ins):
     return int(re.search(r'\$([0-9a-f]+)$', ins.op_str).group(1), 16)
 
 def sext_hi(e, dp):
-    """hi16 of reg at dp = (lo16 & $8000) ? $FFFF : $0000."""
-    p, d = e.fresh(), e.fresh()
-    e('lda $%02X' % dp); e('bpl %s' % p); e('lda #$FFFF'); e('sta $%02X' % (dp+2)); e('bra %s' % d)
-    e.lbl(p); e('stz $%02X' % (dp+2)); e.lbl(d)
+    """hi16 of reg at dp = (lo16 & $8000) ? $FFFF : $0000. Branchless: replicate bit15.
+    (Avoids a Poppy assembler bug where repeated forward short bpl/bra blocks — three
+    consecutive adda.w sext_hi in entry_d96 — get a wrong, backward displacement -> infinite
+    loop. 16-bit A; clobbers A and carry, which both callers reload/reset right after.)"""
+    e('lda $%02X' % dp)              # lo16
+    e('asl a')                       # C = bit15
+    e('lda #$0000'); e('sbc #$0000') # A = C ? $0000 : $FFFF
+    e('eor #$FFFF')                  # A = C ? $FFFF : $0000  (= sign-extended hi16)
+    e('sta $%02X' % (dp+2))
 
 def load_long_to(e, src, dp):
     """32-bit load src -> reg at dp (no flags)."""
@@ -522,17 +530,21 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
 HELPERS = ('rdw40', 'wrw40', 'rdb40', 'wrb40', 'push32', 'rdw_ea', 'readbyte')
 
 def bank1_transform(lines):
-    """rewrite a bank-$00 escape body to run from the $01:8000 escape bank: helper jsr->jsl _l
-    wrapper, jmp inext->jml inext (back to bank $00). Internal jmp L../jmp _t.. stay (bank $01).
-    Counter inc is already emitted long-addressed. op_rts_sentinel trampolines continuations."""
+    """rewrite a bank-$00 escape body to run from the escape bank ($92:8000): helper jsr->jsl.l _l
+    wrapper, jmp inext->jml.l inext (back to bank $00). Internal jmp L../jmp _t.. stay (same bank).
+    Counter inc is already emitted long-addressed. op_rts_sentinel trampolines continuations.
+    NB: the `.l` suffix is REQUIRED — the bank-$00 helper/inext targets are numerically <=$FFFF,
+    so Poppy's analyzer would classify jsl/jml as 16-bit Absolute and SIZE THEM AS 3 (while the
+    encoder emits 4) -> label-address drift -> forward short branches resolve backward -> infinite
+    loops. `.l` forces the analyzer's operand size to 3 (=> instr size 4), matching the encoder."""
     out = []
     for l in lines:
         s = l.strip()
         m = re.fullmatch(r'jsr (%s)' % '|'.join(HELPERS), s)
         if m:
-            out.append('    jsl %s_l' % m.group(1)); continue
+            out.append('    jsl.l %s_l' % m.group(1)); continue
         if s == 'jmp inext':
-            out.append('    jml inext'); continue
+            out.append('    jml.l inext'); continue
         out.append(l)
     return out
 
