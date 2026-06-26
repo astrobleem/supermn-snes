@@ -1303,8 +1303,13 @@ cpu5a22_video:
     jsr vid_init         ; clear derived $7E + raw shadow $41, TM=0, screen off
     rep #$30
     stz $3302            ; FRAME_ACK = 0 (IRAM; 5A22 IRAM writes enabled via SIWP)
-    stz $410000          ; input mailbox = idle (SA-1 joy_read reads this; 5A22 fills it)
-    stz $410002          ; virtual-controller injection word (harness pokes; OR'd in)
+    ; NOTE: stz has no long (24-bit) addressing mode, so "stz $410000" would assemble
+    ; as a 16-bit abs store to the DBR bank ($00 here), NOT BW-RAM $41. Use a long sta
+    ; so the mailbox AND the harness word are actually zeroed at init -- otherwise $41:0002
+    ; keeps uninitialized BW-RAM garbage that joy5a22 ORs into every input read.
+    lda #$0000
+    sta $410000          ; input mailbox = idle (SA-1 joy_read reads this; 5A22 fills it)
+    sta $410002          ; virtual-controller injection word (harness pokes; OR'd in)
 cv_loop:
     rep #$30
     jsr joy5a22          ; refresh the JOY1 mailbox ($41:0000) -- the SA-1 can't read $4016
@@ -1320,16 +1325,39 @@ cv_loop:
 ; reads the pad here and the SA-1's joy_read just loads $41:0000. active-high (1=pressed),
 ; first serial bit -> bit15 (matches the old in-interp joy_read so input_p1/_coins are
 ; unchanged). Auto-joypad is off (NMITIMEN=0), so strobe + clock 16 bits manually.
-; NOTE: this Mesen harness does not drive $4016 (a real pad), and its open-bus read
-; returns garbage (~$F943) that the game consumes as held coin/start/buttons -> crash.
-; So for now the mailbox = ONLY the harness virtual-controller word ($41:0002), giving
-; clean idle ($0000) by default + pokeable injection. TODO(hardware): OR in a real
-; manual $4016 serial read here (the old in-interp joy_read body) once a pad is wired.
+; Reads a REAL pad: strobe $4016 + clock 16 bits manually (auto-joypad off), first serial
+; bit -> bit15, active-high (1=pressed). The result is OR'd with the harness virtual-
+; controller word ($41:0002) so BOTH a real controller AND headless injection work: on
+; hardware/an MCP that drives $4016 (e.g. Nexen's SetInputOverrides) the pad is the source
+; and an unpressed pad reads $0000 (clean idle); the harness can still poke $41:0002.
+; (SNES Select -> arcade Coin1, Start -> arcade Start; see joy_read mapping.)
 joy5a22:
     php
+    phb                  ; save DBR (the supervisor runs in bank $E9; $4016 needs DBR=$00)
+    sep #$20
+    lda #$00
+    pha
+    plb                  ; DBR = $00 -> $4016 resolves to the CPU-bus controller port
     rep #$30
-    lda $410002
-    sta $410000
+    stz $66              ; 16-bit accumulator (DP, always bank $00, transient)
+    sep #$20
+    lda #$01
+    sta $4016            ; latch controllers
+    stz $4016            ; begin serial shift
+    ldx #$0010
+j5_l:
+    lda $4016            ; D0 = current button bit (1 = pressed)
+    lsr a                ; -> carry
+    rep #$30
+    rol $66              ; shift into 16-bit result (first serial bit -> bit15)
+    sep #$20
+    dex
+    bne j5_l
+    rep #$30
+    lda $410002          ; OR in the pokeable harness virtual-controller word (long, DBR-free)
+    ora $66
+    sta $410000          ; write the JOY1 mailbox the SA-1's joy_read consumes (long)
+    plb                  ; restore DBR
     plp
     rts
 
