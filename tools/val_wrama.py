@@ -16,7 +16,7 @@ import sys, os
 sys.path.insert(0,'tools'); sys.path.insert(0,'/home/chad/Mesen2/python')
 os.environ.setdefault('DOTNET_ROOT','/home/chad/.dotnet8'); os.environ['PATH']='/home/chad/.dotnet8:'+os.environ.get('PATH','')
 from mesen_mcp import McpSession
-S='/tmp/claude-1000/-home-chad-supermn-snes/bc5e5a48-495f-47e6-9724-405edc2118da/scratchpad'
+S=os.environ.get('SUPERMN_VALSTATE','/tmp/claude-1000/-home-chad-supermn-snes/bc5e5a48-495f-47e6-9724-405edc2118da/scratchpad')
 TARGET=int(sys.argv[1],16) if len(sys.argv)>1 else 0x0CE4
 wramA=open(S+'/wramA.bin','rb').read(); regs=open(S+'/regsA.bin','rb').read()
 def be32(d,o): return (d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3]
