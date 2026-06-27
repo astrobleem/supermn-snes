@@ -43,6 +43,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_d18a               ; slot 14 ($92802A)  <- $00D18A gf260-reached leaf, btst+negdisp
     jmp entry_2e06               ; slot 15 ($92802D)  <- $002E06 gf260-reached, abs I/O
     jmp entry_2bc2               ; slot 16 ($928030)  <- $002BC2 gf260-reached, C-Chip abs
+    jmp entry_ccd8               ; slot 17 ($928033)  <- $00CCD8 frame-sharing
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -4796,6 +4797,86 @@ entry_2bc2:
     adc #$0000
     sta $52
     jsl.l writeword_l
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $00CCD8 (18 instrs) by tools/transpile.py [bank1] ---
+entry_ccd8:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$0000
+    sta $1C
+    sta $1E
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    jsl.l rdb40_l
+    and #$0010
+    beq Lfccd8_1
+    jmp Lccd8_cd00
+Lfccd8_1:
+    lda $38
+    clc
+    adc #$FFBD
+    tax
+    jsl.l rdb40_l
+    and #$0010
+    bne Lfccd8_2
+    jmp Lccd8_cd00
+Lfccd8_2:
+    lda $38
+    clc
+    adc #$FFB8
+    tax
+    jsl.l rdw40_l
+    beq Lfccd8_3
+    jmp Lccd8_ccf8
+Lfccd8_3:
+    lda #$1B5C
+    sta $1C
+    jmp Lccd8_cd18
+Lccd8_ccf8:
+    lda #$1E88
+    sta $1C
+    jmp Lccd8_cd18
+Lccd8_cd00:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    jsl.l rdb40_l
+    and #$0020
+    beq Lfccd8_4
+    jmp Lccd8_cd18
+Lfccd8_4:
+    lda $38
+    clc
+    adc #$FFBD
+    tax
+    jsl.l rdb40_l
+    and #$0020
+    bne Lfccd8_5
+    jmp Lccd8_cd18
+Lfccd8_5:
+    lda #$1814
+    sta $1C
+Lccd8_cd18:
     ldx $3C
     jsl.l rdw40_l
     sta $42
