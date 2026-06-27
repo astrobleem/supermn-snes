@@ -18357,8 +18357,8 @@ gm_verify:
     beq gv_match
     cmp #$B058           ; cmp.w (An)+,Dn
     beq gv_match
-gv_no:
-    clc
+gv_no:                   ; no verify match -> the generic memset matcher (escape bank slot 2).
+    jsl $928006          ; gm_memset: returns carry=fired via rtl; rts propagates it to the sled
     rts
 gv_match:
     ldy #$0002           ; PC+2 must be bne (the mismatch->error branch)

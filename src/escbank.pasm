@@ -25,6 +25,7 @@ op_rts_sentinel=$00EA2E
 escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jmp = 3 bytes)
     jmp entry_d96                ; slot 0  ($928000)  <- $000D96
     jmp entry_fb8                ; slot 1  ($928003)  <- $000FB8
+    jmp gm_memset                ; slot 2  ($928006)  <- generic memset (loop fast-path)
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -792,3 +793,126 @@ Lffb8_1:
     adc #$0004
     sta $3C
     jml.l inext
+
+; =============================================================================
+; gm_memset — GENERIC memset idiom for the boot loop fast-path, in the escape bank
+; (bank-0 gap was full). Recognizes:  move.b/w Dn,(An)+ / subq.l #1,Dm / bne -6.
+; Self-contained: regfile + the $56 peek-ahead ptr are direct-page (bank-independent),
+; and the work-RAM fill is `sta $400000,x` (absolute-long indexed -> bank $40 explicitly,
+; DBR/PBR-independent), so NO bank-0 helper calls are needed. Work-RAM ($00F0) only; any
+; other bank / count>=64K falls through. Entered via `jsl $928006` from interp.pasm
+; loop_hook (gv_no); returns carry=fired via rtl. Scratch $0740 size / $0742 subq-op /
+; $0744 value / $0746 count / $0748 An regfile offset (same as the bank-0 matchers; DBR=0).
+gm_memset:
+    lda $44
+    and #$F1F8
+    cmp #$10C0
+    beq gms_byte
+    cmp #$30C0
+    beq gms_word
+gms_no:
+    clc
+    rtl
+gms_byte:
+    lda #$0001
+    bra gms_havesz
+gms_word:
+    lda #$0002
+gms_havesz:
+    sta $0740
+    ldy #$0002
+    lda [$56],y
+    xba
+    sta $0742
+    and #$FFF8
+    cmp #$5380
+    bne gms_no
+    ldy #$0004
+    lda [$56],y
+    xba
+    cmp #$66FA
+    bne gms_no
+    lda $0742
+    and #$0007
+    asl a
+    asl a
+    tay
+    lda $02,y
+    bne gms_no
+    lda $00,y
+    sta $0746
+    lda $44
+    and #$0E00
+    xba
+    lsr a
+    asl a
+    asl a
+    ora #$0020
+    sta $0748
+    tax
+    lda $02,x
+    cmp #$00F0
+    bne gms_no
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    tay
+    lda $00,y
+    sta $0744
+    ldx $0748
+    lda $00,x
+    tax
+    ldy $0746
+    beq gms_tail
+    lda $0740
+    cmp #$0002
+    beq gms_fw
+    sep #$20
+    lda $0744
+gms_fb:
+    sta $400000,x
+    inx
+    dey
+    bne gms_fb
+    rep #$30
+    bra gms_tail
+gms_fw:
+    sep #$20
+gms_fwlp:
+    lda $0745
+    sta $400000,x
+    inx
+    lda $0744
+    sta $400000,x
+    inx
+    dey
+    bne gms_fwlp
+    rep #$30
+gms_tail:
+    lda $0746
+    ldx $0740
+    cpx #$0002
+    bne gms_t1
+    asl a
+gms_t1:
+    ldx $0748
+    clc
+    adc $00,x
+    sta $00,x
+    bcc gms_t2
+    inc $02,x
+gms_t2:
+    lda $0742
+    and #$0007
+    asl a
+    asl a
+    tax
+    stz $00,x
+    stz $02,x
+    lda $40
+    clc
+    adc #$0006
+    sta $40
+    sec
+    rtl
