@@ -17,6 +17,7 @@ Z=(SR>>2)&1; C=SR&1; N=(SR>>3)&1; V=(SR>>1)&1; X=(SR>>4)&1
 NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'
 cpu=json.load(open('/tmp/b0_cpu.json')); iram=open('/tmp/b0_iram.bin','rb').read(); bwram=open('/tmp/b0_bwram.bin','rb').read()
 SCRATCH=0xFF00; jsrb=bytes([0x4E,0xB9,0x00,0x00,(TGT>>8)&0xFF,TGT&0xFF])
+NAT='/tmp/b0_native.mss'  # deterministic native save-state (tools/dump_b0_native.py)
 with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=7479,boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a,mt='Sa1Memory'): b=m.read_memory(mt,a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)
@@ -36,7 +37,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
             if r16(0x0702): break
             runf(60)
     def run(hook):
-        freezeB0()
+        m.load_state(NAT)   # deterministic resume (vs the non-det manual transplant)
         wh(0x00, ''.join(le32(D[i]) for i in range(8)) + ''.join(le32(A[i]) for i in range(7)))  # D0-D7,A0-A6
         wh(0x3C, le32(SP))                                                                        # A7 (not A6 @ $38!)
         w16(0x60,Z); w16(0x6E,C); w16(0x70,N); w16(0x72,V); w16(0xA2,X)
