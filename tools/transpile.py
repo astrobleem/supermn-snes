@@ -319,6 +319,10 @@ def gen(e, ins, nxt):
     # ---- moves / address calc ----
     if base == 'move':
         src, dst = ops
+        if size == 'l':                                  # full 32-bit move (ea_load/store are .w-only)
+            gen_movel(e, src, dst)
+            if fuses: raise Unsupported('move.l feeding branch')
+            return 1
         ea_store_A_from(e, dst, size, lambda e: ea_load_A(e, src, size))
         if fuses:                                        # move sets N,Z (V cleared) -> reload + branch
             if dst[0] == 'Dn': e('lda $%02X' % reg_dp(dst[1]))
@@ -493,10 +497,29 @@ def load_long_to(e, src, dp):
     if src[0] in ('Dn', 'An'):
         s = reg_dp(src[1]); e('lda $%02X' % s); e('sta $%02X' % dp)
         e('lda $%02X' % (s+2)); e('sta $%02X' % (dp+2)); return
+    raise Unsupported('load_long src %r' % (src,))
+
+def store_long_from(e, dst, dp):
+    """store the 32-bit value at $dp(lo)/$dp+2(hi) to dst (no flags)."""
+    if dst[0] in ('Dn', 'An'):
+        d = reg_dp(dst[1]); e('lda $%02X' % dp); e('sta $%02X' % d)
+        e('lda $%02X' % (dp+2)); e('sta $%02X' % (d+2)); return
+    if dst[0] in ('(d16,An)', '(An)', '(An)+'):
+        an = dst[-1]; disp = dst[1] if dst[0] == '(d16,An)' else 0
+        ea_store_A_from(e, ('(d16,An)', disp, an),   'w', lambda e: e('lda $%02X' % (dp+2)))  # hi16 @ addr
+        ea_store_A_from(e, ('(d16,An)', disp+2, an), 'w', lambda e: e('lda $%02X' % dp))      # lo16 @ addr+2
+        if dst[0] == '(An)+': bump_an(e, an, 4)
+        return
+    raise Unsupported('store_long dst %r' % (dst,))
+
+def gen_movel(e, src, dst):
+    """move.l src -> dst (full 32-bit). scratch $9A(lo)/$9C(hi). (ea_load/store are .w-only.)"""
     if src[0] == 'imm':
-        e('lda %s' % hx(src[1] & 0xFFFF)); e('sta $%02X' % dp)
-        e('lda %s' % hx((src[1] >> 16) & 0xFFFF)); e('sta $%02X' % (dp+2)); return
-    raise Unsupported('long load %r' % (src,))
+        e('lda %s' % hx(src[1] & 0xFFFF)); e('sta $9A')
+        e('lda %s' % hx((src[1] >> 16) & 0xFFFF)); e('sta $9C')
+    else:
+        load_long_to(e, src, 0x9A)
+    store_long_from(e, dst, 0x9A)
 
 def gen_call(e, ins):
     """CALL-BRIDGE (CALL_BRIDGE_DESIGN.md): push a $00FF:cont sentinel return, set PC=callee,
