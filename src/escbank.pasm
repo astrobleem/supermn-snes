@@ -39,6 +39,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_29b6               ; slot 10 ($92801E)  <- $0029B6 (object handler, table idx10; video)
     jmp entry_13be               ; slot 11 ($928021)  <- $0013BE (table idx5; gf260-reached leaf; video)
     jmp entry_d9cc               ; slot 12 ($928024)  <- $00D9CC table-leaf gf260-reached
+    jmp entry_dc44               ; slot 13 ($928027)  <- $00DC44 gf260-reached leaf
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -4230,6 +4231,60 @@ Ld9cc_da1e:
     adc #$000E
     sta $54
     lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $00DC44 (4 instrs) by tools/transpile.py [bank1] ---
+entry_dc44:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$2AAC
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $08
+    lda $34
+    clc
+    adc #$2A32
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $08
+    sec
+    sbc $9E
+    sta $08
+    lda $08
+    sta $80
+    lda $34
+    clc
+    adc #$2AAC
+    sta $54
+    lda $36
     adc #$0000
     sta $52
     jsl.l writeword_l
