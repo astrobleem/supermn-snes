@@ -30,6 +30,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_28d4               ; slot 3  ($928009)  <- $0028D4 (gameplay ~2.4%)
     jmp entry_26a0               ; slot 4  ($92800C)  <- $0026A0 (sprite-ctrl, $D0 shadow)
     jmp entry_26fa               ; slot 5  ($92800F)  <- $0026FA (hot leaf, jsr.l from $00CE5E)
+    jmp entry_295a               ; slot 6  ($928012)  <- $00295A (jsr(a1) table idx9 @ $0041EC; x14)
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -1785,6 +1786,143 @@ L26fa_2734:
     jmp L26fa_2734
 Lf26fa_5:
 L26fa_2740:
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $00295A (14 instrs) by tools/transpile.py [bank1] ---
+entry_295a:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$0008
+    tax
+    jsl.l rdw40_l
+    sta $1C
+    lda $1C
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $1C
+    lda $34
+    clc
+    adc #$28EA
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $30
+    clc
+    adc $9A
+    sta $30
+    lda $32
+    adc $9C
+    sta $32
+    lda $38
+    clc
+    adc #$000E
+    tax
+    jsl.l rdw40_l
+    sta $1C
+    lda $1C
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    jsl.l wrw40_l
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda #$00F9
+    sta $1C
+    lda $38
+    clc
+    adc #$000C
+    tax
+    jsl.l rdw40_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    jsl.l wrw40_l
+    ldx $3C
+    jsl.l rdw40_l
+    sta $32
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    jsl.l rdw40_l
+    sta $3A
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
     ldx $3C
     jsl.l rdw40_l
     sta $42

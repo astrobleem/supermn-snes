@@ -16945,28 +16945,56 @@ jsrabs_hook2:
     jmp jah2_b2          ; bank!=0 -> $025110 (jmp: distance-independent as the chain grows)
 jah2_bank0:
     lda $52
+    ; DISPATCH-SCALING: bne-skip + jmp (the dispatcher blocks span >127B; a plain `beq`
+    ; to them overflows the 8-bit branch as escapes are added). jmp has unlimited range.
     cmp #$0412
-    beq jah2_e412
+    bne jah2_n0
+    jmp jah2_e412
+jah2_n0:
     cmp #$CB9E
-    beq jah2_ecb9e
+    bne jah2_n1
+    jmp jah2_ecb9e
+jah2_n1:
     cmp #$15B4
-    beq jah2_e15b4
+    bne jah2_n2
+    jmp jah2_e15b4
+jah2_n2:
     cmp #$0CE4
-    beq jah2_ece4
+    bne jah2_n3
+    jmp jah2_ece4
+jah2_n3:
     cmp #$111A
-    beq jah2_e111a
+    bne jah2_n4
+    jmp jah2_e111a
+jah2_n4:
     cmp #$20E8
-    beq jah2_e20e8
+    bne jah2_n5
+    jmp jah2_e20e8
+jah2_n5:
     cmp #$0D96
-    beq jah2_ed96
+    bne jah2_n6
+    jmp jah2_ed96
+jah2_n6:
     cmp #$0FB8
-    beq jah2_efb8
+    bne jah2_n7
+    jmp jah2_efb8
+jah2_n7:
     cmp #$28D4
-    beq jah2_e28d4
+    bne jah2_n8
+    jmp jah2_e28d4
+jah2_n8:
     cmp #$26A0
-    beq jah2_e26a0
+    bne jah2_n9
+    jmp jah2_e26a0
+jah2_n9:
     cmp #$26FA
-    beq jah2_e26fa
+    bne jah2_n10
+    jmp jah2_e26fa
+jah2_n10:
+    cmp #$295A
+    bne jah2_n11
+    jmp jah2_e295a
+jah2_n11:
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -17001,6 +17029,12 @@ jah2_e26fa:
     lda $54
     sta $40
     jml $92800F          ; ESCAPE BANK jmptab slot 5 ($0026FA, hot leaf called jsr.l from $00CE5E).
+jah2_e295a:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $928012          ; ESCAPE BANK jmptab slot 6 ($00295A, jsr(a1) table dispatch @ $0041EC).
 jah2_e412:
     plp
     pla
