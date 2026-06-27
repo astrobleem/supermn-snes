@@ -17029,6 +17029,10 @@ jah2_n17:
     bne jah2_n18
     jmp jah2_edc44
 jah2_n18:
+    cmp #$D18A
+    bne jah2_n19
+    jmp jah2_ed18a
+jah2_n19:
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -17111,6 +17115,12 @@ jah2_edc44:
     lda $54
     sta $40
     jml $928027          ; slot 13 ($00DC44)
+jah2_ed18a:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $92802A          ; slot 14 ($00D18A)
 jah2_e412:
     plp
     pla

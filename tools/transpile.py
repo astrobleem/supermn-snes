@@ -52,6 +52,8 @@ def parse_ea(tok, pc=None):
     if m: return ('-(An)', 'a'+m.group(1))
     m = re.fullmatch(r'\(a([0-7])\)', t)
     if m: return ('(An)', 'a'+m.group(1))
+    m = re.fullmatch(r'-\$([0-9a-f]+)\(a([0-7])\)', t)        # capstone neg disp: -$60(a3)
+    if m: return ('(d16,An)', -int(m.group(1), 16), 'a'+m.group(2))
     m = re.fullmatch(r'\$(-?[0-9a-f]+)\(a([0-7])\)', t)
     if m: return ('(d16,An)', s16(int(m.group(1), 16)), 'a'+m.group(2))
     m = re.fullmatch(r'\$([0-9a-f]+)\(pc\)', t)
@@ -109,11 +111,13 @@ BCC = {'beq', 'bne', 'bmi', 'bpl', 'bge', 'blt', 'ble', 'bgt', 'bcc', 'bcs',
 # ===================== memory address helpers =====================
 def is_frame(an): return an in ('a6', 'a7')
 
+def hi_ext(disp): return '#$FFFF' if disp < 0 else '#$0000'   # sign-extend a 16-bit disp into hi16
+
 def ea_setup_romaware(e, an, disp):
     """set $52(hi16)/$54(lo16) = An + disp (signed)."""
     dp = reg_dp(an)
     e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('sta $54')
-    e('lda $%02X' % (dp+2)); e('adc #$0000'); e('sta $52')
+    e('lda $%02X' % (dp+2)); e('adc %s' % hi_ext(disp)); e('sta $52')
 
 def ea_load_A(e, ea, size):
     """value (size .w/.b -> 16/8 in A) -> A. .b returns byte in A.lo (hi indeterminate)."""
@@ -193,7 +197,7 @@ def ea_store_A_from(e, ea, size, load_value):
             if size == 'b': e('sep #$20'); e('sta $80'); e('rep #$20')
             else: e('sta $80')
             e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('sta $54')
-            e('lda $%02X' % (dp+2)); e('adc #$0000'); e('sta $52')
+            e('lda $%02X' % (dp+2)); e('adc %s' % hi_ext(disp)); e('sta $52')
             e('jsr writebyte' if size == 'b' else 'jsr writeword')
         else:
             load_value(e); e('pha')                          # value first (may clobber X via mem read)
@@ -419,6 +423,17 @@ def gen(e, ins, nxt):
         ea_load_A(e, ops[0], size)
         if fuses: emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
+    if base == 'nop':
+        return 1
+    if base == 'btst':                                   # btst #n,<ea> : Z = !(bit n of ea)
+        bitop, dst = ops
+        if bitop[0] != 'imm': raise Unsupported('btst non-imm bit')
+        nbit = bitop[1] & (7 if size == 'b' else 31)
+        ea_load_A(e, dst, size or 'b'); e('and #$%04X' % (1 << nbit))
+        if fuses:
+            if nb not in ('beq', 'bne'): raise Unsupported('btst feeding %s' % nb)
+            emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+        raise Unsupported('btst not feeding beq/bne')
     if base in ('cmp', 'cmpi', 'cmpa'):
         src, dst = ops
         emit_signed_cmp(e, dst, src, size)
