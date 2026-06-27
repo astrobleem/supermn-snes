@@ -16939,7 +16939,9 @@ e11a_sx0:
 jsrabs_hook2:
     php                  ; preserve carry (op_jsr_abs's adc #6) -- jsrabs_hook's push32r needs it
     lda $071A
-    beq jah2_miss
+    bne jah2_gated       ; gate on -> dispatch; off -> miss (jmp: jah2_miss is far now)
+    jmp jah2_miss
+jah2_gated:
     lda $50
     beq jah2_bank0       ; bank==0 -> the bank-$00 cmp chain below
     jmp jah2_b2          ; bank!=0 -> $025110 (jmp: distance-independent as the chain grows)
@@ -17003,6 +17005,10 @@ jah2_n12:
     bne jah2_n13
     jmp jah2_e2742
 jah2_n13:
+    cmp #$267A
+    bne jah2_n14
+    jmp jah2_e267a
+jah2_n14:
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -17055,6 +17061,12 @@ jah2_e2742:
     lda $54
     sta $40
     jml $928018          ; ESCAPE BANK jmptab slot 8 ($002742, object handler, video).
+jah2_e267a:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $92801B          ; ESCAPE BANK jmptab slot 9 ($00267A, object handler, video).
 jah2_e412:
     plp
     pla

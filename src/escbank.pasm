@@ -33,6 +33,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_295a               ; slot 6  ($928012)  <- $00295A (jsr(a1) table idx9 @ $0041EC; x14)
     jmp entry_284e               ; slot 7  ($928015)  <- $00284E (object handler, table idx7; video)
     jmp entry_2742               ; slot 8  ($928018)  <- $002742 (object handler, table idx8; video)
+    jmp entry_267a               ; slot 9  ($92801B)  <- $00267A (object handler, table idx4; video)
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -2982,6 +2983,126 @@ Lf2742_2:
     inx
     jsl.l rdw40_l
     sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    jsl.l rdw40_l
+    sta $3A
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+
+=== all 11 instrs transpiled ===
+; --- transpiled from $00267A (11 instrs) by tools/transpile.py [bank1] ---
+entry_267a:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$0008
+    tax
+    jsl.l rdw40_l
+    sta $1C
+    lda #$0800
+    sta $20
+    lda #$00E0
+    sta $22
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $38
+    clc
+    adc #$000A
+    tax
+    jsl.l rdw40_l
+    sta $1C
+L267a_2692:
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $20
+    clc
+    adc #$0002
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lf267a_1
+    jmp L267a_2692
+Lf267a_1:
+    ldx $3C
+    jsl.l rdw40_l
+    sta $22
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $20
     lda $3C
     clc
     adc #$0004
