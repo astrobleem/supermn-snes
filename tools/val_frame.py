@@ -37,9 +37,8 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
             runf(60)
     def run(hook):
         freezeB0()
-        # regfile: D0-D7@$00, A0-A6@$20, A7@$3C
-        wh(0x00, ''.join(le32(D[i]) for i in range(8)) + ''.join(le32(A[i]) for i in range(7)))
-        wh(0x38, le32(0)); wh(0x3C, le32(SP))
+        wh(0x00, ''.join(le32(D[i]) for i in range(8)) + ''.join(le32(A[i]) for i in range(7)))  # D0-D7,A0-A6
+        wh(0x3C, le32(SP))                                                                        # A7 (not A6 @ $38!)
         w16(0x60,Z); w16(0x6E,C); w16(0x70,N); w16(0x72,V); w16(0xA2,X)
         w16(0x7C,SR&7 or 7); w16(0xA4,USP&0xFFFF); w16(0xA6,(USP>>16)&0xFFFF); w16(0xA8,1); w16(0xAA,0); w16(0x4A,0); w16(0x4C,0); w16(0xAC,0x7000)
         w16(0x0718,0xFFF8)
@@ -47,16 +46,16 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         w16(0x410000,0x0100,'snesMemory'); w16(0x410002,0x0100,'snesMemory')
         wh(0x400000+SCRATCH, jsrb.hex(),'snesMemory'); w16(0x40,SCRATCH); w16(0x42,0x00F0)
         w16(0x071A,hook); w16(0x0712,0); w16(0x0710,SCRATCH+6); w16(0x0716,0x00F0); w16(0x0702,0); w16(0x0704,1)
-        for _ in range(200):
+        for _ in range(300):
             runf(20)
             if r16(0x0712) or r16(0x0702): break
         return r16(0x0712), rd(0x00,0x40), rd(0x400000,0x10000,'snesMemory'), rd(0x410000,0x8000,'snesMemory')
     print("[Nexen] boot...",flush=True); runf(600)
     def run_complete(hook):
-        for attempt in range(6):
+        for attempt in range(8):
             fz,rf,m40,m41=run(hook)
             if fz: return fz,rf,m40,m41
-            print("  hook=%d attempt %d: froze=0, retry"%(hook,attempt),flush=True)
+            print("  hook=%d attempt %d froze=0, retry"%(hook,attempt),flush=True)
         return fz,rf,m40,m41
     of,orf,o40,o41=run_complete(0); nf,nrf,n40,n41=run_complete(1)
     RN=['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6','a7']
