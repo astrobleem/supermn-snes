@@ -16995,6 +16995,10 @@ jah2_n10:
     bne jah2_n11
     jmp jah2_e295a
 jah2_n11:
+    cmp #$284E
+    bne jah2_n12
+    jmp jah2_e284e
+jah2_n12:
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -17035,6 +17039,12 @@ jah2_e295a:
     lda $54
     sta $40
     jml $928012          ; ESCAPE BANK jmptab slot 6 ($00295A, jsr(a1) table dispatch @ $0041EC).
+jah2_e284e:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $928015          ; ESCAPE BANK jmptab slot 7 ($00284E, object handler, video).
 jah2_e412:
     plp
     pla
