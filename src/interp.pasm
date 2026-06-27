@@ -16939,7 +16939,9 @@ jsrabs_hook2:
     lda $071A
     beq jah2_miss
     lda $50
-    bne jah2_b2          ; bank!=0 -> $025110
+    beq jah2_bank0       ; bank==0 -> the bank-$00 cmp chain below
+    jmp jah2_b2          ; bank!=0 -> $025110 (jmp: distance-independent as the chain grows)
+jah2_bank0:
     lda $52
     cmp #$0412
     beq jah2_e412
@@ -16957,6 +16959,8 @@ jsrabs_hook2:
     beq jah2_ed96
     cmp #$0FB8
     beq jah2_efb8
+    cmp #$28D4
+    beq jah2_e28d4
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -16973,6 +16977,12 @@ jah2_efb8:
     lda $54
     sta $40
     jml $928003          ; ESCAPE BANK jmptab slot 1 ($000FB8 buffer fill).
+jah2_e28d4:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $928009          ; ESCAPE BANK jmptab slot 3 ($0028D4, gameplay ~2.4%).
 jah2_e412:
     plp
     pla
@@ -18085,9 +18095,8 @@ loop_hook:
     lda $40
     cmp #$3B84
     beq lh_delay         ; $3B84: busy-wait delay (clr.w D0; subq.w/bne x65536) -> skip it
-    cmp #$3F7C
-    beq lh_3f7c          ; $3F7C: byte memset  move.b D1,(A1)+ / subq.l #1,D2 / bne
     cmp #$3FEA           ; the far handlers are >127 bytes away -> bne-skip + jmp
+                         ; ($3F7C byte memset retired -> subsumed by the generic gm_memset)
     bne lh_chk_adbe
     jmp lh_3fea          ; $3FEA: walking-bit BYTE RAM test -> net memset 0 (720K instr)
 lh_chk_adbe:
@@ -18111,42 +18120,6 @@ lh_delay:
     sec
     rts
 
-; $3F7C byte memset: fill D2.l bytes of D1.b at A1, then A1+=D2, D2=0. Regs: D1=$04,
-; D2=$08/$0A, A1=$24/$26. Only the work-RAM ($00F0) case is fast-filled here; anything
-; else (other bank, count >= 64K, or a 16-bit bank wrap) falls through to the interp.
-lh_3f7c:
-    lda $26
-    cmp #$00F0
-    bne lh_nofire        ; A1 not in work RAM -> let the interp run the loop
-    lda $0A
-    bne lh_nofire        ; D2 >= 65536 -> interp
-    lda $24
-    clc
-    adc $08
-    bcs lh_nofire        ; A1.lo16 + D2 would cross the bank -> interp
-    ldx $24              ; X = dest offset (A1.lo16)
-    ldy $08              ; Y = byte count (D2.lo16)
-    beq lh_3f7c_tail     ; nothing to fill
-    sep #$20
-    lda $04              ; A.lo8 = fill byte (D1.lo8)
-lh_3f7c_lp:
-    sta $400000,x        ; work-RAM byte (== wrb40's store)
-    inx
-    dey
-    bne lh_3f7c_lp
-    rep #$30
-lh_3f7c_tail:
-    lda $24
-    clc
-    adc $08
-    sta $24              ; A1.lo16 += D2 (no wrap, hi16 unchanged)
-    stz $08
-    stz $0A              ; D2 = 0
-    lda #$3F82
-    sta $40              ; resume after the loop (the read-back/verify setup)
-    stz $42
-    sec
-    rts
 
 ; $3FEA walking-bit BYTE RAM test: for D2.l bytes at A1 it writes/verifies $80..$01 then
 ; leaves the byte 0. Net (on writable RAM): memset 0, A1+=D2, D2=0, D1=0. Only the work-RAM
