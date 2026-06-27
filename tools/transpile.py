@@ -355,7 +355,17 @@ def gen(e, ins, nxt):
             emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
     if base == 'clr':
-        ea_store_A_from(e, ops[0], size, lambda e: e('lda #$0000')); return 1
+        dst = ops[0]
+        if size == 'l':                                  # clear BOTH 16-bit words (ea_store is .w-only)
+            if dst[0] == 'Dn':
+                dp = reg_dp(dst[1]); e('lda #$0000'); e('sta $%02X' % dp); e('sta $%02X' % (dp+2))
+            elif dst[0] in ('(An)', '(d16,An)'):
+                an = dst[-1]; disp = dst[1] if dst[0] == '(d16,An)' else 0
+                for d2 in (disp, disp+2):                # big-endian: both words zero, order moot
+                    ea_store_A_from(e, ('(d16,An)', d2, an), 'w', lambda e: e('lda #$0000'))
+            else: raise Unsupported('clr.l %r' % (dst,))
+            return 1
+        ea_store_A_from(e, dst, size, lambda e: e('lda #$0000')); return 1
     if base == 'moveq':                                  # Dn = sign-extend8(imm) (32-bit), NZ V=C=0
         n = ops[0][1] & 0xFF; dp = reg_dp(ops[1][1])
         lo = (0xFF00 | n) if n & 0x80 else n
@@ -450,8 +460,10 @@ def load_long_to(e, src, dp):
             e('lda $%02X' % s); e('clc'); e('adc %s' % imm16(disp)); e('tax')
             e('jsr rdw40'); e('sta $%02X' % (dp+2)); e('inx'); e('inx'); e('jsr rdw40'); e('sta $%02X' % dp)
         else:
-            ea_setup_romaware(e, an, disp); e('jsr rdw_ea'); e('sta $%02X' % (dp+2))
-            e('inc $54'); e('inc $54'); e('jsr rdw_ea'); e('sta $%02X' % dp)
+            ea_setup_romaware(e, an, disp); e('jsr rdw_ea'); e('sta $%02X' % (dp+2))   # hi16 @ addr
+            ea_setup_romaware(e, an, disp+2); e('jsr rdw_ea'); e('sta $%02X' % dp)     # lo16 @ addr+2
+            # NB: re-setup the address; rdw_ea leaves $54 = addr+1 (it inc's between byte reads),
+            # so the old `inc $54 / inc $54` read addr+3 (off by one). Recompute = robust.
         if src[0] == '(An)+': bump_an(e, an, 4)
         return
     if src[0] in ('Dn', 'An'):

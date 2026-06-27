@@ -19,8 +19,9 @@ push32_l=$00E5AE
 rdw_ea_l=$00E5B2
 readbyte_l=$00E5B6
 writeword_l=$00E5BA
-usmul_l=$00E5BE
-op_rts_sentinel=$00EA36
+writebyte_l=$00E5BE
+usmul_l=$00E5C2
+op_rts_sentinel=$00EA3A
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -37,6 +38,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_267a               ; slot 9  ($92801B)  <- $00267A (object handler, table idx4; video)
     jmp entry_29b6               ; slot 10 ($92801E)  <- $0029B6 (object handler, table idx10; video)
     jmp entry_13be               ; slot 11 ($928021)  <- $0013BE (table idx5; gf260-reached leaf; video)
+    jmp entry_d9cc               ; slot 12 ($928024)  <- $00D9CC table-leaf gf260-reached
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -3999,6 +4001,238 @@ L13be_1418:
     clc
     adc #$0004
     sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $00D9CC (25 instrs) by tools/transpile.py [bank1] ---
+entry_d9cc:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$2AB8
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $22
+    lda $34
+    clc
+    adc #$2ABA
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda #$0001
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$00C0
+    sep #$20
+    sta $80
+    rep #$20
+    lda $20
+    clc
+    adc #$000B
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $34
+    clc
+    adc #$2AAC
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    clc
+    adc #$0008
+    sta $00
+    lda $00
+    sta $80
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $00
+    clc
+    adc #$0020
+    sta $00
+    lda $00
+    sta $80
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $34
+    clc
+    adc #$2AAE
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    clc
+    adc #$0008
+    sta $00
+    lda $00
+    sta $80
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $34
+    clc
+    adc #$2AB0
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0007
+    bne Lfd9cc_1
+    jmp Ld9cc_da16
+Lfd9cc_1:
+    lda $00
+    clc
+    adc #$00D0
+    sta $00
+    lda $00
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    jmp Ld9cc_da1e
+Ld9cc_da16:
+    lda $00
+    clc
+    adc #$0050
+    sta $00
+    lda $00
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+Ld9cc_da1e:
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sta $00
+    sta $02
+    lda $20
+    clc
+    adc #$000D
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    sta $80
+    lda $34
+    clc
+    adc #$2AB4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
     ldx $3C
     jsl.l rdw40_l
     sta $42

@@ -16022,6 +16022,8 @@ readbyte_l: jsr readbyte
     rtl
 writeword_l: jsr writeword
     rtl
+writebyte_l: jsr writebyte
+    rtl
 usmul_l:    jsr usmul        ; unsigned 16x16->32 ($50*$52 -> $94:$96); DP-only, escape-bank callable
     rtl
 ; rdw_a0 — ROM/IO/work-RAM-aware big-endian word read of [a0+Y]. in: Y=byte disp.
@@ -17019,6 +17021,10 @@ jah2_n15:
     bne jah2_n16
     jmp jah2_e13be
 jah2_n16:
+    cmp #$D9CC
+    bne jah2_n17
+    jmp jah2_ed9cc
+jah2_n17:
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -17089,6 +17095,12 @@ jah2_e13be:
     lda $54
     sta $40
     jml $928021          ; ESCAPE BANK jmptab slot 11 ($0013BE, table idx5, gf260-reached, video).
+jah2_ed9cc:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $928024          ; slot 12 ($00D9CC)
 jah2_e412:
     plp
     pla
