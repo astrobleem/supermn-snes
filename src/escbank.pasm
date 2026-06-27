@@ -18,7 +18,8 @@ wrb40_l=$00E5AA
 push32_l=$00E5AE
 rdw_ea_l=$00E5B2
 readbyte_l=$00E5B6
-op_rts_sentinel=$00EA2E
+writeword_l=$00E5BA
+op_rts_sentinel=$00EA32
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -27,6 +28,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_fb8                ; slot 1  ($928003)  <- $000FB8
     jmp gm_memset                ; slot 2  ($928006)  <- generic memset (loop fast-path)
     jmp entry_28d4               ; slot 3  ($928009)  <- $0028D4 (gameplay ~2.4%)
+    jmp entry_26a0               ; slot 4  ($92800C)  <- $0026A0 (sprite-ctrl, $D0 shadow)
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -1433,6 +1435,181 @@ Lf28d4_2:
     clc
     adc #$0004
     sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $0026A0 (27 instrs) by tools/transpile.py [bank1] ---
+entry_26a0:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$28EA
+    sta $20
+    lda #$00F0
+    sta $22
+    lda #$0000
+    sta $00
+    lda #$0001
+    sta $04
+    lda #$0000
+    sta $06
+    lda #$0004
+    sta $08
+    lda #$0000
+    sta $0A
+    lda #$000F
+    sta $1C
+    lda #$0000
+    sta $1E
+L26a0_26ae:
+    ; !! UNIMPLEMENTED: btst.b    #$0, (a0)   (opcode btst.b)
+    ; !! UNIMPLEMENTED: beq.b     $26b6   (stray conditional beq (flags not from preceding op))
+    lda $00
+    ora $04
+    sta $00
+L26a0_26b6:
+    lda $04
+    clc
+    adc $04
+    sta $04
+    lda $20
+    clc
+    adc $08
+    sta $20
+    lda $22
+    adc $0A
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lf26a0_1
+    jmp L26a0_26ae
+Lf26a0_1:
+    lda $00
+    sta $04
+    lda $00
+    and #$00FF
+    sta $00
+    lda $04
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $04
+    ; !! UNIMPLEMENTED: move.w    d0, $d00604.l   (store EA ('abs', 13633028))
+    ; !! UNIMPLEMENTED: move.w    d1, $d00606.l   (store EA ('abs', 13633030))
+    lda #$0408
+    sta $20
+    lda #$00D0
+    sta $22
+    lda #$0400
+    sta $24
+    lda #$00D0
+    sta $26
+    lda $34
+    clc
+    adc #$28EA
+    sta $28
+    lda $36
+    adc #$0000
+    sta $2A
+    lda #$0020
+    sta $00
+    lda #$000F
+    sta $1C
+L26a0_26ec:
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $28
+    clc
+    adc #$0002
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    pla
+    sta $80
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $28
+    clc
+    adc #$0002
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    pla
+    sta $80
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $20
+    clc
+    adc $00
+    sta $20
+    lda $22
+    adc $02
+    sta $22
+    lda $24
+    clc
+    adc $00
+    sta $24
+    lda $26
+    adc $02
+    sta $26
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lf26a0_2
+    jmp L26a0_26ec
+Lf26a0_2:
     ldx $3C
     jsl.l rdw40_l
     sta $42

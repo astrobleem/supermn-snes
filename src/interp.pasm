@@ -16020,6 +16020,8 @@ rdw_ea_l:   jsr rdw_ea
     rtl
 readbyte_l: jsr readbyte
     rtl
+writeword_l: jsr writeword
+    rtl
 ; rdw_a0 — ROM/IO/work-RAM-aware big-endian word read of [a0+Y]. in: Y=byte disp.
 ;   out: A=word (hi:lo). a0 may point at ROM ($00-$07xxxx) or work RAM, so route through
 ;   readbyte (NOT $40 direct). readbyte preserves Y,$52,$54 and clobbers $66,$68; $90 scratch.
@@ -16961,6 +16963,8 @@ jah2_bank0:
     beq jah2_efb8
     cmp #$28D4
     beq jah2_e28d4
+    cmp #$26A0
+    beq jah2_e26a0
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -16983,6 +16987,12 @@ jah2_e28d4:
     lda $54
     sta $40
     jml $928009          ; ESCAPE BANK jmptab slot 3 ($0028D4, gameplay ~2.4%).
+jah2_e26a0:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $92800C          ; ESCAPE BANK jmptab slot 4 ($0026A0, sprite-ctrl $D0 shadow).
 jah2_e412:
     plp
     pla
@@ -18101,12 +18111,9 @@ loop_hook:
     jmp lh_3fea          ; $3FEA: walking-bit BYTE RAM test -> net memset 0 (720K instr)
 lh_chk_adbe:
     cmp #$ADBE
-    bne lh_chk_3f86
-    jmp lh_adbe          ; $ADBE: walking-bit WORD RAM test -> net memset 0 (721K instr)
-lh_chk_3f86:
-    cmp #$3F86
     bne lh_gen
-    jmp lh_3f86          ; $3F86: byte read-back verify -> net A1+=D2,D2=0 (65K instr)
+    jmp lh_adbe          ; $ADBE: walking-bit WORD RAM test -> net memset 0 (721K instr)
+                         ; ($3F86 byte verify retired -> subsumed by the generic gm_verify)
 lh_gen:
     jmp gm_memclr        ; no per-PC match -> the GENERIC loop-idiom matcher
 lh_nofire:
@@ -18203,31 +18210,6 @@ lh_adbe_tail:
     sta $40              ; resume at move #0,CCR ; rts
     stz $42
     sec
-    rts
-
-; $3F86 byte read-back verify: cmp.b (A1)+,D1 / bne err / subq.l #1,D2 / bne. Net (no
-; mismatch): A1+=D2, D2=0. For work-RAM the preceding (hooked) $3F7C clear wrote D1, so the
-; read-back necessarily matches -> skip it. Other banks fall through to the real verify.
-lh_3f86:
-    lda $26
-    cmp #$00F0
-    bne lh_3f86_no
-    lda $0A
-    bne lh_3f86_no       ; D2 >= 65536 -> interp
-    lda $24
-    clc
-    adc $08
-    bcs lh_3f86_no       ; bank wrap -> interp
-    sta $24              ; A1.lo16 += D2 (no wrap)
-    stz $08
-    stz $0A              ; D2 = 0
-    lda #$3F8E
-    sta $40              ; resume after the verify loop
-    stz $42
-    sec
-    rts
-lh_3f86_no:
-    clc
     rts
 
 ; ============================ GENERIC LOOP-IDIOM MATCHER ======================
