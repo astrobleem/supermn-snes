@@ -343,7 +343,13 @@ def gen(e, ins, nxt):
             elif src[0] in ('Dn', 'An'): e('%s $%02X' % (opn, reg_dp(src[1])))
             else: raise Unsupported('logic with memory src (would clobber RMW X)')
         ea_rmw(e, dst, size, modify)                 # handles Dn and memory RMW (incl. (An)+ once)
-        if fuses: raise Unsupported('logic op feeding branch')
+        if fuses:
+            # and/or/eor set N,Z (C=V=0) -> only Z/N-testable branches; reload the result (RMW
+            # write clobbered A/flags for the memory case; cheap+safe for Dn too).
+            if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('logic feeding %s (needs C/V)' % nb)
+            if dst[0] == 'Dn': e('lda $%02X' % reg_dp(dst[1]))
+            else: ea_load_A(e, dst, size)
+            emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
     if base == 'clr':
         ea_store_A_from(e, ops[0], size, lambda e: e('lda #$0000')); return 1
