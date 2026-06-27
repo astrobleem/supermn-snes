@@ -173,6 +173,14 @@ def ea_rmw(e, ea, size, modify):
         return
     raise Unsupported('RMW EA %r' % (ea,))
 
+def ea_addr_to_X(e, ea):
+    """set X = the work-RAM offset of a memory EA (no read). For sub-to-memory writeback."""
+    kind = ea[0]
+    if kind in ('(An)', '(An)+', '(d16,An)'):
+        an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0
+        e('lda $%02X' % reg_dp(an)); e('clc'); e('adc %s' % imm16(disp)); e('tax'); return
+    raise Unsupported('addr_to_X EA %r' % (ea,))
+
 def ea_store_A_from(e, ea, size, load_value):
     """store: load_value(e) must leave the store value in A; dest given by ea (.w/.b)."""
     kind = ea[0]
@@ -601,9 +609,26 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
     src, dst = ops
     store_dp = reg_dp(dst[1]) if dst[0] == 'Dn' else None
     if is_sub:
-        emit_signed_cmp(e, dst, src, size, store_dp=store_dp)   # lda;sec;sbc;sta -> N,V,Z,C live
-        if fuses: emit_branch(e, nb, branch_target(nxt), 'signed'); return 2
-        return 1
+        if dst[0] == 'Dn':                                      # register dest: sbc + sta $dp (flags live)
+            emit_signed_cmp(e, dst, src, size, store_dp=store_dp)
+            if fuses: emit_branch(e, nb, branch_target(nxt), 'signed'); return 2
+            return 1
+        # MEMORY dest: sub is read-modify-WRITE (not a flagless cmp). emit the sub into A with flags,
+        # then write A back to the EA preserving the sub's N,V,Z,C across the (flag-clobbering) store.
+        wr = 'wrb40' if size == 'b' else 'wrw40'
+        if fuses:
+            emit_signed_cmp(e, dst, src, size, store_dp=None)  # A=result; N,V,Z,C live
+            e('php'); e('pha')                                 # save sub flags, then result value
+            ea_addr_to_X(e, dst)                               # X = dest work-RAM offset (clobbers A)
+            e('pla'); e('jsr %s' % wr)                         # A=result; write back (clobbers flags)
+            e('plp')                                           # restore the sub's flags for the branch
+            emit_branch(e, nb, branch_target(nxt), 'signed'); return 2
+        def modify(e2):                                        # non-fused: plain RMW writeback
+            e2('sec')
+            if src[0] == 'imm': e2('sbc %s' % imm16(src[1]))
+            elif src[0] in ('Dn', 'An'): e2('sbc $%02X' % reg_dp(src[1]))
+            else: raise Unsupported('sub mem,mem')
+        ea_rmw(e, dst, size, modify); return 1
     # add family (RMW; (An)+ increments once)
     def modify(e):
         e('clc')
