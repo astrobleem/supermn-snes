@@ -16965,6 +16965,8 @@ jah2_bank0:
     beq jah2_e28d4
     cmp #$26A0
     beq jah2_e26a0
+    cmp #$26FA
+    beq jah2_e26fa
 jah2_miss:
     plp                  ; restore carry for push32r
     jmp jsrabs_hook
@@ -16993,6 +16995,12 @@ jah2_e26a0:
     lda $54
     sta $40
     jml $92800C          ; ESCAPE BANK jmptab slot 4 ($0026A0, sprite-ctrl $D0 shadow).
+jah2_e26fa:
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $92800F          ; ESCAPE BANK jmptab slot 5 ($0026FA, hot leaf called jsr.l from $00CE5E).
 jah2_e412:
     plp
     pla

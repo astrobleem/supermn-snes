@@ -29,6 +29,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp gm_memset                ; slot 2  ($928006)  <- generic memset (loop fast-path)
     jmp entry_28d4               ; slot 3  ($928009)  <- $0028D4 (gameplay ~2.4%)
     jmp entry_26a0               ; slot 4  ($92800C)  <- $0026A0 (sprite-ctrl, $D0 shadow)
+    jmp entry_26fa               ; slot 5  ($92800F)  <- $0026FA (hot leaf, jsr.l from $00CE5E)
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -1610,6 +1611,180 @@ L26a0_26ec:
     beq Lf26a0_2
     jmp L26a0_26ec
 Lf26a0_2:
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $0026FA (20 instrs) by tools/transpile.py [bank1] ---
+entry_26fa:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$1B18
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bne Lf26fa_1
+    jmp L26fa_2740
+Lf26fa_1:
+    lda $34
+    clc
+    adc #$1B1A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    cmp #$8000
+    ror a
+    sta $1C
+    lda $1C
+    beq Lf26fa_2
+    jmp L26fa_270c
+Lf26fa_2:
+    lda $34
+    clc
+    adc #$1B1A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+L26fa_270c:
+    lda $34
+    clc
+    adc #$1B16
+    tax
+    jsl.l rdw40_l
+    clc
+    adc $1C
+    jsl.l wrw40_l
+    lda $34
+    clc
+    adc #$1B16
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lf26fa_3
+    jmp L26fa_2718
+Lf26fa_3:
+    lda $34
+    clc
+    adc #$1B18
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0001
+L26fa_2718:
+    lda $34
+    clc
+    adc #$1B1A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $34
+    clc
+    adc #$1B16
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq Lf26fa_4
+    jmp L26fa_272c
+Lf26fa_4:
+    lda $34
+    clc
+    adc #$1B1A
+    tax
+    jsl.l rdw40_l
+    eor #$FFFF
+    inc a
+    jsl.l wrw40_l
+    lda $34
+    clc
+    adc #$1B18
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0001
+L26fa_272c:
+    lda #$000D
+    sta $00
+    lda $34
+    clc
+    adc #$28EA
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+L26fa_2734:
+    lda $20
+    clc
+    adc #$0000
+    tax
+    jsl.l rdw40_l
+    clc
+    adc $1C
+    jsl.l wrw40_l
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lf26fa_5
+    jmp L26fa_2734
+Lf26fa_5:
+L26fa_2740:
     ldx $3C
     jsl.l rdw40_l
     sta $42

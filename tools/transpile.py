@@ -357,19 +357,29 @@ def gen(e, ins, nxt):
     if base in ('lsl', 'lsr', 'asl', 'asr'):             # shift Dn by #count (.w/.b)
         cnt, dst = ops
         if cnt[0] != 'imm' or dst[0] != 'Dn': raise Unsupported('%s non-imm/non-Dn' % base)
-        op = {'lsl': 'asl a', 'asl': 'asl a', 'lsr': 'lsr a', 'asr': 'asr a... '}[base]  # asr unsupported below
-        if base == 'asr': raise Unsupported('asr (arithmetic shift right) — add if needed')
+        if base == 'asr' and size != 'w': raise Unsupported('asr.%s — only .w' % size)
+        def one(e):                                      # one shift step on A (M=16)
+            if base == 'asr':                            # arithmetic >>1: C=bit15, ror folds sign back in
+                e('cmp #$8000'); e('ror a')
+            else:
+                e({'lsl': 'asl a', 'asl': 'asl a', 'lsr': 'lsr a'}[base])
         def lv(e):
             ea_load_A(e, dst, size)
-            for _ in range(cnt[1] & 0xFFFF): e(op)
+            for _ in range(cnt[1] & 0xFFFF): one(e)
         ea_store_A_from(e, dst, size, lv)
-        if fuses: raise Unsupported('shift feeding branch')
+        if fuses:                                        # result Z/N is live; only Z/N-testable branches
+            if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('shift feeding %s (needs C/V)' % nb)
+            e('lda $%02X' % reg_dp(dst[1]))              # reload result for clean Z/N (dst is Dn)
+            emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
     if base == 'neg':
         dst = ops[0]
-        def lv(e):
-            e('lda #$0000'); e('sec'); e('sbc $%02X' % reg_dp(dst[1]))   # 0 - dst
-        ea_store_A_from(e, dst, size, lv); return 1
+        if size == 'l': raise Unsupported('neg.l — add if needed')
+        def modify(e):
+            e('eor #$FFFF'); e('inc a')                 # two's complement: 0 - A (X preserved)
+        ea_rmw(e, dst, size, modify)                    # works for Dn and memory EAs
+        if fuses: raise Unsupported('neg feeding branch')
+        return 1
     if base == 'ext':
         dp = reg_dp(ops[0][1])
         if size == 'l': sext_hi(e, dp)                   # word -> long: hi16 = sign(lo16)
@@ -522,7 +532,13 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
         elif src[0] in ('Dn', 'An'): e('adc $%02X' % reg_dp(src[1]))
         else: raise Unsupported('add with memory src (would clobber RMW X)')
     ea_rmw(e, dst, size, modify)
-    if fuses: raise Unsupported('add feeding branch (needs V via sbc form)')
+    if fuses:
+        # bne/beq/bmi/bpl need only Z/N -> reload the result (RMW write clobbered A/flags).
+        # bcs/bcc/signed branches need C/V from the add -> not modeled here.
+        if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('add feeding %s (needs C/V)' % nb)
+        if dst[0] == 'Dn': e('lda $%02X' % reg_dp(dst[1]))
+        else: ea_load_A(e, dst, size)                    # re-read stored memory result for Z/N
+        emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
     return 1
 
 # ===================== driver =====================
