@@ -41,12 +41,12 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     print("[Nexen] boot+transplant...",flush=True); runf(600); freezeB0()
     # PHASE 1: capture the fn's entry state from the gf260 tick (gate off, debug-freeze at TGT)
     inject_tickstart()
-    w16(0x071A,0); w16(0x0712,0); w16(0x0710,TGT&0xFFFF); w16(0x0716,(TGT>>16)&0xFFFF); w16(0x0702,0); w16(0x0704,1)
+    w16(0x071A,0); w16(0x0712,0); w16(0x0710,TGT&0xFFFF); w16(0x0716,(TGT>>16)&0xFFFF)
+    w16(0x0700,0); w16(0x0702,0); w16(0x0704,1)   # disarm lockstep -> run freely until debug-freeze
     hit=0
-    for _ in range(60):
+    for _ in range(120):
         runf(20)
         if r16(0x0712): hit=1; break
-        if r16(0x0702): break
     if not hit:
         print("[%06X] NOT reached by gf260 tick (can't capture frame) -> SKIP"%TGT,flush=True); sys.exit(2)
     cap_dp=rd(0x00,0x40)               # regfile $00-$3F (entry context incl. a6 frame ptr)
