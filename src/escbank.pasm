@@ -4904,13 +4904,21 @@ entry_cc10:
     clc
     adc #$FFE6
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $38
     clc
     adc #$FFFC
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $9E
     lda $1C
     sec
@@ -4979,14 +4987,23 @@ Lcc10_cc1a:
     adc #$FFEC
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     jmp Lcc10_cc3a
 Lcc10_cc2a:
     lda $38
     clc
     adc #$FFEA
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sec
     sbc #$0001
     php
@@ -4996,7 +5013,12 @@ Lcc10_cc2a:
     adc #$FFEA
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     plp
     beq Lfcc10_4
     bvs Lfcc10_2
@@ -5012,7 +5034,11 @@ Lfcc10_4:
     clc
     adc #$FFEC
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sec
     sbc #$0001
     php
@@ -5022,7 +5048,12 @@ Lfcc10_4:
     adc #$FFEC
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     plp
     bvs Lfcc10_5
     bmi Lfcc10_6
@@ -5037,11 +5068,19 @@ Lfcc10_7:
     clc
     adc #$FFEE
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
 Lcc10_cc3a:
     lda $20
@@ -5076,7 +5115,12 @@ Lcc10_cc3a:
     adc #$FFE8
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $9A
     pha
     lda $38
@@ -5084,7 +5128,12 @@ Lcc10_cc3a:
     adc #$FFEA
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $20
     sta $9A
     lda $22
@@ -5096,7 +5145,12 @@ Lcc10_cc3a:
     adc #$FFEE
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $9A
     pha
     lda $38
@@ -5104,14 +5158,27 @@ Lcc10_cc3a:
     adc #$FFF0
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
 Lcc10_cc42:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc

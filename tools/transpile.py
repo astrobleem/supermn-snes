@@ -668,6 +668,30 @@ def bank1_transform(lines):
         out.append(l)
     return out
 
+# BW-RAM ($40) word/byte access bodies, inlined in place of the rdw40/wrw40/rdb40/wrb40 leaf calls.
+# These mirror the helpers in interp.pasm EXACTLY (minus the rts). `lda $400000,x` is absolute-LONG
+# indexed ($BF) -> it addresses bank $40 regardless of the program bank, so the SAME inline works from
+# a bank-$00 gap escape AND a bank-$92 escape-bank escape (no `_l` rtl-wrapper, no jsl/jsr/rtl/rts
+# overhead). X holds the work-RAM offset (set by the caller's `tax`); 16-bit X is preserved (sep #$20
+# touches only M). Work RAM is big-endian: [X]=hi, [X+1]=lo.
+INLINE_MEM = {
+    'rdw40': ['sep #$20', 'lda $400000,x', 'xba', 'lda $400001,x', 'rep #$20'],
+    'wrw40': ['sep #$20', 'xba', 'sta $400000,x', 'xba', 'sta $400001,x', 'rep #$20'],
+    'rdb40': ['sep #$20', 'lda $400000,x', 'rep #$20', 'and #$00FF'],
+    'wrb40': ['sep #$20', 'sta $400000,x', 'rep #$20'],
+}
+def inline_mem_ops(lines):
+    """Replace `jsr <rdw40|wrw40|rdb40|wrb40>` leaf calls with their inline bodies. Run BEFORE
+    bank1_transform so it never sees these (they don't become jsl.l _l). Eliminates the per-memory-op
+    call overhead (~25 cycles/op in bank1: jsl+wrapper-jsr+rtl+rts) on the hottest path of every
+    escape -- escapes are memory-op-dominated (every Dn/An is a DP read, every (An)/(d16,An) a $40 op)."""
+    out = []
+    for l in lines:
+        m = re.fullmatch(r'jsr (rdw40|wrw40|rdb40|wrb40)', l.strip())
+        if m: out.extend('    ' + b for b in INLINE_MEM[m.group(1)])
+        else: out.append(l)
+    return out
+
 def main():
     global VIDEO
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
@@ -699,7 +723,9 @@ def main():
             e.cmt('!! UNIMPLEMENTED: %-9s %s   (%s)' % (ins.mnemonic, ins.op_str, ex))
             unimpl['%s %s' % (ins.mnemonic, ins.op_str.split(',')[0] if ins.op_str else '')] = str(ex)
             i += 1
-    out = bank1_transform(e.lines) if bank1 else e.lines
+    noinline = '--noinline' in sys.argv               # keep the leaf calls (baseline / cycle A/B)
+    lines = e.lines if noinline else inline_mem_ops(e.lines)
+    out = bank1_transform(lines) if bank1 else lines
     print('\n'.join(out))
     if unimpl:
         sys.stderr.write('\n=== %d UNIMPLEMENTED ===\n' % len(unimpl))
