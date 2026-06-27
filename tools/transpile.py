@@ -143,7 +143,8 @@ def ea_load_A(e, ea, size):
         return
     if kind == 'abs':
         e('lda #%s' % hx(ea[1] & 0xFFFF)); e('sta $54')
-        e('lda #%s' % hx((ea[1] >> 16) & 0xFFFF)); e('sta $52'); e('jsr rdw_ea'); return
+        e('lda #%s' % hx((ea[1] >> 16) & 0xFFFF)); e('sta $52')
+        e('jsr readbyte' if size == 'b' else 'jsr rdw_ea'); return
     raise Unsupported('load EA %r' % (ea,))
 
 def bump_an(e, an, n):
@@ -204,6 +205,14 @@ def ea_store_A_from(e, ea, size, load_value):
             e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')   # X = dest offset
             e('pla'); e('jsr wrb40' if size == 'b' else 'jsr wrw40')             # work-RAM byte/word
         if kind == '(An)+': bump_an(e, an, 1 if size == 'b' else 2)
+        return
+    if kind == 'abs':                                    # absolute store -> I/O-aware writebyte/writeword
+        load_value(e)                                    # ($F0->$40, $80/$90 I/O, $B0/$D0/$E0->$41)
+        if size == 'b': e('sep #$20'); e('sta $80'); e('rep #$20')
+        else: e('sta $80')
+        e('lda #%s' % hx(ea[1] & 0xFFFF)); e('sta $54')
+        e('lda #%s' % hx((ea[1] >> 16) & 0xFFFF)); e('sta $52')
+        e('jsr writebyte' if size == 'b' else 'jsr writeword')
         return
     raise Unsupported('store EA %r' % (ea,))
 

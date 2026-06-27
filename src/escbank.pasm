@@ -41,6 +41,8 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_d9cc               ; slot 12 ($928024)  <- $00D9CC table-leaf gf260-reached
     jmp entry_dc44               ; slot 13 ($928027)  <- $00DC44 gf260-reached leaf
     jmp entry_d18a               ; slot 14 ($92802A)  <- $00D18A gf260-reached leaf, btst+negdisp
+    jmp entry_2e06               ; slot 15 ($92802D)  <- $002E06 gf260-reached, abs I/O
+    jmp entry_2bc2               ; slot 16 ($928030)  <- $002BC2 gf260-reached, C-Chip abs
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -4682,6 +4684,116 @@ Ld18a_d1fc:
     sta $54
     lda $26
     adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $002E06 (9 instrs) by tools/transpile.py [bank1] ---
+entry_2e06:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda #$0001
+    sta $54
+    lda #$0080
+    sta $52
+    jsl.l writebyte_l
+    lda #$0000
+    sta $00
+    lda #$0000
+    sta $04
+    lda #$0003
+    sta $54
+    lda #$0080
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda #$0003
+    sta $54
+    lda #$0080
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $04
+    rep #$20
+    lda $04
+    asl a
+    asl a
+    asl a
+    asl a
+    sta $04
+    lda $00
+    and #$000F
+    sta $00
+    lda $04
+    ora $00
+    sta $04
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+; --- transpiled from $002BC2 (8 instrs) by tools/transpile.py [bank1] ---
+entry_2bc2:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    clc
+    adc #$0004
+    tax
+    jsl.l rdw40_l
+    sta $1C
+    lda $1C
+    sep #$20
+    sta $80
+    rep #$20
+    lda #$0C01
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l writebyte_l
+    lda $1C
+    sta $80
+    lda $34
+    clc
+    adc #$1B1C
+    sta $54
+    lda $36
+    adc #$0000
     sta $52
     jsl.l writeword_l
     ldx $3C
