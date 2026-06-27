@@ -338,10 +338,13 @@ def gen(e, ins, nxt):
     if base in ('and', 'andi', 'or', 'ori', 'eor', 'eori'):
         src, dst = ops; opn = {'and': 'and', 'andi': 'and', 'or': 'ora', 'ori': 'ora',
                                'eor': 'eor', 'eori': 'eor'}[base]
-        def modify(e):
-            if src[0] == 'imm': e('%s %s' % (opn, imm16(src[1])))
+        memsrc = src[0] in ('(An)', '(An)+', '(d16,An)', 'abs')
+        if memsrc: ea_load_A_to_tmp(e, src, size)    # memory src -> $TMP BEFORE the RMW (X is set
+        def modify(e):                               # only inside ea_rmw, so loading src here is safe)
+            if memsrc: e('%s $%02X' % (opn, TMP))
+            elif src[0] == 'imm': e('%s %s' % (opn, imm16(src[1])))
             elif src[0] in ('Dn', 'An'): e('%s $%02X' % (opn, reg_dp(src[1])))
-            else: raise Unsupported('logic with memory src (would clobber RMW X)')
+            else: raise Unsupported('logic src %r' % (src,))
         ea_rmw(e, dst, size, modify)                 # handles Dn and memory RMW (incl. (An)+ once)
         if fuses:
             # and/or/eor set N,Z (C=V=0) -> only Z/N-testable branches; reload the result (RMW

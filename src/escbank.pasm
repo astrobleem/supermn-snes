@@ -36,6 +36,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_2742               ; slot 8  ($928018)  <- $002742 (object handler, table idx8; video)
     jmp entry_267a               ; slot 9  ($92801B)  <- $00267A (object handler, table idx4; video)
     jmp entry_29b6               ; slot 10 ($92801E)  <- $0029B6 (object handler, table idx10; video)
+    jmp entry_13be               ; slot 11 ($928021)  <- $0013BE (table idx5; gf260-reached leaf; video)
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -3627,6 +3628,328 @@ Lf29b6_4:
     lda $3C
     clc
     adc #$0004
+    sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $2A
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $2E
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $32
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    jsl.l rdw40_l
+    sta $3A
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $42
+    inx
+    inx
+    jsl.l rdw40_l
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
+
+=== all 36 instrs transpiled ===
+; --- transpiled from $0013BE (36 instrs) by tools/transpile.py [bank1] ---
+entry_13be:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    jsl.l wrw40_l
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $00
+    jsl.l wrw40_l
+    lda $38
+    clc
+    adc #$0008
+    tax
+    jsl.l rdw40_l
+    sta $1C
+    lda $1C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1E
+    lda $34
+    clc
+    adc #$1CF6
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $34
+    clc
+    adc #$20F2
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda $34
+    clc
+    adc #$24EE
+    sta $28
+    lda $36
+    adc #$0000
+    sta $2A
+    lda $30
+    clc
+    adc $1C
+    sta $30
+    lda $32
+    adc $1E
+    sta $32
+    lda $2C
+    clc
+    adc $1C
+    sta $2C
+    lda $2E
+    adc $1E
+    sta $2E
+    lda $28
+    clc
+    adc $1C
+    sta $28
+    lda $2A
+    adc $1E
+    sta $2A
+    lda $38
+    clc
+    adc #$0010
+    tax
+    jsl.l rdw40_l
+    sta $1C
+    lda $1C
+    bne Lf13be_1
+    jmp L13be_1414
+Lf13be_1:
+    lda $1C
+    clc
+    adc #$2000
+    sta $1C
+    lda #$00EA
+    sta $00
+    lda $38
+    clc
+    adc #$000C
+    tax
+    jsl.l rdw40_l
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$00FA
+    bvs Lf13be_2
+    bpl Lf13be_3
+    bra Lf13be_4
+Lf13be_2:
+    bmi Lf13be_3
+    bra Lf13be_4
+Lf13be_3:
+    jmp L13be_1414
+Lf13be_4:
+    lda $00
+    sec
+    sbc #$FFFA
+    beq Lf13be_6
+    bvs Lf13be_5
+    bmi Lf13be_6
+    bra Lf13be_7
+Lf13be_5:
+    bpl Lf13be_6
+    bra Lf13be_7
+Lf13be_6:
+    jmp L13be_1414
+Lf13be_7:
+    lda $38
+    clc
+    adc #$000E
+    tax
+    jsl.l rdw40_l
+    sta $04
+    lda $04
+    clc
+    adc #$0000
+    sta $04
+    lda $04
+    sec
+    sbc #$FFF0
+    beq Lf13be_9
+    bvs Lf13be_8
+    bmi Lf13be_9
+    bra Lf13be_10
+Lf13be_8:
+    bpl Lf13be_9
+    bra Lf13be_10
+Lf13be_9:
+    jmp L13be_1414
+Lf13be_10:
+    lda $04
+    sec
+    sbc #$0180
+    bvs Lf13be_11
+    bmi Lf13be_12
+    bra Lf13be_13
+Lf13be_11:
+    bpl Lf13be_12
+    bra Lf13be_13
+Lf13be_12:
+    jmp L13be_1418
+Lf13be_13:
+L13be_1414:
+    lda #$00FA
+    sta $00
+L13be_1418:
+    lda $04
+    and #$01FF
+    sta $04
+    lda $38
+    clc
+    adc #$000A
+    tax
+    jsl.l rdw40_l
+    sta $9E
+    lda $04
+    ora $9E
+    sta $04
+    lda $1C
+    sta $80
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $00
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $04
+    sta $80
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    ldx $3C
+    jsl.l rdw40_l
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    jsl.l rdw40_l
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    lda $3C
+    clc
+    adc #$0002
     sta $3C
     ldx $3C
     jsl.l rdw40_l
