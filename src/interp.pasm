@@ -18264,9 +18264,8 @@ lh_3f86_no:
 ; ($52 bank / $54 off / $80-83 value -> writeword/writelong route $F0/$E0/$B0/$D0/...).
 ; Peek-ahead through $56 (= $C1:PC, still valid in the sled). Scratch: $0740 size,
 ; $0742 dbf-opcode, $0744 count, $0746 Dm*4, $0748 An regfile offset.
-gmc_no:                  ; no-match exit, placed first so the match-phase bails reach it
-    clc
-    rts
+gmc_no:                  ; no memclr match -> try the next generic idiom (verify)
+    jmp gm_verify
 gm_memclr:
     lda $44
     and #$FFF8
@@ -18341,6 +18340,89 @@ gmc_nohi:
     clc
     adc #$0006
     sta $40              ; PC past clr(2)+dbf(4)
+    sec
+    rts
+
+; gm_verify — the read-back verify idiom anywhere:  cmp.b/w (An)+,Dn  /  bne <err>  /
+; subq.l #1,Dm  /  bne -8 (back to the cmp).  In the boot every verify immediately
+; follows a clear/fill of the SAME region with the SAME value, so it necessarily matches
+; -> collapse it: An += count*size, Dm = 0, PC past the 4-instr body (8 bytes). Guarded:
+; Dm.hi16 must be 0 (else the loop is huge -> let the interp run it). Lives at $F602, after
+; the $F600 TESTFLAG, in the last bank-0 gap. Scratch $0740 size, $0742 subq-opcode.
+.org $F602
+gm_verify:
+    lda $44
+    and #$F1F8
+    cmp #$B018           ; cmp.b (An)+,Dn
+    beq gv_match
+    cmp #$B058           ; cmp.w (An)+,Dn
+    beq gv_match
+gv_no:
+    clc
+    rts
+gv_match:
+    ldy #$0002           ; PC+2 must be bne (the mismatch->error branch)
+    lda [$56],y
+    xba
+    and #$FF00
+    cmp #$6600
+    bne gv_no
+    ldy #$0004           ; PC+4 must be subq.l #1,Dm
+    lda [$56],y
+    xba
+    sta $0742
+    and #$FFF8
+    cmp #$5380
+    bne gv_no
+    ldy #$0006           ; PC+6 must be bne -8 (loop back to the cmp)
+    lda [$56],y
+    xba
+    cmp #$66F8
+    bne gv_no
+    lda $0742            ; Dm*4 ; require Dm.hi16 == 0
+    and #$0007
+    asl a
+    asl a
+    tay
+    lda $02,y
+    bne gv_no            ; count >= 65536 -> interp
+    lda $44              ; size: cmp.b opmode bit6=0, cmp.w bit6=1
+    and #$0040
+    beq gv_byte
+    lda #$0002
+    bra gv_havesz
+gv_byte:
+    lda #$0001
+gv_havesz:
+    sta $0740
+    lda $00,y            ; count = Dm.lo16
+    ldx $0740
+    cpx #$0002
+    bne gv_count1
+    asl a                ; *2 for word
+gv_count1:
+    pha                  ; byte span = count*size (saved)
+    tya
+    tax                  ; X = Dm*4 (stz has abs,X but not abs,Y)
+    stz $00,x            ; Dm.lo16 = 0
+    stz $02,x            ; Dm.hi16 = 0
+    lda $44              ; An regfile off = $20 + An*4
+    and #$0007
+    asl a
+    asl a
+    ora #$0020
+    tax
+    pla
+    clc
+    adc $00,x
+    sta $00,x            ; An.lo16 += span
+    bcc gv_nohi
+    inc $02,x
+gv_nohi:
+    lda $40
+    clc
+    adc #$0008
+    sta $40              ; PC past the 4-instruction verify body
     sec
     rts
 
