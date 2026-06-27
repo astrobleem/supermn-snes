@@ -18085,6 +18085,21 @@ loop_hook:
     lda $40
     cmp #$3B84
     beq lh_delay         ; $3B84: busy-wait delay (clr.w D0; subq.w/bne x65536) -> skip it
+    cmp #$3F7C
+    beq lh_3f7c          ; $3F7C: byte memset  move.b D1,(A1)+ / subq.l #1,D2 / bne
+    cmp #$3FEA           ; the far handlers are >127 bytes away -> bne-skip + jmp
+    bne lh_chk_adbe
+    jmp lh_3fea          ; $3FEA: walking-bit BYTE RAM test -> net memset 0 (720K instr)
+lh_chk_adbe:
+    cmp #$ADBE
+    bne lh_chk_3f86
+    jmp lh_adbe          ; $ADBE: walking-bit WORD RAM test -> net memset 0 (721K instr)
+lh_chk_3f86:
+    cmp #$3F86
+    bne lh_gen
+    jmp lh_3f86          ; $3F86: byte read-back verify -> net A1+=D2,D2=0 (65K instr)
+lh_gen:
+    jmp gm_memclr        ; no per-PC match -> the GENERIC loop-idiom matcher
 lh_nofire:
     clc
     rts
@@ -18093,6 +18108,239 @@ lh_delay:
     lda #$3B8A
     sta $40              ; resume right after the delay loop
     stz $42
+    sec
+    rts
+
+; $3F7C byte memset: fill D2.l bytes of D1.b at A1, then A1+=D2, D2=0. Regs: D1=$04,
+; D2=$08/$0A, A1=$24/$26. Only the work-RAM ($00F0) case is fast-filled here; anything
+; else (other bank, count >= 64K, or a 16-bit bank wrap) falls through to the interp.
+lh_3f7c:
+    lda $26
+    cmp #$00F0
+    bne lh_nofire        ; A1 not in work RAM -> let the interp run the loop
+    lda $0A
+    bne lh_nofire        ; D2 >= 65536 -> interp
+    lda $24
+    clc
+    adc $08
+    bcs lh_nofire        ; A1.lo16 + D2 would cross the bank -> interp
+    ldx $24              ; X = dest offset (A1.lo16)
+    ldy $08              ; Y = byte count (D2.lo16)
+    beq lh_3f7c_tail     ; nothing to fill
+    sep #$20
+    lda $04              ; A.lo8 = fill byte (D1.lo8)
+lh_3f7c_lp:
+    sta $400000,x        ; work-RAM byte (== wrb40's store)
+    inx
+    dey
+    bne lh_3f7c_lp
+    rep #$30
+lh_3f7c_tail:
+    lda $24
+    clc
+    adc $08
+    sta $24              ; A1.lo16 += D2 (no wrap, hi16 unchanged)
+    stz $08
+    stz $0A              ; D2 = 0
+    lda #$3F82
+    sta $40              ; resume after the loop (the read-back/verify setup)
+    stz $42
+    sec
+    rts
+
+; $3FEA walking-bit BYTE RAM test: for D2.l bytes at A1 it writes/verifies $80..$01 then
+; leaves the byte 0. Net (on writable RAM): memset 0, A1+=D2, D2=0, D1=0. Only the work-RAM
+; ($00F0) case is collapsed (definitely writable, so the skipped verify can't have failed);
+; any other bank / >=64K / bank-wrap falls through so the interp runs the real test+verify.
+lh_nofire2:              ; local no-fire exit (the big handlers are too far from lh_nofire
+    clc                  ; for an 8-bit branch); same semantics: carry clear -> decode normally
+    rts
+lh_3fea:
+    lda $26
+    cmp #$00F0
+    bne lh_nofire2
+    lda $0A
+    bne lh_nofire2       ; D2 >= 65536 -> interp
+    lda $24
+    clc
+    adc $08
+    bcs lh_nofire2       ; bank wrap -> interp
+    ldx $24
+    ldy $08
+    beq lh_3fea_tail
+    sep #$20
+    lda #$00
+lh_3fea_lp:
+    sta $400000,x
+    inx
+    dey
+    bne lh_3fea_lp
+    rep #$30
+lh_3fea_tail:
+    lda $24
+    clc
+    adc $08
+    sta $24              ; A1 += D2
+    stz $08
+    stz $0A              ; D2 = 0
+    stz $04              ; D1 = 0
+    lda #$3FFE
+    sta $40              ; resume at the test-passed branch (bra $4008)
+    stz $42
+    sec
+    rts
+
+; $ADBE walking-bit WORD RAM test: same idea, words. Net (writable RAM): memset 0,
+; A1+=D2*2, D2=0, D1=0. Work-RAM-only; guards against word-count or byte-span overflow.
+lh_adbe:
+    lda $26
+    cmp #$00F0
+    bne lh_nofire2
+    lda $0A
+    bne lh_nofire2       ; D2 >= 65536 words -> interp
+    lda $08
+    asl a                ; A = D2*2 (byte span)
+    bcs lh_nofire2       ; span > 64K -> interp
+    clc
+    adc $24
+    bcs lh_nofire2       ; A1.lo16 + span wraps bank -> interp
+    ldx $24
+    ldy $08
+    beq lh_adbe_tail
+    sep #$20
+    lda #$00
+lh_adbe_lp:
+    sta $400000,x        ; word = 0 (both bytes)
+    sta $400001,x
+    inx
+    inx
+    dey
+    bne lh_adbe_lp
+    rep #$30
+lh_adbe_tail:
+    lda $08
+    asl a
+    clc
+    adc $24
+    sta $24              ; A1 += D2*2
+    stz $08
+    stz $0A              ; D2 = 0
+    stz $04              ; D1 = 0
+    lda #$ADD2
+    sta $40              ; resume at move #0,CCR ; rts
+    stz $42
+    sec
+    rts
+
+; $3F86 byte read-back verify: cmp.b (A1)+,D1 / bne err / subq.l #1,D2 / bne. Net (no
+; mismatch): A1+=D2, D2=0. For work-RAM the preceding (hooked) $3F7C clear wrote D1, so the
+; read-back necessarily matches -> skip it. Other banks fall through to the real verify.
+lh_3f86:
+    lda $26
+    cmp #$00F0
+    bne lh_3f86_no
+    lda $0A
+    bne lh_3f86_no       ; D2 >= 65536 -> interp
+    lda $24
+    clc
+    adc $08
+    bcs lh_3f86_no       ; bank wrap -> interp
+    sta $24              ; A1.lo16 += D2 (no wrap)
+    stz $08
+    stz $0A              ; D2 = 0
+    lda #$3F8E
+    sta $40              ; resume after the verify loop
+    stz $42
+    sec
+    rts
+lh_3f86_no:
+    clc
+    rts
+
+; ============================ GENERIC LOOP-IDIOM MATCHER ======================
+; gm_memclr — recognize the memclr idiom anywhere:  clr.l/clr.w (An)+  then
+; dbf/dbra Dm (disp -4).  Net: fill (Dm.w+1) zero elements at An; An += count*size;
+; Dm.w = $FFFF; PC past the dbf. Region-correct via the interp's write path
+; ($52 bank / $54 off / $80-83 value -> writeword/writelong route $F0/$E0/$B0/$D0/...).
+; Peek-ahead through $56 (= $C1:PC, still valid in the sled). Scratch: $0740 size,
+; $0742 dbf-opcode, $0744 count, $0746 Dm*4, $0748 An regfile offset.
+gmc_no:                  ; no-match exit, placed first so the match-phase bails reach it
+    clc
+    rts
+gm_memclr:
+    lda $44
+    and #$FFF8
+    cmp #$4298            ; clr.l (An)+
+    beq gmc_long
+    cmp #$4258            ; clr.w (An)+
+    bne gmc_no
+    lda #$0002
+    bra gmc_size
+gmc_long:
+    lda #$0004
+gmc_size:
+    sta $0740
+    ldy #$0002           ; peek PC+2 -> must be dbf/dbra Dm
+    lda [$56],y
+    xba
+    sta $0742
+    and #$FFF8
+    cmp #$51C8
+    bne gmc_no
+    ldy #$0004           ; peek PC+4 -> displacement must be -4 (loops back to the clr)
+    lda [$56],y
+    xba
+    cmp #$FFFC
+    bne gmc_no
+    lda $0742            ; Dm = dbf-opcode & 7 ; count = Dm.w + 1
+    and #$0007
+    asl a
+    asl a
+    sta $0746            ; Dm*4
+    tay
+    lda $00,y
+    inc a
+    beq gmc_no           ; Dm.w == $FFFF -> count would overflow -> let the interp run it
+    sta $0744            ; count
+    lda $44              ; An regfile offset = $20 + (An*4)
+    and #$0007
+    asl a
+    asl a
+    ora #$0020
+    sta $0748
+gmc_loop:
+    ldx $0748
+    lda $00,x
+    sta $54              ; An.lo16
+    lda $02,x
+    sta $52              ; An.hi16
+    stz $80
+    stz $82              ; value = 0
+    lda $0740
+    cmp #$0004
+    bne gmc_word
+    jsr writelong
+    bra gmc_adv
+gmc_word:
+    jsr writeword
+gmc_adv:
+    ldx $0748            ; writeword/long clobbered X -> reload
+    lda $00,x
+    clc
+    adc $0740
+    sta $00,x            ; An += size
+    bcc gmc_nohi
+    inc $02,x
+gmc_nohi:
+    dec $0744
+    bne gmc_loop
+    ldy $0746
+    lda #$FFFF
+    sta $00,y            ; Dm.w = $FFFF (dbf leaves the counter at -1)
+    lda $40
+    clc
+    adc #$0006
+    sta $40              ; PC past clr(2)+dbf(4)
     sec
     rts
 
