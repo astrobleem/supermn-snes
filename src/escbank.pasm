@@ -19,7 +19,8 @@ push32_l=$00E5AE
 rdw_ea_l=$00E5B2
 readbyte_l=$00E5B6
 writeword_l=$00E5BA
-op_rts_sentinel=$00EA32
+usmul_l=$00E5BE
+op_rts_sentinel=$00EA36
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000

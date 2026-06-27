@@ -386,6 +386,17 @@ def gen(e, ins, nxt):
         ea_rmw(e, dst, size, modify)                    # works for Dn and memory EAs
         if fuses: raise Unsupported('neg feeding branch')
         return 1
+    if base == 'mulu':                                   # MULU.W <ea>,Dn : Dn = Dn.w * ea.w (unsigned 32)
+        src, dst = ops
+        if dst[0] != 'Dn': raise Unsupported('mulu dst not Dn')
+        if size not in (None, 'w'): raise Unsupported('mulu.%s' % size)
+        ea_load_A(e, src, 'w'); e('sta $52')             # b = src.w  (usmul reads $50*$52)
+        e('lda $%02X' % reg_dp(dst[1])); e('sta $50')    # a = Dn.w
+        e('jsr usmul')                                   # product -> $94(lo):$96(hi); helper auto -> usmul_l
+        e('lda $94'); e('sta $%02X' % reg_dp(dst[1]))
+        e('lda $96'); e('sta $%02X' % (reg_dp(dst[1]) + 2))
+        if fuses: raise Unsupported('mulu feeding branch')
+        return 1
     if base == 'ext':
         dp = reg_dp(ops[0][1])
         if size == 'l': sext_hi(e, dp)                   # word -> long: hi16 = sign(lo16)
@@ -549,7 +560,7 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
 
 # ===================== driver =====================
 # helpers an escape may jsr; in --bank1 these run in bank $00 reached via `jsl <name>_l` rtl-wrappers
-HELPERS = ('rdw40', 'wrw40', 'rdb40', 'wrb40', 'push32', 'rdw_ea', 'readbyte')
+HELPERS = ('rdw40', 'wrw40', 'rdb40', 'wrb40', 'push32', 'rdw_ea', 'readbyte', 'usmul')
 
 def bank1_transform(lines):
     """rewrite a bank-$00 escape body to run from the escape bank ($92:8000): helper jsr->jsl.l _l

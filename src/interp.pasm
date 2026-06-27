@@ -16022,6 +16022,8 @@ readbyte_l: jsr readbyte
     rtl
 writeword_l: jsr writeword
     rtl
+usmul_l:    jsr usmul        ; unsigned 16x16->32 ($50*$52 -> $94:$96); DP-only, escape-bank callable
+    rtl
 ; rdw_a0 — ROM/IO/work-RAM-aware big-endian word read of [a0+Y]. in: Y=byte disp.
 ;   out: A=word (hi:lo). a0 may point at ROM ($00-$07xxxx) or work RAM, so route through
 ;   readbyte (NOT $40 direct). readbyte preserves Y,$52,$54 and clobbers $66,$68; $90 scratch.
