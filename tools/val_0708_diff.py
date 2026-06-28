@@ -56,5 +56,8 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc', mesen=NEXEN, por
     d41 = sum(1 for i in range(0x8000) if o41[i] != n41[i])
     print(">>> $40 diff: %d live + %d transient-stack(<a7=$%04X) ; $41 diff=%d" % (len(live), len(stack), a7, d41))
     if live: print(">>> first LIVE: %s" % ["$F0%04X(off=%02X on=%02X)" % (i, o40[i], n40[i]) for i in live[:10]])
+    if d41:
+        d41s = [i for i in range(0x8000) if o41[i] != n41[i]]
+        print(">>> first $41 diffs: %s" % ["$41%04X(off=%02X on=%02X)" % (i, o41[i], n41[i]) for i in d41s[:14]])
     print(">>>", "GREEN -- $3A92-path escapes bit-exact vs interp%s" % (" (%d benign stack)" % len(stack) if stack else "")
           if (ok0 and ok1 and len(live) == 0 and d41 == 0) else "RED -- live$40=%d $41=%d (off=%s on=%s)" % (len(live), d41, ok0, ok1))

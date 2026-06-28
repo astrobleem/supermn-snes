@@ -35,7 +35,10 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     # b0 is captured AT jh_spin (its IRAM carries $0702=1). Keep it frozen: arm, DON'T clear $0702,
     # force $0704=0 so it can't release. If b0 ever resumes free, wait up to one game frame (~2048
     # SNES frames at ~14 instr/frame) for the next $3A92/$0708 freeze.
-    setcpu(cpu['sa1']); setcpu(cpu['snes']); w16(0x0700,1); w16(0x0704,0)
+    # escapes OFF during capture ($071A=0): the lockstep freeze ($3A92) lives in jsrabs_hook AFTER
+    # the escape dispatch (jsrabs_hook2). If $3A92 is itself escaped, escapes-on would dispatch it and
+    # NEVER reach the lockstep -> no freeze -> capture fails. Off means the lockstep always wins here.
+    setcpu(cpu['sa1']); setcpu(cpu['snes']); w16(0x0700,1); w16(0x0704,0); w16(0x071A,0)
     froze=False
     for _ in range(60):
         if r16(0x0702): froze=True; break
