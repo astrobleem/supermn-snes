@@ -480,11 +480,32 @@ def gen(e, ins, nxt):
         return 1
     if base == 'nop':
         return 1
-    if base == 'btst':                                   # btst #n,<ea> : Z = !(bit n of ea)
+    if base == 'btst':                                   # btst <bit>,<ea> : Z = !(bit of ea)
         bitop, dst = ops
-        if bitop[0] != 'imm': raise Unsupported('btst non-imm bit')
-        nbit = bitop[1] & (7 if size == 'b' else 31)
-        ea_load_A(e, dst, size or 'b'); e('and #$%04X' % (1 << nbit))
+        if bitop[0] == 'imm':                            # static bit number -> single mask
+            nbit = bitop[1] & (7 if size == 'b' else 31)
+            ea_load_A(e, dst, size or 'b'); e('and #$%04X' % (1 << nbit))
+        elif bitop[0] == 'Dn':                           # dynamic bit number in a data reg
+            # btst Dn,Dm = long (bit mod 32); btst Dn,<mem> = byte (bit mod 8). Extract that bit
+            # of the dst into A bit0 (so `and #$0001` leaves Z = bit-clear, as btst requires), via a
+            # runtime right-shift loop. Reg-dst .l: pick lo/hi word by bit>=16. Clobbers A,X (scratch).
+            bdp = reg_dp(bitop[1])
+            if dst[0] == 'Dn':                           # 32-bit register dst (mod 32)
+                ddp = reg_dp(dst[1])
+                lo, sh = e.fresh(), e.fresh()
+                e('lda $%02X' % bdp); e('and #$001F')
+                e('cmp #$0010'); e('bcc %s' % lo)
+                e('sec'); e('sbc #$0010'); e('tax'); e('lda $%02X' % (ddp+2)); e('bra %s' % sh)
+                e.lbl(lo); e('tax'); e('lda $%02X' % ddp)
+                e.lbl(sh)
+            else:                                        # memory dst (mod 8, single byte)
+                ea_load_A(e, dst, 'b'); e('pha')
+                e('lda $%02X' % bdp); e('and #$0007'); e('tax'); e('pla')
+            lp, dn = e.fresh(), e.fresh()
+            e.lbl(lp); e('cpx #$0000'); e('beq %s' % dn); e('lsr a'); e('dex'); e('bra %s' % lp); e.lbl(dn)
+            e('and #$0001')
+        else:
+            raise Unsupported('btst bit operand %s' % bitop[0])
         if fuses:
             if nb not in ('beq', 'bne'): raise Unsupported('btst feeding %s' % nb)
             emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
