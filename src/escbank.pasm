@@ -2454,7 +2454,7 @@ entry_295a:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 
 === all 47 instrs transpiled ===
@@ -3127,7 +3127,7 @@ Lf284e_2:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 
 === all 47 instrs transpiled ===
@@ -3800,7 +3800,7 @@ Lf2742_2:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 
 === all 11 instrs transpiled ===
@@ -3952,7 +3952,7 @@ Lf267a_1:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 
 === all 53 instrs transpiled ===
@@ -4639,7 +4639,7 @@ Lf29b6_4:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 
 === all 36 instrs transpiled ===
@@ -12187,17 +12187,16 @@ Lc2f8_c322:
     sta $52
     jsl.l rdw_ea_l
     sta $20
-    ; CALL-BRIDGE jsr (a0) -> interpret callee, resume brc2f8_1
+    ; INDIRECT-BRIDGE jsr (a0) -> ibridge (a0 escape or interpret), resume brc2f8_1
     lda #brc2f8_1
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda $20
     sta $40
-    lda $22
+    lda #$00FE
     sta $42
-    jml.l inext
+    lda $20
+    sta $52
+    lda $22
+    sta $50
+    jmp ibridge
 brc2f8_1:
     lda $3C
     clc
@@ -12237,7 +12236,6 @@ Lfc2f8_4:
     lda #$0000
     sta $42
     jml.l inext
-
 ; --- $02658E coroutine task body (bank-2, dispatched by cors_disp) ---
 ; --- transpiled from $02658E (18 instrs) by tools/transpile.py [bank1] ---
 entry_2658e:
@@ -12746,3 +12744,45 @@ cd_455e:
     jmp entry_4542
 cd_b2:                   ; --- bank-$02 bodies ---
     jmp entry_2658e      ; $02658E (only bank-2 body for now)
+
+; ===================== INDIRECT-BRIDGE-TO-ESCAPE =====================
+; ibridge — reached from a coroutine body's `jsr (An)` bridge. The runtime target An is in $50(hi)/
+; $52(lo); the bridge-to-escape state ($40=cont, $42=$00FE) is pre-set. If An is a bridge-to-escape-
+; able escape (an entity DRAW routine) -> jmp it NATIVELY (its prologue re-pushes $00FE:cont, its
+; ors_pre rts resumes the continuation). MISS -> push $00FE:cont and interpret An (the old behavior).
+; This reclaims the draw routines that a jsr(a0) used to stream interpreted (e.g. $295A ~168 PCs).
+; Extend the scan with one cmp/bne/jmp per bridge-to-escape-able jsr(An) target.
+ibridge:
+    lda $50
+    bne ib_miss          ; An bank != 0 -> not a bank-$00 escape -> interpret
+    lda $52
+    cmp #$295A
+    bne ib_n0
+    jmp entry_295a
+ib_n0:
+    cmp #$29B6
+    bne ib_n1
+    jmp entry_29b6
+ib_n1:
+    cmp #$267A
+    bne ib_n2
+    jmp entry_267a
+ib_n2:
+    cmp #$2742
+    bne ib_n3
+    jmp entry_2742
+ib_n3:
+    cmp #$284E
+    bne ib_miss
+    jmp entry_284e
+ib_miss:
+    lda $40              ; interpret An: push the $00FE:cont sentinel return, then PC = An
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $52
+    sta $40
+    lda $50
+    sta $42
+    jml.l inext

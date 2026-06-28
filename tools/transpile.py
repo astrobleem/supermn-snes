@@ -787,15 +787,24 @@ def gen_call(e, ins):
         e('jmp entry_%x' % a)
         e.lbl(cont)
         return 1
-    e.cmt('CALL-BRIDGE %s %s -> interpret callee, resume %s' % (ins.mnemonic, t, cont))
-    e('lda #%s' % cont); e('sta $54'); e('lda #$00FF'); e('sta $56'); e('jsr push32')
-    if m:                                                # jsr.l absolute / bsr (capstone resolves PC-rel)
-        a = int(m.group(1), 16)
-        e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
-    else:                                                # jsr (An) indirect: PC = An at runtime
+    if not m:
+        # INDIRECT-BRIDGE-TO-ESCAPE: jsr (An) with a RUNTIME target -> ibridge (escbank) scans An at
+        # runtime; if it's a bridge-to-escape-able escape (a draw routine) it dispatches it NATIVELY,
+        # else it interpret-bridges. Set up the bridge-to-escape state ($40=cont/$42=$00FE) + An ->
+        # $52(lo)/$50(hi), then jmp ibridge. (escbank-only; ibridge is a $92 label.)
         ea = parse_ea(t)
         if ea[0] != '(An)': raise Unsupported('call form %r' % t)
-        dp = reg_dp(ea[1]); e('lda $%02X' % dp); e('sta $40'); e('lda $%02X' % (dp+2)); e('sta $42')
+        dp = reg_dp(ea[1])
+        e.cmt('INDIRECT-BRIDGE %s %s -> ibridge (a0 escape or interpret), resume %s' % (ins.mnemonic, t, cont))
+        e('lda #%s' % cont); e('sta $40'); e('lda #$00FE'); e('sta $42')
+        e('lda $%02X' % dp); e('sta $52'); e('lda $%02X' % (dp+2)); e('sta $50')
+        e('jmp ibridge')
+        e.lbl(cont)
+        return 1
+    e.cmt('CALL-BRIDGE %s %s -> interpret callee, resume %s' % (ins.mnemonic, t, cont))
+    e('lda #%s' % cont); e('sta $54'); e('lda #$00FF'); e('sta $56'); e('jsr push32')
+    a = int(m.group(1), 16)                              # jsr.l absolute / bsr (capstone resolves PC-rel)
+    e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
     e('jmp inext')
     e.lbl(cont)
     return 1
