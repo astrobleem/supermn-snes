@@ -95,54 +95,93 @@ entry_d96:
     sta $3C
     ldx $3C
     lda $18
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $14
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $10
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $0C
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $08
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $04
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $34
     clc
@@ -214,11 +253,19 @@ entry_d96:
     clc
     adc #$0010
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $20
     clc
@@ -231,7 +278,11 @@ entry_d96:
     clc
     adc #$0014
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $20
     clc
@@ -248,7 +299,11 @@ entry_d96:
     clc
     adc #$000C
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $9E
     lda $04
     sec
@@ -300,7 +355,11 @@ Ld96_de0:
     clc
     adc #$000E
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $0C
     lda $0C
     clc
@@ -387,7 +446,12 @@ Lfd96_14:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $28
     clc
     adc #$0002
@@ -402,7 +466,12 @@ Lfd96_14:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $30
     clc
     adc #$0002
@@ -417,27 +486,54 @@ Lfd96_14:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $2C
     clc
     adc #$0000
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     and #$01FF
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $38
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $10
     lda $2C
     clc
     adc #$0000
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     ora $10
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $2C
     clc
     adc #$0002
@@ -486,7 +582,12 @@ Ld96_e3c:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $30
     clc
     adc #$0002
@@ -503,7 +604,11 @@ Ld96_e3c:
 Lfd96_18:
 Ld96_e42:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda $00
     asl a
@@ -516,7 +621,11 @@ Ld96_e42:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $04
     lda $04
     asl a
@@ -529,7 +638,11 @@ Ld96_e42:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $08
     lda $08
     asl a
@@ -542,7 +655,11 @@ Ld96_e42:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $0C
     lda $0C
     asl a
@@ -555,7 +672,11 @@ Ld96_e42:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $10
     lda $10
     asl a
@@ -568,7 +689,11 @@ Ld96_e42:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $14
     lda $14
     asl a
@@ -581,7 +706,11 @@ Ld96_e42:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $18
     lda $18
     asl a
@@ -594,55 +723,95 @@ Ld96_e42:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $26
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $24
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $32
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $30
     lda $3C
     clc
@@ -653,22 +822,38 @@ Ld96_e42:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -708,7 +893,11 @@ entry_fb8:
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $34
     clc
@@ -736,7 +925,11 @@ entry_fb8:
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda #$00FA
     sta $00
@@ -748,7 +941,12 @@ Lfb8_fd2:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $20
     clc
     adc #$0002
@@ -764,22 +962,38 @@ Lfb8_fd2:
     jmp Lfb8_fd2
 Lffb8_1:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $02
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $3C
     clc
@@ -790,22 +1004,38 @@ Lffb8_1:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -985,54 +1215,93 @@ entry_28d4:
     sta $3C
     ldx $3C
     lda $18
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $14
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $10
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $0C
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $08
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $04
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda #$0800
     sta $30
@@ -1076,11 +1345,19 @@ entry_28d4:
     clc
     adc #$0010
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda #$0004
     sta $1C
@@ -1090,7 +1367,11 @@ entry_28d4:
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda #$1FFF
     sta $08
@@ -1167,7 +1448,12 @@ L28d4_2916:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $20
     clc
     adc $1C
@@ -1193,7 +1479,12 @@ L28d4_2916:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $24
     clc
     adc $1C
@@ -1249,7 +1540,12 @@ L28d4_2936:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $20
     clc
     adc $1C
@@ -1275,7 +1571,12 @@ L28d4_2936:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $24
     clc
     adc $1C
@@ -1291,7 +1592,11 @@ L28d4_2936:
     jmp L28d4_2936
 Lf28d4_2:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda $00
     asl a
@@ -1304,7 +1609,11 @@ Lf28d4_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $04
     lda $04
     asl a
@@ -1317,7 +1626,11 @@ Lf28d4_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $08
     lda $08
     asl a
@@ -1330,7 +1643,11 @@ Lf28d4_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $0C
     lda $0C
     asl a
@@ -1343,7 +1660,11 @@ Lf28d4_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $10
     lda $10
     asl a
@@ -1356,7 +1677,11 @@ Lf28d4_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $14
     lda $14
     asl a
@@ -1369,7 +1694,11 @@ Lf28d4_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $18
     lda $18
     asl a
@@ -1382,55 +1711,95 @@ Lf28d4_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $26
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $24
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $32
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $30
     lda $3C
     clc
@@ -1441,22 +1810,38 @@ Lf28d4_2:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -1627,11 +2012,19 @@ L26a0_26ec:
     jmp L26a0_26ec
 Lf26a0_2:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -1690,10 +2083,19 @@ L26fa_270c:
     clc
     adc #$1B16
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     clc
     adc $1C
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $34
     clc
     adc #$1B16
@@ -1744,10 +2146,19 @@ Lf26fa_4:
     clc
     adc #$1B1A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     eor #$FFFF
     inc a
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $34
     clc
     adc #$1B18
@@ -1773,10 +2184,19 @@ L26fa_2734:
     clc
     adc #$0000
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     clc
     adc $1C
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda #$0004
     sta $9A
     lda $9A
@@ -1801,11 +2221,19 @@ L26fa_2734:
 Lf26fa_5:
 L26fa_2740:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -1840,7 +2268,11 @@ entry_295a:
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $1C
     lsr a
@@ -1874,7 +2306,11 @@ entry_295a:
     clc
     adc #$000E
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $1C
     pha
@@ -1883,7 +2319,12 @@ entry_295a:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $30
     clc
     adc #$0002
@@ -1897,7 +2338,11 @@ entry_295a:
     clc
     adc #$000C
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $9E
     lda $1C
     sec
@@ -1910,13 +2355,26 @@ entry_295a:
     adc #$0000
     tax
     pla
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $32
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $30
     lda $3C
     clc
@@ -1927,22 +2385,38 @@ entry_295a:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -2001,54 +2475,93 @@ entry_284e:
     sta $3C
     ldx $3C
     lda $18
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $14
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $10
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $0C
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $08
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $04
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda #$0800
     sta $30
@@ -2092,11 +2605,19 @@ entry_284e:
     clc
     adc #$0010
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda #$0004
     sta $1C
@@ -2106,7 +2627,11 @@ entry_284e:
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda #$1FFF
     sta $08
@@ -2315,7 +2840,11 @@ L284e_28b0:
     jmp L284e_28b0
 Lf284e_2:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda $00
     asl a
@@ -2328,7 +2857,11 @@ Lf284e_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $04
     lda $04
     asl a
@@ -2341,7 +2874,11 @@ Lf284e_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $08
     lda $08
     asl a
@@ -2354,7 +2891,11 @@ Lf284e_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $0C
     lda $0C
     asl a
@@ -2367,7 +2908,11 @@ Lf284e_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $10
     lda $10
     asl a
@@ -2380,7 +2925,11 @@ Lf284e_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $14
     lda $14
     asl a
@@ -2393,7 +2942,11 @@ Lf284e_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $18
     lda $18
     asl a
@@ -2406,55 +2959,95 @@ Lf284e_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $26
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $24
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $32
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $30
     lda $3C
     clc
@@ -2465,22 +3058,38 @@ Lf284e_2:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -2539,54 +3148,93 @@ entry_2742:
     sta $3C
     ldx $3C
     lda $18
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $14
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $10
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $0C
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $08
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $04
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda #$0800
     sta $30
@@ -2630,11 +3278,19 @@ entry_2742:
     clc
     adc #$0010
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda #$0004
     sta $1C
@@ -2644,7 +3300,11 @@ entry_2742:
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda #$1FFF
     sta $08
@@ -2853,7 +3513,11 @@ L2742_27a4:
     jmp L2742_27a4
 Lf2742_2:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda $00
     asl a
@@ -2866,7 +3530,11 @@ Lf2742_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $04
     lda $04
     asl a
@@ -2879,7 +3547,11 @@ Lf2742_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $08
     lda $08
     asl a
@@ -2892,7 +3564,11 @@ Lf2742_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $0C
     lda $0C
     asl a
@@ -2905,7 +3581,11 @@ Lf2742_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $10
     lda $10
     asl a
@@ -2918,7 +3598,11 @@ Lf2742_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $14
     lda $14
     asl a
@@ -2931,7 +3615,11 @@ Lf2742_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $18
     lda $18
     asl a
@@ -2944,55 +3632,95 @@ Lf2742_2:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $26
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $24
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $32
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $30
     lda $3C
     clc
@@ -3003,22 +3731,38 @@ Lf2742_2:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -3055,7 +3799,11 @@ entry_267a:
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda #$0800
     sta $20
@@ -3080,7 +3828,11 @@ entry_267a:
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
 L267a_2692:
     lda #$0000
@@ -3108,11 +3860,19 @@ L267a_2692:
     jmp L267a_2692
 Lf267a_1:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $3C
     clc
@@ -3123,22 +3883,38 @@ Lf267a_1:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -3197,54 +3973,93 @@ entry_29b6:
     sta $3C
     ldx $3C
     lda $18
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $14
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $10
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $0C
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $08
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $04
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda #$0800
     sta $30
@@ -3288,11 +4103,19 @@ entry_29b6:
     clc
     adc #$0010
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda #$0004
     sta $1C
@@ -3302,7 +4125,11 @@ entry_29b6:
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda #$1FFF
     sta $08
@@ -3525,7 +4352,11 @@ L29b6_2a38:
     jmp L29b6_2a20
 Lf29b6_4:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda $00
     asl a
@@ -3538,7 +4369,11 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $04
     lda $04
     asl a
@@ -3551,7 +4386,11 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $08
     lda $08
     asl a
@@ -3564,7 +4403,11 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $0C
     lda $0C
     asl a
@@ -3577,7 +4420,11 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $10
     lda $10
     asl a
@@ -3590,7 +4437,11 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $14
     lda $14
     asl a
@@ -3603,7 +4454,11 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $18
     lda $18
     asl a
@@ -3616,55 +4471,95 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $26
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $24
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $32
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $30
     lda $3C
     clc
@@ -3675,22 +4570,38 @@ Lf29b6_4:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -3739,19 +4650,33 @@ entry_13be:
     sta $3C
     ldx $3C
     lda $04
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    jsl.l wrw40_l
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $1C
     asl a
@@ -3805,7 +4730,11 @@ entry_13be:
     clc
     adc #$0010
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $1C
     bne Lf13be_1
@@ -3821,7 +4750,11 @@ Lf13be_1:
     clc
     adc #$000C
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $9E
     lda $00
     sec
@@ -3856,7 +4789,11 @@ Lf13be_7:
     clc
     adc #$000E
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $04
     lda $04
     clc
@@ -3898,7 +4835,11 @@ L13be_1418:
     clc
     adc #$000A
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $9E
     lda $04
     ora $9E
@@ -3934,7 +4875,11 @@ L13be_1418:
     sta $52
     jsl.l writeword_l
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $00
     lda $00
     asl a
@@ -3947,7 +4892,11 @@ L13be_1418:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $04
     lda $04
     asl a
@@ -3960,33 +4909,57 @@ L13be_1418:
     adc #$0002
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2E
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $32
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $30
     lda $3C
     clc
@@ -3997,22 +4970,38 @@ L13be_1418:
     lda $3A
     sta $3E
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $3A
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -4240,11 +5229,19 @@ Ld9cc_da1e:
     sta $52
     jsl.l writeword_l
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -4294,11 +5291,19 @@ entry_dc44:
     sta $52
     jsl.l writeword_l
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -4689,11 +5694,19 @@ Ld18a_d1fc:
     sta $52
     jsl.l writeword_l
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -4752,11 +5765,19 @@ entry_2e06:
     ora $00
     sta $04
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -4777,7 +5798,11 @@ entry_2bc2:
     clc
     adc #$0004
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $1C
     lda $1C
     sep #$20
@@ -4799,11 +5824,19 @@ entry_2bc2:
     sta $52
     jsl.l writeword_l
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
@@ -4827,7 +5860,10 @@ entry_ccd8:
     clc
     adc #$FFBC
     tax
-    jsl.l rdb40_l
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
     and #$0010
     beq Lfccd8_1
     jmp Lccd8_cd00
@@ -4836,7 +5872,10 @@ Lfccd8_1:
     clc
     adc #$FFBD
     tax
-    jsl.l rdb40_l
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
     and #$0010
     bne Lfccd8_2
     jmp Lccd8_cd00
@@ -4845,7 +5884,11 @@ Lfccd8_2:
     clc
     adc #$FFB8
     tax
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     beq Lfccd8_3
     jmp Lccd8_ccf8
 Lfccd8_3:
@@ -4861,7 +5904,10 @@ Lccd8_cd00:
     clc
     adc #$FFBC
     tax
-    jsl.l rdb40_l
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
     and #$0020
     beq Lfccd8_4
     jmp Lccd8_cd18
@@ -4870,7 +5916,10 @@ Lfccd8_4:
     clc
     adc #$FFBD
     tax
-    jsl.l rdb40_l
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
     and #$0020
     bne Lfccd8_5
     jmp Lccd8_cd18
@@ -4879,11 +5928,19 @@ Lfccd8_5:
     sta $1C
 Lccd8_cd18:
     ldx $3C
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
     inx
     inx
-    jsl.l rdw40_l
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $40
     lda $3C
     clc
