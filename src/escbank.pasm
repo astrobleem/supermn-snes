@@ -1852,6 +1852,7 @@ Lf28d4_2:
     jml.l inext
 
 ; --- transpiled from $0026A0 (27 instrs) by tools/transpile.py [bank1] ---
+; --- transpiled from $0026A0 (27 instrs) by tools/transpile.py [bank1] ---
 entry_26a0:
     rep #$30
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
@@ -1879,8 +1880,18 @@ entry_26a0:
     lda #$0000
     sta $1E
 L26a0_26ae:
-    ; !! UNIMPLEMENTED: btst.b    #$0, (a0)   (opcode btst.b)
-    ; !! UNIMPLEMENTED: beq.b     $26b6   (stray conditional beq (flags not from preceding op))
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$0001
+    bne Lf26a0_1
+    jmp L26a0_26b6
+Lf26a0_1:
     lda $00
     ora $04
     sta $00
@@ -1900,9 +1911,9 @@ L26a0_26b6:
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lf26a0_1
+    beq Lf26a0_2
     jmp L26a0_26ae
-Lf26a0_1:
+Lf26a0_2:
     lda $00
     sta $04
     lda $00
@@ -1918,8 +1929,20 @@ Lf26a0_1:
     lsr a
     lsr a
     sta $04
-    ; !! UNIMPLEMENTED: move.w    d0, $d00604.l   (store EA ('abs', 13633028))
-    ; !! UNIMPLEMENTED: move.w    d1, $d00606.l   (store EA ('abs', 13633030))
+    lda $00
+    sta $80
+    lda #$0604
+    sta $54
+    lda #$00D0
+    sta $52
+    jsl.l writeword_l
+    lda $04
+    sta $80
+    lda #$0606
+    sta $54
+    lda #$00D0
+    sta $52
+    jsl.l writeword_l
     lda #$0408
     sta $20
     lda #$00D0
@@ -1936,7 +1959,13 @@ Lf26a0_1:
     adc #$0000
     sta $2A
     lda #$0020
+    sta $9A
+    lda #$0000
+    sta $9C
+    lda $9A
     sta $00
+    lda $9C
+    sta $02
     lda #$000F
     sta $1C
 L26a0_26ec:
@@ -2010,9 +2039,9 @@ L26a0_26ec:
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lf26a0_2
+    beq Lf26a0_3
     jmp L26a0_26ec
-Lf26a0_2:
+Lf26a0_3:
     ldx $3C
     sep #$20
     lda $400000,x
@@ -6491,6 +6520,14 @@ jah2_ext_bsr:
     pla
     jmp entry_8c2          ; <- $0008C2 dyn-btst
 bjx_8c2:
+    cmp #$26A0
+    bne bjx_26a0
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_26a0          ; <- $0026A0 sprite-ctrl (rewired bsr)
+bjx_26a0:
 jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40

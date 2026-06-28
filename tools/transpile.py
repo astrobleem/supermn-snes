@@ -578,8 +578,8 @@ def store_long_from(e, dst, dp):
 def gen_movel(e, src, dst):
     """move.l src -> dst (full 32-bit). scratch $9A(lo)/$9C(hi). (ea_load/store are .w-only.)"""
     if src[0] == 'imm':
-        e('lda %s' % hx(src[1] & 0xFFFF)); e('sta $9A')
-        e('lda %s' % hx((src[1] >> 16) & 0xFFFF)); e('sta $9C')
+        e('lda #%s' % hx(src[1] & 0xFFFF)); e('sta $9A')
+        e('lda #%s' % hx((src[1] >> 16) & 0xFFFF)); e('sta $9C')
     else:
         load_long_to(e, src, 0x9A)
     store_long_from(e, dst, 0x9A)
