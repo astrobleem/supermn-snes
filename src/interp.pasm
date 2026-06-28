@@ -356,7 +356,7 @@ dsp_move:
     lda $44
     and #$3000
     beq dsp_clr        ; $0xxx (immediate group) -> not MOVE
-    jmp op_move_g
+    jmp mvc_check
 dsp_clr:
     lda $44
     and #$FF00
@@ -571,10 +571,10 @@ k41: lda $44
     jmp op_adda_w_dn
 k42: cmp #$3150            ; move.w (An),(d16,An)
     bne k43
-    jmp op_movw_an_d16
+    jmp op_move_g        ; (dead: move_dispatch_check catches it)
 k43: cmp #$20D8            ; move.l (An)+,(An)+
     bne k44
-    jmp op_movl_anp_anp
+    jmp op_move_g        ; (dead: move_dispatch_check catches it)
 k44: lda $44
     and #$FFF8
     cmp #$0240            ; andi.w #imm,Dn
@@ -641,7 +641,7 @@ k55: cmp #$3018            ; move.w (An)+,Dn  (ROM-aware src)
     jmp op_movw_anp_dn
 k55b: cmp #$3098           ; move.w (An)+,(An)  (ROM-aware src, gated dst)
     bne k56
-    jmp op_movw_anp_an
+    jmp op_move_g        ; (dead: move_dispatch_check catches it)
 k56: cmp #$2058            ; movea.l (An)+,An  (ROM-aware src)
     bne k57
     jmp op_movea_l_anp
@@ -1331,7 +1331,7 @@ kbad:
     lda $44
     and #$3000           ; bits 13-12 != 00 identifies a MOVE (vs $0xxx ORI/ANDI/...)
     beq kbad_mv0
-    jmp op_move_g
+    jmp mvc_check
 kbad_mv0:
     lda $44              ; CLR.size <ea> = $42xx -> op_clr_g (EA engine, any EA mode)
     and #$FF00
@@ -2777,99 +2777,112 @@ awd_done:
     sta $40
     jmp inext
 
-op_movw_an_d16:          ; move.w (An),(d16,An) : [dstAn+d16]=[srcAn] (big-end) ; PC+=4
-    jsr rdw2
-    sta $52              ; d16
+mvc_check:               ; native move.l (An)+,(An)+ run-collapse (RUN_COLLAPSE_DESIGN.md).
+    ; Reached from move_dispatch_check (jmp mvc_check, was jmp op_move_g). Unrolled block copies
+    ; (e.g. the $15B4 1020-byte copy) are entered by fall-through the call-hook can't reach.
+    ; Bulk-copy all but the LAST long (byte-wise via readbyte+map_snes, identical to per-instr),
+    ; then jmp inext so op_move_g runs the final long NORMALLY (-> flags are op_move_g's).
+    ; $56/$58 = $C1:PC (valid from the fetch). Non-copy / lone move / bank-wrap -> jmp op_move_g.
+    rep #$30
     lda $44
-    and #$0007
-    asl a
-    asl a
-    clc
-    adc #$0020
-    tax                  ; src An slot
-    lda $00,x
-    tax                  ; src addr
-    sep #$20
-    lda $400000,x
-    sta $51              ; high byte
-    inx
-    lda $400000,x
-    sta $50              ; low byte
-    rep #$20
-    jsr regdstA          ; dst An
-    lda $00,x
-    clc
-    adc $52
-    tax                  ; dst addr
-    sep #$20
-    lda $51
-    sta $400000,x        ; high
-    inx
-    lda $50
-    sta $400000,x        ; low
-    rep #$20
-    lda $40
-    clc
-    adc #4
-    sta $40
-    jmp inext
-
-op_movl_anp_anp:         ; move.l (An)+,(An)+ : copy 4 bytes (I/O-aware src) ; PC += 2
-    lda $44
-    and #$0007
-    asl a
-    asl a
-    clc
-    adc #$0020
-    tax                  ; src An slot
-    lda $02,x
-    sta $52              ; src high16 (readbyte: $52=top16)
-    lda $00,x
-    sta $54              ; src low16 (running)
-    clc
-    lda $00,x
-    adc #4
-    sta $00,x            ; src An += 4
-    jsr regdstA          ; dst An slot
-    lda $02,x
-    sta $5E              ; dst high16
-    lda $00,x
-    sta $6A              ; dst addr (running)
-    clc
-    adc #4
-    sta $00,x            ; dst An += 4
-    lda $5E
-    jsr map_snes         ; -> $C2 mode (0=$7F/1=$7E/2=noop), $6A = SNES offset
+    and #$F1F8
+    cmp #$20D8
+    beq mvc_start
+mvc_bail:
+    jmp op_move_g
+mvc_start:
     ldy #$0000
-mll_loop:
-    jsr readbyte         ; reads from $52(top16)/$54(low16); ROM or RAM
-    sta $50              ; byte
+    lda [$56],y
+    sta $96
+    ldx #$0000
+mvc_cnt:
+    iny
+    iny
+    cpy #$0200
+    bcs mvc_done
+    lda [$56],y
+    cmp $96
+    bne mvc_done
+    inx
+    bra mvc_cnt
+mvc_done:
+    cpx #$0000
+    beq mvc_bail
+    txa
+    asl a
+    asl a
+    sta $9A
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    sta $90
+    jsr regdstA
+    stx $92
+    ldx $90
+    lda $00,x
+    clc
+    adc $9A
+    bcs mvc_bail
+    ldx $92
+    lda $00,x
+    clc
+    adc $9A
+    bcs mvc_bail
+    ldx $90
+    lda $02,x
+    sta $52
+    lda $00,x
+    sta $54
+    clc
+    adc $9A
+    sta $00,x
+    ldx $92
+    lda $02,x
+    sta $5E
+    lda $00,x
+    sta $6A
+    clc
+    adc $9A
+    sta $00,x
+    lda $5E
+    jsr map_snes
+    ldy #$0000
+mvc_loop:
+    jsr readbyte
+    sta $50
     lda $C2
-    beq mll_work         ; mode 0 -> work RAM $7F
+    beq mvc_work
     cmp #$0001
-    bne mll_nowrite      ; mode 2 -> no-op
-    ldx $6A              ; mode 1 -> shadow RAM $7E
-    sep #$20
-    lda $50
-    sta $410000,x        ; mirror byte into video shadow
-    rep #$20
-    bra mll_nowrite
-mll_work:
+    bne mvc_skip
     ldx $6A
     sep #$20
     lda $50
-    sta $400000,x        ; write byte to dst (work RAM)
+    sta $410000,x
     rep #$20
-mll_nowrite:
-    inc $54              ; src low16++
-    inc $6A              ; dst low16++
+    bra mvc_skip
+mvc_work:
+    ldx $6A
+    sep #$20
+    lda $50
+    sta $400000,x
+    rep #$20
+mvc_skip:
+    inc $54
+    inc $6A
     iny
-    cpy #4
-    bne mll_loop
-    lda $40
+    cpy $9A
+    bne mvc_loop
+    lda $9A
+    lsr a
     clc
-    adc #2
+    adc $40
     sta $40
+    lda $42
+    adc #$0000
+    sta $42
     jmp inext
 
 op_lsl_w:                ; lsl.w #cnt,Dn : Dn.lo <<= cnt ; Z ; PC += 2
@@ -3311,67 +3324,6 @@ op_movea_l_d16:         ; movea.l (d16,An),An : dst = [srcAn+d16] (direct $7F) ;
     lda $40
     clc
     adc #4
-    sta $40
-    jmp inext
-
-op_movw_anp_an:         ; move.w (An)+,(An) : [dstAn]=[srcAn] (ROM-aware src, gated dst); srcAn+=2 ; PC+=2
-    lda $44
-    and #$0007
-    asl a
-    asl a
-    clc
-    adc #$0020
-    tax                  ; src An slot (bits 2-0)
-    lda $02,x
-    sta $52              ; src high16
-    lda $00,x
-    sta $54              ; src low16
-    clc
-    adc #2
-    sta $00,x            ; src An += 2
-    jsr readbyte         ; src high byte
-    sep #$20
-    sta $51
-    rep #$20
-    inc $54
-    jsr readbyte         ; src low byte
-    sep #$20
-    sta $50
-    rep #$20
-    jsr regdstA          ; X = dst An slot (bits 11-9)
-    lda $00,x
-    sta $6A              ; dst lo16
-    lda $02,x
-    jsr map_snes         ; -> $C2 mode, $6A = SNES offset
-    lda $C2
-    cmp #$0002
-    beq mwaa_skip        ; no-op
-    cmp #$0001
-    beq mwaa_shadow      ; shadow $7E
-    ldx $6A              ; work RAM $7F
-    sep #$20
-    lda $51
-    sta $400000,x        ; high byte
-    inx
-    lda $50
-    sta $400000,x        ; low byte
-    rep #$20
-    bra mwaa_skip
-mwaa_shadow:
-    ldx $6A
-    sep #$20
-    lda $51
-    sta $410000,x        ; high byte (video shadow)
-    inx
-    lda $50
-    sta $410000,x        ; low byte
-    rep #$20
-mwaa_skip:
-    lda $50
-    jsr setnz_w
-    lda $40
-    clc
-    adc #2
     sta $40
     jmp inext
 
@@ -15419,7 +15371,7 @@ move_dispatch_check:
     lda $44
     and #$3000
     beq mdc_no           ; bits13-12 == 00 -> $0xxx immediate, not MOVE
-    jmp op_move_g
+    jmp mvc_check
 mdc_no:
     lda $44
     and #$FF00
