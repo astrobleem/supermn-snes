@@ -416,6 +416,18 @@ def gen(e, ins, nxt):
             e('lda $%02X' % reg_dp(dst[1]))              # reload result for clean Z/N (dst is Dn)
             emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
+    if base == 'ext':                                    # sign-extend in place; V=C=0, NZ from result
+        dp = reg_dp(ops[0][1])
+        if size == 'w':                                  # byte -> word: Dn.w = sext8(Dn.b), hi16 unchanged
+            e('lda $%02X' % dp); e('and #$00FF'); e('eor #$0080'); e('sec'); e('sbc #$0080'); e('sta $%02X' % dp)
+        elif size == 'l':                                # word -> long: Dn.hi16 = sext16(Dn.w)
+            e('lda $%02X' % dp); e('asl a')              # C = bit15 of Dn.w
+            e('lda #$0000'); e('sbc #$0000'); e('eor #$FFFF'); e('sta $%02X' % (dp+2))  # C? $FFFF : $0000
+        else: raise Unsupported('ext.%s' % size)
+        if fuses:
+            if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('ext feeding %s' % nb)
+            e('lda $%02X' % dp); emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+        return 1
     if base == 'neg':
         dst = ops[0]
         if size == 'l': raise Unsupported('neg.l — add if needed')
@@ -629,12 +641,15 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
             elif src[0] in ('Dn', 'An'): e2('sbc $%02X' % reg_dp(src[1]))
             else: raise Unsupported('sub mem,mem')
         ea_rmw(e, dst, size, modify); return 1
-    # add family (RMW; (An)+ increments once)
+    # add family (RMW; (An)+ increments once). A MEMORY src is pre-loaded to TMP BEFORE ea_rmw sets X
+    # for the dst (so the src load can't clobber the RMW address); modify then `adc $TMP`.
+    if src[0] not in ('imm', 'Dn', 'An'):
+        ea_load_A_to_tmp(e, src, size)
     def modify(e):
         e('clc')
         if src[0] == 'imm': e('adc %s' % imm16(src[1]))
         elif src[0] in ('Dn', 'An'): e('adc $%02X' % reg_dp(src[1]))
-        else: raise Unsupported('add with memory src (would clobber RMW X)')
+        else: e('adc $%02X' % TMP)
     ea_rmw(e, dst, size, modify)
     if fuses:
         # bne/beq/bmi/bpl need only Z/N -> reload the result (RMW write clobbered A/flags).
