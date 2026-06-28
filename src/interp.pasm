@@ -11090,15 +11090,23 @@ ors_pre_92:
 ; crash. Pinning ors_rte to a fixed address past the drift makes the label == the real code.
     .org $D184
 ors_rte:
-    lda $42
-    bne ors_rte_x        ; resume-PC bank != 0 -> not a task body
-    lda $40
-    cmp #$C2F8
-    bne ors_rte_x
     lda $071A
     beq ors_rte_x        ; escapes gated OFF -> interpret normally
-    jml $92F800          ; HIT: dispatch the escbank task body ($00C300). Only a real hit detours.
-ors_rte_x:
+    lda $42
+    bne ors_rte_b2       ; resume-PC bank != 0 -> bank-2 task bodies
+    lda $40              ; --- bank-$00 task-body resume-PCs (add `cmp #LO / beq ors_rte_hit` per body) ---
+    cmp #$C2F8
+    beq ors_rte_hit      ; $00C2F8 ($00C300)
+    bra ors_rte_x
+ors_rte_b2:
+    cmp #$0002           ; --- bank-$02 task bodies ---
+    bne ors_rte_x
+    lda $40
+    cmp #$658E
+    bne ors_rte_x        ; $02658E
+ors_rte_hit:
+    jml $92F800          ; HIT: cors_disp re-scans the exact resume-PC and dispatches the body.
+ors_rte_x:               ; Only a real hit detours to bank $92 (per-rte round-trips hang the SA-1).
     jmp inext
 
 ; C-Chip command-1 boot response (256 bytes of downloaded 68K code), captured

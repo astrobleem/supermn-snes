@@ -12238,6 +12238,208 @@ Lfc2f8_4:
     sta $42
     jml.l inext
 
+; --- $02658E coroutine task body (bank-2, dispatched by cors_disp) ---
+; --- transpiled from $02658E (18 instrs) by tools/transpile.py [bank1] ---
+entry_2658e:
+    rep #$30
+    lda $3C
+    sta $0778
+    lda $3E
+    sta $077A
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$0006
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0005
+    beq Lf2658e_1
+    jmp L2658e_265b2
+Lf2658e_1:
+    lda #$0000
+    sta $80
+    lda $30
+    clc
+    adc #$0006
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $30
+    clc
+    adc #$0004
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$0001
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0005
+    beq Lf2658e_3
+    bvs Lf2658e_2
+    bmi Lf2658e_3
+    bra Lf2658e_4
+Lf2658e_2:
+    bpl Lf2658e_3
+    bra Lf2658e_4
+Lf2658e_3:
+    jmp L2658e_265b2
+Lf2658e_4:
+    lda #$0000
+    sta $80
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+L2658e_265b2:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0080
+    bvs Lf2658e_5
+    bmi Lf2658e_6
+    bra Lf2658e_7
+Lf2658e_5:
+    bpl Lf2658e_6
+    bra Lf2658e_7
+Lf2658e_6:
+    jmp Ltj2658e_265e4
+Lf2658e_7:
+    lda $34
+    clc
+    adc #$3CE2
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$0001
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0003
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$2A36
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lf2658e_8
+    jmp Ltj2658e_265f0
+Lf2658e_8:
+    lda $30
+    clc
+    adc #$0006
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lf2658e_9
+    jmp Ltj2658e_265f0
+Lf2658e_9:
+    lda $34
+    clc
+    adc #$3CE2
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0000
+    bvs Lf2658e_10
+    bmi Lf2658e_11
+    bra Lf2658e_12
+Lf2658e_10:
+    bpl Lf2658e_11
+    bra Lf2658e_12
+Lf2658e_11:
+    jmp Ltj2658e_265f0
+Lf2658e_12:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+Ltj2658e_265e4:
+    lda #$65E4
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l inext
+Ltj2658e_265f0:
+    lda #$65F0
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -12466,4 +12668,13 @@ jxb_real:
     .org $F800
 cors_disp:
     inc $0766            ; dispatch counter (coroutine task-body hits)
-    jmp entry_c2f8       ; reached only on a confirmed hit (ors_rte checks resume-PC+gate in bank $00).
+    lda $42
+    bne cd_b2            ; bank-2 bodies
+    lda $40              ; --- bank-$00 bodies (add `cmp #LO / beq entry_X` per body) ---
+    cmp #$C2F8
+    beq cd_c2f8          ; $00C2F8 ($00C300)
+    jml.l inext          ; safety (ors_rte already matched -> shouldn't reach)
+cd_c2f8:
+    jmp entry_c2f8
+cd_b2:                   ; --- bank-$02 bodies ---
+    jmp entry_2658e      ; $02658E (only bank-2 body for now)

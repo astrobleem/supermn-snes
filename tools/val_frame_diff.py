@@ -46,12 +46,14 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc', mesen=NEXEN, por
         return ok, rd(0x400000, 0x10000, 'snesMemory'), rd(0x410000, 0x8000, 'snesMemory'), a7 & 0xFFFF
     ok0, o40, o41, a7 = one_frame(0)
     ok1, n40, n41, _ = one_frame(1)
-    ta7 = r16(0x0774)          # $00C300 task's a7 (entry_c2f8 stashes it). Coroutine task bodies run
-                               # on their OWN stacks (NOT the main a7), so their arg-push frames are
-                               # transient there -- a7-aware must cover the task stack too. 0 if no escape.
-    print(">>> full frame OFF trapped=%s  ON trapped=%s  (main a7=$%04X  $00C300 task a7=$%04X)" % (ok0, ok1, a7, ta7))
-    def is_stack(i):           # transient if within 0x400 below the main a7 OR 0x40 below a task a7
-        return ((a7 - 0x400) & 0xFFFF) <= i < a7 or (ta7 and (ta7 - 0x40) <= i < ta7)
+    # Coroutine task bodies run on their OWN stacks (NOT the main a7), so their arg-push frames are
+    # transient there -- a7-aware must cover each task stack too. Each entry_X stashes its a7: $0774
+    # ($00C300), $0778 ($02658E). 0 if that body didn't run this frame.
+    ta7 = [r16(0x0774), r16(0x0778)]
+    print(">>> full frame OFF trapped=%s  ON trapped=%s  (main a7=$%04X  task a7s=%s)"
+          % (ok0, ok1, a7, ['$%04X' % t for t in ta7]))
+    def is_stack(i):           # transient if within 0x400 below the main a7 OR 0x40 below any task a7
+        return ((a7 - 0x400) & 0xFFFF) <= i < a7 or any(t and (t - 0x40) <= i < t for t in ta7)
     ds = [i for i in range(0x10000) if o40[i] != n40[i]]
     live = [i for i in ds if not is_stack(i)]; stack = [i for i in ds if is_stack(i)]
     d41 = sum(1 for i in range(0x8000) if o41[i] != n41[i])
