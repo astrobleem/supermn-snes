@@ -15,7 +15,11 @@ esc=open('src/escbank.pasm').read()
 esc_orig=esc  # for auto-revert if the deploy breaks the gameplay path
 assert all(k in esc for k in ('ESCBANK_BODIES_END','JAH2_EXT_SCAN','jx_real:','JAH2_EXT_BSR_SCAN','jxb_real:')), \
     "escbank.pasm missing jah2_ext markers (run the extension-chain migration first)"
-assert ('%s:'%lab) not in esc, "%s already deployed"%lab
+assert ('%s:'%lab) not in esc, "%s already deployed (escbank)"%lab
+# also reject if already deployed as a bank-$00 gap escape in interp.pasm (e.g. inline bsr/jah2
+# chains reference entry_X there) -- else we'd create a DUPLICATE label that never fires
+_interp=open('src/interp.pasm').read()
+assert ('%s:'%lab) not in _interp, "%s already deployed (interp.pasm gap escape -- inline chain handles it)"%lab
 
 # Detect how $addr is called -> which hook chain(s) dispatch it. jsr.l/jsr.w/jsr(An) -> jah2_ext
 # (jsrabs_hook2); bsr / jsr(d16,PC) -> jah2_ext_bsr (bsr_hookpush). Append only to the chain(s)
