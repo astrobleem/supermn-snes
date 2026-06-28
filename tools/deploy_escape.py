@@ -41,7 +41,10 @@ if not do_jsr and not do_bsr: do_jsr=True                        # indirect jsr(
 # transpile both modes, pick video if they differ (video mode routes stores through the $41 shadow)
 def tr(*a): return subprocess.run(['python3','tools/transpile.py',hx,'--bank1',*a],capture_output=True,text=True).stdout
 vo=tr('--video'); po=tr()
-assert 'jml.l inext' in vo and 'UNIMPLEMENTED' not in vo and 'CALL-BRIDGE' not in vo, "not a clean leaf"
+# CALL-BRIDGE is now allowed (bank-aware $00FE sentinel + ors_pre resume in bank $92). Still reject
+# UNIMPLEMENTED. A bridged escape interprets its callees (which may themselves be escaped, separately).
+assert 'jml.l inext' in vo and 'UNIMPLEMENTED' not in vo, "transpile has UNIMPLEMENTED ops"
+if 'CALL-BRIDGE' in vo: print("note: %s is a BRIDGED escape (interprets its callees via $00FE sentinel)"%hx)
 video = (vo!=po); body=vo if video else po
 def _w(ln):
     t=ln.strip()

@@ -6477,6 +6477,273 @@ Lf8c2_7:
     sta $3C
     jml.l inext
 
+; --- $002D8E dispatcher (jah2_ext) ---
+; --- transpiled from $002D8E (29 instrs) by tools/transpile.py [bank1] ---
+entry_2d8e:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$0004
+    sta $00
+    ; CALL-BRIDGE bsr.w $2e06 -> interpret callee, resume br2d8e_1
+    lda #br2d8e_1
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$2E06
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br2d8e_1:
+    lda $04
+    and #$0003
+    sta $04
+    lda $04
+    beq Lf2d8e_1
+    jmp L2d8e_2dde
+Lf2d8e_1:
+    lda #$0000
+    sta $00
+    ; CALL-BRIDGE bsr.w $2e06 -> interpret callee, resume br2d8e_2
+    lda #br2d8e_2
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$2E06
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br2d8e_2:
+    lda $04
+    sec
+    sbc #$00E0
+    bne Lf2d8e_2
+    jmp L2d8e_2db0
+Lf2d8e_2:
+    lda $04
+    sec
+    sbc #$00E1
+    beq Lf2d8e_3
+    jmp L2d8e_2dde
+Lf2d8e_3:
+L2d8e_2db0:
+    lda #$0010
+    sta $80
+    lda $34
+    clc
+    adc #$1C48
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $34
+    clc
+    adc #$1C40
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9C
+    lda $34
+    clc
+    adc #$1C42
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9A
+    sta $08
+    lda $9C
+    sta $0A
+    lda $34
+    clc
+    adc #$1C44
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $22
+    lda $34
+    clc
+    adc #$1C46
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $20
+    sec
+    sbc $08
+    bne Lf2d8e_4
+    jmp L2d8e_2dee
+Lf2d8e_4:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    pha
+    lda $20
+    clc
+    adc #$0001
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    pla
+    sep #$20
+    sta $04
+    rep #$20
+    lda #$0000
+    sta $00
+    ; CALL-BRIDGE bsr.w $2df0 -> interpret callee, resume br2d8e_3
+    lda #br2d8e_3
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$2DF0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br2d8e_3:
+    lda #$1C40
+    sta $9A
+    lda #$00F0
+    sta $9C
+    lda $9A
+    sta $00
+    lda $9C
+    sta $02
+    lda $20
+    sec
+    sbc $00
+    beq Lf2d8e_5
+    jmp L2d8e_2dd8
+Lf2d8e_5:
+    lda $34
+    clc
+    adc #$1C20
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+L2d8e_2dd8:
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9C
+    sta $80
+    lda $34
+    clc
+    adc #$1C44
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $9A
+    sta $80
+    lda $34
+    clc
+    adc #$1C46
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    jmp L2d8e_2dee
+L2d8e_2dde:
+    lda $34
+    clc
+    adc #$1C48
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0001
+    php
+    pha
+    lda $34
+    clc
+    adc #$1C48
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    plp
+    beq Lf2d8e_6
+    jmp L2d8e_2dee
+Lf2d8e_6:
+    ; CALL-BRIDGE bsr.w $2e26 -> interpret callee, resume br2d8e_4
+    lda #br2d8e_4
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$2E26
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br2d8e_4:
+    lda #$0010
+    sta $80
+    lda $34
+    clc
+    adc #$1C48
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+L2d8e_2dee:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -6544,6 +6811,14 @@ bjx_2bc2:
     pla
     jmp entry_2e06          ; <- $002E06 gf260 abs-io (rewired: bsr/pcrel-reached)
 bjx_2e06:
+    cmp #$2D8E
+    bne bjx_2d8e
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_2d8e          ; <- $002D8E dispatcher
+bjx_2d8e:
 jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40

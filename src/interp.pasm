@@ -1945,7 +1945,7 @@ op_rts:                  ; rts : PC = pop 24-bit return (bank byte1 -> $42) ; A7
     clc
     adc #4
     sta $3C              ; A7 += 4
-    jmp op_rts_sentinel  ; call-bridge: detect $FF-bank sentinel return -> native continuation
+    jmp ors_pre          ; call-bridge: bank-aware sentinel pre-check (-> op_rts_sentinel)
 
 op_beq:                  ; beq disp8 : if Z(set) branch
     lda $60
@@ -10685,7 +10685,7 @@ op_rtr:                  ; RTR ($4E77): CCR = pop.w (low byte only); PC = pop.l
     clc
     adc #4
     sta $3C
-    jmp op_rts_sentinel  ; call-bridge: same $FF-sentinel dispatch as op_rts
+    jmp ors_pre          ; call-bridge: bank-aware sentinel pre-check
 
 op_move_an_usp:          ; MOVE An,USP ($4E60|An): USP = An
     lda $44
@@ -11064,6 +11064,21 @@ nmi:
     rti
 irq:
     rti
+
+; ors_pre — bank-aware CALL-BRIDGE sentinel pre-check (in the run-collapse reclaim slack before
+; .org $D1ED). op_rts/op_rtr jmp here after popping a 24-bit return. A bank-$92 escbank escape
+; pushes a $00FE sentinel return (bank-$00 gap escapes push $00FF); on its callee's rts, resume the
+; native continuation in bank $92 (jml through $40/$41/$42 with the bank forced to $92). $00FF / real
+; returns fall through to the original op_rts_sentinel ($00FF -> jmp ($0040), bank $00).
+ors_pre:
+    lda $42
+    cmp #$00FE
+    beq ors_pre_92
+    jmp op_rts_sentinel
+ors_pre_92:
+    lda #$0092
+    sta $42
+    jml [$0040]
 
 ; C-Chip command-1 boot response (256 bytes of downloaded 68K code), captured
 ; from MAME (data/cchip_boot_response.bin). Read at $00:F700 via DBR=$00.

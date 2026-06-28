@@ -718,6 +718,12 @@ def bank1_transform(lines):
     out = []
     for l in lines:
         s = l.strip()
+        # CALL-BRIDGE sentinel: a bank-$92 escape must push $00FE (not $00FF) so op_rts_sentinel/
+        # ors_pre resumes the continuation in bank $92 (jml [$40]), not bank $00 (jmp ($40)).
+        # gen_call emits `lda #$00FF` immediately before `sta $56` (the sentinel-return high16).
+        if s == 'sta $56' and out and out[-1].strip() == 'lda #$00FF':
+            out[-1] = '    lda #$00FE'
+            out.append(l); continue
         m = re.fullmatch(r'jsr (%s)' % '|'.join(HELPERS), s)
         if m:
             out.append('    jsl.l %s_l' % m.group(1)); continue
