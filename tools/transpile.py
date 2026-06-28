@@ -173,6 +173,9 @@ def ea_rmw(e, ea, size, modify):
     if kind == 'Dn':
         dp = reg_dp(ea[1]); e('lda $%02X' % dp); modify(e); e('sta $%02X' % dp); return
     if kind in ('(An)', '(An)+', '(d16,An)'):
+        # ea_rmw is WORD-ONLY for memory: a .l caller must split into two word RMWs itself (the logic
+        # ops do; add.l/not.l to memory would need inter-word carry / two words and are not handled).
+        if size == 'l': raise Unsupported('.l RMW to memory (caller must split into two words)')
         an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0; dp = reg_dp(an)
         e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')   # X = work-RAM offset
         e('jsr %s' % rd); modify(e); e('jsr %s' % wr)                        # X preserved across both
@@ -375,6 +378,20 @@ def gen(e, ins, nxt):
         src, dst = ops; opn = {'and': 'and', 'andi': 'and', 'or': 'ora', 'ori': 'ora',
                                'eor': 'eor', 'eori': 'eor'}[base]
         memsrc = src[0] in ('(An)', '(An)+', '(d16,An)', 'abs')
+        # .l RMW to MEMORY = two independent word ops (ea_rmw is word-only). High word @ EA uses the
+        # source's hi16, low word @ EA+2 uses its lo16 (68K big-endian). Was silently truncated to a
+        # single word OR'd with the wrong half -> e.g. `or.l d0,$1b12(a5)` corrupted the dirty-palette
+        # mask in entry_3a92 (caught by val_0708_diff). Logic ops have no inter-word carry, so safe.
+        if size == 'l' and dst[0] in ('(An)', '(d16,An)'):
+            if memsrc: raise Unsupported('logic.l mem-dst with memory src')
+            an = dst[-1]; disp = dst[1] if dst[0] == '(d16,An)' else 0
+            for woff, shalf in ((0, 2), (2, 0)):     # (word offset, src DP/imm half: 2=hi16, 0=lo16)
+                if src[0] in ('Dn', 'An'): mk = (opn, '$%02X' % (reg_dp(src[1]) + shalf))
+                elif src[0] == 'imm': mk = (opn, imm16((src[1] >> 16) if shalf else src[1]))
+                else: raise Unsupported('logic.l mem-dst src %r' % (src,))
+                ea_rmw(e, ('(d16,An)', disp + woff, an), 'w', (lambda o, a: lambda e: e('%s %s' % (o, a)))(*mk))
+            if fuses: raise Unsupported('logic.l mem-dst feeding branch')
+            return 1
         if memsrc: ea_load_A_to_tmp(e, src, size)    # memory src -> $TMP BEFORE the RMW (X is set
         def modify(e):                               # only inside ea_rmw, so loading src here is safe)
             if memsrc: e('%s $%02X' % (opn, TMP))

@@ -35,21 +35,27 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc', mesen=NEXEN, por
     assert cap, "never reached $0708 from the NAT"
     m.save_state(S0708)
     print(">>> captured S0708 (PC=$%04X:%04X)" % (r16(0x42), r16(0x40)))
+    TRAP = int(sys.argv[1], 16) if len(sys.argv) > 1 else 0x070E   # default: GAME_TICK return
     def one_tick(gate):
         m.load_state(S0708)                             # frozen in df_spin at $0708
         a7 = r16(0x3C) | (r16(0x3E) << 16)
         w16(0x071A, gate); w16(0x0700, 0); w16(0x0712, 0); w16(0x0710, 0)
         w16(0x0714, 1); runf(1)                         # release: exits df_spin, stz $0710 (one-shot), runs jsr $3A92
-        w16(0x0714, 0)                                  # clear so the $070E freeze HOLDS
+        w16(0x0714, 0)                                  # clear so the trap freeze HOLDS
         ok = False
         for _ in range(160):
-            w16(0x0710, 0x070E); w16(0x0716, 0)         # (re-)arm the return freeze (stz cleared it once)
+            w16(0x0710, TRAP & 0xFFFF); w16(0x0716, (TRAP >> 16) & 0xFFFF)
             runf(4)
             if r16(0x0712): ok = True; break
-        return ok, rd(0x400000, 0x10000), rd(0x410000, 0x8000), a7 & 0xFFFF
-    ok0, o40, o41, a7 = one_tick(0)
-    ok1, n40, n41, _ = one_tick(1)
-    print(">>> via real jsr $3A92: OFF trapped=%s ON trapped=%s" % (ok0, ok1))
+        regs = rd(0x000000, 0x40, 'Sa1Memory')          # 68K reg file D0-D7/A0-A7 ($00-$3F)
+        return ok, rd(0x400000, 0x10000), rd(0x410000, 0x8000), a7 & 0xFFFF, regs
+    ok0, o40, o41, a7, oreg = one_tick(0)
+    ok1, n40, n41, _, nreg = one_tick(1)
+    print(">>> via real jsr $3A92 (trap=$%06X): OFF trapped=%s ON trapped=%s" % (TRAP, ok0, ok1))
+    rnames = ['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6','a7']
+    rdiff = [rnames[i] + '(off=%08X on=%08X)' % (int.from_bytes(oreg[i*4:i*4+4],'little'), int.from_bytes(nreg[i*4:i*4+4],'little'))
+             for i in range(16) if oreg[i*4:i*4+4] != nreg[i*4:i*4+4]]
+    if rdiff: print(">>> REG diffs @ trap: %s" % rdiff)
     stk_lo = (a7 - 0x400) & 0xFFFF                       # a7-aware (bridge sentinels live below a7)
     ds = [i for i in range(0x10000) if o40[i] != n40[i]]
     live = [i for i in ds if not (stk_lo <= i < a7)]; stack = [i for i in ds if stk_lo <= i < a7]

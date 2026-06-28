@@ -6794,6 +6794,938 @@ L2d8e_2dee:
     sta $3C
     jml.l ors_pre
 
+; --- $003A92 game-tick (jah2_ext) ---
+; --- transpiled from $003A92 (56 instrs) by tools/transpile.py [bank1] ---
+entry_3a92:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $34
+    sta $54
+    lda $36
+    sta $56
+    jsl.l push32_l
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsl.l push32_l
+    lda $24
+    sta $54
+    lda $26
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $1C
+    sta $54
+    lda $1E
+    sta $56
+    jsl.l push32_l
+    lda $18
+    sta $54
+    lda $1A
+    sta $56
+    jsl.l push32_l
+    lda $14
+    sta $54
+    lda $16
+    sta $56
+    jsl.l push32_l
+    lda $10
+    sta $54
+    lda $12
+    sta $56
+    jsl.l push32_l
+    lda $0C
+    sta $54
+    lda $0E
+    sta $56
+    jsl.l push32_l
+    lda $08
+    sta $54
+    lda $0A
+    sta $56
+    jsl.l push32_l
+    lda $04
+    sta $54
+    lda $06
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $80
+    lda #$0000
+    sta $54
+    lda #$0060
+    sta $52
+    jsl.l writeword_l
+    lda $00
+    sta $80
+    lda #$0000
+    sta $54
+    lda #$0030
+    sta $52
+    jsl.l writeword_l
+    lda $34
+    clc
+    adc #$0000
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf3a92_1
+    jmp L3a92_3ab0
+Lf3a92_1:
+    lda $00
+    sta $80
+    lda #$0000
+    sta $54
+    lda #$0040
+    sta $52
+    jsl.l writeword_l
+L3a92_3ab0:
+    lda $34
+    clc
+    adc #$1CCA
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0000
+    bne Lf3a92_2
+    jmp L3a92_3b7e
+Lf3a92_2:
+    ; CALL-BRIDGE jsr $2bda(pc) -> interpret callee, resume br3a92_1
+    lda #br3a92_1
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$2BDA
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_1:
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    ; CALL-BRIDGE jsr $2bc2(pc) -> interpret callee, resume br3a92_2
+    lda #br3a92_2
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$2BC2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_2:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$1CCA
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0003
+    bne Lf3a92_3
+    jmp L3a92_3af2
+Lf3a92_3:
+    lda $34
+    clc
+    adc #$1C4E
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C52
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$0001
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C4E
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $34
+    clc
+    adc #$1C4F
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C53
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$0003
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C4F
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+L3a92_3af2:
+    lda $34
+    clc
+    adc #$1C50
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C54
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$0005
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C50
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    ; CALL-BRIDGE jsr $2be2(pc) -> interpret callee, resume br3a92_3
+    lda #br3a92_3
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$2BE2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_3:
+    ; CALL-BRIDGE jsr $3c36(pc) -> interpret callee, resume br3a92_4
+    lda #br3a92_4
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$3C36
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_4:
+    lda $34
+    clc
+    adc #$1CCA
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0002
+    bne Lf3a92_4
+    jmp L3a92_3b38
+Lf3a92_4:
+    lda #$0030
+    sta $1C
+    lda $34
+    clc
+    adc #$1C50
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$0008
+    beq Lf3a92_5
+    jmp L3a92_3b3e
+Lf3a92_5:
+    lda #$0000
+    sta $04
+    lda #$0000
+    sta $00
+    ; CALL-BRIDGE jsr $2df0.l -> entry_2df0 (NATIVE escape), resume br3a92_5
+    lda #br3a92_5
+    sta $40
+    lda #$00FE
+    sta $42
+    jmp entry_2df0
+br3a92_5:
+    ; CALL-BRIDGE jsr $3e0e.l -> interpret callee, resume br3a92_6
+    lda #br3a92_6
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$3E0E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_6:
+    lda #$1F1F
+    sta $80
+    lda $34
+    clc
+    adc #$3FFE
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$2E6A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+L3a92_3b38:
+    ; CALL-BRIDGE jsr $4178.l -> interpret callee, resume br3a92_7
+    lda #br3a92_7
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$4178
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_7:
+L3a92_3b3e:
+    lda $34
+    clc
+    adc #$1C56
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$0001
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C58
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9C
+    lda $34
+    clc
+    adc #$1C5A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9A
+    sta $00
+    lda $9C
+    sta $02
+    asl $00
+    rol $02
+    bcc Lf3a92_6
+    inc $00
+Lf3a92_6:
+    asl $00
+    rol $02
+    bcc Lf3a92_7
+    inc $00
+Lf3a92_7:
+    lda $00
+    sta $9A
+    lda $02
+    sta $9C
+    lda $9C
+    sta $80
+    lda $34
+    clc
+    adc #$1C58
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $9A
+    sta $80
+    lda $34
+    clc
+    adc #$1C5A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $34
+    clc
+    adc #$1B12
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    ora $02
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1B14
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    ora $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    ; CALL-BRIDGE jsr $8c2(pc) -> interpret callee, resume br3a92_8
+    lda #br3a92_8
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$08C2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_8:
+    ; CALL-BRIDGE jsr $26a0(pc) -> interpret callee, resume br3a92_9
+    lda #br3a92_9
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$26A0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_9:
+    lda $34
+    clc
+    adc #$1C5C
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lf3a92_8
+    jmp L3a92_3b64
+Lf3a92_8:
+    ; CALL-BRIDGE jsr $158e(pc) -> interpret callee, resume br3a92_10
+    lda #br3a92_10
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$158E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_10:
+    jmp L3a92_3b68
+L3a92_3b64:
+    ; CALL-BRIDGE jsr $17b4(pc) -> interpret callee, resume br3a92_11
+    lda #br3a92_11
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$17B4
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_11:
+L3a92_3b68:
+    ; CALL-BRIDGE jsr $2d8e(pc) -> entry_2d8e (NATIVE escape), resume br3a92_12
+    lda #br3a92_12
+    sta $40
+    lda #$00FE
+    sta $42
+    jmp entry_2d8e
+br3a92_12:
+    ; CALL-BRIDGE jsr $5c32(pc) -> interpret callee, resume br3a92_13
+    lda #br3a92_13
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$5C32
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_13:
+    lda $34
+    clc
+    adc #$1CCE
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$AAAA
+    beq Lf3a92_9
+    jmp L3a92_3b7e
+Lf3a92_9:
+    ; CALL-BRIDGE jsr $90c4.l -> interpret callee, resume br3a92_14
+    lda #br3a92_14
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$90C4
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3a92_14:
+L3a92_3b7e:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $02
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $06
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $04
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $0A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $08
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $0E
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $0C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $12
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $10
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $16
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $14
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $1A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $18
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $1E
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $1C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $26
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2E
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $32
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $36
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $34
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $3A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -6819,6 +7751,15 @@ jah2_ext:
     sta $40
     jmp entry_2df0          ; <- $002DF0 callee
 jx_2df0:
+    cmp #$3A92
+    bne jx_3a92
+    inc $0764
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry_3a92          ; <- $003A92 game-tick
+jx_3a92:
 jx_real:
     plp                  ; restore carry for push32r (matches the original jah2_miss)
     jml jsrabs_hook

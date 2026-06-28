@@ -48,6 +48,7 @@ for ln in esc.splitlines():
     if m: _cur=m.group(1)
     elif _cur and ln.strip()=='jml.l ors_pre': _esc_addrs.append(_cur); _cur=None  # body ends in ors_pre rts
 ESCAPES_ARG='--escapes='+','.join(_esc_addrs) if _esc_addrs else '--noescapes'
+if os.environ.get('DEPLOY_NOB2E'): ESCAPES_ARG='--noescapes'   # debug: force all interpret-bridge
 # transpile both modes, pick video if they differ (video mode routes stores through the $41 shadow)
 def tr(*a): return subprocess.run(['python3','tools/transpile.py',hx,'--bank1',ESCAPES_ARG,*a],capture_output=True,text=True).stdout
 vo=tr('--video'); po=tr()
