@@ -14032,8 +14032,9 @@ ib_miss:
 ojmp_disp:
     lda $40
     cmp #$D0D0
-    bne ojd_x
+    bne ojn_d0d0
     jmp entry_d0d0       ; $00D0D0 state handler
+ojn_d0d0:
     cmp #$D5C4
     bne ojn_d5c4
     jmp entry_d5c4
