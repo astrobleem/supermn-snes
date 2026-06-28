@@ -38,12 +38,22 @@ def call_type(a):
     return jsr, bsr
 do_jsr, do_bsr = call_type(addr)
 if not do_jsr and not do_bsr: do_jsr=True                        # indirect jsr(An) -> jah2_ext path
+# BRIDGE-TO-ESCAPE: a callee that's an escbank escape whose terminal rts routes through ors_pre
+# (jml.l ors_pre) can be run NATIVELY from this escape (vs interpreted). Collect those addrs and pass
+# them via --escapes so gen_call dispatches a native bridge to them. (Escapes deployed before this
+# feature end in `jml.l inext` and are NOT bridge-to-escape-able -> excluded.)
+_esc_addrs=[]; _cur=None
+for ln in esc.splitlines():
+    m=re.match(r'^entry_([0-9a-f]+):',ln)
+    if m: _cur=m.group(1)
+    elif _cur and ln.strip()=='jml.l ors_pre': _esc_addrs.append(_cur); _cur=None  # body ends in ors_pre rts
+ESCAPES_ARG='--escapes='+','.join(_esc_addrs) if _esc_addrs else '--noescapes'
 # transpile both modes, pick video if they differ (video mode routes stores through the $41 shadow)
-def tr(*a): return subprocess.run(['python3','tools/transpile.py',hx,'--bank1',*a],capture_output=True,text=True).stdout
+def tr(*a): return subprocess.run(['python3','tools/transpile.py',hx,'--bank1',ESCAPES_ARG,*a],capture_output=True,text=True).stdout
 vo=tr('--video'); po=tr()
 # CALL-BRIDGE is now allowed (bank-aware $00FE sentinel + ors_pre resume in bank $92). Still reject
 # UNIMPLEMENTED. A bridged escape interprets its callees (which may themselves be escaped, separately).
-assert 'jml.l inext' in vo and 'UNIMPLEMENTED' not in vo, "transpile has UNIMPLEMENTED ops"
+assert 'jml.l ors_pre' in vo and 'UNIMPLEMENTED' not in vo, "transpile has UNIMPLEMENTED ops (or no terminal rts)"
 if 'CALL-BRIDGE' in vo: print("note: %s is a BRIDGED escape (interprets its callees via $00FE sentinel)"%hx)
 video = (vo!=po); body=vo if video else po
 def _w(ln):

@@ -24,6 +24,7 @@ usmul_l=$00E5C2
 op_rts_sentinel=$00EA3A
 jsrabs_hook=$00E200
 bhp_after=$00E454
+ors_pre=$00D16F
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -6477,6 +6478,70 @@ Lf8c2_7:
     sta $3C
     jml.l inext
 
+; --- $002DF0 callee (jah2_ext) ---
+; --- transpiled from $002DF0 (5 instrs) by tools/transpile.py [bank1] ---
+entry_2df0:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda #$0001
+    sta $54
+    lda #$0080
+    sta $52
+    jsl.l writebyte_l
+    lda $04
+    sep #$20
+    sta $80
+    rep #$20
+    lda #$0003
+    sta $54
+    lda #$0080
+    sta $52
+    jsl.l writebyte_l
+    lda $04
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $04
+    lda $04
+    sep #$20
+    sta $80
+    rep #$20
+    lda #$0003
+    sta $54
+    lda #$0080
+    sta $52
+    jsl.l writebyte_l
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
 ; --- $002D8E dispatcher (jah2_ext) ---
 ; --- transpiled from $002D8E (29 instrs) by tools/transpile.py [bank1] ---
 entry_2d8e:
@@ -6613,17 +6678,12 @@ Lf2d8e_4:
     rep #$20
     lda #$0000
     sta $00
-    ; CALL-BRIDGE bsr.w $2df0 -> interpret callee, resume br2d8e_3
+    ; CALL-BRIDGE bsr.w $2df0 -> entry_2df0 (NATIVE escape), resume br2d8e_3
     lda #br2d8e_3
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$2DF0
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_2df0
 br2d8e_3:
     lda #$1C40
     sta $9A
@@ -6742,7 +6802,7 @@ L2d8e_2dee:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
@@ -6760,6 +6820,15 @@ jah2_ext:
     bne jx_real          ; target bank != 0 -> real miss (extension is bank-0 only)
     lda $52              ; target low16
     ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<
+    cmp #$2DF0
+    bne jx_2df0
+    inc $0764
+    plp
+    pla
+    lda $54
+    sta $40
+    jmp entry_2df0          ; <- $002DF0 callee
+jx_2df0:
 jx_real:
     plp                  ; restore carry for push32r (matches the original jah2_miss)
     jml jsrabs_hook
@@ -6811,6 +6880,14 @@ bjx_2bc2:
     pla
     jmp entry_2e06          ; <- $002E06 gf260 abs-io (rewired: bsr/pcrel-reached)
 bjx_2e06:
+    cmp #$2DF0
+    bne bjx_2df0
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_2df0          ; <- $002DF0 callee
+bjx_2df0:
     cmp #$2D8E
     bne bjx_2d8e
     inc $0764

@@ -40,6 +40,8 @@ def reg_dp(name):
 TMP = 0x9E                                      # transpiler compare/store scratch (avoids rdw_ea $90)
 VIDEO = False                                   # --video: route non-frame stores via writeword/writebyte
                                                 # (IO-aware: video $B0/$D0/$E0 -> $41 shadow). For $002xxx.
+ESCAPED = set()                                 # --escapes=hex,..: callee addrs with an ESCBANK escape;
+                                                # gen_call dispatches a bridge-TO-escape (run native) to them
 
 # ---- EA parse: capstone op_str token -> structured operand ----
 def parse_ea(tok, pc=None):
@@ -321,7 +323,11 @@ def gen(e, ins, nxt):
         e('ldx $3C'); e('jsr rdw40'); e('sta $42')      # PC.hi16 = [a7]
         e('inx'); e('inx'); e('jsr rdw40'); e('sta $40')# PC.lo16
         e('lda $3C'); e('clc'); e('adc #$0004'); e('sta $3C')
-        e('jmp inext')
+        # route the return through ors_pre (not inext): if the popped return bank is a CALL-BRIDGE
+        # sentinel ($00FE bank-$92 / $00FF bank-$00) -> resume the bridging escape's continuation;
+        # else ors_pre falls through to inext (normal 68K return). Enables bridge-TO-escape: a parent
+        # escape can call this escape with a $00FE:cont sentinel return and be resumed natively.
+        e('jmp ors_pre')
         return 1
 
     # ---- moves / address calc ----
@@ -590,9 +596,20 @@ def gen_call(e, ins):
     -> jmp ($0040) -> cont. Args/cleanup are the normal move.w/-(a7) + addq.l #n,a7 instructions
     around the call (transpiled separately). Reg-file-faithful => no native state crosses the bridge."""
     e.brn += 1; cont = 'br%s_%d' % (e.pfx, e.brn); t = ins.op_str.strip()
+    m = re.fullmatch(r'\$([0-9a-f]+)\.l', t) or re.fullmatch(r'\$([0-9a-f]+)', t)
+    # BRIDGE-TO-ESCAPE: callee has an escbank escape -> run it NATIVELY (no interpret) and resume the
+    # parent. Set $40=cont/$42=$00FE (sentinel), jmp entry_C: entry_C's prologue pushes $00FE:cont, its
+    # body runs native, its terminal rts pops $00FE:cont -> ors_pre -> resume here ($92:cont). The
+    # callee escape MUST route its rts through ors_pre (transpiled with the current rts codegen).
+    if m and (int(m.group(1), 16) & 0xFFFFFF) in ESCAPED:
+        a = int(m.group(1), 16) & 0xFFFFFF
+        e.cmt('CALL-BRIDGE %s %s -> entry_%x (NATIVE escape), resume %s' % (ins.mnemonic, t, a, cont))
+        e('lda #%s' % cont); e('sta $40'); e('lda #$00FE'); e('sta $42')
+        e('jmp entry_%x' % a)
+        e.lbl(cont)
+        return 1
     e.cmt('CALL-BRIDGE %s %s -> interpret callee, resume %s' % (ins.mnemonic, t, cont))
     e('lda #%s' % cont); e('sta $54'); e('lda #$00FF'); e('sta $56'); e('jsr push32')
-    m = re.fullmatch(r'\$([0-9a-f]+)\.l', t) or re.fullmatch(r'\$([0-9a-f]+)', t)
     if m:                                                # jsr.l absolute / bsr (capstone resolves PC-rel)
         a = int(m.group(1), 16)
         e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
@@ -729,6 +746,8 @@ def bank1_transform(lines):
             out.append('    jsl.l %s_l' % m.group(1)); continue
         if s == 'jmp inext':
             out.append('    jml.l inext'); continue
+        if s == 'jmp ors_pre':                           # terminal rts -> bank-aware sentinel resume
+            out.append('    jml.l ors_pre'); continue
         out.append(l)
     return out
 
@@ -757,10 +776,13 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO
+    global VIDEO, ESCAPED
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     bank1 = '--bank1' in sys.argv
     VIDEO = '--video' in sys.argv
+    for a in sys.argv:                                   # --escapes=hex,hex,..: callees with escbank escapes
+        if a.startswith('--escapes='):
+            ESCAPED = {int(x, 16) & 0xFFFFFF for x in a.split('=', 1)[1].split(',') if x}
     entry = int(args[0], 16)
     insns, labels = decode(entry)
     name = 'entry_%x' % entry
