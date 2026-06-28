@@ -15778,7 +15778,7 @@ bhp_e3:                  ; -- $003E6A -> entry_3e6a --  (A still = target lo16)
     lda $54
     sta $40
     pla
-    jmp entry_3e6a
+    jmp entry_3e6a_gap
 bhp_push:                ; MISS (or new-escape check). SIZE-NEUTRAL redirect to the escbank
     ; bsr extension: this `jml` (4 bytes) exactly replaces the old `lda $54 / cmp $40` (2+2),
     ; so the chain never shifts the packed $E200 region. jah2_ext_bsr re-checks gate/bank,
@@ -16360,7 +16360,9 @@ e15_nw:
 ;   clr.w d2 ; btst.l d3,d1: set -> d2+=1 ; btst.l d3,d0: clear -> d2+=2 ; move.w d2,(a0)
 ;   (d0/d1 saved+restored via movem = unchanged; a0 a work-RAM dest). bit = d3 & 31 selects
 ;   d1/d0 low or high word. Sets d2.lo16 + CCR (N/Z from d2, C=V=0). Scratch $90/$92. jmp inext.
-entry_3e6a:
+; NB: renamed _gap — superseded by the escbank entry_3e6a (so $3e32 can bridge-to-escape into it).
+;     Now DEAD: $3e6a's only callers ($3E46/$3E52) are inside the native $3e32. Kept (zero-shift).
+entry_3e6a_gap:
     rep #$30
     inc $0722                ; hit counter
     lda $0C
