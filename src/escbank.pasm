@@ -2062,7 +2062,7 @@ Lf26a0_3:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 ; --- transpiled from $0026FA (20 instrs) by tools/transpile.py [bank1] ---
 entry_26fa:
@@ -5874,7 +5874,7 @@ entry_2bc2:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 ; --- transpiled from $00CCD8 (18 instrs) by tools/transpile.py [bank1] ---
 entry_ccd8:
@@ -6476,7 +6476,7 @@ Lf8c2_7:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 ; --- $002DF0 callee (jah2_ext) ---
 ; --- transpiled from $002DF0 (5 instrs) by tools/transpile.py [bank1] ---
@@ -6955,17 +6955,12 @@ br3a92_1:
     xba
     sta $400001,x
     rep #$20
-    ; CALL-BRIDGE jsr $2bc2(pc) -> interpret callee, resume br3a92_2
+    ; CALL-BRIDGE jsr $2bc2(pc) -> entry_2bc2 (NATIVE escape), resume br3a92_2
     lda #br3a92_2
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$2BC2
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_2bc2
 br3a92_2:
     lda $3C
     clc
@@ -7313,29 +7308,19 @@ Lf3a92_7:
     xba
     sta $400001,x
     rep #$20
-    ; CALL-BRIDGE jsr $8c2(pc) -> interpret callee, resume br3a92_8
+    ; CALL-BRIDGE jsr $8c2(pc) -> entry_8c2 (NATIVE escape), resume br3a92_8
     lda #br3a92_8
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$08C2
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_8c2
 br3a92_8:
-    ; CALL-BRIDGE jsr $26a0(pc) -> interpret callee, resume br3a92_9
+    ; CALL-BRIDGE jsr $26a0(pc) -> entry_26a0 (NATIVE escape), resume br3a92_9
     lda #br3a92_9
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$26A0
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_26a0
 br3a92_9:
     lda $34
     clc
