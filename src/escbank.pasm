@@ -5815,7 +5815,7 @@ entry_2e06:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 ; --- transpiled from $002BC2 (8 instrs) by tools/transpile.py [bank1] ---
 entry_2bc2:
@@ -6554,17 +6554,12 @@ entry_2d8e:
     jsl.l push32_l
     lda #$0004
     sta $00
-    ; CALL-BRIDGE bsr.w $2e06 -> interpret callee, resume br2d8e_1
+    ; CALL-BRIDGE bsr.w $2e06 -> entry_2e06 (NATIVE escape), resume br2d8e_1
     lda #br2d8e_1
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$2E06
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_2e06
 br2d8e_1:
     lda $04
     and #$0003
@@ -6575,17 +6570,12 @@ br2d8e_1:
 Lf2d8e_1:
     lda #$0000
     sta $00
-    ; CALL-BRIDGE bsr.w $2e06 -> interpret callee, resume br2d8e_2
+    ; CALL-BRIDGE bsr.w $2e06 -> entry_2e06 (NATIVE escape), resume br2d8e_2
     lda #br2d8e_2
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$2E06
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_2e06
 br2d8e_2:
     lda $04
     sec
