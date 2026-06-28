@@ -10353,6 +10353,194 @@ L3e32_3e80:
     sta $3C
     jml.l ors_pre
 
+; --- $003E88 game-tick-cnt1 (jah2_ext) ---
+; --- transpiled from $003E88 (8 instrs) by tools/transpile.py [bank1] ---
+entry_3e88:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$1C4B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$0004
+    bne Lf3e88_1
+    jmp Ltj3e88_3ea6
+Lf3e88_1:
+    lda $34
+    clc
+    adc #$1C6E
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0002
+    beq Lf3e88_2
+    jmp Ltj3e88_3ea6
+Lf3e88_2:
+    lda $34
+    clc
+    adc #$1C7A
+    tax
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
+    clc
+    adc #$0001
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C7A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0020
+    bne Lf3e88_3
+    jmp Ltj3e88_3ed0
+Lf3e88_3:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+Ltj3e88_3ea6:
+    lda #$3EA6
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltj3e88_3ed0:
+    lda #$3ED0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- $003EAC game-tick-cnt2 (jah2_ext) ---
+; --- transpiled from $003EAC (8 instrs) by tools/transpile.py [bank1] ---
+entry_3eac:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$1C4B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$0004
+    bne Lf3eac_1
+    jmp Ltj3eac_3eca
+Lf3eac_1:
+    lda $34
+    clc
+    adc #$1C70
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0002
+    beq Lf3eac_2
+    jmp Ltj3eac_3eca
+Lf3eac_2:
+    lda $34
+    clc
+    adc #$1C7B
+    tax
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
+    clc
+    adc #$0001
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C7B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0020
+    bne Lf3eac_3
+    jmp Ltj3eac_3ed0
+Lf3eac_3:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+Ltj3eac_3eca:
+    lda #$3ECA
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltj3eac_3ed0:
+    lda #$3ED0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; --- $003C36 game-tick-subtree (jah2_ext) ---
 ; --- transpiled from $003C36 (112 instrs) by tools/transpile.py [bank1] ---
 entry_3c36:
@@ -10384,17 +10572,12 @@ Lf3c36_1:
     sta $42
     jmp entry_3e32
 br3c36_1:
-    ; CALL-BRIDGE bsr.w $3e88 -> interpret callee, resume br3c36_2
+    ; CALL-BRIDGE bsr.w $3e88 -> entry_3e88 (NATIVE escape), resume br3c36_2
     lda #br3c36_2
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$3E88
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_3e88
 br3c36_2:
     lda $34
     clc
@@ -10642,17 +10825,12 @@ L3c36_3cae:
     sta $52
     jsl.l rdw_ea_l
     sta $30
-    ; CALL-BRIDGE bsr.w $3eac -> interpret callee, resume br3c36_5
+    ; CALL-BRIDGE bsr.w $3eac -> entry_3eac (NATIVE escape), resume br3c36_5
     lda #br3c36_5
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$3EAC
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_3eac
 br3c36_5:
     lda $34
     clc
@@ -11601,6 +11779,22 @@ bjx_3e6a:
     pla
     jmp entry_3e32          ; <- $003E32 game-tick-bitclass
 bjx_3e32:
+    cmp #$3E88
+    bne bjx_3e88
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_3e88          ; <- $003E88 game-tick-cnt1
+bjx_3e88:
+    cmp #$3EAC
+    bne bjx_3eac
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_3eac          ; <- $003EAC game-tick-cnt2
+bjx_3eac:
     cmp #$3C36
     bne bjx_3c36
     inc $0764
