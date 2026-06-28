@@ -1,5 +1,28 @@
 # Superman Arcade → SNES Port Plan
 
+> ## ⚠️ SUPERSEDED — historical (June 15, 2026), kept for reference only
+>
+> This was the **original** port plan. Its core architecture was **abandoned** once the
+> interpret-cold/transpile-hot approach proved out. **Do not follow the architecture,
+> CPU-responsibility, game-logic-phase, or memory-map sections below** — they describe a
+> design that was never built. Authoritative current docs:
+> **[README.md](README.md)** (entry point) · **[STATUS.md](STATUS.md)** (authoritative state) ·
+> **[ROADMAP.md](ROADMAP.md)** (next) · **[METHODOLOGY.md](METHODOLOGY.md)** (the reusable recipe).
+>
+> **What actually changed (this plan → reality):**
+> | This plan said | What was actually built |
+> |---|---|
+> | Hand-port the 68K game logic to **5A22 ASM**, function by function (Phases 1-5) | A hand-written **68000 interpreter runs on the SA-1** (`src/interp.pasm`); hot functions are **auto-transpiled** to native 65816 escapes by `tools/transpile.py` (interpret-cold / transpile-hot). No hand-porting to the 5A22. |
+> | **SA-1 emulates the C-Chip** as a command-response state machine | C-Chip is **patched** — boot self-test bypass + input mailbox + download replay; **no MCU emulation**. (See [RISK_CCHIP.md](RISK_CCHIP.md), [CCHIP_BOOT_HANDSHAKE.md](CCHIP_BOOT_HANDSHAKE.md).) |
+> | **SA-1 CC Type 2** character conversion for sprite scaling | CC Type 2 **rejected as not useful**; sprites are colored **per-bank at runtime**. (See [SPRITE_SCALING_VERDICT.md](SPRITE_SCALING_VERDICT.md), [RISK_SPRITES.md](RISK_SPRITES.md).) |
+> | 5A22 runs the game loop; SA-1 does C-Chip + compositing | **SA-1 runs the interpreter + native escapes**; the **5A22 is a thin supervisor** (PPU flush via `VID_FRAME` + controller read). |
+> | BW-RAM map ($40:0000=tiles, $41:0000=level data, …) | `$40` = the 68K **work RAM** ($F0xxxx shadow); `$41` = the **video shadow** ($B0/$D0/$E0); escape bank at ROM file `$290000` (SA-1 `$92:8000`). |
+>
+> **Still broadly valid below** (these were correct and are covered authoritatively elsewhere):
+> the SNES hardware constraints, and the data-conversion notes — palette 12→15-bit
+> ([PALETTE_VERDICT.md](PALETTE_VERDICT.md)), audio YM2610→SNES ([CONVERTSOUND.md](CONVERTSOUND.md),
+> `vgm-to-tad-mml` skill), and the input mapping.
+
 ## Architecture
 
 ```
