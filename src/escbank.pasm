@@ -6528,6 +6528,22 @@ bjx_8c2:
     pla
     jmp entry_26a0          ; <- $0026A0 sprite-ctrl (rewired bsr)
 bjx_26a0:
+    cmp #$2BC2
+    bne bjx_2bc2
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_2bc2          ; <- $002BC2 cchip-abs (rewired: bsr/pcrel-reached)
+bjx_2bc2:
+    cmp #$2E06
+    bne bjx_2e06
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_2e06          ; <- $002E06 gf260 abs-io (rewired: bsr/pcrel-reached)
+bjx_2e06:
 jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40
