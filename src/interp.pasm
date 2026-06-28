@@ -11127,6 +11127,14 @@ ojmp_hook:
     lda $40              ; --- escaped state handlers (add `cmp #LO / beq ojmp_hit` per handler) ---
     cmp #$D0D0
     beq ojmp_hit         ; $00D0D0
+    cmp #$D5C4
+    beq ojmp_hit         ; $00D5C4
+    cmp #$D6FC
+    beq ojmp_hit         ; $00D6FC
+    cmp #$D386
+    beq ojmp_hit         ; $00D386
+    cmp #$D3B0
+    beq ojmp_hit         ; $00D3B0
     bra ojmp_x
 ojmp_hit:
     jml $92F900          ; -> escbank ojmp_disp

@@ -22,6 +22,7 @@ writeword_l=$00E5BA
 writebyte_l=$00E5BE
 usmul_l=$00E5C2
 op_rts_sentinel=$00EA3A
+ojmp_hook=$00D1B3
 jsrabs_hook=$00E200
 bhp_after=$00E454
 ors_pre=$00D16F
@@ -13134,6 +13135,605 @@ Ld0d0_d166:
     sta $42
     jml.l inext
 
+; --- $00D5C4 jmp-table state handler ---
+; --- transpiled from $00D5C4 (22 instrs) by tools/transpile.py [bank1] ---
+entry_d5c4:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$2AA8
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd5c4_1
+    bmi Lfd5c4_1
+    bra Lfd5c4_2
+Lfd5c4_1:
+    jmp Ld5c4_d5d8
+Lfd5c4_2:
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda #$0194
+    sta $80
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    jmp Ld5c4_d5f0
+Ld5c4_d5d8:
+    lda $34
+    clc
+    adc #$2AA9
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd5c4_3
+    bmi Lfd5c4_3
+    bra Lfd5c4_4
+Lfd5c4_3:
+    jmp Ld5c4_d5ee
+Lfd5c4_4:
+    lda #$0001
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda #$01A4
+    sta $80
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    jmp Ld5c4_d5f0
+Ld5c4_d5ee:
+    lda #$D5A0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ld5c4_d5f0:
+    lda $34
+    clc
+    adc #$2A4C
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    bne Lfd5c4_5
+    jmp Ld5c4_d5fe
+Lfd5c4_5:
+    lda $34
+    clc
+    adc #$2A58
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+Ld5c4_d5fe:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $22
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda #$0000
+    sta $80
+    lda $20
+    clc
+    adc #$FF8C
+    sta $54
+    lda $22
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda #$D61E
+    sta $20
+    lda #$0000
+    sta $22
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9C
+    sta $80
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda $9A
+    sta $80
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $80
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda #$0004
+    sta $80
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda #$D52E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- $00D6FC jmp-table state handler ---
+; --- transpiled from $00D6FC (9 instrs) by tools/transpile.py [bank1] ---
+entry_d6fc:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2E
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda #$0000
+    sta $80
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sta $80
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $34
+    clc
+    adc #$2AAA
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$D6D8
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- $00D386 jmp-table state handler ---
+; --- transpiled from $00D386 (11 instrs) by tools/transpile.py [bank1] ---
+entry_d386:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $34
+    clc
+    adc #$2A32
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$01A0
+    bvs Lfd386_1
+    bpl Lfd386_2
+    bra Lfd386_3
+Lfd386_1:
+    bmi Lfd386_2
+    bra Lfd386_3
+Lfd386_2:
+    jmp Ld386_d3a6
+Lfd386_3:
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$FFE0
+    beq Lfd386_5
+    bvs Lfd386_4
+    bmi Lfd386_5
+    bra Lfd386_6
+Lfd386_4:
+    bpl Lfd386_5
+    bra Lfd386_6
+Lfd386_5:
+    jmp Ld386_d3a6
+Lfd386_6:
+    jmp Ld386_d3ac
+Ld386_d3a6:
+    lda #$000C
+    sta $80
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+Ld386_d3ac:
+    lda #$D232
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- $00D3B0 jmp-table state handler ---
+; --- transpiled from $00D3B0 (14 instrs) by tools/transpile.py [bank1] ---
+entry_d3b0:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2E
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda #$0000
+    sta $80
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sta $80
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA6
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C9A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $22
+    lda $34
+    clc
+    adc #$1C9C
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ibridge (a0 escape or interpret), resume brd3b0_1
+    lda #brd3b0_1
+    sta $40
+    lda #$00FE
+    sta $42
+    lda $20
+    sta $52
+    lda $22
+    sta $50
+    jmp ibridge
+brd3b0_1:
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    lda #$D374
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -13434,5 +14034,21 @@ ojmp_disp:
     cmp #$D0D0
     bne ojd_x
     jmp entry_d0d0       ; $00D0D0 state handler
+    cmp #$D5C4
+    bne ojn_d5c4
+    jmp entry_d5c4
+ojn_d5c4:
+    cmp #$D6FC
+    bne ojn_d6fc
+    jmp entry_d6fc
+ojn_d6fc:
+    cmp #$D386
+    bne ojn_d386
+    jmp entry_d386
+ojn_d386:
+    cmp #$D3B0
+    bne ojn_d3b0
+    jmp entry_d3b0
+ojn_d3b0:
 ojd_x:
     jml.l inext          ; safety (ojmp_hook already matched)
