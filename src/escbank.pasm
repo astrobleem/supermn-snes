@@ -22,6 +22,7 @@ writeword_l=$00E5BA
 writebyte_l=$00E5BE
 usmul_l=$00E5C2
 op_rts_sentinel=$00EA3A
+jsrabs_hook=$00E200
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -6242,3 +6243,23 @@ Lcc10_cc42:
     adc #$0004
     sta $3C
     jml.l inext
+
+; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
+
+; ============================ JAH2 EXTENSION CHAIN ============================
+; Shift-safe dispatch for escapes added after the bank-$00 inline chain. Reached from the
+; bank-$00 jah2_miss via `jml $92F000` (size-neutral redirect). Stack on entry:
+; [jsr-return, php-flags], 16-bit mode. The bank-$00 inline chain already scanned the
+; original escapes and missed; here we re-check gate + bank, scan the NEW escapes, then
+; dispatch (plp/pla/PC=return/jml entry) or replicate the original miss (plp/jmp jsrabs_hook).
+    .org $F000
+jah2_ext:
+    lda $071A
+    beq jx_real          ; escapes gated off -> real miss (no dispatch)
+    lda $50
+    bne jx_real          ; target bank != 0 -> real miss (extension is bank-0 only)
+    lda $52              ; target low16
+    ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<
+jx_real:
+    plp                  ; restore carry for push32r (matches the original jah2_miss)
+    jml jsrabs_hook

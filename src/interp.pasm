@@ -17050,8 +17050,11 @@ jah2_n22:
     jmp jah2_ecc10
 jah2_n23:
 jah2_miss:
-    plp                  ; restore carry for push32r
-    jmp jsrabs_hook
+    jml $92F000          ; -> escbank jah2_ext (shift-safe extension chain). SIZE-NEUTRAL: this
+                         ; jml (4 bytes) exactly replaces the old `plp / jmp jsrabs_hook` (1+3),
+                         ; so adding escapes never shifts the packed bank-$00 $E200 region (which
+                         ; overlaps .org $F602). jah2_ext re-checks gate/bank, scans NEW escapes,
+                         ; and on miss replicates `plp / jmp jsrabs_hook` itself (jx_real).
 jah2_ed96:
     plp
     pla

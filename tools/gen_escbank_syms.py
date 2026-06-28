@@ -12,7 +12,8 @@ from pathlib import Path
 
 # bank-$00 interp symbols an escape may reference (jml/jsl targets + rtl-wrappers)
 NEEDED = ["inext", "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
-          "rdw_ea_l", "readbyte_l", "writeword_l", "writebyte_l", "usmul_l", "op_rts_sentinel"]
+          "rdw_ea_l", "readbyte_l", "writeword_l", "writebyte_l", "usmul_l", "op_rts_sentinel",
+          "jsrabs_hook"]  # jah2_ext (escbank extension chain) tail-calls the original miss handler
 
 sym_path = Path("src/interp.sym")
 esc_path = Path("src/escbank.pasm")
