@@ -90,10 +90,15 @@ def decode(entry):
             if m:
                 t = int(m.group(1), 16)
                 if not (entry <= t < end):
-                    raise Unsupported('branch out of function: $%06X -> $%06X (%s)'
-                                      % (ins.address, t, ins.mnemonic))
+                    # out-of-function target. An UNCONDITIONAL bra is a TAIL-JUMP to another
+                    # function (e.g. GAME_TICK's `bra $2e6a`) -> gen emits PC=t/jmp inext. A
+                    # conditional branch out is not yet supported (would need a tail-jump stub).
+                    if base != 'bra':
+                        raise Unsupported('conditional branch out of function: $%06X -> $%06X (%s)'
+                                          % (ins.address, t, ins.mnemonic))
+                    continue
                 labels.add(t)
-    return insns, labels
+    return insns, (labels, entry, end)
 
 # ---- emit buffer + fresh local labels ----
 class Emit:
@@ -433,6 +438,24 @@ def gen(e, ins, nxt):
             e('lda $%02X' % reg_dp(dst[1]))              # reload result for clean Z/N (dst is Dn)
             emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
+    if base in ('rol', 'ror'):                           # rotate Dn by #imm (.w lo16 / .l full 32-bit)
+        cnt, dst = ops
+        if dst[0] != 'Dn' or cnt[0] != 'imm': raise Unsupported('%s non-imm/non-Dn' % base)
+        if fuses: raise Unsupported('%s feeding branch' % base)
+        dp = reg_dp(dst[1]); n = cnt[1] & 0xFFFF
+        for _ in range(n):
+            s = e.fresh()
+            if base == 'rol':                            # left: top bit (lo15 for .w / bit31 for .l) -> bit0
+                e('asl $%02X' % dp)                      # lo <<= 1, C = lo.bit15
+                if size == 'l': e('rol $%02X' % (dp + 2))# hi = (hi<<1)|C, C = bit31
+                e('bcc %s' % s); e('inc $%02X' % dp); e.lbl(s)
+            else:                                        # ror: bit0 -> top bit
+                if size == 'l': e('lsr $%02X' % (dp + 2)); e('ror $%02X' % dp)  # C = bit0
+                else: e('lsr $%02X' % dp)                # C = lo.bit0
+                e('bcc %s' % s)
+                w = dp + 2 if size == 'l' else dp        # set the top bit (bit31 / bit15)
+                e('lda $%02X' % w); e('ora #$8000'); e('sta $%02X' % w); e.lbl(s)
+        return 1
     if base == 'not':                                    # bitwise complement <ea> (~ea), in place
         dst = ops[0]
         if size == 'l': raise Unsupported('not.l — add if needed')
@@ -524,7 +547,15 @@ def gen(e, ins, nxt):
 
     # ---- branches ----
     if base == 'bra':
-        emit_branch(e, 'bra', branch_target(ins), None); return 1
+        t = branch_target(ins)
+        if getattr(e, 'entry', None) is not None and not (e.entry <= t < e.end):
+            # TAIL-JUMP: bra to another function (e.g. GAME_TICK -> $2e6a). Set PC=t and jmp inext;
+            # the target runs interpreted and rts's to OUR caller (the return we re-pushed in the
+            # prologue). No sentinel (it's a tail, not a call). bank1_transform -> jml.l inext.
+            e('lda %s' % imm16(t & 0xFFFF)); e('sta $40')
+            e('lda %s' % imm16((t >> 16) & 0xFFFF)); e('sta $42')
+            e('jmp inext'); return 1
+        emit_branch(e, 'bra', t, None); return 1
     if base in ('dbra', 'dbf'):
         dp = reg_dp(ops[0][1]); tgt = branch_target(ins)
         e('lda $%02X' % dp); e('dec a'); e('sta $%02X' % dp); e('cmp #$FFFF')
@@ -596,7 +627,10 @@ def gen_call(e, ins):
     -> jmp ($0040) -> cont. Args/cleanup are the normal move.w/-(a7) + addq.l #n,a7 instructions
     around the call (transpiled separately). Reg-file-faithful => no native state crosses the bridge."""
     e.brn += 1; cont = 'br%s_%d' % (e.pfx, e.brn); t = ins.op_str.strip()
-    m = re.fullmatch(r'\$([0-9a-f]+)\.l', t) or re.fullmatch(r'\$([0-9a-f]+)', t)
+    # $XXXX.l (jsr.l) / $XXXX (bsr, capstone-resolved) / $XXXX(pc) (jsr (d16,PC) -- capstone already
+    # resolved the target to absolute $XXXX). All give the absolute callee address in group(1).
+    m = (re.fullmatch(r'\$([0-9a-f]+)\.l', t) or re.fullmatch(r'\$([0-9a-f]+)', t)
+         or re.fullmatch(r'\$([0-9a-f]+)\(pc\)', t))
     # BRIDGE-TO-ESCAPE: callee has an escbank escape -> run it NATIVELY (no interpret) and resume the
     # parent. Set $40=cont/$42=$00FE (sentinel), jmp entry_C: entry_C's prologue pushes $00FE:cont, its
     # body runs native, its terminal rts pops $00FE:cont -> ors_pre -> resume here ($92:cont). The
@@ -784,9 +818,10 @@ def main():
         if a.startswith('--escapes='):
             ESCAPED = {int(x, 16) & 0xFFFFFF for x in a.split('=', 1)[1].split(',') if x}
     entry = int(args[0], 16)
-    insns, labels = decode(entry)
+    insns, (labels, fn_lo, fn_hi) = decode(entry)
     name = 'entry_%x' % entry
     e = Emit(pfx='%x' % entry)                       # per-function label namespace (global Poppy syms)
+    e.entry, e.end = fn_lo, fn_hi                    # function bounds (for tail-jump detection in gen)
     e.lines.append('; --- transpiled from $%06X (%d instrs) by tools/transpile.py%s ---'
                    % (entry, len(insns), ' [bank1]' if bank1 else ''))
     e.lbl(name)
