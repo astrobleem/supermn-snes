@@ -398,15 +398,26 @@ def gen(e, ins, nxt):
         e('lda #$%04X' % (0xFFFF if n & 0x80 else 0)); e('sta $%02X' % (dp+2))
         if fuses: e('lda $%02X' % dp); emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
-    if base in ('lsl', 'lsr', 'asl', 'asr'):             # shift Dn by #count (.w/.b)
+    if base in ('lsl', 'lsr', 'asl', 'asr'):             # shift Dn by #imm OR by Dm (.w)
         cnt, dst = ops
-        if cnt[0] != 'imm' or dst[0] != 'Dn': raise Unsupported('%s non-imm/non-Dn' % base)
+        if dst[0] != 'Dn': raise Unsupported('%s non-Dn dst' % base)
         if base == 'asr' and size != 'w': raise Unsupported('asr.%s — only .w' % size)
         def one(e):                                      # one shift step on A (M=16)
             if base == 'asr':                            # arithmetic >>1: C=bit15, ror folds sign back in
                 e('cmp #$8000'); e('ror a')
             else:
                 e({'lsl': 'asl a', 'asl': 'asl a', 'lsr': 'lsr a'}[base])
+        if cnt[0] == 'Dn':                               # DYNAMIC count: shift Dn.w (Dm.b & $3F) times via a loop
+            if size != 'w': raise Unsupported('dynamic %s.%s — only .w' % (base, size))
+            dp = reg_dp(dst[1]); dm = reg_dp(cnt[1]); loop = e.fresh(); done = e.fresh()
+            e('lda $%02X' % dm); e('and #$003F'); e('tax')   # X = count (low 6 bits, 0-63)
+            e('lda $%02X' % dp)                              # A = Dn.w
+            e.lbl(loop); e('cpx #$0000'); e('beq %s' % done)
+            one(e); e('dex'); e('bra %s' % loop)
+            e.lbl(done); e('sta $%02X' % dp)
+            if fuses: raise Unsupported('dynamic shift feeding branch — add if needed')
+            return 1
+        if cnt[0] != 'imm': raise Unsupported('%s count mode %s' % (base, cnt[0]))
         def lv(e):
             ea_load_A(e, dst, size)
             for _ in range(cnt[1] & 0xFFFF): one(e)
@@ -414,6 +425,17 @@ def gen(e, ins, nxt):
         if fuses:                                        # result Z/N is live; only Z/N-testable branches
             if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('shift feeding %s (needs C/V)' % nb)
             e('lda $%02X' % reg_dp(dst[1]))              # reload result for clean Z/N (dst is Dn)
+            emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+        return 1
+    if base == 'not':                                    # bitwise complement <ea> (~ea), in place
+        dst = ops[0]
+        if size == 'l': raise Unsupported('not.l — add if needed')
+        m = 0x00FF if size == 'b' else 0xFFFF
+        ea_rmw(e, dst, size, lambda e: e('eor #$%04X' % m))
+        if fuses:
+            if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('not feeding %s' % nb)
+            if dst[0] == 'Dn': e('lda $%02X' % reg_dp(dst[1]))
+            else: ea_load_A(e, dst, size)
             emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
     if base == 'ext':                                    # sign-extend in place; V=C=0, NZ from result
