@@ -23,6 +23,7 @@ writebyte_l=$00E5BE
 usmul_l=$00E5C2
 op_rts_sentinel=$00EA3A
 jsrabs_hook=$00E200
+bhp_after=$00E454
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -6244,6 +6245,209 @@ Lcc10_cc42:
     sta $3C
     jml.l inext
 
+; --- $0008C2 dyn-btst (jah2_ext) ---
+; --- transpiled from $0008C2 (17 instrs) by tools/transpile.py [bank1] ---
+entry_8c2:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$0000
+    sta $00
+    lda #$001F
+    sta $14
+    lda $34
+    clc
+    adc #$1B12
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9C
+    lda $34
+    clc
+    adc #$1B14
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9A
+    sta $18
+    lda $9C
+    sta $1A
+    lda $34
+    clc
+    adc #$1712
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda #$0000
+    sta $24
+    lda #$00B0
+    sta $26
+L8c2_8d6:
+    lda $00
+    and #$001F
+    cmp #$0010
+    bcc Lf8c2_1
+    sec
+    sbc #$0010
+    tax
+    lda $1A
+    bra Lf8c2_2
+Lf8c2_1:
+    tax
+    lda $18
+Lf8c2_2:
+Lf8c2_3:
+    cpx #$0000
+    beq Lf8c2_4
+    lsr a
+    dex
+    bra Lf8c2_3
+Lf8c2_4:
+    and #$0001
+    bne Lf8c2_5
+    jmp L8c2_8e6
+Lf8c2_5:
+    lda #$0007
+    sta $04
+L8c2_8de:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9C
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $20
+    clc
+    adc #$0004
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $9C
+    sta $80
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $9A
+    sta $80
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $24
+    clc
+    adc #$0004
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $04
+    dec a
+    sta $04
+    cmp #$FFFF
+    beq Lf8c2_6
+    jmp L8c2_8de
+Lf8c2_6:
+    jmp L8c2_8ee
+L8c2_8e6:
+    lda $20
+    clc
+    adc #$0020
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $24
+    clc
+    adc #$0020
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+L8c2_8ee:
+    lda $00
+    clc
+    adc #$0001
+    sta $00
+    lda $14
+    dec a
+    sta $14
+    cmp #$FFFF
+    beq Lf8c2_7
+    jmp L8c2_8d6
+Lf8c2_7:
+    lda #$0000
+    sta $80
+    lda $34
+    clc
+    adc #$1B12
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sta $80
+    lda $34
+    clc
+    adc #$1B14
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -6263,3 +6467,31 @@ jah2_ext:
 jx_real:
     plp                  ; restore carry for push32r (matches the original jah2_miss)
     jml jsrabs_hook
+
+; ======================= JAH2 BSR/PCREL EXTENSION CHAIN =======================
+; Shift-safe dispatch for bsr / jsr(d16,PC)-reached escapes (the SEPARATE bsr_hookpush path,
+; target in $5C not $52). Reached from bank-$00 bhp_push via `jml $92F400` (size-neutral
+; redirect that replaced its `lda $54 / cmp $40`). Stack on entry: [RET1] only (no php; pla
+; drops it on a hit). Re-checks gate + bank, scans bsr-reached escapes; on miss it redoes the
+; lda$54/cmp$40 the redirect overwrote and `jml bhp_after` to finish push32 in bank $00 (the
+; rts back into op_bsr MUST run in bank $00).
+    .org $F400
+jah2_ext_bsr:
+    lda $071A
+    beq jxb_real         ; escapes gated off -> real miss (no dispatch)
+    lda $5E
+    bne jxb_real         ; target bank != 0 -> real miss
+    lda $5C              ; bsr target low16
+    ; >>> JAH2_EXT_BSR_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jxb_real <<<
+    cmp #$08C2
+    bne bjx_8c2
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jmp entry_8c2          ; <- $0008C2 dyn-btst
+bjx_8c2:
+jxb_real:
+    lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
+    cmp $40
+    jml bhp_after        ; -> bank-$00 push32r/rts (must run in bank $00)

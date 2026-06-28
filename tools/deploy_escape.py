@@ -13,9 +13,27 @@ SKIP_REVERT=os.environ.get('DEPLOY_NOREVERT')=='1'  # leave a broken build in pl
 hx='%06X'%addr; lab='entry_%x'%(addr&0xFFFFFF); jx='jx_%x'%(addr&0xFFFFFF)
 esc=open('src/escbank.pasm').read()
 esc_orig=esc  # for auto-revert if the deploy breaks the gameplay path
-assert 'ESCBANK_BODIES_END' in esc and 'JAH2_EXT_SCAN' in esc and 'jx_real:' in esc, \
+assert all(k in esc for k in ('ESCBANK_BODIES_END','JAH2_EXT_SCAN','jx_real:','JAH2_EXT_BSR_SCAN','jxb_real:')), \
     "escbank.pasm missing jah2_ext markers (run the extension-chain migration first)"
-assert ('jmp %s\n'%lab) not in esc and ('%s:'%lab) not in esc, "%s already deployed"%lab
+assert ('%s:'%lab) not in esc, "%s already deployed"%lab
+
+# Detect how $addr is called -> which hook chain(s) dispatch it. jsr.l/jsr.w/jsr(An) -> jah2_ext
+# (jsrabs_hook2); bsr / jsr(d16,PC) -> jah2_ext_bsr (bsr_hookpush). Append only to the chain(s)
+# that can actually reach it (an indirect jsr(An) shows as neither -> default to jah2_ext).
+def call_type(a):
+    img=open('build/interp.sfc','rb').read()[0x10000:0x10000+0x40000]; a&=0xFFFFFF
+    jsr = (a<0x10000 and bytes([0x4e,0xb8])+a.to_bytes(2,'big') in img) or (bytes([0x4e,0xb9])+a.to_bytes(4,'big') in img)
+    bsr=False; i=0
+    while i<len(img)-3:
+        if img[i]==0x4e and img[i+1]==0xba:                      # jsr (d16,PC)
+            if (i+2+int.from_bytes(img[i+2:i+4],'big',signed=True))&0xFFFFFF==a: bsr=True
+        elif img[i]==0x61:                                       # bsr.b / bsr.w
+            d=int.from_bytes(img[i+2:i+4],'big',signed=True) if img[i+1]==0 else (img[i+1]-256 if img[i+1]>=128 else img[i+1])
+            if (i+2+d)&0xFFFFFF==a: bsr=True
+        i+=1
+    return jsr, bsr
+do_jsr, do_bsr = call_type(addr)
+if not do_jsr and not do_bsr: do_jsr=True                        # indirect jsr(An) -> jah2_ext path
 # transpile both modes, pick video if they differ (video mode routes stores through the $41 shadow)
 def tr(*a): return subprocess.run(['python3','tools/transpile.py',hx,'--bank1',*a],capture_output=True,text=True).stdout
 vo=tr('--video'); po=tr()
@@ -30,13 +48,19 @@ body='\n'.join(_w(ln) for ln in body.splitlines())
 # 1) append the body just before the BODIES_END marker (stays below .org $F000)
 body_blk='; --- $%s %s (jah2_ext) ---\n%s\n\n'%(hx,tag,body.rstrip())
 esc=esc.replace('; >>> ESCBANK_BODIES_END', body_blk+'; >>> ESCBANK_BODIES_END',1)
-# 2) append a scan block just before jx_real (dispatch jumps within bank $92 to the body label)
-scan=("    cmp #$%04X\n    bne %s\n    inc $0764\n    plp\n    pla\n    lda $54\n    sta $40\n"
-      "    jmp %s          ; <- $%s %s\n%s:\n"%(addr&0xFFFF,jx,lab,hx,tag,jx))
-assert esc.count('jx_real:')==1
-esc=esc.replace('jx_real:',scan+'jx_real:',1)
+# 2) append a scan block before the matching chain's miss label (dispatch jmps within bank $92).
+#    jah2_ext (jsr): plp/pla then PC=return.  jah2_ext_bsr (bsr): PC=return then pla (no php).
+chains=[]
+if do_jsr: chains.append(('jx_real:', jx, "    plp\n    pla\n    lda $54\n    sta $40\n"))
+if do_bsr: chains.append(('jxb_real:', 'b'+jx, "    lda $54\n    sta $40\n    pla\n"))
+for miss_lbl, jlab, prologue in chains:
+    scan="    cmp #$%04X\n    bne %s\n    inc $0764\n%s    jmp %s          ; <- $%s %s\n%s:\n"%(
+        addr&0xFFFF, jlab, prologue, lab, hx, tag, jlab)
+    assert esc.count(miss_lbl)==1
+    esc=esc.replace(miss_lbl, scan+miss_lbl, 1)
 open('src/escbank.pasm','w').write(esc)
-print("DEPLOYED %s -> jah2_ext (%s) mode=%s"%(hx,lab,'video' if video else 'work'))
+cn='+'.join(([ 'jah2_ext'] if do_jsr else [])+(['jah2_ext_bsr'] if do_bsr else []))
+print("DEPLOYED %s -> %s (%s) mode=%s"%(hx, cn, lab, 'video' if video else 'work'))
 
 def revert(why):
     if SKIP_REVERT:

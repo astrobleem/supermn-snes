@@ -15812,10 +15812,13 @@ bhp_e3:                  ; -- $003E6A -> entry_3e6a --  (A still = target lo16)
     sta $40
     pla
     jmp entry_3e6a
-bhp_push:                ; MISS: push the 24-bit return. push32r derives the return bank
-    ; from the caller's carry (PC+len add) which we clobbered -> derive it ourselves.
-    lda $54
-    cmp $40              ; C set if return-lo16 >= PC-lo16 (i.e. no bank wrap)
+bhp_push:                ; MISS (or new-escape check). SIZE-NEUTRAL redirect to the escbank
+    ; bsr extension: this `jml` (4 bytes) exactly replaces the old `lda $54 / cmp $40` (2+2),
+    ; so the chain never shifts the packed $E200 region. jah2_ext_bsr re-checks gate/bank,
+    ; scans bsr/pcrel-reached escapes, and on miss redoes lda$54/cmp$40 then `jml bhp_after`
+    ; to finish the original return-bank derivation + push32 HERE (rts must run in bank $00).
+    jml $92F400
+bhp_after:               ; re-entered from jah2_ext_bsr after it redoes lda $54 / cmp $40 (carry live)
     lda $42
     bcs bhp_nob
     inc a                ; return crossed into the next bank
