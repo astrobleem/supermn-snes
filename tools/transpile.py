@@ -91,9 +91,10 @@ def decode(entry):
                 btgt = int(m.group(1), 16)
                 if entry <= btgt < entry + 0x2000: targets.add(btgt)
         if ins.mnemonic == 'rts': break
-        # a coroutine task body has no rts -- it ends with an unconditional `bra` BACK to its trap #5
-        # (target < entry). Treat that backward tail-jump as the body end (multi-exit guard: only if
-        # nothing branches past it). gen emits it as a tail-jump -> interp runs the trap #5 = yield.
+        # a coroutine yield is `trap #5` (inline, e.g. $4542's at $455C) OR an unconditional `bra` BACK
+        # to a trap #5 (target < entry, e.g. $C2F8's bra $c2f6). Both end the body (multi-exit guard).
+        # gen emits the trap as a tail-jump to itself and the bra as a tail-jump -> interp runs the trap.
+        if base == 'trap' and addr not in targets: break
         if base == 'bra' and btgt is not None and btgt < entry and addr not in targets: break
         if addr - entry > 0x2000: raise Unsupported('no rts within 0x2000 from $%06X' % entry)
     end = addr
@@ -651,6 +652,13 @@ def gen(e, ins, nxt):
         if fuses: emit_branch(e, nb, branch_target(nxt), 'signed'); return 2
         raise Unsupported('%s not feeding a branch' % base)
 
+    if base == 'trap':
+        # coroutine yield: tail-jump to the trap itself so the interpreter executes it ($0532 saves
+        # the context with resume-PC = the instr after the trap, and the scheduler runs the next task).
+        a = ins.address
+        e('lda %s' % imm16(a & 0xFFFF)); e('sta $40')
+        e('lda %s' % imm16((a >> 16) & 0xFFFF)); e('sta $42')
+        e('jmp inext'); return 1
     # ---- branches ----
     if base == 'bra':
         t = branch_target(ins)

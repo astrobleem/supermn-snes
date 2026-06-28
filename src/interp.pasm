@@ -11097,6 +11097,8 @@ ors_rte:
     lda $40              ; --- bank-$00 task-body resume-PCs (add `cmp #LO / beq ors_rte_hit` per body) ---
     cmp #$C2F8
     beq ors_rte_hit      ; $00C2F8 ($00C300)
+    cmp #$455E
+    beq ors_rte_hit      ; $00455E (trampoline -> $4542 body)
     bra ors_rte_x
 ors_rte_b2:
     cmp #$0002           ; --- bank-$02 task bodies ---

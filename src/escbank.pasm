@@ -12440,6 +12440,70 @@ Ltj2658e_265f0:
     sta $42
     jml.l inext
 
+; --- $004542 coroutine task body ($00455E trampoline target) ---
+; --- transpiled from $004542 (9 instrs) by tools/transpile.py [bank1] ---
+entry_4542:
+    rep #$30
+    lda $3C
+    sta $077C
+    lda $3E
+    sta $077E
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$1CCC
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    sec
+    sbc #$000A
+    bne Lf4542_1
+    jmp L4542_4556
+Lf4542_1:
+    ; CALL-BRIDGE jsr $46de(pc) -> interpret callee, resume br4542_1
+    lda #br4542_1
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$46DE
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br4542_1:
+    lda $1C
+    bne Lf4542_2
+    jmp L4542_4556
+Lf4542_2:
+    lda #$4560
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+L4542_4556:
+    ; CALL-BRIDGE jsr $c9f8.l -> interpret callee, resume br4542_2
+    lda #br4542_2
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$C9F8
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br4542_2:
+    lda #$455C
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -12673,8 +12737,12 @@ cors_disp:
     lda $40              ; --- bank-$00 bodies (add `cmp #LO / beq entry_X` per body) ---
     cmp #$C2F8
     beq cd_c2f8          ; $00C2F8 ($00C300)
+    cmp #$455E
+    beq cd_455e          ; $00455E (trampoline -> $4542 body)
     jml.l inext          ; safety (ors_rte already matched -> shouldn't reach)
 cd_c2f8:
     jmp entry_c2f8
+cd_455e:
+    jmp entry_4542
 cd_b2:                   ; --- bank-$02 bodies ---
     jmp entry_2658e      ; $02658E (only bank-2 body for now)

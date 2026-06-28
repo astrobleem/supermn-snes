@@ -49,7 +49,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc', mesen=NEXEN, por
     # Coroutine task bodies run on their OWN stacks (NOT the main a7), so their arg-push frames are
     # transient there -- a7-aware must cover each task stack too. Each entry_X stashes its a7: $0774
     # ($00C300), $0778 ($02658E). 0 if that body didn't run this frame.
-    ta7 = [r16(0x0774), r16(0x0778)]
+    ta7 = [r16(0x0774), r16(0x0778), r16(0x077C)]   # $00C300, $02658E, $004542 task a7s
     print(">>> full frame OFF trapped=%s  ON trapped=%s  (main a7=$%04X  task a7s=%s)"
           % (ok0, ok1, a7, ['$%04X' % t for t in ta7]))
     def is_stack(i):           # transient if within 0x400 below the main a7 OR 0x40 below any task a7
