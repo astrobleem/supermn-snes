@@ -59,7 +59,7 @@ def parse_ea(tok, pc=None):
     m = re.fullmatch(r'\$(-?[0-9a-f]+)\(a([0-7])\)', t)
     if m: return ('(d16,An)', s16(int(m.group(1), 16)), 'a'+m.group(2))
     m = re.fullmatch(r'\$([0-9a-f]+)\(pc\)', t)
-    if m: return ('imm', None)                  # PC-relative const: resolve later (none in v1 targets)
+    if m: return ('abs', int(m.group(1), 16))   # capstone already RESOLVED pc+disp -> absolute address
     m = re.fullmatch(r'#\$?(-?[0-9a-f]+)', t)
     if m: return ('imm', int(t[1:].replace('$', '0x'), 0) & 0xFFFFFFFF)
     m = re.fullmatch(r'\$([0-9a-f]+)\.[lw]', t)             # absolute long/short ($XXXXXX.l)
@@ -427,6 +427,10 @@ def gen(e, ins, nxt):
         elif src[0] == 'abs':
             e('lda #%s' % hx(src[1] & 0xFFFF)); e('sta $%02X' % dp)
             e('lda #%s' % hx((src[1] >> 16) & 0xFFFF)); e('sta $%02X' % (dp+2))
+        elif src[0] == '(An)':                       # lea (An),Am = copy An (disp 0)
+            s = reg_dp(src[1])
+            e('lda $%02X' % s); e('sta $%02X' % dp)
+            e('lda $%02X' % (s+2)); e('sta $%02X' % (dp+2))
         else:
             raise Unsupported('lea src %r' % (src,))
         return 1

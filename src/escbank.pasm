@@ -2271,7 +2271,7 @@ L26fa_2740:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 ; --- transpiled from $00295A (14 instrs) by tools/transpile.py [bank1] ---
 entry_295a:
@@ -5744,7 +5744,7 @@ Ld18a_d1fc:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    jml.l ors_pre
 
 ; --- transpiled from $002E06 (9 instrs) by tools/transpile.py [bank1] ---
 entry_2e06:
@@ -12502,6 +12502,213 @@ br4542_2:
     sta $42
     jml.l inext
 
+; --- $00CE58 coroutine task body ($00CEB4 trampoline target) ---
+; --- transpiled from $00CE58 (23 instrs) by tools/transpile.py [bank1] ---
+entry_ce58:
+    rep #$30
+    lda $3C
+    sta $0780
+    lda $3E
+    sta $0782
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    ; CALL-BRIDGE jsr $cd1a.l -> interpret callee, resume brce58_1
+    lda #brce58_1
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$CD1A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+brce58_1:
+    ; CALL-BRIDGE jsr $26fa.l -> entry_26fa (NATIVE escape), resume brce58_2
+    lda #brce58_2
+    sta $40
+    lda #$00FE
+    sta $42
+    jmp entry_26fa
+brce58_2:
+    lda $38
+    sta $30
+    lda $3A
+    sta $32
+    lda #$0001
+    sta $18
+Lce58_ce6a:
+    ; CALL-BRIDGE bsr.w $d522 -> interpret callee, resume brce58_3
+    lda #brce58_3
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$D522
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+brce58_3:
+    lda #$0010
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $30
+    sec
+    sbc $9A
+    sta $30
+    lda $32
+    sbc $9C
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lfce58_1
+    jmp Lce58_ce6a
+Lfce58_1:
+    lda #$0005
+    sta $18
+Lce58_ce7a:
+    ; CALL-BRIDGE bsr.w $ceb6 -> interpret callee, resume brce58_4
+    lda #brce58_4
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$CEB6
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+brce58_4:
+    lda #$0010
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $30
+    sec
+    sbc $9A
+    sta $30
+    lda $32
+    sbc $9C
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lfce58_2
+    jmp Lce58_ce7a
+Lfce58_2:
+    lda #$0001
+    sta $18
+Lce58_ce8a:
+    ; CALL-BRIDGE bsr.w $d6b0 -> interpret callee, resume brce58_5
+    lda #brce58_5
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$D6B0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+brce58_5:
+    lda #$0010
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $30
+    sec
+    sbc $9A
+    sta $30
+    lda $32
+    sbc $9C
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lfce58_3
+    jmp Lce58_ce8a
+Lfce58_3:
+    lda #$0001
+    sta $18
+Lce58_ce9a:
+    ; CALL-BRIDGE bsr.w $d226 -> interpret callee, resume brce58_6
+    lda #brce58_6
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda #$D226
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+brce58_6:
+    lda #$0020
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $30
+    sec
+    sbc $9A
+    sta $30
+    lda $32
+    sbc $9C
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lfce58_4
+    jmp Lce58_ce9a
+Lfce58_4:
+    lda $34
+    clc
+    adc #$1CCC
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0003
+    beq Lfce58_5
+    jmp Lce58_ceb2
+Lfce58_5:
+    ; CALL-BRIDGE bsr.w $d18a -> entry_d18a (NATIVE escape), resume brce58_7
+    lda #brce58_7
+    sta $40
+    lda #$00FE
+    sta $42
+    jmp entry_d18a
+brce58_7:
+Lce58_ceb2:
+    lda #$CEB2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -12737,11 +12944,15 @@ cors_disp:
     beq cd_c2f8          ; $00C2F8 ($00C300)
     cmp #$455E
     beq cd_455e          ; $00455E (trampoline -> $4542 body)
+    cmp #$CEB4
+    beq cd_ceb4          ; $00CEB4 (trampoline -> $CE58 body)
     jml.l inext          ; safety (ors_rte already matched -> shouldn't reach)
 cd_c2f8:
     jmp entry_c2f8
 cd_455e:
     jmp entry_4542
+cd_ceb4:
+    jmp entry_ce58
 cd_b2:                   ; --- bank-$02 bodies ---
     jmp entry_2658e      ; $02658E (only bank-2 body for now)
 
