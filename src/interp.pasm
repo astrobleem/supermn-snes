@@ -11113,6 +11113,26 @@ ors_rte_hit:
 ors_rte_x:               ; Only a real hit detours to bank $92 (per-rte round-trips hang the SA-1).
     jmp inext
 
+; ojmp_hook — JMP-TABLE DISPATCH HOOK (op_jmp_idx jmps here; $40/$42 = the `jmp (a0)` target, e.g. a
+; state-machine handler from a `lea $T(pc),a0; movea.l (a0),a0; jmp (a0)` dispatcher). Scans the
+; target + gate IN BANK $00; HIT -> jml $92F900 (escbank ojmp_disp) -> the state-handler escape (run
+; with the CURRENT reg file -- no movem, we're mid-task). MISS -> jmp inext (interpret as today). Like
+; ors_rte, the miss case must stay in bank $00. Contiguous after ors_rte (which is .org-pinned, so
+; the drift is already reset; no jml [abs] in between -> ojmp_hook's label is correct).
+ojmp_hook:
+    lda $071A
+    beq ojmp_x           ; escapes gated OFF
+    lda $42
+    bne ojmp_x           ; target bank != 0 -> not a bank-$00 state handler
+    lda $40              ; --- escaped state handlers (add `cmp #LO / beq ojmp_hit` per handler) ---
+    cmp #$D0D0
+    beq ojmp_hit         ; $00D0D0
+    bra ojmp_x
+ojmp_hit:
+    jml $92F900          ; -> escbank ojmp_disp
+ojmp_x:
+    jmp inext
+
 ; C-Chip command-1 boot response (256 bytes of downloaded 68K code), captured
 ; from MAME (data/cchip_boot_response.bin). Read at $00:F700 via DBR=$00.
 .org $D1ED
@@ -19274,7 +19294,8 @@ op_jmp_idx:
     lda $52
     and #$00FF
     sta $42
-    jmp inext
+    jmp ojmp_hook        ; JMP-TABLE DISPATCH HOOK (size-neutral: was `jmp inext`). $40/$42 = the
+                         ; jmp (a0) target; if it's an escaped state-machine handler, dispatch it.
 op_jsr_idx:
     rep #$30
     lda $44

@@ -12709,6 +12709,431 @@ Lce58_ceb2:
     sta $42
     jml.l inext
 
+; --- $00D0D0 jmp-table state handler ($CEB6 dispatcher state) ---
+; --- transpiled from $00D0D0 (43 instrs) by tools/transpile.py [bank1] ---
+entry_d0d0:
+    rep #$30
+    lda $3C
+    sta $0784
+    lda $3E
+    sta $0786
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$2AA4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd0d0_1
+    bmi Lfd0d0_1
+    bra Lfd0d0_2
+Lfd0d0_1:
+    jmp Ld0d0_d11a
+Lfd0d0_2:
+    lda $34
+    clc
+    adc #$2AA4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    asl a
+    asl a
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda $30
+    clc
+    adc #$FFF8
+    tax
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
+    clc
+    adc #$0004
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FF1E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $00
+    asl a
+    asl a
+    sta $00
+    lda #$D16A
+    sta $20
+    lda #$0000
+    sta $22
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $20
+    clc
+    adc #$0002
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    pla
+    sta $00
+    lda $00
+    bne Lfd0d0_3
+    jmp Ld0d0_d11a
+Lfd0d0_3:
+    lda #$00FF
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FF1E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF4
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    clc
+    adc #$0134
+    sta $00
+    lda $00
+    sta $80
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda #$CFA4
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ld0d0_d11a:
+    lda $34
+    clc
+    adc #$2AA5
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd0d0_4
+    bmi Lfd0d0_4
+    bra Lfd0d0_5
+Lfd0d0_4:
+    jmp Ld0d0_d166
+Lfd0d0_5:
+    lda $34
+    clc
+    adc #$2AA5
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    asl a
+    asl a
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda $30
+    clc
+    adc #$FFF8
+    tax
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
+    clc
+    adc #$0004
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA5
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FF1C
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $00
+    asl a
+    asl a
+    sta $00
+    lda #$D16A
+    sta $20
+    lda #$0000
+    sta $22
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $20
+    clc
+    adc #$0002
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    pla
+    sta $00
+    lda $00
+    bne Lfd0d0_6
+    jmp Ld0d0_d166
+Lfd0d0_6:
+    lda #$00FF
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA5
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FF1C
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $00
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF4
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    clc
+    adc #$0144
+    sta $00
+    lda $00
+    sta $80
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda #$0001
+    sep #$20
+    sta $80
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    lda #$CFA4
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ld0d0_d166:
+    lda #$CF8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -12997,3 +13422,17 @@ ib_miss:
     lda $50
     sta $42
     jml.l inext
+
+; ===================== JMP-TABLE STATE-HANDLER DISPATCH ($92:F900) =====================
+; Reached from bank-$00 ojmp_hook via `jml $92F900`. $40 = the jmp(a0) target (a state-machine
+; handler). Run with the CURRENT reg file (we're mid-task; no movem). The handler escape (--coroutine,
+; no prologue push) tail-jumps to the dispatcher's common exit / rts's -> returns to the bsr caller,
+; same as interpreting it. Add one cmp/bne/jmp per escaped state handler.
+    .org $F900
+ojmp_disp:
+    lda $40
+    cmp #$D0D0
+    bne ojd_x
+    jmp entry_d0d0       ; $00D0D0 state handler
+ojd_x:
+    jml.l inext          ; safety (ojmp_hook already matched)
