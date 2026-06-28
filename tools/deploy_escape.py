@@ -5,6 +5,7 @@ import sys, re, subprocess
 addr=int(sys.argv[1],16); tag=sys.argv[2] if len(sys.argv)>2 else ''
 hx='%06X'%addr; lab='entry_%x'%(addr&0xFFFFFF)
 esc=open('src/escbank.pasm').read(); interp=open('src/interp.pasm').read()
+esc_orig=esc; interp_orig=interp  # for auto-revert if the deploy breaks the gameplay path
 # next slot = count of jmptab entries
 slot=len(re.findall(r'^    jmp (entry_|gm_memset)', esc, re.M))
 tgt=0x928000+slot*3
@@ -37,3 +38,22 @@ disp="jah2_e%x:\n    plp\n    pla\n    lda $54\n    sta $40\n    jml $%06X      
 interp=interp.replace('jah2_e412:',disp,1)
 open('src/interp.pasm','w').write(interp)
 print("DEPLOYED %s -> slot %d ($%06X) mode=%s"%(hx,slot,tgt,'video' if video else 'work'))
+
+def revert(why):
+    open('src/escbank.pasm','w').write(esc_orig); open('src/interp.pasm','w').write(interp_orig)
+    print("REVERTED %s -- %s"%(hx,why))
+    subprocess.run(['bash','tools/build_interp.sh'],capture_output=True,text=True)  # restore working ROM
+    sys.exit(1)
+
+# build the new ROM; a code-shift that wraps a short branch fails to assemble or breaks gameplay
+print("building...",flush=True)
+b=subprocess.run(['bash','tools/build_interp.sh'],capture_output=True,text=True)
+if b.returncode!=0:
+    revert("build failed:\n"+(b.stdout[-600:]+b.stderr[-600:]))
+# gameplay smoke-test: does one real GAME_TICK still run + return? (catches silent branch-wrap)
+print("smoke-testing gameplay...",flush=True)
+s=subprocess.run([sys.executable,'tools/smoke_gameplay.py'],capture_output=True,text=True)
+print(s.stdout.strip())
+if s.returncode!=0 or 'SMOKE: OK' not in s.stdout:
+    revert("gameplay smoke-test FAILED (deploy broke the execution path)")
+print("OK %s -- build + gameplay smoke-test PASS"%hx)
