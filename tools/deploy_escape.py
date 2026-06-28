@@ -31,7 +31,7 @@ body='\n'.join(_w(ln) for ln in body.splitlines())
 body_blk='; --- $%s %s (jah2_ext) ---\n%s\n\n'%(hx,tag,body.rstrip())
 esc=esc.replace('; >>> ESCBANK_BODIES_END', body_blk+'; >>> ESCBANK_BODIES_END',1)
 # 2) append a scan block just before jx_real (dispatch jumps within bank $92 to the body label)
-scan=("    cmp #$%04X\n    bne %s\n    plp\n    pla\n    lda $54\n    sta $40\n"
+scan=("    cmp #$%04X\n    bne %s\n    inc $0764\n    plp\n    pla\n    lda $54\n    sta $40\n"
       "    jmp %s          ; <- $%s %s\n%s:\n"%(addr&0xFFFF,jx,lab,hx,tag,jx))
 assert esc.count('jx_real:')==1
 esc=esc.replace('jx_real:',scan+'jx_real:',1)
