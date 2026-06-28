@@ -18271,6 +18271,19 @@ loop_hook:
     lda $42
     bne lh_nofire        ; only bank-$00 loops are hooked
     lda $40
+    cmp #$0818
+    bne lh_chk_3b84
+    ; $0818: the gameplay MAIN-LOOP IDLE SPIN (`bra $818`), the 68K waiting for the vblank
+    ; IRQ. MAME hardware-paces it (~10.7K spins/frame); interpreting all of them is ~95% of
+    ; the per-game-frame cost (the real work is only ~2.4K instr). Collapse it: fire the IRQ
+    ; NOW by forcing the $AC countdown to underflow next iloop -> GAME_TICK runs immediately.
+    ; The real 60Hz pacing comes from the 5A22-side vblank (VID_FRAME), not this dead wait.
+    inc $0760            ; game-frame counter (fps instrumentation; $0760 = free IRAM)
+    lda #$0001
+    sta $AC              ; AC=1 -> next iloop top underflows -> raise $AA -> vblank IRQ
+    clc                  ; C=0: let the bra execute once; the normal iloop path takes the IRQ
+    rts
+lh_chk_3b84:
     cmp #$3B84
     beq lh_delay         ; $3B84: busy-wait delay (clr.w D0; subq.w/bne x65536) -> skip it
     cmp #$3FEA           ; the far handlers are >127 bytes away -> bne-skip + jmp
