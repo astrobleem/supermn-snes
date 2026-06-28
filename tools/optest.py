@@ -44,8 +44,15 @@ MAME_CODE = 0xF03000
 INTERP_CODE_68K = 0x07C000           # 68K addr; ROM file offset = 0x10000+addr
 INTERP_CODE_ROMOFF = 0x10000 + INTERP_CODE_68K
 OPND = 0xF03800
-OPND_INTERP_WRAM = 0x10000 + (OPND & 0xFFFF)   # snesWorkRam offset for $7F:3800
+OPND_INTERP_WRAM = 0x10000 + (OPND & 0xFFFF)   # legacy: snesWorkRam offset for $7F:3800 (pre-SA-1)
 STACK = 0xF03F00
+# SA-1 memory model (the interp runs on the SA-1 coprocessor, not the 5A22). The pre-SA-1 harness
+# poked snesWorkRam ($7E/$7F) -> the SA-1 interp never saw the regs/go-flag and never single-stepped
+# (0/all FAIL "did not single-step"). DP/register file/flags/mailbox ($00-$FF) live in SA-1 IRAM
+# (Sa1Memory); the operand at 68K work RAM $F0xxxx maps to BW-RAM $40 (snesMemory). Mirrors opsweep.py.
+DP_SPACE   = "Sa1Memory"
+OPND_SPACE = "snesMemory"
+OPND_ADDR  = 0x400000 | (OPND & 0xFFFF)        # $F03800 work RAM -> BW-RAM $40:3800
 MBOX = 0x7600                         # ROM file offset of the TESTFLAG. The interp runs on the SA-1,
                                       # which sees bank-$00 $8000-$FFFF LoROM-style (file = CPU-$8000),
                                       # so CPU $00:F600 -> file $7600. (The old $F400 only "worked"
@@ -194,24 +201,24 @@ def interp_run(opwords, oplen, vecs):
         with McpSession(rom=sfc, mesen=MESEN, port=7339, boot_wait=3.0) as m:
             for v in vecs:
                 # poke vector state directly into the (running, idle) interpreter
-                m.write_memory("snesWorkRam", 0x00, _regblk(v).hex())
+                m.write_memory(DP_SPACE, 0x00, _regblk(v).hex())
                 pc=INTERP_CODE_68K
-                m.write_memory("snesWorkRam", 0x40,
+                m.write_memory(DP_SPACE, 0x40,
                                bytes([pc&0xFF,(pc>>8)&0xFF,(pc>>16)&0xFF,(pc>>24)&0xFF]).hex())
                 Z=(v.ccr>>2)&1; C=v.ccr&1; N=(v.ccr>>3)&1; V=(v.ccr>>1)&1; X=(v.ccr>>4)&1
                 for addr,val in ((0x60,Z),(0x6E,C),(0x70,N),(0x72,V),(0xA2,X)):
-                    m.write_memory("snesWorkRam", addr, bytes([val,0]).hex())
-                m.write_memory("snesWorkRam", 0x7C, bytes([0x07,0]).hex())   # SR mask
-                m.write_memory("snesWorkRam", OPND_INTERP_WRAM, v.opnd.hex())
-                m.write_memory("snesWorkRam", 0xA0, bytes([0x01,0]).hex())   # go-flag
+                    m.write_memory(DP_SPACE, addr, bytes([val,0]).hex())
+                m.write_memory(DP_SPACE, 0x7C, bytes([0x07,0]).hex())   # SR mask
+                m.write_memory(OPND_SPACE, OPND_ADDR, v.opnd.hex())
+                m.write_memory(DP_SPACE, 0xA0, bytes([0x01,0]).hex())   # go-flag
                 m.run_frames(1)
-                regblk=m.read_memory("snesWorkRam", 0x00, 0x40)
-                flagblk=m.read_memory("snesWorkRam", 0x60, 0x20)   # $60..$7F
-                xbyte=m.read_memory("snesWorkRam", 0xA2, 1)        # X flag
-                opnd=m.read_memory("snesWorkRam", OPND_INTERP_WRAM, 16)
-                stopf=m.read_memory("snesWorkRam", 0x4E, 2)
-                pcblk=m.read_memory("snesWorkRam", 0x40, 4)
-                uspblk=m.read_memory("snesWorkRam", 0xA4, 4)       # USP slot ($A4/$A6)
+                regblk=m.read_memory(DP_SPACE, 0x00, 0x40)
+                flagblk=m.read_memory(DP_SPACE, 0x60, 0x20)   # $60..$7F
+                xbyte=m.read_memory(DP_SPACE, 0xA2, 1)        # X flag
+                opnd=m.read_memory(OPND_SPACE, OPND_ADDR, 16)
+                stopf=m.read_memory(DP_SPACE, 0x4E, 2)
+                pcblk=m.read_memory(DP_SPACE, 0x40, 4)
+                uspblk=m.read_memory(DP_SPACE, 0xA4, 4)       # USP slot ($A4/$A6)
                 d={}
                 d["USP"]=uspblk[0]|(uspblk[1]<<8)|(uspblk[2]<<16)|(uspblk[3]<<24)
                 d["PC"]=pcblk[0]|(pcblk[1]<<8)|(pcblk[2]<<16)|(pcblk[3]<<24)
