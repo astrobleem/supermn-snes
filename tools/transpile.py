@@ -90,12 +90,12 @@ def decode(entry):
             if m:
                 t = int(m.group(1), 16)
                 if not (entry <= t < end):
-                    # out-of-function target. An UNCONDITIONAL bra is a TAIL-JUMP to another
-                    # function (e.g. GAME_TICK's `bra $2e6a`) -> gen emits PC=t/jmp inext. A
-                    # conditional branch out is not yet supported (would need a tail-jump stub).
-                    if base != 'bra':
-                        raise Unsupported('conditional branch out of function: $%06X -> $%06X (%s)'
-                                          % (ins.address, t, ins.mnemonic))
+                    # out-of-function target -> a TAIL-JUMP (set PC=t, jmp inext, interpreter takes
+                    # over there; our re-pushed return brings control back to OUR caller on its rts).
+                    # Works for an unconditional bra (e.g. GAME_TICK's `bra $2e6a`) AND a conditional
+                    # branch out (e.g. $3C36's `bhi $3c34` to a spin) -> gen/emit_branch routes the
+                    # taken path through a per-target tail-jump stub (emitted after the body). Don't
+                    # add to intra-fn labels.
                     continue
                 labels.add(t)
     return insns, (labels, entry, end)
@@ -235,9 +235,28 @@ def ea_store_A_from(e, ea, size, load_value):
     raise Unsupported('store EA %r' % (ea,))
 
 # ===================== branch idiom =====================
+def branch_label(e, tgt):
+    """Resolve a conditional-branch target to a local jmp label. In-function -> the normal per-fn
+    label (placed in the main loop). Out-of-function -> register a TAIL-JUMP stub (emitted after the
+    body by emit_tailjump_stubs) and return its label; the stub sets PC=tgt and jmp inext so the
+    interpreter takes over there (matches the real 68K, e.g. $3C36's bhi -> $3c34 spin)."""
+    if getattr(e, 'entry', None) is None or (e.entry <= tgt < e.end):
+        return e.L(tgt)
+    e.tailjumps.add(tgt)
+    return 'Ltj%s_%x' % (e.pfx, tgt)
+
+def emit_tailjump_stubs(e):
+    """Emit the out-of-function tail-jump stubs collected by branch_label. Placed after the body
+    (only reached via jmp): set 68K PC=tgt and jmp inext. bank1_transform -> jml.l inext."""
+    for tgt in sorted(getattr(e, 'tailjumps', ())):
+        e.lbl('Ltj%s_%x' % (e.pfx, tgt))
+        e('lda %s' % imm16(tgt & 0xFFFF)); e('sta $40')
+        e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
+        e('jmp inext')
+
 def emit_branch(e, base, tgt, fsrc):
     """fsrc: 'signed' (N,V,Z,C from sec;sbc) | 'tst' (N,Z; V=0). end: falls through if not taken."""
-    L = e.L(tgt)
+    L = branch_label(e, tgt)
     def jmp(): e('jmp %s' % L)
     def over(short_skip_cc):                       # `cc _s ; jmp L ; _s:`  (cc skips the jmp)
         s = e.fresh(); e('%s %s' % (short_skip_cc, s)); jmp(); e.lbl(s)
@@ -246,8 +265,19 @@ def emit_branch(e, base, tgt, fsrc):
     if base == 'bne': over('beq'); return
     if base == 'bmi': over('bpl'); return
     if base == 'bpl': over('bmi'); return
-    if base in ('bcs', 'bcc'):                     # 68K carry inverted vs 65816 sbc carry
-        over('bcc' if base == 'bcs' else 'bcs'); return
+    if base in ('bcs', 'bcc'):
+        # 68K carry is INVERTED vs the 65816 sec;sbc carry (68K bcs = unsigned-below = dst<src =
+        # 65816 C clear). over() takes the 68K branch when skip_cc is FALSE, so skip_cc must be the
+        # COMPLEMENT of the 68K condition in 65816 flags -> that complement is the SAME mnemonic as
+        # base (the carry-inversion and the skip-inversion cancel). e.g. 68K bcs: jmp when 65816 C
+        # clear -> skip_cc='bcs' (skip when C set). Cross-checked vs op_bcc's $6E (true 68K carry).
+        over(base); return
+    # unsigned compares (only meaningful after a cmp's sec;sbc): 65816 C=1 => dst>=src, Z=1 => equal.
+    if base == 'bhi':                              # dst>src unsigned: C set AND Z clear
+        sk = e.fresh(); e('bcc %s' % sk); e('beq %s' % sk); jmp(); e.lbl(sk); return
+    if base == 'bls':                              # dst<=src unsigned: C clear OR Z set
+        tk, sk = e.fresh(), e.fresh()
+        e('bcc %s' % tk); e('beq %s' % tk); e('bra %s' % sk); e.lbl(tk); jmp(); e.lbl(sk); return
     if fsrc == 'tst':                              # V==0: lt->mi, ge->pl
         if base == 'blt': over('bpl'); return
         if base == 'bge': over('bmi'); return
@@ -526,6 +556,32 @@ def gen(e, ins, nxt):
         return 1
     if base == 'nop':
         return 1
+    if base in ('bset', 'bclr', 'bchg'):                 # bit set/clear/change <bit>,<ea> (in place)
+        bitop, dst = ops
+        if bitop[0] != 'imm': raise Unsupported('%s dynamic bit operand' % base)
+        if fuses: raise Unsupported('%s feeding branch (Z = original bit, not modeled)' % base)
+        op = {'bset': 'ora', 'bclr': 'and', 'bchg': 'eor'}[base]
+        if dst[0] == 'Dn':                               # 32-bit register bit (mod 32)
+            nbit = bitop[1] & 31; dp = reg_dp(dst[1])
+            w = dp if nbit < 16 else dp + 2; m = (1 << nbit) >> (0 if nbit < 16 else 16)
+            mm = ((~m) & 0xFFFF) if base == 'bclr' else (m & 0xFFFF)
+            e('lda $%02X' % w); e('%s #$%04X' % (op, mm)); e('sta $%02X' % w); return 1
+        # memory/abs byte (mod 8): IO-aware RMW via readbyte/writebyte so the C-Chip register $900007
+        # routes to $41:F000 shared RAM EXACTLY as the interpreter does ($90xxxx; $00F0xxxx -> $40).
+        nbit = bitop[1] & 7; m = 1 << nbit
+        mm = ((~m) & 0xFFFF) if base == 'bclr' else m
+        def setup_addr(e):
+            if dst[0] == 'abs':
+                e('lda #%s' % hx(dst[1] & 0xFFFF)); e('sta $54')
+                e('lda #%s' % hx((dst[1] >> 16) & 0xFFFF)); e('sta $52')
+            elif dst[0] in ('(An)', '(d16,An)'):
+                an = dst[-1]; disp = dst[1] if dst[0] == '(d16,An)' else 0
+                ea_setup_romaware(e, an, disp)
+            else: raise Unsupported('%s dst %r' % (base, dst))
+        setup_addr(e); e('jsr readbyte')                # A.lo = current byte (IO-aware)
+        e('%s #$%04X' % (op, mm)); e('sta $80')         # modify; writebyte takes the value in $80
+        setup_addr(e); e('jsr writebyte')               # re-setup ($54 advanced by readbyte), write back
+        return 1
     if base == 'btst':                                   # btst <bit>,<ea> : Z = !(bit of ea)
         bitop, dst = ops
         if bitop[0] == 'imm':                            # static bit number -> single mask
@@ -576,7 +632,7 @@ def gen(e, ins, nxt):
     if base in ('dbra', 'dbf'):
         dp = reg_dp(ops[0][1]); tgt = branch_target(ins)
         e('lda $%02X' % dp); e('dec a'); e('sta $%02X' % dp); e('cmp #$FFFF')
-        s = e.fresh(); e('beq %s' % s); e('jmp ' + e.L(tgt)); e.lbl(s); return 1
+        s = e.fresh(); e('beq %s' % s); e('jmp ' + branch_label(e, tgt)); e.lbl(s); return 1
     if base in BCC:
         raise Unsupported('stray conditional %s (flags not from preceding op)' % base)
 
@@ -839,6 +895,7 @@ def main():
     name = 'entry_%x' % entry
     e = Emit(pfx='%x' % entry)                       # per-function label namespace (global Poppy syms)
     e.entry, e.end = fn_lo, fn_hi                    # function bounds (for tail-jump detection in gen)
+    e.tailjumps = set()                              # out-of-fn conditional-branch targets -> stubs
     e.lines.append('; --- transpiled from $%06X (%d instrs) by tools/transpile.py%s ---'
                    % (entry, len(insns), ' [bank1]' if bank1 else ''))
     e.lbl(name)
@@ -861,6 +918,7 @@ def main():
             e.cmt('!! UNIMPLEMENTED: %-9s %s   (%s)' % (ins.mnemonic, ins.op_str, ex))
             unimpl['%s %s' % (ins.mnemonic, ins.op_str.split(',')[0] if ins.op_str else '')] = str(ex)
             i += 1
+    emit_tailjump_stubs(e)                            # out-of-fn conditional tail-jumps (after body)
     noinline = '--noinline' in sys.argv               # keep the leaf calls (baseline / cycle A/B)
     lines = e.lines if noinline else inline_mem_ops(e.lines)
     out = bank1_transform(lines) if bank1 else lines

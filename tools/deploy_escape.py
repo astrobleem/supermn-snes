@@ -74,8 +74,11 @@ if do_bsr: chains.append(('jxb_real:', 'b'+jx, "    lda $54\n    sta $40\n    pl
 for miss_lbl, jlab, prologue in chains:
     scan="    cmp #$%04X\n    bne %s\n    inc $0764\n%s    jmp %s          ; <- $%s %s\n%s:\n"%(
         addr&0xFFFF, jlab, prologue, lab, hx, tag, jlab)
-    assert esc.count(miss_lbl)==1
-    esc=esc.replace(miss_lbl, scan+miss_lbl, 1)
+    # anchor to the label DEFINITION (line start) -- the gate comments now mention "jmp jxb_real:"
+    # so a bare substring match/replace would hit the comment first and insert the scan there.
+    anchor='\n'+miss_lbl
+    assert esc.count(anchor)==1, "miss-label %r appears %d times at line-start"%(miss_lbl,esc.count(anchor))
+    esc=esc.replace(anchor, '\n'+scan+miss_lbl, 1)
 open('src/escbank.pasm','w').write(esc)
 cn='+'.join(([ 'jah2_ext'] if do_jsr else [])+(['jah2_ext_bsr'] if do_bsr else []))
 print("DEPLOYED %s -> %s (%s) mode=%s"%(hx, cn, lab, 'video' if video else 'work'))
