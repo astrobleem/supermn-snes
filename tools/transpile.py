@@ -96,6 +96,7 @@ def decode(entry):
         # gen emits the trap as a tail-jump to itself and the bra as a tail-jump -> interp runs the trap.
         if base == 'trap' and addr not in targets: break
         if base == 'bra' and btgt is not None and btgt < entry and addr not in targets: break
+        if base == 'jmp' and addr not in targets: break  # jmp(An) state-dispatch / jmp abs tail-jump: ends the body
         if addr - entry > 0x2000: raise Unsupported('no rts within 0x2000 from $%06X' % entry)
     end = addr
     # Phase 2: absorb MULTI-EXIT fragments -- a STRAIGHT-LINE block (data ops only, ending in rts)
@@ -564,6 +565,23 @@ def gen(e, ins, nxt):
             if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('ext feeding %s' % nb)
             e('lda $%02X' % dp); emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
+    if base == 'swap':                                   # swap Dn.hi16 <-> Dn.lo16 (32-bit; NZ from result, V=C=0)
+        dp = reg_dp(ops[0][1])
+        e('lda $%02X' % dp); e('tax'); e('lda $%02X' % (dp+2)); e('sta $%02X' % dp); e('txa'); e('sta $%02X' % (dp+2))
+        if fuses:
+            if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('swap feeding %s' % nb)
+            e('lda $%02X' % dp); emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+        return 1
+    if base == 'pea':                                    # push effective address (32-bit) to -(a7)
+        ea = ops[0]
+        if ea[0] == 'abs':                               # pea $XXXX(pc) [capstone-resolved] / $XXXX.l
+            e('lda #%s' % hx(ea[1] & 0xFFFF)); e('sta $54'); e('lda #%s' % hx((ea[1] >> 16) & 0xFFFF)); e('sta $56')
+        elif ea[0] in ('(An)', '(d16,An)'):              # pea (An) / pea (d16,An) = An (+disp)
+            an = ea[-1]; disp = ea[1] if ea[0] == '(d16,An)' else 0; dp = reg_dp(an)
+            e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('sta $54')
+            e('lda $%02X' % (dp+2)); e('adc %s' % hi_ext(disp)); e('sta $56')
+        else: raise Unsupported('pea %r' % (ea,))
+        e('jsr push32'); return 1
     if base == 'neg':
         dst = ops[0]
         if size == 'l': raise Unsupported('neg.l — add if needed')
@@ -663,6 +681,18 @@ def gen(e, ins, nxt):
         e('lda %s' % imm16(a & 0xFFFF)); e('sta $40')
         e('lda %s' % imm16((a >> 16) & 0xFFFF)); e('sta $42')
         e('jmp inext'); return 1
+    if base == 'jmp':
+        ea = ops[0]
+        if ea[0] == '(An)':                              # jmp (An): jump-table state dispatch -> route
+            dp = reg_dp(ea[1])                           # through ojmp_hook (dispatch the state escape, else
+            e('lda $%02X' % dp); e('sta $40')            # interpret) exactly like the interp's op_jmp_idx hook.
+            e('lda $%02X' % (dp+2)); e('sta $42')
+            e('jmp ojmp_hook'); return 1
+        if ea[0] == 'abs':                               # jmp $XXXX: tail-jump (interpret the target)
+            e('lda %s' % imm16(ea[1] & 0xFFFF)); e('sta $40')
+            e('lda %s' % imm16((ea[1] >> 16) & 0xFFFF)); e('sta $42')
+            e('jmp inext'); return 1
+        raise Unsupported('jmp %r' % (ea,))
     # ---- branches ----
     if base == 'bra':
         t = branch_target(ins)
@@ -940,6 +970,8 @@ def bank1_transform(lines):
             out.append('    jml.l inext'); continue
         if s == 'jmp ors_pre':                           # terminal rts -> bank-aware sentinel resume
             out.append('    jml.l ors_pre'); continue
+        if s == 'jmp ojmp_hook':                         # jmp(An) state-dispatch -> bank-$00 jmp-table hook
+            out.append('    jml.l ojmp_hook'); continue
         out.append(l)
     return out
 
