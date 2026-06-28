@@ -6841,7 +6841,7 @@ op_rte:                ; rte : SR = pop.w ; PC = pop.l
     sta $3C
     jmp ors_rte          ; COROUTINE RESUME HOOK (size-neutral: was `jmp inext`). PC=$40/$42 now =
                          ; the task resume-PC, reg file restored by the $07E4 movem, a7 past the
-                         ; trap frame -> ors_rte -> $92F800 cors_disp dispatches an escaped task body.
+                         ; trap frame -> ors_rte checks resume-PC + gate in BANK $00; hit -> escbank.
 
 ; take_irq: simulate a level-6 (vblank) interrupt -> push PC.l + SR.w, mask=6,
 ; PC = autovector $6C4. Called from iloop when pending and mask<6.
@@ -11082,10 +11082,13 @@ ors_pre_92:
     sta $42
     jml [$0040]
 
-; ors_rte — coroutine resume trampoline (op_rte jmps here, see the hook). SIZE-NEUTRAL on the
-; op_rte side (jmp ors_rte == jmp inext, 3 bytes). Redirects every task-resume rte to the escbank
-; coroutine dispatcher ($92:F800 cors_disp), which scans the resume-PC ($40/$42) against escaped
-; task bodies and either jmps the native body (bank $92) or jml.l inext back here on a miss.
+; ors_rte — coroutine resume hook (op_rte jmps here). Checks the resume-PC + gate IN BANK $00 and,
+; only on a hit, jml $92F800 to the escbank dispatcher (routing EVERY rte through the escbank
+; round-trip hangs the SA-1 -- the miss case must stay in bank $00). NB the explicit `.org`: the
+; preceding `jml [$0040]` (ors_pre_92) is MIS-SIZED by Poppy's analyzer (tracked 2 bytes, emitted 3),
+; which drifts any following label by 1 -> `jmp ors_rte` would land on the jml's $00 (=BRK) byte and
+; crash. Pinning ors_rte to a fixed address past the drift makes the label == the real code.
+    .org $D184
 ors_rte:
     lda $42
     bne ors_rte_x        ; resume-PC bank != 0 -> not a task body
@@ -11094,12 +11097,7 @@ ors_rte:
     bne ors_rte_x
     lda $071A
     beq ors_rte_x        ; escapes gated OFF -> interpret normally
-    ; WIP: the dispatch is DISABLED pending an entry_c2f8 fix. The hook MECHANISM is proven (correct
-    ; resume-PC match, gate, miss-path stable), but entry_c2f8 hangs: at dispatch time $1cbe(a5) (the
-    ; entity draw-fn pointer) reads NULL, so the jsr(a0)=$0 bridge jumps to the 68K vector table and
-    ; crashes (the interpreted path survives a null draw). See task #69. Re-enable with `jml $92F800`.
-    ; jml $92F800        ; HIT: dispatch the escbank task body ($00C300). Only a real hit detours to
-    ;                    ; bank $92 -- routing EVERY rte through the escbank round-trip hangs the SA-1.
+    jml $92F800          ; HIT: dispatch the escbank task body ($00C300). Only a real hit detours.
 ors_rte_x:
     jmp inext
 

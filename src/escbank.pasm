@@ -12461,4 +12461,5 @@ jxb_real:
 ; See [[main-loop-coroutine-arch]]. Extend with one cmp/bne/jmp per escaped task body.
     .org $F800
 cors_disp:
+    inc $0766            ; dispatch counter (coroutine task-body hits)
     jmp entry_c2f8       ; reached only on a confirmed hit (ors_rte checks resume-PC+gate in bank $00).
