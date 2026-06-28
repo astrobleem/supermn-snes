@@ -17,10 +17,11 @@ SNES PPU (via Mesen) for the target side.
 
 | Area | State |
 |---|---|
-| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Correctness gate **opsweep 782/782**. |
+| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Correctness gates **opsweep 782/782 + optest 154/154**. |
 | Graphics pipeline | ✅ validated on real SNES PPU vs MAME (palette + both X1-001 draw paths); dual-CPU render on the SA-1 |
-| **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) |
-| **Bulk game-logic port** | ⬆ **underway (automated)** — 8 hot functions transpiled to native 65816 + deployed, incl. the ~12.6% collision (bridged) and ~5.9% video |
+| **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
+| **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video |
+| **Realtime budget** | ⬆ **measured** — real game logic is only **~2,400 68K-instr/frame** (the rest is the idle spin, now collapsed); at full native coverage the SA-1 budget closes with ~4× headroom (60fps fits). Currently ~0.4 game-fps; path to 99% coverage mapped |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
 | Audio (YM2610 → SNES TAD) | 🔬 analyzed; `vgm-to-tad-mml` skill exists |
@@ -43,11 +44,13 @@ subset Superman happens to use — so it is reusable for future arcade→SNES po
 - Exceptions (TRAP, divide-by-zero → vec 5, CHK → vec 6, TRAPV → vec 7,
   ILLEGAL → vec 4) push correct stack frames and vector through the ROM table.
 
-**Validated against MAME** by a single-instruction sweep (`tools/opsweep.py`,
-**782/782**) plus a frame-boundary **lock-step differential** harness (inject MAME's
-68K state, run a game-frame, diff work RAM — this caught 4 opcode bugs the op sweep
-missed). The hot path is then migrated to native 65816 by **`tools/transpile.py`**,
-each escape lock-step-checked against the interpreter. See
+**Validated against MAME** by two single-instruction gates — `tools/opsweep.py`
+(op×addressing-mode grid, **782/782**) and `tools/optest.py` (curated per-opcode
+vectors vs MAME, **154/154**) — plus a frame-boundary **lock-step differential** harness
+(inject MAME's 68K state, run a game-frame, diff work RAM — this caught 4 opcode bugs the
+op sweep missed). The hot path is then migrated to native 65816 by **`tools/transpile.py`**,
+each escape checked bit-exact against the interpreter (and the hottest against MAME
+ground truth directly via `tools/val_cc10_mame.py`). See
 **[INTERPRETER_SPIKE.md](INTERPRETER_SPIKE.md)** and **[TRANSPILER_TOOL_SCOPE.md](TRANSPILER_TOOL_SCOPE.md)**.
 
 ## Key documents
@@ -74,9 +77,10 @@ each escape lock-step-checked against the interpreter. See
    ```sh
    bash tools/build_interp.sh      # assembles src/interp.pasm -> build/interp.sfc
    ```
-4. Run the differential test suite (needs MAME + Mesen MCP running):
+4. Run the interpreter regression gates (need MAME + Mesen MCP running):
    ```sh
-   python3 tools/opsweep.py        # SA-1-aware single-instruction sweep vs MAME (782/782)
+   python3 tools/opsweep.py        # SA-1-aware op×addressing-mode grid vs MAME (782/782)
+   python3 tools/optest.py         # curated per-opcode vectors vs MAME (154/154)
    ```
 5. Transpile a hot 68K function to a native escape:
    ```sh

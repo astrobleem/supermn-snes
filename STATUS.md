@@ -1,9 +1,50 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 25, 2026. Single source of "where we're at." Per-area detail
+Last updated: June 27, 2026. Single source of "where we're at." Per-area detail
 lives in the linked docs.
 
-## CURRENT STATE (June 25) — the transpiler is AUTOMATED; bulk transpilation underway
+## CURRENT STATE (June 27) — realtime budget MEASURED; ~25 escapes deployed; both gates green
+
+Bulk transpilation continued, and the **realtime budget is now measured** — the decisive
+go/no-go number the project hinged on. Headline: **the per-frame game logic is only ~2,400
+68K-instructions**, not the 28,672 IRQ-pacing countdown, so the SA-1 budget closes at full
+native coverage with headroom. Playable (incl. 60fps) is realistic; the remaining work is
+bounded — transpile the per-frame hot path toward ~99% native coverage.
+
+- **Frame budget (measured, one gameplay frame; `f450n.tr` + `analyze_trace68k.py`).** Of
+  ~13,000 68K-instr/frame, **~82% is the `$0818` idle spin** (the 68K spinning until the vblank
+  IRQ); **real game logic is only ~2,391 instr/frame**. At full native (~18 cyc/instr transpiler
+  codegen) that's ~43K SA-1 cycles vs the ~178K/frame budget — **~4× headroom, 60fps fits**. The
+  deployed escapes cover **~40%** of real per-frame work; **~18 functions cover 99%** (→60fps).
+  It's a coverage *cliff*: the interpreted tail dominates until ~99% (the interp measured
+  ~16,500 cyc/instr, ~4× the old estimate). Tools: `tools/measure_fps.py`, `tools/onon_capture.py`.
+- **`$0818` idle-spin COLLAPSED** (`loop_hook`): detect the spin → fire the vblank IRQ immediately
+  instead of interpreting ~26K dead spins/frame (~10× faster). Measured game-fps now **0.27
+  (escapes off) / 0.40 (escapes on)**, up from sub-0.05. Real 60Hz pacing comes from the 5A22-side
+  vblank, not this wait.
+- **~25 escapes wired** (was 8). The **escape bank** (ROM file `$290000` = SA-1 `$92:8000`) is a
+  2nd executable SA-1 bank (32KB free) holding **18 transpiler escapes** (`transpile.py --bank1`);
+  plus the bank-$00-gap escapes (`$025110` bridged collision, `$0020e8` video, the `entry_ce4`/
+  `entry_111a` hand oracles, and leaves). The "bank-$00-full" problem is solved — multi-bank is no
+  longer a blocker. See `escape-bank` memory.
+- **Transpiler hardened + faster.** Fixed `move.l` with memory EAs and **`sub`-to-memory writeback**
+  (it was emitted as a flagless `cmp` — a real bug a frame-sharing list-walker exposed). New
+  **memory-access inlining**: `$40` BW-RAM ops inline `lda $400000,x` instead of a `jsl` helper call
+  (−26 SA-1 cycles/op), applied to all 18 escape-bank escapes (verified behavior-preserving via
+  ON-vs-ON `onon_capture`).
+- **New validation — escape-vs-MAME ground truth** (`tools/val_cc10_mame.py` + `extract_exit.py`):
+  inject a MAME-captured entry frame on the deterministic native base, run the escape to the trap,
+  diff its work RAM against MAME's exit. Bypasses the non-deterministic synthetic-jsr OFF reference.
+  (Gotcha: capture a leaf's exit at the RETURN address, not its `rts` — MAME read-taps are
+  prefetch-stale and miss the last store.)
+- **Both interp gates GREEN: `opsweep` 782/782** (op×EA grid) **+ `optest` 154/154** (curated
+  per-opcode vs MAME). optest was ported to the SA-1 memory model (`Sa1Memory`/`snesMemory`) — the
+  earlier "optest deprecated" note is RETIRED.
+- **NEXT** = transpile the named hot functions toward 99% per-frame coverage (path to playable):
+  `$003A92` (the GAME_TICK dispatcher, ~15 indirect-jump sites/frame), `$001008`, `$00158E`,
+  `$0008C2`, `$004A9E`, `$00C9F8`. ~6 → ~90% (~10fps); ~12 more → 99% (60fps). See `ROADMAP.md`.
+
+## CURRENT STATE (June 25) — superseded by the June 27 state above; transpiler AUTOMATED, bulk transpilation underway
 
 The interpret-cold/transpile-hot hybrid is now a **working production pipeline**, not just a
 mechanism. An **automated 68K→65816 transpiler** (`tools/transpile.py`) replaces hand work, and
@@ -127,7 +168,8 @@ JSR *target* to bank 0 — needed for direct cross-bank calls. Then A3 cadence, 
 (hybrid hook + transpiler). See `sa1-bringup`. Not started: audio.
 
 ROM layout (4 MB HiROM): interp `$C0:8000` · 68K image `$C1:0000`–`$C8` · arcade tiles
-`gfx1` `$C9:0000`–`$E8` · video subsystem `$E9:8000` (file `$298000`).
+`gfx1` `$C9:0000`–`$E8` · video subsystem `$E9:8000` (file `$298000`) · **escape bank**
+`$92:8000` (file `$290000`, 2nd executable SA-1 bank holding the transpiler escapes).
 
 ## Workstream status
 
@@ -136,7 +178,7 @@ ROM layout (4 MB HiROM): interp `$C0:8000` · 68K image `$C1:0000`–`$C8` · ar
 | **Graphics pipeline** | ✅ validated on real SNES PPU vs MAME | `PALETTE_VERDICT.md` |
 | **Transpiler design (D1–D4)** | ✅ settled | `TRANSPILER_DESIGN.md` |
 | **Transpiler spike (gate G2)** | ✅ GREEN — 2 functions differentially verified | `SPIKE_RESULT.md` |
-| **68K interpreter** | ✅ **BIT-EXACT vs MAME** on busy attract + active gameplay (lock-step diff; 4 opcode bugs fixed). Runs on the **SA-1**. Correctness gate **opsweep 782/782** (`tools/opsweep.py`). (optest is deprecated — pre-SA-1, reads `snesWorkRam`.) Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md`, `lockstep-harness-progress` memory |
+| **68K interpreter** | ✅ **BIT-EXACT vs MAME** on busy attract + active gameplay (lock-step diff; 4 opcode bugs fixed). Runs on the **SA-1**. Correctness gates **opsweep 782/782 + optest 154/154** (`tools/opsweep.py` op×EA grid + `tools/optest.py` per-opcode vs MAME — both SA-1-correct). Clears the **C-Chip boot handshake** (replay, not emulation). | `INTERPRETER_SPIKE.md`, `lockstep-harness-progress` memory |
 | **Phase A — SA-1** | ✅ **DONE** — cart runs on SA-1 (work RAM in BW-RAM `$40`, shadow `$41`, dual-CPU video). | `sa1-bringup` memory |
 | **Phase B — native-escape hook** | ✅ **DONE** — PC-hook routes hooked 68K calls (jsr.l / jsr(An) / bsr) to native 65816; `$412` RNG native, bit-identical. Profiler + save-state + speedup harness. Foundation hardened (leak fixed, `leaf_check.py`, FOUNDATION CONTRACT). | `TRANSPILER_DESIGN.md` §D5 |
 | **Transpiler TOOL (automated)** | ✅ **BUILT + validated** — `tools/transpile.py` emits native escapes from 68K functions; reproduces the hand oracles bit-exact. Call-bridge (non-leaf) + `--video` (shadow stores). | `TRANSPILER_TOOL_SCOPE.md`, `transpiler-tool` memory |
@@ -145,7 +187,7 @@ ROM layout (4 MB HiROM): interp `$C0:8000` · 68K image `$C1:0000`–`$C8` · ar
 | **Tooling (MAME/Mesen MCP, trace/CDL)** | ✅ built & validated | below |
 | **C-Chip** | ✅ SOLVED — patch + input mailbox + **boot handshake replay**, still **no MCU emulation** | `CCHIP_BOOT_HANDSHAKE.md`, `CCHIP_FIRMWARE.md` |
 | **Audio (YM2610→TAD)** | 🔬 analyzed; `vgm-to-tad-mml` skill exists | `CONVERTSOUND.md`, `SOUNDHARDWARE.md` |
-| **Bulk transpilation (native escapes)** | ⬆ **UNDERWAY (automated)** — `transpile.py` deploys hot functions into bank-$00 gaps; 8 escapes live incl. the ~12.6% collision (bridged) + ~5.9% video (shadow). The interpreter is the cold-path fallback. | `transpiler-tool` / `bulk-transpile-phase` memory |
+| **Bulk transpilation (native escapes)** | ⬆ **UNDERWAY (automated)** — **~25 escapes live**: 18 in the **escape bank** (`$92:8000`, file `$290000`) + bank-$00 gaps; incl. the ~12.6% collision (bridged), ~5.9% video (shadow), a list-walker. **~40% of real per-frame work covered**; ~18 functions → 99%. The interpreter is the cold-path fallback. | `escape-bank` / `transpiler-tool` / `bulk-transpile-phase` memory |
 
 ## Graphics — done
 Arcade palette decode (`xRGB555` big-endian) and the **two X1-001 draw paths**
@@ -180,7 +222,10 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
 - **G1 — coverage ≥85% code/data separated:** ⬆ in progress (reliable 10.2% floor;
   descent ~67.5% classified; needs full descent %, maybe more playthroughs).
 - **G2 — differential harness green:** ✅ done (2 functions).
-- **G3 — cycle budget <150k/frame:** ⬜ not started.
+- **G3 — cycle budget <150k/frame:** ⬆ **MEASURED** — real per-frame work is only ~2,391
+  68K-instr (the $0818 spin is collapsed); ~43K SA-1 cyc at full native coverage (well under the
+  178K/frame budget). ~40% covered now → ~0.4 game-fps; path to 99% (60fps) mapped. Not yet *met*
+  (needs the hot-set transpiled), but the budget provably closes.
 - **G4 — endianness manifest:** ⬜ not started (policy set in D3).
 
 ## Tooling built this phase
