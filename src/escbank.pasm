@@ -11922,6 +11922,10 @@ L3a92_3b7e:
 ; --- transpiled from $00C2F8 (23 instrs) by tools/transpile.py [bank1] ---
 entry_c2f8:
     rep #$30
+    lda $3C
+    sta $0774
+    lda $3E
+    sta $0776
     ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
     lda $34
     clc
