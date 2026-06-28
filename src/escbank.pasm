@@ -10353,8 +10353,8 @@ L3e32_3e80:
     sta $3C
     jml.l ors_pre
 
-; --- $003E88 game-tick-cnt1 (jah2_ext) ---
-; --- transpiled from $003E88 (8 instrs) by tools/transpile.py [bank1] ---
+; --- $003E88  (jah2_ext) ---
+; --- transpiled from $003E88 (10 instrs) by tools/transpile.py [bank1] ---
 entry_3e88:
     rep #$30
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
@@ -10373,7 +10373,7 @@ entry_3e88:
     jsl.l readbyte_l
     and #$0004
     bne Lf3e88_1
-    jmp Ltj3e88_3ea6
+    jmp L3e88_3ea6
 Lf3e88_1:
     lda $34
     clc
@@ -10386,7 +10386,7 @@ Lf3e88_1:
     sec
     sbc #$0002
     beq Lf3e88_2
-    jmp Ltj3e88_3ea6
+    jmp L3e88_3ea6
 Lf3e88_2:
     lda $34
     clc
@@ -10434,12 +10434,39 @@ Lf3e88_3:
     adc #$0004
     sta $3C
     jml.l ors_pre
-Ltj3e88_3ea6:
-    lda #$3EA6
-    sta $40
+L3e88_3ea6:
     lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C7A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
-    jml.l inext
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
 Ltj3e88_3ed0:
     lda #$3ED0
     sta $40
@@ -10447,8 +10474,8 @@ Ltj3e88_3ed0:
     sta $42
     jml.l inext
 
-; --- $003EAC game-tick-cnt2 (jah2_ext) ---
-; --- transpiled from $003EAC (8 instrs) by tools/transpile.py [bank1] ---
+; --- $003EAC  (jah2_ext) ---
+; --- transpiled from $003EAC (10 instrs) by tools/transpile.py [bank1] ---
 entry_3eac:
     rep #$30
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
@@ -10467,7 +10494,7 @@ entry_3eac:
     jsl.l readbyte_l
     and #$0004
     bne Lf3eac_1
-    jmp Ltj3eac_3eca
+    jmp L3eac_3eca
 Lf3eac_1:
     lda $34
     clc
@@ -10480,7 +10507,7 @@ Lf3eac_1:
     sec
     sbc #$0002
     beq Lf3eac_2
-    jmp Ltj3eac_3eca
+    jmp L3eac_3eca
 Lf3eac_2:
     lda $34
     clc
@@ -10528,12 +10555,39 @@ Lf3eac_3:
     adc #$0004
     sta $3C
     jml.l ors_pre
-Ltj3eac_3eca:
-    lda #$3ECA
-    sta $40
+L3eac_3eca:
     lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$1C7B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $42
-    jml.l inext
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
 Ltj3eac_3ed0:
     lda #$3ED0
     sta $40
@@ -10541,8 +10595,8 @@ Ltj3eac_3ed0:
     sta $42
     jml.l inext
 
-; --- $003C36 game-tick-subtree (jah2_ext) ---
-; --- transpiled from $003C36 (112 instrs) by tools/transpile.py [bank1] ---
+; --- $003C36  (jah2_ext) ---
+; --- transpiled from $003C36 (115 instrs) by tools/transpile.py [bank1] ---
 entry_3c36:
     rep #$30
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
@@ -11546,7 +11600,7 @@ L3c36_3e06:
     sec
     sbc #$0009
     bcs Lf3c36_28
-    jmp Ltj3c36_3e20
+    jmp L3c36_3e20
 Lf3c36_28:
     lda #$0007
     sta $54
@@ -11592,14 +11646,53 @@ Lf3c36_28:
     adc #$0004
     sta $3C
     jml.l ors_pre
+L3c36_3e20:
+    lda #$0007
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda #$0007
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l writebyte_l
+    lda #$0007
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l readbyte_l
+    and #$FFF7
+    sta $80
+    lda #$0007
+    sta $54
+    lda #$0090
+    sta $52
+    jsl.l writebyte_l
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
 Ltj3c36_3c34:
     lda #$3C34
-    sta $40
-    lda #$0000
-    sta $42
-    jml.l inext
-Ltj3c36_3e20:
-    lda #$3E20
     sta $40
     lda #$0000
     sta $42
@@ -11785,7 +11878,7 @@ bjx_3e32:
     lda $54
     sta $40
     pla
-    jmp entry_3e88          ; <- $003E88 game-tick-cnt1
+    jmp entry_3e88          ; <- $003E88 
 bjx_3e88:
     cmp #$3EAC
     bne bjx_3eac
@@ -11793,7 +11886,7 @@ bjx_3e88:
     lda $54
     sta $40
     pla
-    jmp entry_3eac          ; <- $003EAC game-tick-cnt2
+    jmp entry_3eac          ; <- $003EAC 
 bjx_3eac:
     cmp #$3C36
     bne bjx_3c36
@@ -11801,7 +11894,7 @@ bjx_3eac:
     lda $54
     sta $40
     pla
-    jmp entry_3c36          ; <- $003C36 game-tick-subtree
+    jmp entry_3c36          ; <- $003C36 
 bjx_3c36:
 jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)

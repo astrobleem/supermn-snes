@@ -73,15 +73,38 @@ def imm16(v): return '#$%04X' % (v & 0xFFFF)
 def hx(v): return '$%04X' % (v & 0xFFFF)
 
 # ---- decode the function: entry -> rts, collect intra-fn branch targets as labels ----
+def _dis1(a):
+    ins = next(MD.disasm(ROM[IMG+a:IMG+a+8], a), None)
+    if ins is None: raise Unsupported('decode stalled @ $%06X' % a)
+    return ins
+
 def decode(entry):
-    insns, end, addr = [], None, entry
+    # Phase 1: linear decode to the FIRST rts.
+    insns, addr, targets = [], entry, set()
     while True:
-        ins = next(MD.disasm(ROM[IMG+addr:IMG+addr+8], addr), None)
-        if ins is None: raise Unsupported('decode stalled @ $%06X' % addr)
-        insns.append(ins)
-        addr = ins.address + ins.size
-        if ins.mnemonic == 'rts': end = addr; break
+        ins = _dis1(addr); insns.append(ins); addr = ins.address + ins.size
+        base = ins.mnemonic.split('.')[0]
+        if base in BCC or base in ('bra', 'dbra', 'dbf'):
+            m = re.search(r'\$([0-9a-f]+)$', ins.op_str)
+            if m:
+                t = int(m.group(1), 16)
+                if entry <= t < entry + 0x2000: targets.add(t)
+        if ins.mnemonic == 'rts': break
         if addr - entry > 0x2000: raise Unsupported('no rts within 0x2000 from $%06X' % entry)
+    end = addr
+    # Phase 2: absorb MULTI-EXIT fragments -- a STRAIGHT-LINE block (data ops only, ending in rts)
+    # sitting right after `end` that the body branches to (e.g. $3e88's clr.b+rts exit at $3ea6,
+    # $3c36's bclr C-Chip exit at $3e20). A fragment containing ANY control flow is a separate
+    # function (a distant tail-jump like beq $3ed0 that happens to be contiguous) -> left a stub.
+    while end in targets:
+        frag, a = [], end
+        while True:
+            f = _dis1(a); a += f.size; fb = f.mnemonic.split('.')[0]
+            if f.mnemonic == 'rts': frag.append(f); break
+            if fb in CTRLFLOW or a - end > 0x40: frag = None; break   # not a simple exit fragment
+            frag.append(f)
+        if frag is None: break
+        insns.extend(frag); end = a
     labels = set()
     for ins in insns:
         base = ins.mnemonic.split('.')[0]
@@ -114,6 +137,7 @@ class Emit:
 
 BCC = {'beq', 'bne', 'bmi', 'bpl', 'bge', 'blt', 'ble', 'bgt', 'bcc', 'bcs',
        'bhi', 'bls', 'bvs', 'bvc'}
+CTRLFLOW = BCC | {'bra', 'dbra', 'dbf', 'bsr', 'jsr', 'jmp', 'rte', 'rtr'}  # not straight-line (exit-frag reject)
 
 # ===================== memory address helpers =====================
 def is_frame(an): return an in ('a6', 'a7')
