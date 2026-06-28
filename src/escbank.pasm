@@ -11918,6 +11918,322 @@ L3a92_3b7e:
     sta $3C
     jml.l ors_pre
 
+; --- $00C2F8 coroutine task body ($00C300 entity loop, dispatched by cors_disp) ---
+; --- transpiled from $00C2F8 (23 instrs) by tools/transpile.py [bank1] ---
+entry_c2f8:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$29B2
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda #$000D
+    sta $18
+    lda $34
+    clc
+    adc #$2A36
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $34
+    clc
+    adc #$2A34
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc $0C
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+Lc2f8_c308:
+    lda #$0000
+    sta $0C
+    sta $0E
+    lda $34
+    clc
+    adc #$2A36
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $30
+    clc
+    adc #$0000
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sec
+    sbc $0C
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$FFC0
+    beq Lfc2f8_3
+    bvs Lfc2f8_1
+    bpl Lfc2f8_2
+    bra Lfc2f8_3
+Lfc2f8_1:
+    bmi Lfc2f8_2
+    bra Lfc2f8_3
+Lfc2f8_2:
+    jmp Lc2f8_c322
+Lfc2f8_3:
+    lda $30
+    clc
+    adc #$0000
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$01C0
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+Lc2f8_c322:
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    lda #$0000
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    inx
+    inx
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0002
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1CBE
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $22
+    lda $34
+    clc
+    adc #$1CC0
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    ; CALL-BRIDGE jsr (a0) -> interpret callee, resume brc2f8_1
+    lda #brc2f8_1
+    sta $54
+    lda #$00FE
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l inext
+brc2f8_1:
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $30
+    clc
+    adc #$0008
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lfc2f8_4
+    jmp Lc2f8_c308
+Lfc2f8_4:
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $34
+    clc
+    adc #$2A36
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$C2F6
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
 ; ============================ JAH2 EXTENSION CHAIN ============================
@@ -12136,3 +12452,13 @@ jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40
     jml bhp_after        ; -> bank-$00 push32r/rts (must run in bank $00)
+
+; ===================== COROUTINE RESUME DISPATCH ($92:F800) =====================
+; Reached from bank-$00 op_rte via `ors_rte -> jml $92F800`. PC ($40/$42) = the task resume-PC (the
+; instr after a trap #5); the reg file $00-$3F is already restored (the $07E4 movem) and a7 is past
+; the trap frame -> a matched escaped task body runs as-is. Scan the resume-PC; HIT -> jmp the native
+; body (internal, bank $92); MISS -> jml.l inext (continue interpreting normally, $40/$42 untouched).
+; See [[main-loop-coroutine-arch]]. Extend with one cmp/bne/jmp per escaped task body.
+    .org $F800
+cors_disp:
+    jmp entry_c2f8       ; reached only on a confirmed hit (ors_rte checks resume-PC+gate in bank $00).

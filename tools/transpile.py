@@ -84,12 +84,17 @@ def decode(entry):
     while True:
         ins = _dis1(addr); insns.append(ins); addr = ins.address + ins.size
         base = ins.mnemonic.split('.')[0]
+        btgt = None
         if base in BCC or base in ('bra', 'dbra', 'dbf'):
             m = re.search(r'\$([0-9a-f]+)$', ins.op_str)
             if m:
-                t = int(m.group(1), 16)
-                if entry <= t < entry + 0x2000: targets.add(t)
+                btgt = int(m.group(1), 16)
+                if entry <= btgt < entry + 0x2000: targets.add(btgt)
         if ins.mnemonic == 'rts': break
+        # a coroutine task body has no rts -- it ends with an unconditional `bra` BACK to its trap #5
+        # (target < entry). Treat that backward tail-jump as the body end (multi-exit guard: only if
+        # nothing branches past it). gen emits it as a tail-jump -> interp runs the trap #5 = yield.
+        if base == 'bra' and btgt is not None and btgt < entry and addr not in targets: break
         if addr - entry > 0x2000: raise Unsupported('no rts within 0x2000 from $%06X' % entry)
     end = addr
     # Phase 2: absorb MULTI-EXIT fragments -- a STRAIGHT-LINE block (data ops only, ending in rts)
@@ -470,6 +475,10 @@ def gen(e, ins, nxt):
                 an = dst[-1]; disp = dst[1] if dst[0] == '(d16,An)' else 0
                 for d2 in (disp, disp+2):                # big-endian: both words zero, order moot
                     ea_store_A_from(e, ('(d16,An)', d2, an), 'w', lambda e: e('lda #$0000'))
+            elif dst[0] == '-(An)':                      # push a long zero (predec 4, write 0 both words)
+                an = dst[-1]; predec_an(e, an, 4); dp = reg_dp(an)
+                e('lda $%02X' % dp); e('tax'); e('lda #$0000')
+                e('jsr wrw40'); e('inx'); e('inx'); e('jsr wrw40')
             else: raise Unsupported('clr.l %r' % (dst,))
             return 1
         ea_store_A_from(e, dst, size, lambda e: e('lda #$0000')); return 1
@@ -942,6 +951,10 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     bank1 = '--bank1' in sys.argv
     VIDEO = '--video' in sys.argv
+    coroutine = '--coroutine' in sys.argv                 # task-BODY escape (see main-loop-coroutine-arch):
+    # entered by the $07E4/op_rte resume hook (reg file already restored, a7 already past the trap
+    # frame), NOT by a jsr -> NO re-simulate-push prologue. Decode ends at the yield `bra` (target <
+    # entry = back to the trap #5); that tail-jump runs the trap interpreted -> the normal yield.
     for a in sys.argv:                                   # --escapes=hex,hex,..: callees with escbank escapes
         if a.startswith('--escapes='):
             ESCAPED = {int(x, 16) & 0xFFFFFF for x in a.split('=', 1)[1].split(',') if x}
@@ -959,8 +972,11 @@ def main():
         c = COUNTERS[entry]
         if bank1: e('lda $00%04X' % c); e('inc a'); e('sta $00%04X' % c)   # long: DBR-independent
         else: e('inc $%04X' % c)
-    e.cmt('re-simulate the jsr return-push the hook skipped (frame must match the real 68K)')
-    e('lda $40'); e('sta $54'); e('lda $42'); e('sta $56'); e('jsr push32')
+    if coroutine:
+        e.cmt('coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)')
+    else:
+        e.cmt('re-simulate the jsr return-push the hook skipped (frame must match the real 68K)')
+        e('lda $40'); e('sta $54'); e('lda $42'); e('sta $56'); e('jsr push32')
     unimpl = {}
     i = 0
     while i < len(insns):
