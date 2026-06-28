@@ -15771,7 +15771,7 @@ bhp_e2:                  ; -- $0015B4 -> entry_15b4 --  (A still = target lo16)
     lda $54
     sta $40
     pla
-    jmp entry_15b4
+    jmp entry_15b4_gap
 bhp_e3:                  ; -- $003E6A -> entry_3e6a --  (A still = target lo16)
     cmp #$3E6A
     bne bhp_push
@@ -16256,13 +16256,14 @@ cbe_n:
     stz $72
     jmp inext
 
-; entry_15b4 — native $0015B4: 255x `move.l (a0)+,(a1)+` block copy (1020 bytes), SAFE-LEAF.
+; entry_15b4_gap (renamed; superseded by the escbank entry_15b4 so $158e can bridge-to-
+; escape; gap kept for any interpreted caller) — native $0015B4: 255x `move.l (a0)+,(a1)+` block copy (1020 bytes), SAFE-LEAF.
 ; The interp's op_movl_anp_anp copies BYTE-WISE (src via readbyte, dst via map_snes routing,
 ; NO flag update). Captured live: a0=work RAM ($F0), a1=$D0 video shadow ($41). Fast path =
 ; direct word copy $40:(a0.lo) -> $41:((a1.lo&$0FFF)|$3000) (raw byte positions preserved by
 ; 16-bit moves). Fallback = faithful op_movl_anp_anp x255 for any other bank combo. a0/a1
 ; post-increment by 1020. No flag update (matches the interp). Scratch $96-$9E. Ends jmp inext.
-entry_15b4:
+entry_15b4_gap:
     rep #$30
     inc $0720                ; hit counter
     lda $22
@@ -17153,7 +17154,7 @@ jah2_e15b4:
     pla
     lda $54
     sta $40
-    jmp entry_15b4
+    jmp entry_15b4_gap
 jah2_ece4:
     plp
     pla

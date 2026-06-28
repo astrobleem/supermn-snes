@@ -718,6 +718,37 @@ def gen_movel(e, src, dst):
         load_long_to(e, src, 0x9A)
     store_long_from(e, dst, 0x9A)
 
+RUN_MIN = 4                                          # collapse runs of >=4 identical move.l (An)+,(An)+
+
+def is_movel_anp(ins):
+    """move.l (An)+,(Am)+ -- the postincrement long-copy primitive that forms memcpy runs."""
+    b, sz = split_mn(ins)
+    if b != 'move' or sz != 'l': return False
+    ops = operands(ins)
+    return len(ops) == 2 and ops[0][0] == '(An)+' and ops[1][0] == '(An)+'
+
+def movel_run_len(insns, i, labels):
+    """length of the run of IDENTICAL `move.l (An)+,(Am)+` starting at i (same An,Am). Stops at a
+    branch target (a label inside the run would be unreachable after collapsing)."""
+    if not is_movel_anp(insns[i]): return 0
+    s0 = operands(insns[i]); k = 1
+    while i + k < len(insns):
+        nx = insns[i + k]
+        if nx.address in labels or not is_movel_anp(nx) or operands(nx) != s0: break
+        k += 1
+    return k
+
+def gen_movel_run(e, src, dst, k):
+    """collapse k copies of `move.l (a0)+,(a1)+` into a loop (mirrors the interpreter's mvc_check;
+    avoids unrolling a 255-long memcpy like $15b4 into 255x native code). Counter in scratch $98
+    (free; gen_movel uses $9A/$9C + X + $80, none touch $98). a0/a1 advance via the (An)+ bumps."""
+    lp = e.fresh()
+    e.cmt('run-collapse: %d x move.l (a0)+,(a1)+' % k)
+    e('lda #$%04X' % k); e('sta $98')
+    e.lbl(lp)
+    gen_movel(e, src, dst)                            # one long: load (a0)+ -> store (a1)+, bumps both
+    e('dec $98'); e('bne %s' % lp)
+
 def gen_call(e, ins):
     """CALL-BRIDGE (CALL_BRIDGE_DESIGN.md): push a $00FF:cont sentinel return, set PC=callee,
     jmp inext (interpreter runs the callee). The callee's rts pops the sentinel -> op_rts_sentinel
@@ -935,6 +966,9 @@ def main():
     while i < len(insns):
         ins = insns[i]
         if ins.address in labels: e.lbl(e.L(ins.address))
+        rk = movel_run_len(insns, i, labels)         # collapse a memcpy run into a loop (vs unroll)
+        if rk >= RUN_MIN:
+            s, d = operands(ins); gen_movel_run(e, s, d, rk); i += rk; continue
         nxt = insns[i+1] if i+1 < len(insns) else None
         try:
             i += gen(e, ins, nxt)
