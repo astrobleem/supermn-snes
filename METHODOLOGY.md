@@ -91,6 +91,20 @@ that dominate each frame with native 65816 "escapes," via the **automated transp
 Superman: 8 escapes live incl. the ~12.6% collision (bridged) and ~5.9% video (shadow stores).
 See `TRANSPILER_TOOL_SCOPE.md` + the `transpiler-tool`/`bulk-transpile-phase` memories.
 
+**Evolution (AOT) — when per-escape hand-deployment stops scaling.** Hand-escaping one cluster at a
+time tops out because *dispatch*, not transpilation, becomes the wall: each cluster needs a bespoke
+hook to catch how its control transfer (jmp/rts/rte/coroutine) is reached. The fix is **one global
+68K-PC→native dispatch table** that all control flow consults (hit → native, miss → interpret),
+then **batch-transpile the CDL block list** through it, demoting the interpreter to a cold fallback.
+Per-escape hooks collapse into one table lookup; coverage *composes* instead of fighting back. Key
+pieces (Superman, `aot-dispatch-table` memory): `tools/gen_xlat_table.py` (offline 2-level page table
+→ a free SA-1 bank), `xlat_dispatch` (one indirection; route every dispatch site through it),
+`transpile.py --table` (faithful link/unlk/rts, no re-sim push, for table dispatch at a materialized
+boundary). Caveats learned: the table FORCES real dispatch, which exposes latent escapes the hooks
+silently never exercised (great — but plan for it); a function reached via multiple paths can have
+different stack frames; and validating table-dispatched faithful escapes needs SA-1-side trace
+tooling, which is the real gate to batch coverage. See `ROADMAP.md` (June-29 update) + STATUS.md.
+
 ## 3. Disassembly coverage (gate G1): the trace IS the CDL
 Static disassembly stalls on indirect/computed jumps (jump tables = hazard H6).
 The execution trace resolves them by observation.
@@ -143,17 +157,20 @@ From Chad's SA-1 OutRun port (corrects the naive "SNES can't scale → impossibl
 So the constraint isn't "can it scale?" but "ROM budget for ladders + can SA-1
 grind the road math in time + can you race the beam."
 
-## 📌 Pinned next target: Space Harrier
-Looks tractable with the above: checkerboard **floor → Mode 7**, enemies/obstacles
-→ **baked sprite ladders**, SA-1 for the per-scanline floor/scaling math. Never got
-a faithful SNES port. Revisit now that Superman's toolchain (interpreter + automated
-transpiler + lock-step) is battle-tested.
-- **Reuse:** the §2 CPU toolchain (interpreter + `transpile.py` + opsweep/lock-step) carries over
-  directly — Space Harrier is 68000-based. The §1 graphics path does NOT (it's super-scaler, not
-  X1-001 — use the baked-ladder + Mode-7-floor recipe above).
-- **CPU wrinkle to plan for:** Space Harrier runs **dual 68000s** (main + sub). The interpreter is
-  single-68K today; decide early whether to run two interpreter instances (shared work RAM) or
-  model the sub-CPU's effect — this is the main new CPU-side work, separate from opcodes.
+## 📌 Pinned next target: Gigandes (decided 2026-06-29)
+**Gigandes** (Taito, 1989) is the next port after Superman — chosen specifically to **harden the
+AOT transpiler** on a second real game. It runs on **Taito-X hardware, the SAME family as Superman**,
+so the entire §2 CPU toolchain transfers *directly*: the MC68000 interpreter, `transpile.py` + the
+**AOT dispatch table** (§2d evolution), opsweep/optest gates, the lock-step/`val_frame_diff`
+differentials, and the §3 trace-driven CDL coverage pipeline. A different code corpus stresses the
+transpiler/dispatch coverage in ways one title can't — that's the point. The §1 graphics path is
+single-screen 2D (not super-scaler), so it reuses the Superman decode-→reproduce-→diff recipe too.
+Sequencing: finish Superman first (the AOT build-out), then start Gigandes on the hardened toolchain.
+
+**Space Harrier is DROPPED** as the next target (was the prior pick): it runs **dual 68000s** (main +
+sub), making the port overly ambitious for now. The super-scaler / Mode-7-floor + baked-sprite-ladder
+recipe above stays valid reference for a possible later super-scaler title, just not the immediate one.
+See the `gigandes-target` memory.
 
 ---
 
