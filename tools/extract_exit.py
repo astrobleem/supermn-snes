@@ -26,9 +26,14 @@ try:
         r=s.cmd("capture_game_tick", addr=0xF00000, len=4, nth=step, maxFrames=step+400, timeout=180)
         if not r.get("registers"): break
         frame=r["frame"]
-    print("ff to %d; capture at return R=$%06X nth=1"%(frame,R),flush=True)
-    X=s.cmd("capture_at_pc", pc=R, addr=0xF00000, len=0x10000, nth=1, maxFrames=8000, timeout=300)
-    assert X.get("registers"), "no return hit at R=$%06X: %r"%(R,X)
+    # INVOCATION-CONSISTENT: pin the exit capture to the SAME call as the entry frame. At this
+    # function's rts, SP = entry_SP + 4 (the frame is popped, then the return is popped). exp_sp
+    # filters R-hits to that stack depth so a different invocation's return at the shared R isn't
+    # captured (the old nth=1 grabbed the first R hit -> entry/exit could mismatch -> spurious REDs).
+    ESP=(SP+4)&0xFFFFFF
+    print("ff to %d; capture at return R=$%06X exp_sp=$%06X"%(frame,R,ESP),flush=True)
+    X=s.cmd("capture_at_pc", pc=R, addr=0xF00000, len=0x10000, nth=1, exp_sp=ESP, maxFrames=8000, timeout=300)
+    assert X.get("registers"), "no return hit at R=$%06X exp_sp=$%06X: %r"%(R,ESP,X)
     xw=bytes.fromhex(X["hex"])
     print("return frame=%d PC=$%06X SP=$%06X"%(X["frame"],X["registers"]["PC"]&0xFFFFFF,X["registers"]["SP"]&0xFFFFFF),flush=True)
     (OUT/"exit_wram.bin").write_bytes(xw)
