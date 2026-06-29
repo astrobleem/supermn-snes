@@ -30,12 +30,15 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         d=0
         while d<n: x=min(c,n-d); m.run_frames(x); d+=x
     m.load_state(NAT); runf(120)
-    w16(0x0700,0); w16(0x071A,0); w16(0x0712,0); w16(0x0714,0); w16(0x0716,0)
+    # CRITICAL: NAT is saved FROZEN at jh_spin via $0700/$0702/$0704 -> set $0704=1 to RELEASE it,
+    # else the interp never runs (instr=0) and no trap fires.
+    w16(0x0700,0); w16(0x071A,0); w16(0x0712,0); w16(0x0716,0); w16(0x0710,0x0708); w16(0x0704,1)
     # B0 stage 1: reach gameplay via the $0708 IRQ (a direct $3A92 trap from NAT never fires)
     s1=False
-    for _ in range(150):
-        w16(0x0710,0x0708); w16(0x0716,0); runf(4)
+    for _ in range(240):
+        runf(5)
         if r16(0x0712): s1=True; break
+        w16(0x0710,0x0708); w16(0x0716,0)   # re-arm (one-shot clears on release)
     # release one step, then stage 2: trap the GAME_TICK $3A92 (the wramB phase)
     w16(0x0712,0); w16(0x0710,0); w16(0x0714,1); runf(1); w16(0x0714,0)
     b0=False
@@ -51,11 +54,15 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x071A,ESC)
     for o in range(0,WN,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
-    # release one step past the B0 $3A92, then trap at the NEXT $3A92 (= B1, matches wramB)
+    # release one step past B0, then trap at the next $0708 IRQ entry (B1). NOTE: with escapes ON the
+    # GAME_TICK $3A92 is itself a native escape (entry_3a92) so the interp never FETCHES $3A92 -> can't
+    # trap there; $0708 (IRQ entry, before entry_3a92 runs) is escape-safe. Small phase offset vs wramB
+    # (the $0708->$3A92 IRQ prologue).
+    B1PC=int(os.environ.get('B1PC','0708'),16)
     w16(0x0712,0); w16(0x0710,0); w16(0x0714,1); runf(1); w16(0x0714,0)
     b1=False
     for _ in range(400):
-        w16(0x0710,0x3A92); w16(0x0716,0); runf(4)
+        w16(0x0710,B1PC); w16(0x0716,0); runf(4)
         if r16(0x0712): b1=True; break
     instr=r16(0x4A)|(r16(0x4C)<<16)
     print("B1 trap=%s instr=%d ce4=%d 13be=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),ESC),flush=True)
