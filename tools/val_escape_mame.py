@@ -53,7 +53,12 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     for s in range(15):
         if RN[s] in rdiff: print("   %s: esc=%08X mame=%08X"%(RN[s],le(escr,s),be32(exitr,s*4)),flush=True)
     a7=SP&0xFFFF
-    excl=set(range(SCRATCH,SCRATCH+8)) | set(range((a7-4)&0xFFFF,((a7-4)&0xFFFF)+4))
+    # a7-aware stack exclusion: the escape pushes a transient frame (re-sim return + link/movem,
+    # ~tens of bytes) BELOW the entry a7; MAME's exit has a7 popped, so those bytes are dead, not
+    # output. Exclude a generous window [a7-0x200, a7) (like val_frame_diff's a7-mask) so benign
+    # stack writes don't read as false REDs. Real output is elsewhere (game state, well above SP).
+    STK=0x200
+    excl=set(range(SCRATCH,SCRATCH+8)) | set((a7-1-k)&0xFFFF for k in range(STK))
     mame_d={i:(wram[i],exitw[i]) for i in range(0x10000) if wram[i]!=exitw[i] and i not in excl}
     esc_d ={i:(wram[i],esc[i])   for i in range(0x10000) if wram[i]!=esc[i]   and i not in excl}
     print("MAME deltas (%d): %s"%(len(mame_d),{("$F0%04X"%i):"%02X->%02X"%v for i,v in sorted(mame_d.items())}),flush=True)
