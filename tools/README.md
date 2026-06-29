@@ -30,9 +30,13 @@ What each tool does and how reusable it is for the **next** game. See
 - **`transpile.py`** [G core / S address-maps] — automated 68K→65816 transpiler.
   `transpile.py <hexaddr>` emits a native escape (`entry_<addr>`) operating on the
   interp's DP reg file; `--video` routes non-frame stores to the `$41` shadow;
-  `--bank1` is dead multi-bank scaffolding (unused — bank-$00 gaps suffice). The
-  codegen rules (EA matrix, D1 signed-branch lowering, call-bridge sentinel) are
-  game-agnostic; the reg-file/work-RAM/shadow addresses are the Superman SA-1 map.
+  `--bank1`/`--bank2` target the SA-1 escape banks ($92/$94). The codegen rules
+  (EA matrix, D1 signed-branch lowering, call-bridge sentinel) are game-agnostic;
+  the reg-file/work-RAM/shadow addresses are the Superman SA-1 map. **Three entry
+  conventions** (see `aot-dispatch-table` memory): default = jsr-hook (re-simulate
+  the skipped return-push); `--coroutine` = no push, decode ends at the yield bra;
+  `--table` = no push, faithful link/unlk/rts, for AOT/xlat dispatch where the real
+  return is already on the stack at a materialized boundary.
 - **`stream_profile.py`** [P/S] — in-game hot-function profile from the interp's
   per-frame PC stream (MAME can't reach gameplay under `-debug`). Injects a gameplay
   tick, enables PC streaming (`$0718=0`), histograms by 64-byte function-region. The
@@ -44,6 +48,32 @@ What each tool does and how reusable it is for the **next** game. See
   the live state to match tick B / each other). KEY: classify diffs vs `a7` (bridge
   sentinels below SP are dead, not bugs); diff the `$41` shadow for `--video` escapes.
   `$SUPERMN_SCRATCH` parameterizes the data dir.
+
+## AOT dispatch table (the pivot — unify escape dispatch)
+The strategic shift from per-target dispatch hooks (one hardcoded cmp-chain per
+escape: `ojmp_hook`/`ojmp_disp`, `ors_pre`, `ors_rte`/`cors_disp`, `jsrabs_hook2`,
+`bsr_hookpush`) to ONE global 68K-PC→native table that all control flow consults.
+See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
+- **`gen_xlat_table.py`** [G core / S addresses] — builds the table offline from the
+  escape banks' `.sym` (entry_X native addrs) + the `transpiled from $XXXXXX`
+  comments (68K PCs). Emits `src/xlat_table.bin`, a 2-level page table
+  (`page[PC>>8]` → 256-entry sub-table of 3-byte native addrs; 0 = miss) placed by
+  `build_interp_rom.py` at SA-1 **$96:8000**. `ALLOWED_PCS` = the validated set;
+  `JMP_STATE_PCS` (no-push handlers) is GREEN, `TABLE_PCS` (`--table` called fns) is
+  the in-progress class. Runtime mechanism: `xlat_dispatch` at escbank2 **$94:F900**
+  (push+RTL dispatch — `jml [abs]` is Poppy-mis-sized); `ojmp_hook` and `op_rts_norm`
+  both route through it (gate-check → jml $94F900 → native on hit, else jmp inext).
+- **`val_frame_diff.py`** [S] — the gate: capture at the $0708 IRQ jsr site, run one
+  full per-frame tick escapes-ON vs OFF, diff work RAM ($40) + video shadow ($41),
+  a7-aware. GREEN ⇒ the table-dispatched escapes are bit-exact vs interpretation.
+- **AOT diagnostics** (built for the $0CE4 state-divergence; reusable):
+  *dual-CPU `get_cpu_state('Snes'|'Sa1')` sampling* when a frame fails to trap
+  (found the interp/escapes run on the SA-1; a hang at `$00:D15A=ispin` = idle, not a
+  crash); *function-boundary differentials* (`/tmp/fnbound_ce4*.py` family) that trap
+  $0CE4 entry, save state, and run interpret-vs-dispatch to a trap point + diff $40.
+  KEY: the xlat table ROM ($96:8000) is **debugger-writable**, so you can toggle ONE
+  escape's table entry at runtime (zero=interpret / restore=dispatch) while keeping
+  all other escapes on — the only way to diff escape-on-only reaches.
 
 ## Differential transpiler harness (gate G2, historical spike)
 - **`spike_harness.py` / `spike24d98_harness.py`** [S] — build WRAM input blobs +

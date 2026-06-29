@@ -1,7 +1,31 @@
 # Roadmap — where we are and where we're heading
 
-Last updated: June 25, 2026. Companion to [STATUS.md](STATUS.md) (current state)
+Last updated: June 29, 2026. Companion to [STATUS.md](STATUS.md) (current state)
 and [METHODOLOGY.md](METHODOLOGY.md) (the reusable recipe).
+
+## DIRECTIONAL UPDATE (June 29) — from hand-escaping to AOT
+
+The thesis below (*interpret-cold / transpile-hot*) is unchanged, but the **method**
+pivoted. Hand-escaping one hot cluster at a time hit a wall: the transpiler already
+produces bit-exact native code, but *every* cluster became a multi-hour hunt for how
+its control transfer (jmp/rts/rte/coroutine) is reached, each needing a bespoke
+dispatch hook. The pivot is **ahead-of-time (AOT) transpilation**: build ONE global
+68K-PC→native table that all control flow consults (hit → native, miss → interpret),
+demoting the interpreter to a cold-path fallback, and batch-transpile the CDL block
+list through it. Dispatch stops being a per-case hunt and becomes one indirection.
+
+**Done + validated (this phase):** the dispatch table (`xlat_dispatch` @ $94:F900,
+blob @ $96:8000, `tools/gen_xlat_table.py`) with two convention classes unified onto
+it bit-exact — jmp-state (via `ojmp_hook`) and rts (via `op_rts_norm`); plus the
+`transpile.py --table` convention primitive. **Bottleneck moved** from dispatch
+(solved) to per-function correctness + SA-1-side validation tooling: the hottest
+cluster ($0CE4) dispatches but diverges (a timeline-coupled, escape-on-only reach).
+**Remaining to playable:** (1) SA-1-side full-trace / step validation to diagnose
+divergences and validate at scale; (2) convention-unify the jsr/coroutine classes;
+(3) the `inext` chokepoint (convention-free, catches every transfer); (4) scale bank
+allocation to $80–$9F + batch-transpile the CDL list; (5) divergence-bisection. See
+the `aot-dispatch-table` memory + STATUS.md (June 29) for detail. The per-function
+hot-list below remains the coverage target; execution now runs through the table.
 
 ## The plan in one screen
 
