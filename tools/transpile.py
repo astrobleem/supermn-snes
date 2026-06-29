@@ -40,6 +40,10 @@ def reg_dp(name):
 TMP = 0x9E                                      # transpiler compare/store scratch (avoids rdw_ea $90)
 VIDEO = False                                   # --video: route non-frame stores via writeword/writebyte
                                                 # (IO-aware: video $B0/$D0/$E0 -> $41 shadow). For $002xxx.
+BANK2 = False                                   # --bank2: body lives in the 2nd escape bank ($94:8000,
+                                                # file $2A0000). ibridge ($92) is unreachable + its $00FE
+                                                # resume lands in $92, so INLINE the interpret-bridge with
+                                                # a $00FD sentinel (ors_pre -> ors_94chk -> bank $94).
 ESCAPED = set()                                 # --escapes=hex,..: callee addrs with an ESCBANK escape;
                                                 # gen_call dispatches a bridge-TO-escape (run native) to them
 
@@ -601,6 +605,23 @@ def gen(e, ins, nxt):
         e('lda $96'); e('sta $%02X' % (reg_dp(dst[1]) + 2))
         if fuses: raise Unsupported('mulu feeding branch')
         return 1
+    if base == 'divu':                                   # DIVU.W <ea>,Dn : Dn.lo=Dn(32)/ea.w, Dn.hi=rem
+        src, dst = ops
+        if dst[0] != 'Dn': raise Unsupported('divu dst not Dn')
+        if size not in (None, 'w'): raise Unsupported('divu.%s' % size)
+        dp = reg_dp(dst[1])
+        e('lda $%02X' % dp); e('sta $50')                # dividend lo16 = Dn.lo
+        e('lda $%02X' % (dp + 2)); e('sta $52')          # dividend hi16 = Dn.hi
+        ea_load_A(e, src, 'w'); e('sta $54')             # divisor = src.w
+        e('jsr esc_udiv')                                # -> quot $50:$52, rem $94 (bank-$92 local; NOT
+                                                         # the bank-$00 `udiv` $00:A483 -- name collision)
+        e.brn += 1; ov = 'dvov%s_%d' % (e.pfx, e.brn)
+        e('lda $52'); e('bne %s' % ov)                   # quotient >16b => 68K overflow: Dn UNCHANGED (V=1)
+        e('lda $50'); e('sta $%02X' % dp)                # Dn.lo = quotient
+        e('lda $94'); e('sta $%02X' % (dp + 2))          # Dn.hi = remainder
+        e.lbl(ov)
+        if fuses: raise Unsupported('divu feeding branch')
+        return 1
     if base == 'ext':
         dp = reg_dp(ops[0][1])
         if size == 'l': sext_hi(e, dp)                   # word -> long: hi16 = sign(lo16)
@@ -829,6 +850,17 @@ def gen_call(e, ins):
         ea = parse_ea(t)
         if ea[0] != '(An)': raise Unsupported('call form %r' % t)
         dp = reg_dp(ea[1])
+        if BANK2:
+            # ibridge is a $92 label (unreachable from $94) and its ib_miss resumes in bank $92. INLINE
+            # the interpret-bridge: push the $00FD sentinel:cont, set PC=An, jml inext. The callee's rts
+            # pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont. (No native draw dispatch
+            # in $94 -- the callee always interprets; the per-jsr(An) native-draw win is forgone here.)
+            e.cmt('INDIRECT-BRIDGE %s %s -> interpret callee ($00FD bank-94 sentinel), resume %s' % (ins.mnemonic, t, cont))
+            e('lda #%s' % cont); e('sta $54'); e('lda #$00FD'); e('sta $56'); e('jsr push32')
+            e('lda $%02X' % dp); e('sta $40'); e('lda $%02X' % (dp+2)); e('sta $42')
+            e('jmp inext')
+            e.lbl(cont)
+            return 1
         e.cmt('INDIRECT-BRIDGE %s %s -> ibridge (a0 escape or interpret), resume %s' % (ins.mnemonic, t, cont))
         e('lda #%s' % cont); e('sta $40'); e('lda #$00FE'); e('sta $42')
         e('lda $%02X' % dp); e('sta $52'); e('lda $%02X' % (dp+2)); e('sta $50')
@@ -836,7 +868,8 @@ def gen_call(e, ins):
         e.lbl(cont)
         return 1
     e.cmt('CALL-BRIDGE %s %s -> interpret callee, resume %s' % (ins.mnemonic, t, cont))
-    e('lda #%s' % cont); e('sta $54'); e('lda #$00FF'); e('sta $56'); e('jsr push32')
+    sentinel = '$00FD' if BANK2 else '$00FF'         # bank2: $00FD resumes in $94 (not $00 via $00FF)
+    e('lda #%s' % cont); e('sta $54'); e('lda #%s' % sentinel); e('sta $56'); e('jsr push32')
     a = int(m.group(1), 16)                              # jsr.l absolute / bsr (capstone resolves PC-rel)
     e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
     e('jmp inext')
@@ -1000,9 +1033,10 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED
+    global VIDEO, ESCAPED, BANK2
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    bank1 = '--bank1' in sys.argv
+    BANK2 = '--bank2' in sys.argv
+    bank1 = '--bank1' in sys.argv or BANK2            # bank2 reuses all of bank1's jsl.l/jml.l transforms
     VIDEO = '--video' in sys.argv
     coroutine = '--coroutine' in sys.argv                 # task-BODY escape (see main-loop-coroutine-arch):
     # entered by the $07E4/op_rte resume hook (reg file already restored, a7 already past the trap

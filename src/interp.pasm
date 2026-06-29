@@ -11076,7 +11076,7 @@ ors_pre:
     lda $42
     cmp #$00FE
     beq ors_pre_92
-    jmp op_rts_sentinel
+    jmp ors_94chk        ; SIZE-NEUTRAL: A still = $42; ors_94chk checks $00FD (bank-$94 escbank2)
 ors_pre_92:
     lda #$0092
     sta $42
@@ -18842,6 +18842,20 @@ svb_done:
 ; combos the attract-only validation never exercised, e.g. $2B6E move.l (d16,Ay),(d16,Ax)).
 ; Skips flags, matching the existing move handlers. dest mode/reg are SWAPPED in the move
 ; encoding (reg=bits11-9, mode=bits8-6); source=bits5-0.
+; ors_94chk / ors_pre_94 — bank-$94 (escbank2) CALL-BRIDGE/ibridge sentinel resume. Reached from
+; ors_pre's size-neutral `jmp ors_94chk` when $42 != $00FE; A still holds the popped sentinel ($42).
+; $00FD -> resume the native continuation in bank $94 (the 2nd escape bank, file $2A0000). Placed in
+; the free $F964 gap (zero-run) so it doesn't shift main code. See [[escbank-overflow-second-bank]].
+.org $F964
+ors_94chk:
+    cmp #$00FD
+    beq ors_pre_94
+    jmp op_rts_sentinel
+ors_pre_94:
+    lda #$0094
+    sta $42
+    jml [$0040]
+
 .org $FA00
 op_move_g:
     rep #$30

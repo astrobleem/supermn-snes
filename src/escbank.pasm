@@ -26,6 +26,7 @@ ojmp_hook=$00D1B3
 jsrabs_hook=$00E200
 bhp_after=$00E454
 ors_pre=$00D16F
+entry_c9f8=$948022
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -12485,17 +12486,13 @@ Lf4542_2:
     sta $42
     jml.l inext
 L4542_4556:
-    ; CALL-BRIDGE jsr $c9f8.l -> interpret callee, resume br4542_2
+    ; CALL-BRIDGE jsr $c9f8.l -> entry_c9f8 (NATIVE escape in the 2nd bank $94), resume br4542_2.
+    ; entry_c9f8's prologue re-pushes $00FE:br4542_2; its terminal `jml.l ors_pre` resumes here ($92).
     lda #br4542_2
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$C9F8
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jml entry_c9f8       ; cross-bank $92 -> $94 (entry_c9f8 fed as $94xxxx by gen_escbank_syms)
 br4542_2:
     lda #$455C
     sta $40

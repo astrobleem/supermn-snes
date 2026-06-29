@@ -38,6 +38,16 @@ if _osp.exists("src/escbank.bin"):
     assert len(ESC) <= 0x8000, ("escape bank %d bytes overflows the $290000..$298000 gap" % len(ESC))
     ROM[0x290000:0x290000+len(ESC)] = ESC            # @ SA-1 $92:8000 (file $290000)
 
+# --- SECOND SA-1 ESCAPE BANK ($94:8000, file $2A0000) ---
+# The $92 bank's bodies region filled to $F000 (jah2 dispatch chains). file $2A0000 is free (after
+# VID at $298000-$2A0000) and the SA-1 MMC maps it to $94:8000 (file $200000-$2FFFFF -> $80-$9F;
+# ($A0000/$8000=20)+$80=$94). Confirmed by a live marker read. escbank2.pasm is .org $8000, so
+# escbank2 $8000 -> file $2A0000 -> $94:8000. $92 dispatchers `jml entry_X` into it.
+if _osp.exists("src/escbank2.bin"):
+    ESC2 = Path("src/escbank2.bin").read_bytes()
+    assert len(ESC2) <= 0x8000, ("escbank2 %d bytes overflows the $2A0000..$2A8000 bank" % len(ESC2))
+    ROM[0x2A0000:0x2A0000+len(ESC2)] = ESC2          # @ SA-1 $94:8000 (file $2A0000)
+
 # --- SA-1 LoROM mirror of the interpreter ---
 # Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style
 # (32KB/bank): $00:8000-FFFF -> FILE $0-$7FFF, so $00:FFFC (reset) -> FILE $7FFC and the

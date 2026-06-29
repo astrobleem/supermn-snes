@@ -37,6 +37,18 @@ for n in NEEDED:
         lines.append("%s=%s" % (n, addr[n]))
     else:
         missing.append(n)
+# Cross-bank: feed escbank2's entry_X addresses ($94:8000, file $2A0000) so $92 dispatchers can
+# `jml entry_X` into the 2nd bank. escbank2.sym is produced by the earlier escbank2 assembly pass.
+esc2_sym = Path("src/escbank2.sym")
+n2 = 0
+if esc2_sym.exists():
+    for line in esc2_sym.read_text(encoding="utf-8-sig").splitlines():
+        m = re.match(r"\s*([0-9A-Fa-f]{2}):([0-9A-Fa-f]{4})\s+(entry_[0-9a-f]+)", line)
+        if m:
+            # Poppy assembles escbank2 at .org $8000 reporting bank $00; it actually loads at file
+            # $2A0000 = SA-1 $94:8000. Force bank $94 so `jml entry_X` targets the real bank.
+            lines.append("%s=$94%04X" % (m.group(3), int(m.group(2), 16)))
+            n2 += 1
 lines.append("; <<< ESCBANK_SYMS <<<")
 block = "\n".join(lines)
 
@@ -47,5 +59,5 @@ if pat.search(src):
 else:
     src = block + "\n\n" + src
 esc_path.write_text(src)
-print("gen_escbank_syms: wrote %d symbols%s" %
-      (len(NEEDED) - len(missing), (" (MISSING: %s)" % missing) if missing else ""))
+print("gen_escbank_syms: wrote %d bank-$00 + %d escbank2 entry_X symbols%s" %
+      (len(NEEDED) - len(missing), n2, (" (MISSING: %s)" % missing) if missing else ""))
