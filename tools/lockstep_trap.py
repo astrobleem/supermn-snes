@@ -51,7 +51,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     wh(0x40, le32(0x00003A92)); w16(0x3C, SP&0xFFFF); w16(0x3E,(SP>>16)&0xFF)
     w16(0x60,Z);w16(0x6E,C);w16(0x70,N);w16(0x72,V);w16(0xA2,X);w16(0x7C,SR&7 or 7)
     w16(0xA4,USP&0xFFFF);w16(0xA6,(USP>>16)&0xFFFF);w16(0xA8,1);w16(0xAA,0);w16(0x4A,0);w16(0x4C,0)
-    w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x071A,ESC)
+    w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x0734,0); w16(0x071A,ESC)
     for o in range(0,WN,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
     # release one step past B0, then trap at the next $0708 IRQ entry (B1). NOTE: with escapes ON the
@@ -65,7 +65,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         w16(0x0710,B1PC); w16(0x0716,0); runf(4)
         if r16(0x0712): b1=True; break
     instr=r16(0x4A)|(r16(0x4C)<<16)
-    print("B1 trap=%s instr=%d ce4=%d 13be=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),ESC),flush=True)
+    print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC),flush=True)
     out=bytes(m.read_memory('snesMemory',0x400000,WN))
     excl=set(range(0x170A-0x80,0x170A+0x80))
     diff=[i for i in range(WN) if out[i]!=wramB[i] and i not in excl]
