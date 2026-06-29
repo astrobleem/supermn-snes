@@ -13,6 +13,7 @@ os.environ['DOTNET_ROOT']='/home/chad/.dotnet10'; os.environ['PATH']='/home/chad
 import mesen_mcp.session as _sess; _sess.validate_mesen_build=lambda *a,**k: None
 from mesen_mcp import McpSession
 TD=sys.argv[1]; AC=int(sys.argv[2],16) if len(sys.argv)>2 else 0x2F60
+ESC=int(sys.argv[3]) if len(sys.argv)>3 else 0   # $071A escape-enable gate (0=pure interp baseline, 1=escapes on)
 wramA=open(TD+'/wramA.bin','rb').read(); wramB=open(TD+'/wramB.bin','rb').read(); regs=open(TD+'/regsA.bin','rb').read()
 def be32(d,o): return (d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3]
 D=[be32(regs,i*4) for i in range(8)]; A=[be32(regs,(8+i)*4) for i in range(7)]
@@ -43,7 +44,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     w16(0x3C, SP&0xFFFF); w16(0x3E,(SP>>16)&0xFF)
     w16(0x60,Z);w16(0x6E,C);w16(0x70,N);w16(0x72,V);w16(0xA2,X);w16(0x7C,SR&7 or 7)
     w16(0xA4,USP&0xFFFF);w16(0xA6,(USP>>16)&0xFFFF);w16(0xA8,1);w16(0xAA,0);w16(0x4A,0);w16(0x4C,0)
-    w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0)
+    w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x071A,ESC)
     for o in range(0,0x4000,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
     # release -> run exactly one game tick -> freeze at B1
@@ -53,7 +54,12 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         runf(20)
         if r16(0x0702): b1=True; break
     instr=r16(0x4A)|(r16(0x4C)<<16)
-    print("B1 frozen=%s instr(B0->B1)=%d  ce4=%d 13be=%d"%(b1,instr,r16(0x0724),r16(0x0730)),flush=True)
+    print("B1 frozen=%s instr(B0->B1)=%d  ce4=%d 13be=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),ESC),flush=True)
+    if not b1:   # runaway: dump the 68K PC ring ($0400, 128 entries lo16/hi16, write idx @ $48) to see where
+        ring=m.read_memory('Sa1Memory',0x0400,0x200); idx=r16(0x48)
+        def pc_at(o): return ((ring[o+2]|(ring[o+3]<<8))<<16)|(ring[o]|(ring[o+1]<<8))
+        pcs=[pc_at((idx+4*k)&0x1FF) for k in range(128)]
+        print("   NO FREEZE; last 40 68K PCs: %s"%' '.join('%05X'%p for p in pcs[-40:]),flush=True)
     out=bytes(m.read_memory('snesMemory',0x400000,0x4000))
     excl=set(range(0x170A-0x80,0x170A+0x80))   # entry a7 region (stack churn) -> exclude
     diff=[i for i in range(0x4000) if out[i]!=wramB[i] and i not in excl]
