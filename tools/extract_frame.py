@@ -31,14 +31,22 @@ try:
     # with a non-zero A-register, or fall back to nth=1. Override with NTH=<n> env.
     import os as _os
     forced=_os.environ.get("NTH")
+    def be32(d,o): return ((d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3])&0xFFFFFF
     E=None
-    for nth in ([int(forced)] if forced else range(1,9)):
+    for nth in ([int(forced)] if forced else range(1,25)):
         E=s.cmd("capture_at_pc", pc=ADDR, addr=0xF00000, len=0x10000, nth=nth, maxFrames=8000, timeout=300)
         if not E.get("registers"): break
         er=E["registers"]; aregs=[er.get("A%d"%i,0)&0xFFFFFF for i in range(5)]
+        SP=er["SP"]&0xFFFFFF; ew=bytes.fromhex(E["hex"]); R=be32(ew, SP-0xF00000) if 0<=SP-0xF00000<0xFFFC else -1
         degenerate=all(a==0 for a in aregs)
-        print("  nth=%d frame=%d a0-a4=%s%s"%(nth,E.get("frame",0),[hex(a) for a in aregs]," DEGENERATE-skip" if degenerate and not forced else ""),flush=True)
-        if forced or not degenerate: break
+        # also reject invocations whose [SP] (the rts return) is NOT a plausible 68K code address:
+        # tail-dispatched/recursive entries (e.g. [SP]=$0CE4 self-loop, $3C0000 garbage) can't be
+        # exit-captured (no real return to trap) and produce mismatched entry/exit pairs.
+        badret = not (0x000400 <= R < 0x040000)
+        skip = (degenerate or badret) and not forced
+        print("  nth=%d frame=%d SP=%06X [SP]=%06X a0-a4=%s%s"%(nth,E.get("frame",0),SP,R&0xFFFFFF,[hex(a) for a in aregs],
+              (" DEGENERATE-skip" if degenerate else " BADRET-skip") if skip else ""),flush=True)
+        if forced or not skip: break
     assert E and E.get("registers"), "no $%06X hit: %r"%(ADDR,E)
     er=E["registers"]; ew=bytes.fromhex(E["hex"])
     print("$%06X entry frame=%d SP=%06X a6=%06X SR=%04X"%(ADDR,E["frame"],er["SP"]&0xFFFFFF,er["A6"]&0xFFFFFF,er.get("SR",0)),flush=True)
