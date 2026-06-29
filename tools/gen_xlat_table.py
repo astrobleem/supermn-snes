@@ -27,9 +27,11 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC}
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()     # rts-class: ce4t deploy validated the DISPATCH path (isolated lockstep works) and
-                      # caught (a) a real xlat_dispatch scratch collision [FIXED] and (b) a ce4t transpiler
-                      # stray-write bug [open]. Re-add 0xCE4 once the transpile --table body is fixed.
+TABLE_PCS = set()     # $0CE4 in DETERMINISTIC gameplay is JSR-reached (already covered by the inline
+                      # jah2 entry_ce4); ce4t (rts/jmp table) never fired (ce4=0) -> its rts-reach was a
+                      # free-run artifact. The TABLE ITSELF is PROVEN to compose GREEN in-context (3
+                      # jmp-state escapes, lockstep_trap, guaranteed jah2-off: 1B). Add table escapes only
+                      # for PCs genuinely jmp/rts-reached in deterministic gameplay.
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
