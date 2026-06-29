@@ -27,7 +27,7 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC}
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()   # (empty) -- $0CE4 deferred: rts-reach is timeline-dependent (only exists escapes-on), not boundary-diffable; needs full-trace compare
+TABLE_PCS = set()   # (empty) -- entry_xce4 ($0CE4) is bit-exact ALONE; {+d0d0} RED looks like a val_frame_diff trap-alignment artifact (needs frame-aligned validation)
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
