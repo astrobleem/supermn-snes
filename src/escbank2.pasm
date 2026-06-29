@@ -1341,7 +1341,14 @@ L1008_106e:
 ; ============================================================================
 .org $F900
 xlat_dispatch:
+    ; CRITICAL scratch rule: the MISS path falls through to `jml inext`, and inext reads the interp
+    ; 32-bit step counter $4A/$4C and stop marker $4E (`lda $4A; inc; ...; cmp $4C #$0800; bcs docap`).
+    ; The old code used $4A/$4C/$4E as table-lookup scratch, so EVERY table miss corrupted the counter
+    ; -- and any page whose sub-table offset >= $0800 (e.g. d5c4@$0800) tripped the cap -> docap halt
+    ; -> the game diverged/ran away whenever escapes were enabled (escapes-on lockstep RED, off GREEN).
+    ; Fix: use $96/$98 (escape-transient DP, dead on the miss path) and preserve X across the miss.
     rep #$30
+    phx                      ; preserve X (interp decode state) for the miss path
     lda $42
     bne xd_miss              ; non-bank-0 target -> not in this table
     lda $40                  ; PC lo16
@@ -1351,28 +1358,30 @@ xlat_dispatch:
     tax
     lda $968000,x            ; page[PC>>8] = sub-table byte-offset (0 = no escapes in page)
     beq xd_miss
-    sta $4C                  ; save sub-table offset
+    sta $96                  ; save sub-table offset (was $4C = step-counter hi)
     lda $40
     and #$00FF               ; PC low byte (entry index)
-    sta $4E
+    sta $98                  ; (was $4E = stop marker)
     asl a                    ; *2
     clc
-    adc $4E                  ; + *1 = *3 (3-byte entries)
+    adc $98                  ; + *1 = *3 (3-byte entries)
     clc
-    adc $4C                  ; + sub-table offset = blob offset of the entry
+    adc $96                  ; + sub-table offset = blob offset of the entry
     tax
     lda $968002,x            ; native addr bank (high byte; ignore the mid byte overlap)
     and #$00FF
-    sta $4A
+    sta $96                  ; native bank (was $4A = step-counter lo)
     lda $968000,x            ; native addr lo16
     bne xd_hit               ; lo16!=0 -> live entry (real entries are $8000+)
 xd_miss:
+    plx                      ; restore X
     jml.l inext
 xd_hit:                      ; dispatch via push+RTL (avoids the Poppy-mis-sized jml [abs]).
+    plx                      ; discard the preserved X (balance the stack before push+rtl)
     dec a                    ; A = native lo16 - 1 (RTL adds 1 to the pulled 16-bit PC)
     tax                      ; stash lo16-1
     sep #$20
-    lda $4A
+    lda $96                  ; native bank
     pha                      ; push PBR FIRST (highest stack addr; RTL pulls it last)
     rep #$30
     txa
