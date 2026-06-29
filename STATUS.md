@@ -3,6 +3,12 @@
 Last updated: June 29, 2026. Single source of "where we're at." Per-area detail
 lives in the linked docs.
 
+> **The engine is named Cambium** — the graft-union layer where rootstock and scion fuse. It is
+> the whole graft system: the 68K **interpreter rootstock** (`src/interp.pasm`) + the transpiled
+> native **scions** (escbank/escbank2, `tools/transpile.py`) + **the global AOT dispatch table that
+> unites them** (`xlat_dispatch`). The name points at the dispatch union — that, not the codegen, is
+> the crown jewel. Cambium belongs to the Game Garden botanical family (Poppy/Peony).
+
 ## CURRENT STATE (June 29) — DIRECTIONAL PIVOT to AOT; one dispatch table replaces per-target hooks; PoC proven
 
 The project changes gear from **hand-escaping one hot cluster at a time** to **ahead-of-time
