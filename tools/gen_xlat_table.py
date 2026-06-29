@@ -27,12 +27,11 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC}
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()     # rts-class deferred: lockstep_nexen (the reliable in-context gate) shows the
-                      # $0708-gated GAME_TICK intervals don't table-dispatch $0CE4/$13BE in DETERMINISTIC
-                      # gameplay -- profile_real/caller_census saw those rts reaches in the interp FREE-RUN
-                      # (which drifts from real input-driven flow). Need: capture the $3A92 boundary that
-                      # PRECEDES a sprite-build interval, then lockstep-validate (13bet body regenerates via
-                      # transpile --table + COUNTERS[0x13BE]=0x0730). See mame-capture-precision memory.
+TABLE_PCS = set()     # rts-class DEFERRED: full-frame lockstep (escapes ON) diverges for ALL escapes
+                      # (table-only too, jah2 disabled) -- escapes need interp-INTERNAL state not derivable
+                      # from an injected MAME frame; per-function val_escape_mame/val_jmpstate (native base)
+                      # are the only escape gates, and rts-class is blocked by capture_at_pc prefetch-skew.
+                      # See mame-capture-precision. entry_ce4t regenerates via transpile --table.
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
