@@ -25,8 +25,21 @@ try:
         if not r.get("registers"): print("ended @%d"%frame); break
         frame=r["frame"]
     print("ff to frame %d; arming capture_at_pc $%06X"%(frame,ADDR), flush=True)
-    E=s.cmd("capture_at_pc", pc=ADDR, addr=0xF00000, len=0x10000, nth=1, maxFrames=8000, timeout=300)
-    assert E.get("registers"), "no $%06X hit: %r"%(ADDR,E)
+    # REPRESENTATIVE capture: skip DEGENERATE invocations (e.g. all source ptrs a0-a4 == 0 -> the fn
+    # does nothing / reads garbage), which produce false escape-vs-MAME REDs (the escape and MAME can
+    # map a null/edge read differently, and val only injects $F0 work RAM). Walk nth=1.. until a call
+    # with a non-zero A-register, or fall back to nth=1. Override with NTH=<n> env.
+    import os as _os
+    forced=_os.environ.get("NTH")
+    E=None
+    for nth in ([int(forced)] if forced else range(1,9)):
+        E=s.cmd("capture_at_pc", pc=ADDR, addr=0xF00000, len=0x10000, nth=nth, maxFrames=8000, timeout=300)
+        if not E.get("registers"): break
+        er=E["registers"]; aregs=[er.get("A%d"%i,0)&0xFFFFFF for i in range(5)]
+        degenerate=all(a==0 for a in aregs)
+        print("  nth=%d frame=%d a0-a4=%s%s"%(nth,E.get("frame",0),[hex(a) for a in aregs]," DEGENERATE-skip" if degenerate and not forced else ""),flush=True)
+        if forced or not degenerate: break
+    assert E and E.get("registers"), "no $%06X hit: %r"%(ADDR,E)
     er=E["registers"]; ew=bytes.fromhex(E["hex"])
     print("$%06X entry frame=%d SP=%06X a6=%06X SR=%04X"%(ADDR,E["frame"],er["SP"]&0xFFFFFF,er["A6"]&0xFFFFFF,er.get("SR",0)),flush=True)
     (OUT/"entry_regs.bin").write_bytes(regsA(er)); (OUT/"entry_wram.bin").write_bytes(ew)
