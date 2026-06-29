@@ -16728,7 +16728,10 @@ op_rts_sentinel:
     bne op_rts_norm
     jmp ($0040)            ; sentinel: jmp to the native continuation address held in $40
 op_rts_norm:
-    jmp inext
+    jmp ojmp_hook         ; rts-class AOT dispatch: route the popped return PC ($40/$42) through the
+                          ; gated xlat table (ojmp_hook = gate-check -> jml $94F900, else jmp inext).
+                          ; HIT -> dispatch native (e.g. "push addr+rts" computed-goto targets);
+                          ; MISS/gate-off -> jmp inext (interpret as before). Size-neutral swap.
 
 ; entry_bridgeproof — VALIDATED CALL-BRIDGE reference template (not in the active dispatch).
 ; To re-run the end-to-end proof, point jah2_e412 here instead of entry412: when $0412 (the RNG
