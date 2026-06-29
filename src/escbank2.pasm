@@ -686,3 +686,51 @@ Ld5a0_d5b2:
     jml.l ors_pre
 
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
+
+; ============================================================================
+; xlat_dispatch — the AOT address-translation indirection ($94:F900).
+; in: $40 = 68K PC lo16, $42 = PC bank, 16-bit A/X/Y. ojmp_hook (bank $00) jml's here after its
+; gate check. Looks the PC up in the 2-level page table at $96:8000 (file $2B0000, built by
+; tools/gen_xlat_table.py). HIT -> jml [native entry]; MISS -> jml inext (interpret as today).
+; This replaces ojmp_hook's hardcoded cmp-chain AND escbank's ojmp_disp re-scan with one lookup.
+; Bank-$00 PCs only for now (the table's jmp-state convention class); $42!=0 -> miss.
+; ============================================================================
+.org $F900
+xlat_dispatch:
+    rep #$30
+    lda $42
+    bne xd_miss              ; non-bank-0 target -> not in this table
+    lda $40                  ; PC lo16
+    xba                      ; low byte now = PC>>8 (page index)
+    and #$00FF
+    asl a                    ; *2 (2-byte page pointers)
+    tax
+    lda $968000,x            ; page[PC>>8] = sub-table byte-offset (0 = no escapes in page)
+    beq xd_miss
+    sta $4C                  ; save sub-table offset
+    lda $40
+    and #$00FF               ; PC low byte (entry index)
+    sta $4E
+    asl a                    ; *2
+    clc
+    adc $4E                  ; + *1 = *3 (3-byte entries)
+    clc
+    adc $4C                  ; + sub-table offset = blob offset of the entry
+    tax
+    lda $968002,x            ; native addr bank (high byte; ignore the mid byte overlap)
+    and #$00FF
+    sta $4A
+    lda $968000,x            ; native addr lo16
+    bne xd_hit               ; lo16!=0 -> live entry (real entries are $8000+)
+xd_miss:
+    jml.l inext
+xd_hit:                      ; dispatch via push+RTL (avoids the Poppy-mis-sized jml [abs]).
+    dec a                    ; A = native lo16 - 1 (RTL adds 1 to the pulled 16-bit PC)
+    tax                      ; stash lo16-1
+    sep #$20
+    lda $4A
+    pha                      ; push PBR FIRST (highest stack addr; RTL pulls it last)
+    rep #$30
+    txa
+    pha                      ; push PCH:PCL (native lo16 - 1)
+    rtl                      ; -> native bank:lo16

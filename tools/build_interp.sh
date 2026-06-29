@@ -20,6 +20,10 @@ fi
 # when interp.pasm changes), then assemble. Skipped if src/escbank.pasm is absent.
 if [ -f src/escbank.pasm ]; then
   python3 tools/gen_escbank_syms.py
-  dotnet "$POPPY" -t snes -I . -o src/escbank.bin src/escbank.pasm
+  dotnet "$POPPY" -t snes -I . -o src/escbank.bin -s src/escbank.sym src/escbank.pasm
+fi
+# AOT address-translation table (68K PC -> native escape entry); needs both escbank .sym files.
+if [ -f src/escbank.sym ]; then
+  python3 tools/gen_xlat_table.py
 fi
 python3 tools/build_interp_rom.py

@@ -11122,22 +11122,9 @@ ors_rte_x:               ; Only a real hit detours to bank $92 (per-rte round-tr
 ojmp_hook:
     lda $071A
     beq ojmp_x           ; escapes gated OFF
-    lda $42
-    bne ojmp_x           ; target bank != 0 -> not a bank-$00 state handler
-    lda $40              ; --- escaped state handlers (add `cmp #LO / beq ojmp_hit` per handler) ---
-    cmp #$D0D0
-    beq ojmp_hit         ; $00D0D0
-    cmp #$D5C4
-    beq ojmp_hit         ; $00D5C4
-    cmp #$D6FC
-    beq ojmp_hit         ; $00D6FC
-    cmp #$D386
-    beq ojmp_hit         ; $00D386
-    cmp #$D3B0
-    beq ojmp_hit         ; $00D3B0
-    bra ojmp_x
-ojmp_hit:
-    jml $92F900          ; -> escbank ojmp_disp
+    jml $94F900          ; xlat_dispatch (AOT table lookup): HIT -> jml native, MISS -> jml inext.
+                         ; Replaces the per-state cmp-chain + escbank ojmp_disp re-scan with one
+                         ; indirection. $42 bank check + table lookup all live in xlat_dispatch.
 ojmp_x:
     jmp inext
 
