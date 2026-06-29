@@ -23,6 +23,13 @@ from pathlib import Path
 # the table exposed (the old ojmp cmp-chain never co-dispatched them). They fall through to the
 # interpreter (bit-exact) until that interaction is debugged. See task #70 / memory.
 JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC}
+
+# AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
+# entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
+# cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
+TABLE_PCS = set()   # (empty) -- $0CE4 deferred: hardest fn (ROM source + jsr-vs-rts frame mismatch)
+
+ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
 
 def load_native_addrs():
@@ -33,7 +40,7 @@ def load_native_addrs():
         if not p.exists():
             continue
         for line in p.read_text(encoding="utf-8-sig").splitlines():
-            m = re.match(r"\s*[0-9A-Fa-f]{2}:([0-9A-Fa-f]{4})\s+(entry_[0-9a-f]+)", line)
+            m = re.match(r"\s*[0-9A-Fa-f]{2}:([0-9A-Fa-f]{4})\s+(entry_[0-9a-z]+)", line)
             if m:
                 out[m.group(2)] = (bank << 16) | int(m.group(1), 16)
     return out
@@ -47,7 +54,7 @@ def load_entry_pcs():
             m = re.search(r"transpiled from \$([0-9A-Fa-f]+)", ln)
             if m:
                 last = int(m.group(1), 16)
-            m2 = re.match(r"(entry_[0-9a-f]+):", ln)
+            m2 = re.match(r"(entry_[0-9a-z]+):", ln)
             if m2:
                 out[m2.group(1)] = last
                 last = None
@@ -59,13 +66,13 @@ def main():
     # select the jmp-state class entries that are present + resolved
     pairs = []   # (pc, native_addr)
     for name, pc in pcs.items():
-        if pc in JMP_STATE_PCS and name in native:
+        if pc in ALLOWED_PCS and name in native:
             pairs.append((pc, native[name], name))
     pairs.sort()
-    if len(pairs) != len(JMP_STATE_PCS):
+    if len(pairs) != len(ALLOWED_PCS):
         got = {p for p, _, _ in pairs}
         print("gen_xlat_table: WARNING missing jmp-state entries: %s"
-              % [hex(x) for x in JMP_STATE_PCS - got], file=sys.stderr)
+              % [hex(x) for x in ALLOWED_PCS - got], file=sys.stderr)
 
     # build the page table
     PAGE_BYTES = 256 * 2

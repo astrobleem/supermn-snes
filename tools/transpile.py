@@ -1042,6 +1042,10 @@ def main():
     # entered by the $07E4/op_rte resume hook (reg file already restored, a7 already past the trap
     # frame), NOT by a jsr -> NO re-simulate-push prologue. Decode ends at the yield `bra` (target <
     # entry = back to the trap #5); that tail-jump runs the trap interpreted -> the normal yield.
+    table = '--table' in sys.argv                         # AOT-TABLE/rts dispatch (aot-dispatch-table):
+    # entered via xlat_dispatch (jmp(a0)/rts at a materialized boundary) with PC=fn-entry and the
+    # caller's REAL return already on the 68K stack -> like default, decode to the terminal rts and
+    # emit the faithful link/unlk/rts body, but SKIP the re-simulate push (the return is already there).
     for a in sys.argv:                                   # --escapes=hex,hex,..: callees with escbank escapes
         if a.startswith('--escapes='):
             ESCAPED = {int(x, 16) & 0xFFFFFF for x in a.split('=', 1)[1].split(',') if x}
@@ -1061,6 +1065,8 @@ def main():
         else: e('inc $%04X' % c)
     if coroutine:
         e.cmt('coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)')
+    elif table:
+        e.cmt('AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push')
     else:
         e.cmt('re-simulate the jsr return-push the hook skipped (frame must match the real 68K)')
         e('lda $40'); e('sta $54'); e('lda $42'); e('sta $56'); e('jsr push32')
