@@ -28,6 +28,7 @@ bhp_after=$00E454
 ors_pre=$00D16F
 entry_c9f8=$948022
 entry_d5a0=$948487
+entry_1008=$948544
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -13748,6 +13749,15 @@ jx_on:
 jx_b0:
     lda $52              ; target low16
     ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<
+    cmp #$1008
+    bne jx_1008
+    inc $0764
+    plp
+    pla
+    lda $54
+    sta $40
+    jml entry_1008
+jx_1008:
     cmp #$2DF0
     bne jx_2df0
     inc $0764
