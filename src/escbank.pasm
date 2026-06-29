@@ -27,6 +27,7 @@ jsrabs_hook=$00E200
 bhp_after=$00E454
 ors_pre=$00D16F
 entry_c9f8=$948022
+entry_d5a0=$948487
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -13213,11 +13214,7 @@ Lfd5c4_4:
     jsl.l writeword_l
     jmp Ld5c4_d5f0
 Ld5c4_d5ee:
-    lda #$D5A0
-    sta $40
-    lda #$0000
-    sta $42
-    jml.l inext
+    jml.l entry_d5a0     ; $D5EE bra $d5a0 -> native $D5A0 leaf (escbank2 $94), not interp bail
 Ld5c4_d5f0:
     lda $34
     clc

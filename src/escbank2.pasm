@@ -590,4 +590,99 @@ brc9f8_4:
     sta $3C
     jml.l ors_pre
 
+; --- $00D5A0 leaf (escbank2 / $94): reached by `$D5EE bra $d5a0` INSIDE the $D5C4 state
+; handler -- NOT a jmp-table dispatch. entry_d5c4 jml's here instead of bailing to the
+; interpreter, so its $D5A0 tail loop (~14 interp-instr/fr) runs native. Ends in rts (pop
+; 24-bit return -> ors_pre), like the coroutine task body it belongs to. ---
+; --- transpiled from $00D5A0 (8 instrs) by tools/transpile.py [bank1] ---
+entry_d5a0:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$2AA8
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd5a0_1
+    bmi Lfd5a0_1
+    bra Lfd5a0_2
+Lfd5a0_1:
+    jmp Ld5a0_d5b2
+Lfd5a0_2:
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+Ld5a0_d5b2:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
