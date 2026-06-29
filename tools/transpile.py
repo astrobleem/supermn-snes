@@ -25,7 +25,7 @@ IMG = 0x10000                                  # 68K ROM at file offset $10000
 MD = capstone.Cs(capstone.CS_ARCH_M68K, capstone.CS_MODE_BIG_ENDIAN)
 
 # per-function lockstep hit counter (TRANSPILER_TOOL_SCOPE) ; add a slot per new target
-COUNTERS = {0x000CE4: 0x0724, 0x00111A: 0x0726, 0x025110: 0x072A, 0x0020E8: 0x072C}
+COUNTERS = {0x000CE4: 0x0724, 0x00111A: 0x0726, 0x0013BE: 0x0730, 0x025110: 0x072A, 0x0020E8: 0x072C}
 
 class Unsupported(Exception): pass
 

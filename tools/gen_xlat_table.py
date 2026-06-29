@@ -27,13 +27,12 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC}
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()     # $0CE4 (entry_ce4t) DEFERRED again: MAME ground-truth capture is unreliable for it.
-                      # It is called MANY times/frame with DIFFERENT conventions -- a recursive self-loop
-                      # variant (SP=$F015EC, [SP]=$0CE4) AND a tail-dispatch variant (SP=$F01276) whose
-                      # WRAM-snapshot [SP]=$B60800 disagrees with the LIVE [SP]=$032318 (capture-vs-trap
-                      # timing skew in the stack region), and whose terminal rts $0D94 is never hit at the
-                      # pinned SP. No clean single-invocation entry/exit pair -> can't gate. Pick clean
-                      # jmp(a0)/single-convention targets first (val_jmpstate_mame GREEN on d5c4).
+TABLE_PCS = set()     # rts-class deferred: lockstep_nexen (the reliable in-context gate) shows the
+                      # $0708-gated GAME_TICK intervals don't table-dispatch $0CE4/$13BE in DETERMINISTIC
+                      # gameplay -- profile_real/caller_census saw those rts reaches in the interp FREE-RUN
+                      # (which drifts from real input-driven flow). Need: capture the $3A92 boundary that
+                      # PRECEDES a sprite-build interval, then lockstep-validate (13bet body regenerates via
+                      # transpile --table + COUNTERS[0x13BE]=0x0730). See mame-capture-precision memory.
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
@@ -69,11 +68,25 @@ def load_entry_pcs():
 def main():
     native = load_native_addrs()
     pcs = load_entry_pcs()
-    # select the jmp-state class entries that are present + resolved
-    pairs = []   # (pc, native_addr)
+    # select the entries that are present + resolved. A PC can have TWO transpiled bodies: a jsr-conv
+    # `entry_<hex>` (escbank, jah2-dispatched) AND a table-conv `entry_<hex>t` (escbank2). For TABLE_PCS
+    # the table MUST point at the table variant (no-push, return on stack); for JMP_STATE_PCS at the bare
+    # name. Pick deterministically by name (don't rely on $94>$92 address ordering).
+    bypc = {}    # pc -> list of (name, addr)
     for name, pc in pcs.items():
         if pc in ALLOWED_PCS and name in native:
-            pairs.append((pc, native[name], name))
+            bypc.setdefault(pc, []).append((name, native[name]))
+    pairs = []   # (pc, native_addr, name)
+    for pc, cands in bypc.items():
+        want_table = pc in TABLE_PCS
+        pick = None
+        for name, addr in cands:
+            is_table = name.endswith('t')
+            if is_table == want_table:
+                pick = (pc, addr, name); break
+        if pick is None:
+            pick = (pc, cands[0][1], cands[0][0])   # fallback: whatever resolved
+        pairs.append(pick)
     pairs.sort()
     if len(pairs) != len(ALLOWED_PCS):
         got = {p for p, _, _ in pairs}

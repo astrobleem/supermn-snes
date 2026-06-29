@@ -43,7 +43,7 @@ esc2_sym = Path("src/escbank2.sym")
 n2 = 0
 if esc2_sym.exists():
     for line in esc2_sym.read_text(encoding="utf-8-sig").splitlines():
-        m = re.match(r"\s*([0-9A-Fa-f]{2}):([0-9A-Fa-f]{4})\s+(entry_[0-9a-f]+)", line)
+        m = re.match(r"\s*([0-9A-Fa-f]{2}):([0-9A-Fa-f]{4})\s+(entry_[0-9a-z_]+)", line)
         if m:
             # Poppy assembles escbank2 at .org $8000 reporting bank $00; it actually loads at file
             # $2A0000 = SA-1 $94:8000. Force bank $94 so `jml entry_X` targets the real bank.
