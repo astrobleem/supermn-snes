@@ -74,6 +74,8 @@ iramclr:
     lda #$FFF8
     sta $0718            ; PC-stream OFF (capped). The ONE inert default that isn't 0;
                          ; the harness sets $0718=0 post-boot to enable streaming.
+                         ; NB: ilog's $0762 is NOT inited here (would shift code -> stale-NAT
+                         ; crash); harness sets $0762=$3FF8 (off, for val) or 0 (on, profiler).
     ldx #$07ff           ; 65816 stack in bank-$00 low RAM. On the SA-1 (which runs the
     txs                  ; interp) bank $00 is 2KB IRAM ($0000-07FF); stack grows down
                          ; from $07FF, clear of DP ($00-FF), vc ($0200), ring ($0400).
@@ -238,13 +240,11 @@ ifetch_go:
     bcc lh_off
     jmp irq_none
 lh_off:
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
+    jsr ilog             ; LOOP-HOOK-AWARE PROFILE: log GENUINELY-interpreted PCs (collapsed loops
+    nop                  ; jmp irq_none BEFORE here, so they're excluded). Gated by $0762; ~nil
+    nop                  ; overhead in production ($0762=$3FF8). Stream -> $40:C000 (vs dbg_fetch's
+    nop                  ; $40:8000 = ALL fetched PCs incl collapsed-loop entries). Diff = collapsed.
+    nop                  ; (jsr ilog = 3 bytes + 4 nops = 7 = the reserved sled; nolog stays put.)
 nolog:
     ; CLR <ea> ($42xx, ss!=11) via the correct general handler. The specific CLR handlers
     ; no-op'd / omitted memory modes (op_clr = no-op for (An)+; no CLR -(An) handler at all),
@@ -18855,6 +18855,36 @@ ors_pre_94:
     lda #$0094
     sta $42
     jml [$0040]
+
+; ilog — loop-hook-aware PC logger, called from lh_off (only reached for GENUINELY-interpreted
+; instructions; loop_hook-collapsed ones jmp irq_none before lh_off). Streams the 68K PC to
+; $40:C000 (count byte-ptr $0762; harness sets 0 to enable, production leaves $3FF8 -> skip ->
+; ~nil cost). Compare $40:C000 (interpreted) vs dbg_fetch's $40:8000 (ALL fetched) to find what
+; loop_hook collapses (cheap) vs what is genuinely interpreted (real cost). 16-bit M/X here.
+; .org-pinned: the preceding `jml [$0040]` (ors_pre_94) mis-sizes in Poppy (tracked 2, emitted 3)
+; and drifts this label by 1 onto a $00=BRK byte (same gotcha as ors_rte) -> pin past the drift.
+.org $F980
+ilog:
+    rep #$30             ; assert 16-bit M/X for Poppy (jsr'd into a .org region; else cpx mis-sizes)
+    phx
+    ldx $0718            ; gate on dbg_fetch's enable ($FFF8=off at boot) -> auto-off in production
+    cpx #$FFF8           ; + val (no boot-init shift, no val change needed). Profiler sets $0718=0.
+    bcs il_skip
+    ldx $0762            ; ilog buffer position (profiler resets to 0; caps at $3FF8)
+    cpx #$3FF8
+    bcs il_skip
+    lda $40
+    sta $40C000,x
+    lda $42
+    sta $40C002,x
+    txa
+    clc
+    adc #4
+    tax
+    stx $0762
+il_skip:
+    plx
+    rts
 
 .org $FA00
 op_move_g:
