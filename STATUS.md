@@ -1,7 +1,50 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 27, 2026. Single source of "where we're at." Per-area detail
+Last updated: June 29, 2026. Single source of "where we're at." Per-area detail
 lives in the linked docs.
+
+## CURRENT STATE (June 29) — DIRECTIONAL PIVOT to AOT; one dispatch table replaces per-target hooks; PoC proven
+
+The project changes gear from **hand-escaping one hot cluster at a time** to **ahead-of-time
+(AOT) transpilation**. The realization (forced by the per-cluster grind — see the `$D5A0` saga
+below): the transpiler already produces bit-exact native code per function; the *one* hard,
+recurring problem is **dispatch** — every hot cluster turned into a multi-hour hunt for how its
+control transfer (jmp/rts/rte/coroutine) is reached, with a bespoke hook per case. AOT flips it:
+build **ONE global 68K-PC→native-entry table** that all control flow consults (hit → run native,
+miss → interpret). That converts "every dispatch is a custom hunt" into "one indirection," and is
+the single piece that makes coverage *compose* instead of fighting back. The interpreter is
+demoted from engine to cold-path fallback. Everything we'd been doing with hooks is a hand-rolled,
+per-case version of that table.
+
+- **Dispatch-table PoC — PROVEN bit-exact** (`val_frame_diff` GREEN; 3 escapes across 3 pages).
+  The machinery, all reusing existing tools:
+  - `tools/gen_xlat_table.py` builds a 2-level page table (page[PC>>8] → 256-entry sub-table of
+    3-byte native addrs; 0 = miss) offline from the escape banks' `.sym` + the `transpiled from`
+    comments. Placed at file `$2B0000` = **SA-1 `$96:8000`** (free MMC-window bank, verified
+    live-readable by the executing CPU, not just the debugger).
+  - `xlat_dispatch` (escbank2 `$94:F900`) indexes it; `ojmp_hook` now `jml`s there instead of its
+    hardcoded cmp-chain → `ojmp_disp` re-scan. HIT → dispatch native, MISS → `jml inext`.
+  - Two gotchas burned in: `jml [abs]` is **Poppy-mis-sized** (tracks 2 / emits 3 → branches land
+    on a `BRK` → hang); use **push PBR + push (lo16−1) + RTL** instead. And diagnose dispatch hangs
+    with a DIAG build that computes-but-always-misses (records to scratch, never jumps).
+- **The table earns its keep immediately — it exposed a latent escape interaction.** Routing
+  *real* dispatch through the table surfaced that `entry_d386`/`entry_d3b0` (`$D3` jmp-state
+  handlers) each run bit-exact ALONE but **diverge when co-dispatched alongside `entry_d0d0`** — a
+  shared `$D0`-`$D3` state-machine interaction the old per-target cmp-chain silently never
+  exercised (it never co-dispatched them; cf. the vacuous-GREEN `$D5A0` had). Excluded from the
+  table (→ interpreted, bit-exact) pending a separate debug. This is the AOT thesis in action.
+- **`$D5A0` closed (the pivot's trigger).** An 8-instr leaf reached only by `bra` *inside* the
+  already-escaped `$D5C4` handler (NOT a jmp-table target — the ojmp approach was structurally
+  wrong); `entry_d5c4` was bailing to the interpreter at that branch. Fixed by `jml entry_d5a0`.
+  Bit-exact. The hours this took (5 min to transpile, the rest dispatch archaeology) is the
+  argument for the table.
+- **NEXT (the AOT build-out, in order):** (1) convention-unify so the jsr/coroutine classes share
+  one table (the jmp-state class is convention-uniform today); (2) move the lookup to the **`inext`
+  chokepoint** — one edit catches every transfer, convention-free, and is cheap precisely because
+  the interp is demoted; (3) scale bank allocation to `$80`-`$9F` (~20+ banks for full coverage);
+  (4) batch-transpile from the CDL block list (`g1-coverage`); (5) build a **divergence-bisection**
+  harness (first divergent block) to validate at scale; (6) debug the `d0d0`/`$D3` interaction.
+  See `aot-dispatch-table` memory + task #70.
 
 ## CURRENT STATE (June 27) — realtime budget MEASURED; ~25 escapes deployed; both gates green
 
