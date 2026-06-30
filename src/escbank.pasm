@@ -26,14 +26,14 @@ ojmp_hook=$00D1B3
 jsrabs_hook=$00E200
 bhp_after=$00E454
 ors_pre=$00D16F
-entry_c9f8=$948022
-entry_d5a0=$948487
-entry_1008=$948544
-entry_d01a=$948AA9
-entry_d05e=$948C26
-entry_d0bc=$948CC0
-entry_d07a=$948D62
-entry_ce4t=$948F68
+entry_c9f8=$948039
+entry_d5a0=$94849E
+entry_1008=$94855B
+entry_d01a=$948AC0
+entry_d05e=$948C3D
+entry_d0bc=$948CD7
+entry_d07a=$948D79
+entry_ce4t=$948F7F
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
