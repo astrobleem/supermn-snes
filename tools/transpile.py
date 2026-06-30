@@ -939,6 +939,28 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
     # add/sub on Dn (or mem) .w
     src, dst = ops
     store_dp = reg_dp(dst[1]) if dst[0] == 'Dn' else None
+    # .l RMW to MEMORY for add/sub: ea_rmw is word-only, and unlike the logic family these need
+    # inter-word CARRY/BORROW. 68K big-endian -> HIGH word @ disp+0, LOW word @ disp+2. Do the LOW
+    # word first (clc/sec then adc/sbc -> sets C), preserve C across the high-word ADDRESS calc (its
+    # `clc` would clobber C) via php/plp, then the HIGH word adc/sbc consumes it. The interp reg file
+    # stores a Dn as lo16@dp / hi16@dp+2 (see the adda .l case above). Unblocks the $00C1xx sprite
+    # segments (addi.l #4,$2a38(a5) / addi.l #2,$2a44(a5)). (impl 2026-06-29; validated by optest.)
+    if size == 'l' and dst[0] in ('(An)', '(An)+', '(d16,An)'):
+        if fuses: raise Unsupported('.l add/sub mem-dst feeding branch')
+        an = dst[-1]; disp = dst[1] if dst[0] == '(d16,An)' else 0; dp = reg_dp(an)
+        if src[0] == 'imm':
+            slo, shi = imm16(src[1] & 0xFFFF), imm16((src[1] >> 16) & 0xFFFF)
+        elif src[0] in ('Dn', 'An'):
+            s = reg_dp(src[1]); slo, shi = '$%02X' % s, '$%02X' % (s + 2)
+        else:
+            raise Unsupported('.l add/sub mem-dst src %r' % (src,))
+        op = 'sbc' if is_sub else 'adc'; init = 'sec' if is_sub else 'clc'
+        e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp + 2)); e('tax')   # X = LOW word offset
+        e('jsr rdw40'); e(init); e('%s %s' % (op, slo)); e('php'); e('jsr wrw40')
+        e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')       # X = HIGH word offset
+        e('jsr rdw40'); e('plp'); e('%s %s' % (op, shi)); e('jsr wrw40')          # plp restores LOW's C
+        if dst[0] == '(An)+': bump_an(e, an, 4)
+        return 1
     if is_sub:
         if dst[0] == 'Dn':                                      # register dest: sbc + sta $dp (flags live)
             emit_signed_cmp(e, dst, src, size, store_dp=store_dp)
