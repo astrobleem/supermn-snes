@@ -1089,11 +1089,6 @@ def main():
         c = COUNTERS[entry]
         if bank1: e('lda $00%04X' % c); e('inc a'); e('sta $00%04X' % c)   # long: DBR-independent
         else: e('inc $%04X' % c)
-    if '--accharge' in sys.argv:
-        # TASK #73 frame-pacing: charge $AC by this escape's 68K-instr count (the main loop only takes 1
-        # per step). STRAIGHT-LINE count here; LOOPING escapes also need a per-iteration charge at each
-        # backward branch (TODO) -- this prologue charge alone is exact only for branchless/no-loop bodies.
-        e('lda #$%04X' % len(insns)); e('jsr esc_ac_charge')
     if coroutine:
         e.cmt('coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)')
     elif table:
@@ -1102,20 +1097,44 @@ def main():
         e.cmt('re-simulate the jsr return-push the hook skipped (frame must match the real 68K)')
         e('lda $40'); e('sta $54'); e('lda $42'); e('sta $56'); e('jsr push32')
     unimpl = {}
+    # TASK #73 frame-pacing (--accharge): charge $AC by this escape's DYNAMIC 68K-instr count so the
+    # vblank-IRQ boundary fires at the same 68K-work point as MAME (the main loop only decrements $AC by
+    # 1 per escape-step). Charge PER BASIC BLOCK at the block START -> loop bodies charge per iteration
+    # (exact). Each charge is php/rep#$30/.../plp-wrapped so it preserves the caller's flags+mode and can
+    # never disturb a fused cmp->conditional-branch. block size = #decoded instrs from the block start to
+    # the next label-or-control-flow (cf inclusive). Bridged jsr/bsr count as 1 (callee charges its own).
+    accharge = '--accharge' in sys.argv
+    def _is_cf(ins):
+        b = ins.mnemonic.split('.')[0]
+        return b in CTRLFLOW or b in ('rts', 'trap')
+    def emit_charge(start):
+        if not accharge: return
+        n = 0
+        for j in range(start, len(insns)):
+            if n > 0 and insns[j].address in labels: break      # next block begins at this label
+            n += 1
+            if _is_cf(insns[j]): break                          # block ends at control flow (inclusive)
+        if n:
+            e('php'); e('rep #$30'); e('lda #$%04X' % n); e('jsr esc_ac_charge'); e('plp')
     i = 0
+    new_block = True
     while i < len(insns):
         ins = insns[i]
-        if ins.address in labels: e.lbl(e.L(ins.address))
+        if ins.address in labels: e.lbl(e.L(ins.address)); new_block = True
+        if new_block: emit_charge(i); new_block = False
         rk = movel_run_len(insns, i, labels)         # collapse a memcpy run into a loop (vs unroll)
         if rk >= RUN_MIN:
             s, d = operands(ins); gen_movel_run(e, s, d, rk); i += rk; continue
         nxt = insns[i+1] if i+1 < len(insns) else None
+        i0 = i
         try:
             i += gen(e, ins, nxt)
         except Unsupported as ex:
             e.cmt('!! UNIMPLEMENTED: %-9s %s   (%s)' % (ins.mnemonic, ins.op_str, ex))
             unimpl['%s %s' % (ins.mnemonic, ins.op_str.split(',')[0] if ins.op_str else '')] = str(ex)
             i += 1
+        # block ends if ANY consumed instr was control flow (covers fused cmp+branch where the branch is nxt)
+        if any(_is_cf(insns[k]) for k in range(i0, min(i, len(insns)))): new_block = True
     emit_tailjump_stubs(e)                            # out-of-fn conditional tail-jumps (after body)
     noinline = '--noinline' in sys.argv               # keep the leaf calls (baseline / cycle A/B)
     lines = e.lines if noinline else inline_mem_ops(e.lines)
