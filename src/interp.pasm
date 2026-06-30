@@ -11143,6 +11143,25 @@ lhs_rdbe:
     rep #$20
     rts
 
+; df_gap — dbg_fetch's freeze-release tail, relocated here so the redirect hook adds ZERO bytes to
+; dbg_fetch (its `stz $0710` is replaced by a same-size `jmp df_gap`; no code shift -> b0_native and
+; all hardcoded addresses stay valid -- the lesson from the mid-file-insert that broke the lockstep).
+; Does the one-shot $0710 clear, then the HARNESS REDIRECT: if $0738==$A5A5 (magic; random IRAM/saved
+; states won't match -> production & lockstep unaffected), re-fetch from $40/$42 instead of executing
+; the frozen opcode -> cycle_isolate.py points the interp at an injected driver PC. Else normal plx/rts.
+df_gap:
+    stz $0710            ; one-shot: don't re-freeze the same PC next iteration
+    lda $0738
+    cmp #$A5A5
+    beq df_gap_redir
+    plx
+    rts
+df_gap_redir:
+    stz $0738            ; one-shot
+    plx                  ; balance dbg_fetch's phx
+    pla                  ; discard the dbg_fetch jsr-return (re-fetch instead of executing $44)
+    jmp irq_none         ; re-derive the fetch ptr from $40/$42 and fetch the new PC's opcode
+
 ; C-Chip command-1 boot response (256 bytes of downloaded 68K code), captured
 ; from MAME (data/cchip_boot_response.bin). Read at $00:F700 via DBR=$00.
 .org $D1ED
@@ -15594,9 +15613,9 @@ ds_skip:
 df_spin:
     lda $0714
     beq df_spin
-    stz $0710           ; one-shot: don't re-freeze the same PC next iteration
+    jmp df_gap          ; one-shot $0710 clear + harness redirect; relocated -> ZERO code shift (jmp==stz, 3B)
 df_ret:
-    plx
+    plx                 ; reached from the $0710=0 fast path (beq df_ret above); freeze path -> df_gap
     rts
 
 ; op_movem_d16 — movem.l (d16,An),<list> : load regs from [An + sign_ext(d16)],
