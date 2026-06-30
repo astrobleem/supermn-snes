@@ -27,16 +27,19 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC,
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()     # $0CE4 RE-INVESTIGATED 2026-06-29: it IS reached by an interpreted rts (from $0047FE,
-                      # exactly 1x/period in full2742) NOT jsr, so inline jah2 entry_ce4 misses it. Wired
-                      # ce4t in + built GREEN (table blob VERIFIED correct: page[$0C]=$0200, entry $4AC ->
-                      # $948F68) -- but it STILL did NOT fire (the $D40 loop stayed interpreted x66). ROOT
-                      # CAUSE localized: all 9 validated entries dispatch via the JMP(a0) path (op_jmp_idx
-                      # -> ojmp_hook); ce4t is the FIRST entry meant to be caught via the RTS path (op_rts ->
-                      # ors_pre -> ors_94chk -> op_rts_sentinel -> op_rts_norm -> ojmp_hook). That rts->table
-                      # path has NEVER activated an entry. NEXT: instrument xlat_dispatch with a reached-
-                      # counter + check $42 (bank) on the $CE4 rts (suspect $42!=0 -> xd_miss, OR a broken
-                      # link in the op_rts_norm chain). Reverted to the clean firing 9-set meanwhile.
+TABLE_PCS = set()     # $0CE4 (ce4t) is VALIDATION-PENDING, not shipped. PROVEN 2026-06-29: the rts->table
+                      # dispatch WORKS -- an instrumented run (full2742, 180f) showed entry_ce4t fired 63451x
+                      # via the table (counter probe at $0738) + xlat_dispatch reached for $CE4 16212x ($073A),
+                      # catching the rts/jmp reaches of $CE4 that inline jah2 entry_ce4 (jsr-only, 5112x) MISSES.
+                      # (My earlier "ce4t never fires" was a PROFILER ARTIFACT: native dispatches don't stream,
+                      # so the escapes-ON profiler only sees the rare interpreted straggler -- $D40 x66 = ONE
+                      # uncaught call's loop -- NOT the ~63k native ones. $CE4 is ~99% coverable by ce4t.)
+                      # NOT shipped because it is the FIRST --table escape and is NOT YET bit-exact validated:
+                      # per-call validation is blocked by the stack-frame capture skew (ce4 has a link frame;
+                      # the jsr-vs-table a7 differs by 4, and MAME exit-capture is prefetch-skewed). To SHIP:
+                      # extract a wramB triple at a $CE4-active GAME_TICK, get lockstep_trap firing, validate
+                      # ESC=1 (full-tick vs MAME, no timing/skew issue), then re-add 0xCE4 here. Deploy recipe:
+                      # transpile ce4 --bank2 --table | sed ce4->ce4t, splice into escbank2, build. See task #72.
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
