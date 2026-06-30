@@ -397,7 +397,12 @@ def gen(e, ins, nxt):
         e('lda $3C'); e('clc'); e('adc #$0004'); e('sta $3C')                       # a7 += 4
         return 1
     if base == 'rts':
-        e('ldx $3C'); e('jsr rdw40'); e('sta $42')      # PC.hi16 = [a7]
+        # PC bank = [a7] bits 16-23, MASKED to a byte. 68K addresses are 24-bit; the stacked return's
+        # top byte (bits 24-31) is undefined garbage. op_rts masks it (lda $400001,x; and #$00FF); we
+        # MUST too, else a dirty top byte leaves $42 nonzero and xlat_dispatch's `bne xd_miss` rejects
+        # a real bank-0 return -> the rts-class table dispatch silently misses (e.g. ce4t's rts to the
+        # $13BE leaf never fired). See [[rts-dispatch-dirty-bank]] / task #78.
+        e('ldx $3C'); e('jsr rdw40'); e('and #$00FF'); e('sta $42')   # PC bank = [a7] bits 16-23 (masked)
         e('inx'); e('inx'); e('jsr rdw40'); e('sta $40')# PC.lo16
         e('lda $3C'); e('clc'); e('adc #$0004'); e('sta $3C')
         # route the return through ors_pre (not inext): if the popped return bank is a CALL-BRIDGE

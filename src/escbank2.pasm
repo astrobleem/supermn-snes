@@ -2190,37 +2190,37 @@ entry_ce4t:
     sec
     sbc $9E
     sta $04
-Lce4t_d24:
+Lce4_d24:
     lda #$00FA
     sta $14
     lda $04
     sec
     sbc $14
-    bvs Lfce4t_1
-    bpl Lfce4t_2
-    bra Lfce4t_3
-Lfce4t_1:
-    bmi Lfce4t_2
-    bra Lfce4t_3
-Lfce4t_2:
-    jmp Lce4t_d34
-Lfce4t_3:
+    bvs Lfce4_1
+    bpl Lfce4_2
+    bra Lfce4_3
+Lfce4_1:
+    bmi Lfce4_2
+    bra Lfce4_3
+Lfce4_2:
+    jmp Lce4_d34
+Lfce4_3:
     lda $04
     sec
     sbc #$FFFA
-    beq Lfce4t_5
-    bvs Lfce4t_4
-    bmi Lfce4t_5
-    bra Lfce4t_6
-Lfce4t_4:
-    bpl Lfce4t_5
-    bra Lfce4t_6
-Lfce4t_5:
-    jmp Lce4t_d34
-Lfce4t_6:
+    beq Lfce4_5
+    bvs Lfce4_4
+    bmi Lfce4_5
+    bra Lfce4_6
+Lfce4_4:
+    bpl Lfce4_5
+    bra Lfce4_6
+Lfce4_5:
+    jmp Lce4_d34
+Lfce4_6:
     lda $04
     sta $14
-Lce4t_d34:
+Lce4_d34:
     lda $20
     clc
     adc #$0002
@@ -2244,7 +2244,7 @@ Lce4t_d34:
     clc
     adc #$0000
     sta $0C
-Lce4t_d40:
+Lce4_d40:
     lda $24
     clc
     adc #$0000
@@ -2264,35 +2264,35 @@ Lce4t_d40:
     pla
     sta $10
     lda $10
-    bne Lfce4t_7
-    jmp Lce4t_d6c
-Lfce4t_7:
+    bne Lfce4_7
+    jmp Lce4_d6c
+Lfce4_7:
     lda $0C
     sec
     sbc #$FFF0
-    beq Lfce4t_9
-    bvs Lfce4t_8
-    bmi Lfce4t_9
-    bra Lfce4t_10
-Lfce4t_8:
-    bpl Lfce4t_9
-    bra Lfce4t_10
-Lfce4t_9:
-    jmp Lce4t_d50
-Lfce4t_10:
+    beq Lfce4_9
+    bvs Lfce4_8
+    bmi Lfce4_9
+    bra Lfce4_10
+Lfce4_8:
+    bpl Lfce4_9
+    bra Lfce4_10
+Lfce4_9:
+    jmp Lce4_d50
+Lfce4_10:
     lda $0C
     sec
     sbc #$0180
-    bvs Lfce4t_11
-    bmi Lfce4t_12
-    bra Lfce4t_13
-Lfce4t_11:
-    bpl Lfce4t_12
-    bra Lfce4t_13
-Lfce4t_12:
-    jmp Lce4t_d56
-Lfce4t_13:
-Lce4t_d50:
+    bvs Lfce4_11
+    bmi Lfce4_12
+    bra Lfce4_13
+Lfce4_11:
+    bpl Lfce4_12
+    bra Lfce4_13
+Lfce4_12:
+    jmp Lce4_d56
+Lfce4_13:
+Lce4_d50:
     lda #$00FA
     pha
     lda $30
@@ -2313,8 +2313,8 @@ Lce4t_d50:
     lda $32
     adc #$0000
     sta $32
-    jmp Lce4t_d58
-Lce4t_d56:
+    jmp Lce4_d58
+Lce4_d56:
     lda $14
     pha
     lda $30
@@ -2335,7 +2335,7 @@ Lce4t_d56:
     lda $32
     adc #$0000
     sta $32
-Lce4t_d58:
+Lce4_d58:
     lda $10
     clc
     adc #$2000
@@ -2392,16 +2392,16 @@ Lce4t_d58:
     sec
     sbc #$0001
     sta $1C
-    bvs Lfce4t_14
-    bmi Lfce4t_15
-    bra Lfce4t_16
-Lfce4t_14:
-    bpl Lfce4t_15
-    bra Lfce4t_16
-Lfce4t_15:
-    jmp Lce4t_d8a
-Lfce4t_16:
-Lce4t_d6c:
+    bvs Lfce4_14
+    bmi Lfce4_15
+    bra Lfce4_16
+Lfce4_14:
+    bpl Lfce4_15
+    bra Lfce4_16
+Lfce4_15:
+    jmp Lce4_d8a
+Lfce4_16:
+Lce4_d6c:
     lda $0C
     clc
     adc #$0010
@@ -2410,9 +2410,9 @@ Lce4t_d6c:
     dec a
     sta $08
     cmp #$FFFF
-    beq Lfce4t_17
-    jmp Lce4t_d40
-Lfce4t_17:
+    beq Lfce4_17
+    jmp Lce4_d40
+Lfce4_17:
     lda $04
     sec
     sbc #$0010
@@ -2421,16 +2421,16 @@ Lfce4t_17:
     dec a
     sta $00
     cmp #$FFFF
-    beq Lfce4t_18
-    jmp Lce4t_d24
-Lfce4t_18:
+    beq Lfce4_18
+    jmp Lce4_d24
+Lfce4_18:
     lda $1C
-    bpl Lfce4t_19
-    jmp Lce4t_d8a
-Lfce4t_19:
+    bpl Lfce4_19
+    jmp Lce4_d8a
+Lfce4_19:
     lda #$00FA
     sta $00
-Lce4t_d84:
+Lce4_d84:
     lda $00
     pha
     lda $30
@@ -2455,10 +2455,10 @@ Lce4t_d84:
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lfce4t_20
-    jmp Lce4t_d84
-Lfce4t_20:
-Lce4t_d8a:
+    beq Lfce4_20
+    jmp Lce4_d84
+Lfce4_20:
+Lce4_d8a:
     ldx $3C
     sep #$20
     lda $400000,x
@@ -2702,6 +2702,7 @@ Lce4t_d8a:
     xba
     lda $400001,x
     rep #$20
+    and #$00FF
     sta $42
     inx
     inx
