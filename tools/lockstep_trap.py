@@ -60,12 +60,19 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     # (the $0708->$3A92 IRQ prologue).
     B1PC=int(os.environ.get('B1PC','0708'),16)
     GPPROF=os.environ.get('GPPROF')
+    HK=os.environ.get('HOOKTEST')   # comma-sep hex SA-1 addresses to exec-hook (reliable; not memory counters)
+    if HK:
+        for a in HK.split(','): m.add_exec_hook(int(a,16), cpu_type='Sa1')
+        print(">>> exec-hooks armed:", HK, flush=True)
     w16(0x0712,0); w16(0x0710,0); w16(0x0714,1); runf(1); w16(0x0714,0)
     if GPPROF: w16(0x0718,0); w16(0x0762,0)   # enable dbg_fetch (ALL) + ilog (REAL interpreted) streams
     b1=False
     for _ in range(400):
         w16(0x0710,B1PC); w16(0x0716,0); runf(4)
         if r16(0x0712): b1=True; break
+    if HK:
+        print(">>> hook_diag:", m.hook_diag(), flush=True)
+        for h in m.list_hooks(): print(">>>   hook:", h, flush=True)
     if GPPROF:
         import collections
         na,nr=r16(0x0718),r16(0x0762)
