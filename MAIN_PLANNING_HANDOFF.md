@@ -5,7 +5,8 @@ current state, the reliable mental model (several older notes were WRONG — cor
 tooling, the validated escape-deployment recipe, and prioritized next steps.
 
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
-Repo: clean at `59f4b15`, branch `boot-scheduler-progress`. AOT table: **12 escapes**.
+Repo: clean at `507d692`, branch `boot-scheduler-progress`. AOT table: **13 escapes**
+(c172 = first COROUTINE escape, shipped this session; STEP A resolved).
 Build: `bash tools/build_interp.sh` (→ `build/interp.sfc`).
 
 > NOTE: there is older planning text (STATUS.md, ROADMAP.md, and the prior version of this file)
@@ -92,11 +93,24 @@ baseline (zero added/removed bytes).
 
 ## 4. Next steps, prioritized
 
-### STEP A — Nail the `$AC` exact-charge to unblock the COROUTINE class (task #73). **Do this first.**
-This is the gate for the 227/tick coroutine (c172 + siblings) and any big escape. When an escape
-fires it consumes fewer interp-steps than the interpreter would, so `$AC` (frame pacer) drains
-slower, the vblank boundary shifts, and a downstream byte diverges (c172 adds `$F01401`). Small
-escapes (d718/d3f6) didn't cross the boundary; big ones do.
+### STEP A — `$AC` exact-charge / COROUTINE class. **RESOLVED 2026-06-30 (task #73 closed). c172 SHIPPED.**
+Resolution (commit 507d692): the "charge=0 and charge=35 both give DIFF=49" anomaly is settled.
+- `esc_ac_charge` WORKS (measured: `--accharge` drains `$AC` by exactly 231 at `$AC@C170`).
+- The exact c172 charge = **35** (isolated: c172-interpreted reaches `$C170` in 562 interp-steps
+  vs 527 escaped). Shipped as ONE static `lda #$0023 / jsr esc_ac_charge` at entry; per-block
+  `--accharge` OVER-charges to 231 (bridged loop charges per-iteration).
+- The residual `$F01401` byte is NOT `$AC`-correctable: the `$0708` lockstep trap is
+  HARDWARE-VBLANK-driven, proven `$AC`-INVARIANT (DIFF=48 across injected `$AC`=2F60/2600/3400).
+  c172's body never writes `$1401` (targets a5+`$2A3x` / a4 `$0004`+8 / a7 `$170A`+0xE); the
+  01-vs-04 is other code shifted by the escape running faster (1878 vs 1913 steps to vblank) — a
+  sub-realtime artifact, same class as the 48-byte baseline. Bounded across 3 triples (49/51/51).
+- RECIPE for the next coroutine's exact charge: toggle `CORO_PCS` in `gen_xlat_table.py`, measure
+  `$AC@<yield>` via `REGDUMP=1 B1PC=<yield>` both ESC=1; the delta is the charge. Splice the body,
+  add a single static charge at entry, validate (FIRES via HOOKTEST + ESC=0 GREEN + bounded diff).
+
+Next coroutine bodies to grind (rte-reached, same path): `$46DE`, `$7828`, `$11752`, the rest of
+the `$00C1xx` cluster. NOTE (from [[coroutine-shells-low-value]]): coroutine shells save only
+~35/tick each — the bigger lever is escaping their bridge CALLEES ($29B6/$295A already escaped).
 
 c172 facts: body is PROVEN bit-exact (regs + work-RAM identical at the `$C170` yield, ESC=1 vs 0).
 Native c172 saves ~35 interp-steps vs interp (others held constant). `--accharge` OVER-charges
@@ -148,9 +162,10 @@ no-`rts`/external-jmp functions (give the decoder an explicit end bound for loop
 ---
 
 ## 5. Tasks & memory
-Tasks: #67 (~99% coverage, overarching), #70 (AOT table unify), #72 (ce4t never fires), **#73 (`$AC`
-exact-charge — STEP A)**, #74 (closed, rts-class misread), **#75 (scheduler — STEP C)**, #78 (closed,
-coroutine-dispatch resolution), **#79 (jmp-state/fire-finder — STEP B)**.
+Tasks: #67 (~99% coverage, overarching), #70 (AOT table unify), #72 (ce4t never fires), #73 (`$AC`
+exact-charge — STEP A, **CLOSED 2026-06-30: c172 shipped, commit 507d692**), #74 (closed, rts-class
+misread), **#75 (scheduler — STEP C)**, #78 (closed, coroutine-dispatch resolution), **#79
+(jmp-state/fire-finder — STEP B)**.
 Memory: `rts-class-dispatch-nonfunctional.md` (corrected model + methodology lesson),
 `coroutine-shells-low-value.md`, `escape-bank.md`, `aot-dispatch-table.md`, `transpiler-tool.md`.
 
@@ -161,9 +176,9 @@ Memory: `rts-class-dispatch-nonfunctional.md` (corrected model + methodology les
 - ce4t is dead weight (never fires); don't "re-validate" it with single-frame zero-added (passes
   only because it never runs).
 
-**Recommended first action:** STEP A — resolve the "charge=0 and charge=35 both give DIFF=49"
-anomaly (verify `esc_ac_charge` works, then find the exact charge). Solving it unblocks the entire
-coroutine class, the bulk of the remaining interpreted cost.
+**Recommended first action:** STEP A is DONE. Next: STEP B (fire-finder for more jmp-state escapes,
+low-risk additive) and/or grind the next coroutine bodies via the STEP A recipe. Highest VALUE is
+still STEP C (the ~246/tick scheduler), but it's the hardest.
 
 ---
 
