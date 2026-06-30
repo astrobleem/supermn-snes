@@ -902,12 +902,16 @@ def gen_call(e, ins):
         e('jmp ibridge')
         e.lbl(cont)
         return 1
-    e.cmt('CALL-BRIDGE %s %s -> interpret callee, resume %s' % (ins.mnemonic, t, cont))
+    # route the (static-target) callee through ojmp_hook (xlat): a --table escape of the callee
+    # dispatches NATIVELY (cross-bank-safe; e.g. entry_25110's $184E8/$25A40), a MISS falls back to
+    # jml inext (interpret, as before). Same size as `jmp inext` -> safe in-place swap for bank-$00
+    # escapes. The pushed $00FF/$00FD sentinel + faithful-rts callee resume cont either way.
+    e.cmt('CALL-BRIDGE %s %s -> ojmp_hook (callee --table escape, else interpret), resume %s' % (ins.mnemonic, t, cont))
     sentinel = '$00FD' if BANK2 else '$00FF'         # bank2: $00FD resumes in $94 (not $00 via $00FF)
     e('lda #%s' % cont); e('sta $54'); e('lda #%s' % sentinel); e('sta $56'); e('jsr push32')
     a = int(m.group(1), 16)                              # jsr.l absolute / bsr (capstone resolves PC-rel)
     e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
-    e('jmp inext')
+    e('jmp ojmp_hook')
     e.lbl(cont)
     return 1
 
