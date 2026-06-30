@@ -136,23 +136,34 @@ Native c172 saves ~35 interp-steps vs interp (others held constant). `--accharge
 Once `$AC` is solved, c172 ships (first coroutine escape) and the path is validated end-to-end →
 grind the other rte-reached coroutine bodies (`$46DE`, `$7828`, `$11752`, the `$00C1xx` cluster).
 
-### STEP B — More jmp-state escapes via a FIRE-FINDER (task #79). Low-risk, incremental.
-jmp-state handlers active in the current triples are exhausted (d718, d3f6 shipped; rest are rts
-trampolines $CF8A/$D6D8/$D374). Build a fire-finder: scan a MAME playthrough for frames where OTHER
-jmp-state handlers are active (e.g. $CEB6 jmp-reach, $D522, more $D7xx/$D3xx object handlers),
-capture a triple (wramA/wramB/regsA) — reuse `/tmp/supermn-scratch/extract_triple_scan64.py`. Then
-run §3 per handler. Each ~10 interp/tick, but safe and additive.
+### STEP B — More jmp-state escapes (task #79). INVESTIGATED 2026-06-30: surface is SPARSE, LOW ROI.
+Finding: beyond the shipped 11, the jmp-state surface is largely exhausted. ENTRYCLASS across
+ce4trip64/trip2500/trip4000/trip5000/trip1000/trip1040 shows the only jmp-reached targets are rts
+TRAMPOLINES ($CF8A/$D6D8/$D374 = bare `rts`, escaping them is a no-op) plus the already-shipped
+handlers. $CEB6 and $D522 ARE catchable in principle — both are jmp-reached from `$00D52C: jmp (a0)`
+(the object-dispatch loop, op_jmp_idx-routed) — and transpile+deploy cleanly. BUT their reaches are
+RARE and scene-specific (x1 in one frame's GPPROF stream), so they could NOT be validated FIRING:
+HOOKTEST=0 on trip1000 (732-instr window) AND trip1040 (1181-instr window, ce4t fired 3x). Per the
+§3 gate ("commit only if it FIRES"), they were built+reverted, not shipped. Each is ~10 interp/tick
+anyway. To actually land these you need a true FIRE-FINDER: trace `$00D52C` jmp(a0) targets across
+the MAME playback (`/snap/bin/mame` + vplay.inp), find a frame where target==$CEB6/$D522 with a full
+GAME_TICK->vblank window, capture that triple, then run §3. Deferred as low-value vs STEP C.
 
-### STEP C — Escape the SCHEDULER (task #75). Highest value (~246/tick), hardest.
-`$074C-$07E8` won't plain-transpile: no clean `rts` (loops via `rte`); bounds-fail path `$07AA` does
-`jmp $1000ae.l` (SA-1 hardware I/O). Plan:
-- Hand-write a native escape for the **disabled-task-skip loop** `$074C-$0772` (valid 68K: idx load,
-  `btst d0,$2(a5)` enable check, `beq $74c`). Iterate d0 = current+1..16 natively, skip disabled
-  tasks, bail to interpret only on an enabled task or the done path `$07EA`. Collapses most of the
-  246 without touching rte/SP/`$1000ae`.
-- Dispatch hook: find how `$074C` is reached (`STREAMWIN=074C`/`PRED=074C` on a scheduler-active
-  triple) — likely the trap#5/yield → scheduler-resume path, or extend the GAME_TICK escape
-  `entry_3a92`.
+### STEP C — Escape the SCHEDULER (task #75). DONE 2026-06-30 (commit 1aaafb2). lh_sched shipped.
+Hand-wrote `lh_sched` (interp.pasm) for the disabled-task-skip loop `$074C-$0772`. Dispatch: NOT a
+new hook — `loop_hook` is ALREADY per-fetch in gameplay ($072E set in notest, it's what collapses
+$0818), and fires on `$40==$074C`. Routed via `lh_gen: jmp lh_sched_pre` (size-neutral swap of
+`jmp gm_memclr` — no loop_hook region growth, which is critical: the region is packed against
+.org $F602). lh_sched scans current+1..15, skips enable-disabled tasks natively, hands the first
+ENABLED task to interp at `$075C` (deeper $0774+ checks; a fail re-fetches $074C -> re-fires) or
+`$07EA` at 16. Sets a4=a5+4 (for $075C's `move.w d0,(a4)`) and d0=found idx. BE reads via lhs_rdbe.
+Placement: lh_sched_pre+main (79B) in the il_skip->$FA00 gap; lhs_rdbe (15B) in the $D1BF gap.
+Behaviorally exact -> runs UNGATED (like $0818 collapse) so ESC=0 catches bugs directly.
+RESULT: ESC=0 GREEN on all 4 triples; ESC=1 DIFF unchanged (zero added); interpreted 1842->1717
+(-125/tick), $0740 region 246->121 (-51%). The residual 121 = ENABLED-task setups ($075C+ real
+work) + the $0540/$0500 trap-handler re-entries (66+44/tick) -- the next scheduler targets.
+NOTE: bank-$00 space is the binding constraint (biggest gaps: 86B@$F9AA, 46B@$D1BF). New bank-$00
+loop_hook escapes must fit those or split; loop_hook itself can't grow (packed vs .org $F602).
 
 ### STEP D — Transpiler hardening (as it blocks real handlers).
 This session added the `move-to-mem feeding branch` fix (transpile.py:422). Next limits you'll hit:
