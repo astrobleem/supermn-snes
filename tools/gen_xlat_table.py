@@ -27,19 +27,24 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC,
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()     # $0CE4 (ce4t) is VALIDATION-PENDING, not shipped. PROVEN 2026-06-29: the rts->table
-                      # dispatch WORKS -- an instrumented run (full2742, 180f) showed entry_ce4t fired 63451x
-                      # via the table (counter probe at $0738) + xlat_dispatch reached for $CE4 16212x ($073A),
-                      # catching the rts/jmp reaches of $CE4 that inline jah2 entry_ce4 (jsr-only, 5112x) MISSES.
-                      # (My earlier "ce4t never fires" was a PROFILER ARTIFACT: native dispatches don't stream,
-                      # so the escapes-ON profiler only sees the rare interpreted straggler -- $D40 x66 = ONE
-                      # uncaught call's loop -- NOT the ~63k native ones. $CE4 is ~99% coverable by ce4t.)
-                      # NOT shipped because it is the FIRST --table escape and is NOT YET bit-exact validated:
-                      # per-call validation is blocked by the stack-frame capture skew (ce4 has a link frame;
-                      # the jsr-vs-table a7 differs by 4, and MAME exit-capture is prefetch-skewed). To SHIP:
-                      # extract a wramB triple at a $CE4-active GAME_TICK, get lockstep_trap firing, validate
-                      # ESC=1 (full-tick vs MAME, no timing/skew issue), then re-add 0xCE4 here. Deploy recipe:
-                      # transpile ce4 --bank2 --table | sed ce4->ce4t, splice into escbank2, build. See task #72.
+TABLE_PCS = set()     # $0CE4 (ce4t): strongly RELATIVE-validated, ABSOLUTE-blocked -> not shipped (yet).
+                      # The rts->table dispatch WORKS: entry_ce4t fired 63451x via the table (instrumented
+                      # full2742/180f) catching the rts/jmp reaches of $CE4 that inline jah2 entry_ce4 (jsr-only)
+                      # MISSES. (The earlier "never fires" was a profiler artifact -- native dispatches don't
+                      # stream, so the escapes-ON profiler only sees the rare interpreted straggler.)
+                      # 2026-06-29 full-tick lockstep_trap on a fresh $CE4-active wramB triple (ce4trip):
+                      #   ESC=0 (pure interp) -> GREEN (deterministic): the tool + triple are sound.
+                      #   ESC=1 with ce4t (ce4=1, fired) -> DIFF=48, but IDENTICAL to ESC=1 WITHOUT ce4t
+                      #     (`comm` shows ZERO ce4t-only bytes) and NONE in ce4t's sprite-output region
+                      #     ($1cf6-$2600 clean). So ce4t adds zero divergence + bit-exact output == as-correct
+                      #     as the existing escape set, AND its body is identical to the bit-exact inline ce4.
+                      # The 48-byte diff is a PRE-EXISTING escapes-ON baseline ($0049 + a contiguous $01B6-$01D6
+                      # block), present in the 9-set WITHOUT ce4t, unchanged by AC ($2F60==$7000) -- the known
+                      # "full-frame can't validate escapes-ON" limit (likely a B1 $0708-trap boundary phase
+                      # artifact: escapes reach $0708 in 1933 vs interp's 4901 instrs). TO SHIP ce4t: classify
+                      # that baseline (trap a cleaner boundary, or bisect which escape writes $01B6) -> if it's a
+                      # boundary artifact, ce4t is bit-exact and ships; if a real escape bug, fix it first.
+                      # Validation infra is NOW READY (lockstep_trap GREEN on ce4trip). See tasks #72, #73.
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
