@@ -19361,7 +19361,9 @@ op_jsr_idx:
     lda $58
     and #$00FF
     sta $42
-    jmp inext
+    jmp ojmp_hook        ; INDIRECT-JSR AOT dispatch (size-neutral swap of `jmp inext`, like op_rts_norm):
+                         ; the return is ALREADY pushed (push32r above) and $40/$42=target, so a table HIT
+                         ; dispatches the --table (no-push) convention; gate-off / MISS -> inext (unchanged).
 ; kbad_chkidx — free-space tail of the kbad catch-all: route indexed/PC-rel JMP/JSR, else
 ; fall through to kbad_aq2. Reached only via the same-size jmp swap at kbad_halt.
 kbad_chkidx:
