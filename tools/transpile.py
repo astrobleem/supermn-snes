@@ -422,7 +422,9 @@ def gen(e, ins, nxt):
         ea_store_A_from(e, dst, size, lambda e: ea_load_A(e, src, size))
         if fuses:                                        # move sets N,Z (V cleared) -> reload + branch
             if dst[0] == 'Dn': e('lda $%02X' % reg_dp(dst[1]))
-            else: raise Unsupported('move-to-mem feeding branch')
+            elif dst[0] in ('(An)', '(d16,An)', 'abs'):  # re-readable w/o side effects: reload stored val
+                ea_load_A(e, dst, size)                  # the just-stored value carries the move's N,Z
+            else: raise Unsupported('move-to-mem feeding branch (non-reloadable dst %s)' % dst[0])
             emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
     if base == 'movea':
