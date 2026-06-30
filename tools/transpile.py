@@ -1089,6 +1089,11 @@ def main():
         c = COUNTERS[entry]
         if bank1: e('lda $00%04X' % c); e('inc a'); e('sta $00%04X' % c)   # long: DBR-independent
         else: e('inc $%04X' % c)
+    if '--accharge' in sys.argv:
+        # TASK #73 frame-pacing: charge $AC by this escape's 68K-instr count (the main loop only takes 1
+        # per step). STRAIGHT-LINE count here; LOOPING escapes also need a per-iteration charge at each
+        # backward branch (TODO) -- this prologue charge alone is exact only for branchless/no-loop bodies.
+        e('lda #$%04X' % len(insns)); e('jsr esc_ac_charge')
     if coroutine:
         e.cmt('coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)')
     elif table:

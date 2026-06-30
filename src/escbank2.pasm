@@ -52,6 +52,29 @@ esud_no:
     bne esud_l
     rts
 
+; esc_ac_charge — TASK #73 frame-pacing fix. The vblank-IRQ frame boundary fires when $AC (the per-
+; frame interp-step countdown, interp.pasm reload=$7000) hits EXACTLY 0 via the main loop's `dec $AC`.
+; An escape is ONE step but does N 68K instrs, so it must charge $AC by N (the main loop only takes 1).
+; in: A = N (16-bit, instr count to charge). Decrements $AC by N; CLAMPS to 1 on underflow/zero so the
+; next main-loop `dec` fires the boundary cleanly (never fires VID_FRAME mid-escape). Uses the stack for
+; scratch (no DP clobber); clobbers A, preserves X/Y. Off-by-<=1-escape/frame timing error = negligible.
+esc_ac_charge:
+    rep #$30
+    pha                  ; [16-bit N on stack]
+    lda $AC
+    sec
+    sbc $01,s            ; $AC - N
+    bcc eacc_clamp       ; borrow -> $AC < N -> underflow
+    beq eacc_clamp       ; == 0 -> clamp (boundary needs the main-loop dec to reach 0)
+    sta $AC
+    pla
+    rts
+eacc_clamp:
+    lda #$0001
+    sta $AC
+    pla
+    rts
+
 ; --- transpiled from $00C9F8 (43 instrs) by tools/transpile.py [bank1] ---
 entry_c9f8:
     rep #$30
