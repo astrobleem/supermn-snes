@@ -11110,8 +11110,11 @@ ors_rte_b2:
     bne ors_rte_x        ; $02658E
 ors_rte_hit:
     jml $92F800          ; HIT: cors_disp re-scans the exact resume-PC and dispatches the body.
-ors_rte_x:               ; Only a real hit detours to bank $92 (per-rte round-trips hang the SA-1).
-    jmp inext
+ors_rte_x:               ; rte-miss: route the resume-PC through the AOT table (size-neutral swap of
+    jmp ojmp_hook        ; `jmp inext`, like op_rts_norm/op_jsr_idx). ojmp_hook gates on $071A then
+                         ; jml $94F900 (xlat_dispatch); HIT -> dispatch the coroutine segment (--coroutine
+                         ; no-push, resume-PC already in $40/$42 from op_rte), MISS/gate-off -> inext.
+                         ; The bank-$92 cors_disp HITs above are unaffected; only non-special rtes reach here.
 
 ; ojmp_hook — JMP-TABLE DISPATCH HOOK (op_jmp_idx jmps here; $40/$42 = the `jmp (a0)` target, e.g. a
 ; state-machine handler from a `lea $T(pc),a0; movea.l (a0),a0; jmp (a0)` dispatcher). Scans the
