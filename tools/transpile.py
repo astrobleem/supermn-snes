@@ -795,6 +795,11 @@ def store_long_from(e, dst, dp):
         ea_store_A_from(e, ('(d16,An)', disp+2, an), 'w', lambda e: e('lda $%02X' % dp))      # lo16 @ addr+2
         if dst[0] == '(An)+': bump_an(e, an, 4)
         return
+    if dst[0] == '-(An)':                                     # push long: predec 4, write big-endian
+        an = dst[-1]; predec_an(e, an, 4)                     # An -= 4 (now points at the push slot)
+        ea_store_A_from(e, ('(d16,An)', 0, an), 'w', lambda e: e('lda $%02X' % (dp+2)))  # hi16 @ An
+        ea_store_A_from(e, ('(d16,An)', 2, an), 'w', lambda e: e('lda $%02X' % dp))      # lo16 @ An+2
+        return
     raise Unsupported('store_long dst %r' % (dst,))
 
 def gen_movel(e, src, dst):
