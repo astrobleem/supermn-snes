@@ -886,10 +886,14 @@ def gen_call(e, ins):
             # the interpret-bridge: push the $00FD sentinel:cont, set PC=An, jml inext. The callee's rts
             # pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont. (No native draw dispatch
             # in $94 -- the callee always interprets; the per-jsr(An) native-draw win is forgone here.)
-            e.cmt('INDIRECT-BRIDGE %s %s -> interpret callee ($00FD bank-94 sentinel), resume %s' % (ins.mnemonic, t, cont))
+            # push the $00FD:cont sentinel, set PC=An, then route through ojmp_hook (reachable from $94
+            # via jml.l): xlat HIT -> dispatch the callee's --table native escape (the per-jsr(An) native-
+            # draw win, e.g. c172's $295A/$29B6 renderers); MISS/gate-off -> jml inext (interpret, as before).
+            # Either way the callee's rts pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont.
+            e.cmt('INDIRECT-BRIDGE %s %s -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume %s' % (ins.mnemonic, t, cont))
             e('lda #%s' % cont); e('sta $54'); e('lda #$00FD'); e('sta $56'); e('jsr push32')
             e('lda $%02X' % dp); e('sta $40'); e('lda $%02X' % (dp+2)); e('sta $42')
-            e('jmp inext')
+            e('jmp ojmp_hook')
             e.lbl(cont)
             return 1
         e.cmt('INDIRECT-BRIDGE %s %s -> ibridge (a0 escape or interpret), resume %s' % (ins.mnemonic, t, cont))
@@ -1030,7 +1034,7 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
 
 # ===================== driver =====================
 # helpers an escape may jsr; in --bank1 these run in bank $00 reached via `jsl <name>_l` rtl-wrappers
-HELPERS = ('rdw40', 'wrw40', 'rdb40', 'wrb40', 'push32', 'rdw_ea', 'readbyte', 'usmul')
+HELPERS = ('rdw40', 'wrw40', 'rdb40', 'wrb40', 'push32', 'rdw_ea', 'readbyte', 'usmul', 'writeword', 'writebyte')
 
 def bank1_transform(lines):
     """rewrite a bank-$00 escape body to run from the escape bank ($92:8000): helper jsr->jsl.l _l
