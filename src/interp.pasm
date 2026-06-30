@@ -11131,6 +11131,18 @@ ojmp_hook:
 ojmp_x:
     jmp inext
 
+; lhs_rdbe — big-endian work-RAM word read for lh_sched (STEP C scheduler escape). Placed in the
+; $D1BF gap before .org $D1ED (loop_hook's gap is too tight). in: A=68K work-RAM offset (lo16);
+; out: A=big-endian word at $40:offset; clobbers X; 16-bit M restored on exit.
+lhs_rdbe:
+    tax
+    sep #$20
+    lda $400000,x        ; high byte (68K big-endian: low addr = hi byte)
+    xba
+    lda $400001,x        ; low byte -> A = (hi<<8)|lo
+    rep #$20
+    rts
+
 ; C-Chip command-1 boot response (256 bytes of downloaded 68K code), captured
 ; from MAME (data/cchip_boot_response.bin). Read at $00:F700 via DBR=$00.
 .org $D1ED
@@ -18326,7 +18338,7 @@ lh_chk_adbe:
     jmp lh_adbe          ; $ADBE: walking-bit WORD RAM test -> net memset 0 (721K instr)
                          ; ($3F86 byte verify retired -> subsumed by the generic gm_verify)
 lh_gen:
-    jmp gm_memclr        ; no per-PC match -> the GENERIC loop-idiom matcher
+    jmp lh_sched_pre     ; STEP C: check the scheduler-scan PC ($074C), else fall to gm_memclr
 lh_nofire:
     clc
     rts
@@ -18877,6 +18889,61 @@ ilog:
     stx $0762
 il_skip:
     plx
+    rts
+
+; lh_sched — native disabled-task-skip scan for the coroutine scheduler (STEP C). The $074C-$0772
+; scan ("$0740" region = ~246/tick, the single largest interpreted cost) iterates tasks current+1..15
+; skipping enable-mask-DISABLED ones natively, then hands the first ENABLED task to the interpreter at
+; $075C (which does the deeper $0774+ checks; a fail there re-fetches $074C -> re-fires us) or the done
+; path $07EA at idx 16. Reached from loop_hook's lh_gen (jmp lh_sched_pre) when $40==$074C. Behaviorally
+; identical to interpreting the scan -> ESC=0 must stay GREEN (catches any bug here). Lives in the
+; il_skip->$FA00 gap; lhs_rdbe helper in the $D1BF gap. a5 = the system base ($34/$36).
+lh_sched_pre:
+    cmp #$074C           ; A = $40 (from lh_gen)
+    beq lh_sched
+    jmp gm_memclr        ; not the scheduler -> the generic loop-idiom matcher
+lh_sched:
+    lda $34              ; a5 lo16
+    inc a
+    inc a                ; a5+2 = enable-mask address
+    jsr lhs_rdbe
+    sta $9A              ; $9A = enable mask (16-bit)
+    lda $34
+    clc
+    adc #$0004           ; a5+4 = current-idx address = a4 (needed by the $075C exit)
+    sta $30              ; a4 lo16
+    jsr lhs_rdbe
+    sta $9C              ; $9C = current task idx
+    lda $36
+    sta $32              ; a4 hi16 = a5 hi16 (a5 lo16 = 0 -> no carry from +4)
+    lda $9C
+    inc a                ; align count = current+1
+    tax
+    lda $9A
+lhs_align:
+    lsr a
+    dex
+    bne lhs_align
+    sta $9A              ; mask aligned: bit0 = enable[current+1]
+lhs_scan:
+    inc $9C              ; idx++ (first iteration = current+1)
+    lda $9C
+    cmp #$0010
+    bcs lhs_done         ; idx >= 16 -> done ($07EA)
+    lsr $9A              ; carry = enable[idx]; mask bit0 -> enable[idx+1]
+    bcs lhs_found        ; enabled -> hand to the interpreter
+    bra lhs_scan         ; disabled -> skip natively
+lhs_found:
+    lda #$075C
+    bra lhs_exit
+lhs_done:
+    lda #$07EA
+lhs_exit:
+    sta $40
+    stz $42
+    lda $9C
+    sta $00              ; d0 = found idx (or 16); $075C stores it to (a4)
+    sec                  ; carry set -> caller (ifetch) re-fetches the new $40
     rts
 
 .org $FA00
