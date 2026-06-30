@@ -8,7 +8,7 @@ sys.path.insert(0,'tools'); sys.path.insert(0,'/home/chad/Mesen2/python')
 os.environ['DOTNET_ROOT']='/home/chad/.dotnet10'; os.environ['PATH']='/home/chad/.dotnet10:'+os.environ.get('PATH','')
 import mesen_mcp.session as _sess; _sess.validate_mesen_build=lambda *a,**k: None
 from mesen_mcp import McpSession
-ENTRY=0x92DA5D; INEXT=0x00D16F; NCOPY=255   # entry_15b4 @ $92:DA5D, ors_pre @ $00:D16F (the real exit), 255 move.l
+ENTRY=0x00E5B2; INEXT=0x00E5B5; NCOPY=1   # rdw_ea_l entry -> its rtl = ONE helper call
 TD='/tmp/supermn-scratch/ce4trip64'
 wramA=open(TD+'/wramA.bin','rb').read(); regs=open(TD+'/regsA.bin','rb').read()
 def be32(d,o): return (d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3]
@@ -45,7 +45,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     w16(0x0712,0); w16(0x0710,0); w16(0x0714,1); runf(1); w16(0x0714,0)
     Hentry=m.add_exec_hook(ENTRY, cpu_type='Sa1'); Hnext=m.add_exec_hook(INEXT, cpu_type='Sa1')
     samples=[]
-    for k in range(6):
+    for k in range(10):
         r=m.run_until(max_frames=600, hook_handle=Hentry)
         if not r.get('hookFired') and 'hook' not in str(r).lower() and r.get('reason')!='hook':
             # fall back: check if it actually paused on the hook by diag
