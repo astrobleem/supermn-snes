@@ -89,6 +89,21 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
                 try: ins=next(_MD.disasm(_ROM[0x10000+(pp&0x3FFFFF):0x10000+(pp&0x3FFFFF)+8],pp)); d='%s %s'%(ins.mnemonic,ins.op_str)
                 except StopIteration: d='?'
                 print(">>>   from $%06X x%-3d [%s]"%(pp,c,d),flush=True)
+        if os.environ.get('ENTRYCLASS'):
+            # classify FUNCTION ENTRIES: an interpreted PC whose predecessor is a control transfer.
+            def mn(pc):
+                try: return next(_MD.disasm(_ROM[0x10000+(pc&0x3FFFFF):0x10000+(pc&0x3FFFFF)+8],pc)).mnemonic.split('.')[0]
+                except StopIteration: return '?'
+            CF={'jsr','bsr','rts','jmp','rte','rtr','rtd'}
+            ent=collections.Counter()   # (target, kind) -> count
+            for i in range(1,len(real)):
+                pm=mn(real[i-1]&0xFFFFFF)
+                if pm in CF: ent[(real[i]&0xFFFFFF, pm)]+=1
+            print(">>> FUNCTION ENTRIES via control-transfer (kind | target | count | disasm):",flush=True)
+            for (t,k),c in ent.most_common(28):
+                try: ins=next(_MD.disasm(_ROM[0x10000+(t&0x3FFFFF):0x10000+(t&0x3FFFFF)+8],t)); d='%s %s'%(ins.mnemonic,ins.op_str)
+                except StopIteration: d='?'
+                print(">>>   %-4s $%06X x%-4d [%s]"%(k,t,c,d),flush=True)
     instr=r16(0x4A)|(r16(0x4C)<<16)
     print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC),flush=True)
     if os.environ.get('REGDUMP'):
