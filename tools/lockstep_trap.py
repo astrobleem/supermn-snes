@@ -52,6 +52,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     w16(0x60,Z);w16(0x6E,C);w16(0x70,N);w16(0x72,V);w16(0xA2,X);w16(0x7C,SR&7 or 7)
     w16(0xA4,USP&0xFFFF);w16(0xA6,(USP>>16)&0xFFFF);w16(0xA8,1);w16(0xAA,0);w16(0x4A,0);w16(0x4C,0)
     w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x0734,0); w16(0x071A,ESC)
+    if os.environ.get('LH072E') is not None: w16(0x072E, int(os.environ['LH072E'],0))  # loop_hook enable (per-fetch tax probe)
     for o in range(0,WN,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
     # release one step past B0, then trap at the next $0708 IRQ entry (B1). NOTE: with escapes ON the
