@@ -166,8 +166,10 @@ NOTE: bank-$00 space is the binding constraint (biggest gaps: 86B@$F9AA, 46B@$D1
 loop_hook escapes must fit those or split; loop_hook itself can't grow (packed vs .org $F602).
 
 ### STEP D — Transpiler hardening (as it blocks real handlers).
-This session added the `move-to-mem feeding branch` fix (transpile.py:422). Next limits you'll hit:
-`move.l feeding branch`, `(An)+/-(An)` dst feeding branch, and linear-decode stall on
+Added (commit 7d09bc9): `move.l <long> -> -(An)` (push long) in store_long_from — unblocked $46DE
+(coroutine sibling). $11752 also transpiles clean (31 instrs). Both are READY coroutine escapes
+pending firing-validation (need an rte-reached triple + the STEP A charge cycle). Next limits you'll
+hit: `move.l feeding branch`, `(An)+ dst feeding branch`, and linear-decode stall on
 no-`rts`/external-jmp functions (give the decoder an explicit end bound for loop/coroutine bodies).
 
 ---
@@ -193,7 +195,18 @@ still STEP C (the ~246/tick scheduler), but it's the hardest.
 
 ---
 
-## This session's deltas (2026-06-30, → `59f4b15`)
+## Session deltas (2026-06-30 pt.2, → `7d09bc9`) — STEPS A-D
+- **STEP A (#73 CLOSED):** shipped `entry_c172` (commit 507d692, table 12->13), the FIRST coroutine
+  escape. Resolved the $AC-charge anomaly: esc_ac_charge works; exact charge=35 (static); the
+  residual $1401 is hardware-vblank timing, $AC-invariant (not chargeable). Recipe + memory updated.
+- **STEP B (#79):** investigated — jmp-state surface beyond the shipped 11 is sparse; $CEB6/$D522
+  catchable (from $D52C jmp(a0)) but reaches too rare to firing-validate; not shipped. Low ROI.
+- **STEP C (#75 CLOSED):** shipped `lh_sched` (commit 1aaafb2) — native disabled-task-skip for the
+  $074C scheduler scan via loop_hook. ESC=0 GREEN all triples; interpreted 1842->1717 (-125/tick),
+  $0740 region 246->121. New memory: [[scheduler-escape-loophook]].
+- **STEP D:** transpile.py `move.l -> -(An)` push-long (commit 7d09bc9), unblocks $46DE.
+
+## Prior session deltas (→ `59f4b15`)
 - Table 10 → 12: shipped `entry_d718`, `entry_d3f6` (jmp-state, validated firing, zero-added, GREEN).
 - transpile.py: `movea.l (An),An` aliasing fix; `--table` rts `$42` bank-mask; `move-to-mem feeding
   branch` feature.
