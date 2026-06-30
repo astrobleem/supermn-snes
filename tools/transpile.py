@@ -236,9 +236,13 @@ def ea_store_A_from(e, ea, size, load_value):
         else:
             e('sta $%02X' % reg_dp(ea[1]))                                 # .w touches lo16 only
         return
-    if kind == '-(An)':                                      # predecrement push (arg push to a7)
-        if size != 'w': raise Unsupported('-(An) store size %s (only .w)' % size)
+    if kind == '-(An)':                                      # predecrement store (push / buffer write)
         an = ea[-1]; dp = reg_dp(an)
+        if size == 'b':                                      # byte: predec 1, write low8 via wrb40
+            load_value(e); e('pha'); predec_an(e, an, 1)
+            e('lda $%02X' % dp); e('tax'); e('pla'); e('jsr wrb40')
+            return
+        if size != 'w': raise Unsupported('-(An) store size %s' % size)
         load_value(e); e('pha'); predec_an(e, an, 2)
         e('lda $%02X' % dp); e('tax'); e('pla'); e('jsr wrw40')
         return
