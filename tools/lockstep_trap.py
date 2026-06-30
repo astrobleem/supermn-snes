@@ -59,11 +59,36 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     # trap there; $0708 (IRQ entry, before entry_3a92 runs) is escape-safe. Small phase offset vs wramB
     # (the $0708->$3A92 IRQ prologue).
     B1PC=int(os.environ.get('B1PC','0708'),16)
+    GPPROF=os.environ.get('GPPROF')
     w16(0x0712,0); w16(0x0710,0); w16(0x0714,1); runf(1); w16(0x0714,0)
+    if GPPROF: w16(0x0718,0); w16(0x0762,0)   # enable dbg_fetch (ALL) + ilog (REAL interpreted) streams
     b1=False
     for _ in range(400):
         w16(0x0710,B1PC); w16(0x0716,0); runf(4)
         if r16(0x0712): b1=True; break
+    if GPPROF:
+        import collections
+        na,nr=r16(0x0718),r16(0x0762)
+        def dec(buf,nb): return [((buf[i+2]|(buf[i+3]<<8))<<16)|(buf[i]|(buf[i+1]<<8)) for i in range(0,min(nb,len(buf))-3,4)]
+        real=dec(bytes(m.read_memory('snesMemory',0x40C000,min(nr,0x3FF8))),nr)
+        reg=collections.Counter(p&0xFFFFC0 for p in real)
+        print(">>> GAMEPLAY interpreted stream: %d REAL PCs, top 64B regions:"%len(real),flush=True)
+        import capstone as _cs; _MD=_cs.Cs(_cs.CS_ARCH_M68K,_cs.CS_MODE_BIG_ENDIAN)
+        _ROM=open('build/interp.sfc','rb').read()
+        for reg64,cnt in reg.most_common(24):
+            try: ins=next(_MD.disasm(_ROM[0x10000+(reg64&0x3FFFFF):0x10000+(reg64&0x3FFFFF)+8],reg64)); d='%s %s'%(ins.mnemonic,ins.op_str)
+            except StopIteration: d='?'
+            print(">>>   $%06X  x%-4d  [%s]"%(reg64,cnt,d),flush=True)
+        tgt=os.environ.get('PRED')
+        if tgt:
+            t=int(tgt,16); preds=collections.Counter()
+            for i,p in enumerate(real):
+                if (p&0xFFFFFF)==t and i>0: preds[real[i-1]&0xFFFFFF]+=1
+            print(">>> predecessors of $%06X (interpreted stream):"%t,flush=True)
+            for pp,c in preds.most_common(8):
+                try: ins=next(_MD.disasm(_ROM[0x10000+(pp&0x3FFFFF):0x10000+(pp&0x3FFFFF)+8],pp)); d='%s %s'%(ins.mnemonic,ins.op_str)
+                except StopIteration: d='?'
+                print(">>>   from $%06X x%-3d [%s]"%(pp,c,d),flush=True)
     instr=r16(0x4A)|(r16(0x4C)<<16)
     print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC),flush=True)
     if os.environ.get('REGDUMP'):
