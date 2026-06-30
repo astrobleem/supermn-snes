@@ -29,6 +29,10 @@ ors_pre=$00D16F
 entry_c9f8=$948022
 entry_d5a0=$948487
 entry_1008=$948544
+entry_d01a=$948AA9
+entry_d05e=$948C26
+entry_d0bc=$948CC0
+entry_d07a=$948D62
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
