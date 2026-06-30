@@ -63,6 +63,13 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   the in-progress class. Runtime mechanism: `xlat_dispatch` at escbank2 **$94:F900**
   (push+RTL dispatch — `jml [abs]` is Poppy-mis-sized); `ojmp_hook` and `op_rts_norm`
   both route through it (gate-check → jml $94F900 → native on hit, else jmp inext).
+  **(corrected 2026-06-30: the rts-class table dispatch FIRES 0× in gameplay. `op_rts_norm`'s
+  table route is real, but the hot rts-reached PCs ($CE4/$13BE) are entered via the scheduler's
+  rte→rts chain that BYPASSES `op_rts_norm`, so `TABLE_PCS`/`ce4t` never dispatch — `ce4t` is
+  dead weight in the table. The earlier "ce4t fires 63451×" was a corrupted $07xx in-memory-
+  counter artifact; NEVER trust $07xx counters — measure with SA-1 exec-hooks. The families that
+  DO fire: jah2 (jsr/bsr/jsr(An)), jmp-state (jmp(a0)→table), coroutine (rte-resume→table). See
+  MAIN_PLANNING_HANDOFF.md.)**
 - **`val_frame_diff.py`** [S] — the gate: capture at the $0708 IRQ jsr site, run one
   full per-frame tick escapes-ON vs OFF, diff work RAM ($40) + video shadow ($41),
   a7-aware. GREEN ⇒ the table-dispatched escapes are bit-exact vs interpretation.

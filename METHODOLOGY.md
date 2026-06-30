@@ -1,8 +1,9 @@
 # Arcade → SNES Port Playbook
 
 Last updated: June 25, 2026. How we ported (are porting) Superman (Taito X, 68000) to
-SNES/SA-1, written so the same recipe + tools apply to the **next** game (pinned: Space
-Harrier). Superman is the worked example; the method is general. Companion: per-area docs
+SNES/SA-1, written so the same recipe + tools apply to the **next** game (pinned: Gigandes
+— see §"Pinned next target"; Space Harrier was dropped). Superman is the worked example; the
+method is general. Companion: per-area docs
 (`PALETTE_VERDICT.md`, `TRANSPILER_DESIGN.md`, `INTERPRETER_SPIKE.md`,
 `TRANSPILER_TOOL_SCOPE.md`, `COVERAGE_G1.md`) and `STATUS.md`/`ROADMAP.md`.
 
@@ -89,6 +90,8 @@ that dominate each frame with native 65816 "escapes," via the **automated transp
 4. **Deploy** the escape in free **bank-$00 gaps** (no ROM-layout change needed for the foreseeable
    hot set). Grind the ranked hot set until the per-frame path fits the realtime cycle budget (G3).
 Superman: 8 escapes live incl. the ~12.6% collision (bridged) and ~5.9% video (shadow stores).
+*(escape counts here are dated phase snapshots — "deployed" ≠ "fires in gameplay"; do not treat
+as a current total. See `MAIN_PLANNING_HANDOFF.md` for the authoritative current set.)*
 See `TRANSPILER_TOOL_SCOPE.md` + the `transpiler-tool`/`bulk-transpile-phase` memories.
 
 **Evolution (AOT) — when per-escape hand-deployment stops scaling.** Hand-escaping one cluster at a
@@ -104,6 +107,17 @@ boundary). Caveats learned: the table FORCES real dispatch, which exposes latent
 silently never exercised (great — but plan for it); a function reached via multiple paths can have
 different stack frames; and validating table-dispatched faithful escapes needs SA-1-side trace
 tooling, which is the real gate to batch coverage. See `ROADMAP.md` (June-29 update) + STATUS.md.
+
+**(corrected 2026-06-30, verified via SA-1 exec-hooks):** of the dispatch families, **jah2**
+(jsr/bsr/jsr(An)), **jmp-state** (jmp(a0)→table), and **coroutine** (rte-resume→table) FIRE in
+gameplay; the **rts-class table dispatch FIRES 0×** — the hot rts-reached handlers ($CE4/$13BE)
+are entered via the scheduler's rte→rts chain that BYPASSES the table, so the `ce4t` table entry
+is dead weight (the earlier "ce4t fires 63451×" was a corrupted $07xx in-memory-counter artifact;
+NEVER trust $07xx counters — use exec-hooks). So *dispatch* is no longer the wall: the real
+bottleneck is the **coroutine scheduler + handler chains** (~1900 genuinely-interpreted 68K instr
+per GAME_TICK). Latest escapes: `entry_c172` (first coroutine escape, via `--coroutine` +
+rte-resume) and `lh_sched` (hand-written native scheduler scan via `loop_hook`, not transpiled).
+See `MAIN_PLANNING_HANDOFF.md` (authoritative).
 
 ## 3. Disassembly coverage (gate G1): the trace IS the CDL
 Static disassembly stalls on indirect/computed jumps (jump tables = hazard H6).

@@ -8,6 +8,11 @@ interpreted PCs/tick after $08C2+$26A0 landed) is the **`$0015B4` unrolled block
 cycles**, ~23× the whole SA-1 frame budget. Collapsing it is the single biggest win toward
 realtime.
 
+> **(corrected 2026-06-30:** the "single biggest win" line is a dated profiling snapshot. The
+> current bottleneck assessment is the **coroutine scheduler + handler chains** (~1900
+> interpreted 68K instr per GAME_TICK), not this block copy — see `MAIN_PLANNING_HANDOFF.md`.
+> The collapse design below remains valid and is still **NOT YET LANDED**.)
+
 `entry_15b4` (native escape) already handles the **`bsr $15B4`** call sites. But the run is
 ALSO entered by **fall-through**: `$158E` does `lea …,a0 / lea $E00002,a1` then falls
 straight into `$15B4` (no call) for its third copy. The call-hook can't intercept a

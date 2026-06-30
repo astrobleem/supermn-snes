@@ -42,7 +42,9 @@ This tool **implements** them. Reference oracles: the hand-written, MAME-validat
   `lda $<An>;[clc;adc #d16;]tax;jsr rdw40` (work RAM) or `ce_rdw`/`readbyte` (ROM ptr `a0`);
   `(An)+`→load then bump An; `imm`→`lda #imm`; `abs`→`lda $40<abs>`; `(d16,PC)`→resolved const.
 - **EA_STORE[mode]** (dest): address into X, `jsr wrw40`; `Dn`→`sta $<4n>`; `(An)+`→store+bump;
-  read-modify-write (`andi (a3); or d,(a3)`) → load/modify/store (the entry_111a Y-write).
+  `-(An)`→predecrement An then store — incl. **`move.l → -(An)` push-long** (added 2026-06-30 in
+  `store_long_from`; unblocked `$46DE`); read-modify-write (`andi (a3); or d,(a3)`) →
+  load/modify/store (the entry_111a Y-write).
 - **OP[mnemonic.size]:** `move/movea` (+NZ, V=C=0); `add/addi/adda/sub/subi/subq/neg/cmp/cmpi/
   tst/clr` (set NZVCX per D1 — **subtract/compare carry is INVERTED vs 68K**, V is the CMP
   trap); `and/or/andi/ori/eor` (NZ, V=C=0); `lea` (no flags). `.b`/`.w`/`.l` size variants.

@@ -115,10 +115,14 @@ Sound:
 - build_rom.py: ✅ Creates final ROM with LoROM header + checksum from Poppy binary
 
 ### Current Build Pipeline
-1. `make` → Poppy assembles src/main.pasm → src/main.bin (32KB, code + vectors)
-2. `build_rom.py` → Creates 64KB LoROM image with header at $7FC0, copies code,
-   injects vectors, computes checksum
-3. Output: distribution/superman.sfc (64KB, valid checksum, boots in emulator)
+> (corrected 2026-06-30) The `main.pasm → 64KB superman.sfc` flow below is the OBSOLETE early-spike
+> toy build. The current pipeline is **`bash tools/build_interp.sh` → `build/interp.sfc`** (a 4 MB
+> HiROM image: the `src/interp.pasm` 68K interpreter + `video.pasm` + the escape banks
+> `escbank.pasm`/`escbank2.pasm` + the `gen_xlat_table.py` AOT table). **BUILD.md is authoritative.**
+
+(historical) 1. `make` → Poppy assembles src/main.pasm → src/main.bin (32KB, code + vectors)
+(historical) 2. `build_rom.py` → 64KB LoROM image with header at $7FC0, vectors, checksum
+(historical) 3. Output: distribution/superman.sfc (64KB) — superseded by build/interp.sfc
 
 ### Known Issues
 See BLOCKERS.md for resolved findings and notes.
