@@ -1,97 +1,176 @@
-# MAIN PLANNING HANDOFF — resume the Superman port here
+# MAIN_PLANNING_HANDOFF.md
 
-Last updated: June 25, 2026. **Start here** to pick the main thread back up in a fresh session.
-This is the "where were we / what's next / how to resume" doc. Authoritative detail lives in
-[STATUS.md](STATUS.md) (state), [ROADMAP.md](ROADMAP.md) (plan), [METHODOLOGY.md](METHODOLOGY.md)
-(recipe), [BUILD.md](BUILD.md) (toolchain + migration).
+Last updated: 2026-06-30. **Read this first** in a fresh session, then act. It captures the
+current state, the reliable mental model (several older notes were WRONG — corrected here), the
+tooling, the validated escape-deployment recipe, and prioritized next steps.
 
-> **Context:** we split off to do **Mesen/Nexen MCP** work (see [Parked threads](#parked-threads));
-> that is NOT the main thread. The main thread is the **Superman 68K→SNES/SA-1 transpiler**. Branch:
-> **`boot-scheduler-progress`** (everything below is committed + pushed there).
+Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
+Repo: clean at `59f4b15`, branch `boot-scheduler-progress`. AOT table: **12 escapes**.
+Build: `bash tools/build_interp.sh` (→ `build/interp.sfc`).
 
----
-
-## Where we are (one paragraph)
-
-The interpret-cold / transpile-hot hybrid is a **working production pipeline**. The 68000
-interpreter is bit-exact vs MAME, runs on the SA-1, renders video, reads input. The **automated
-transpiler** (`tools/transpile.py`) is built and validated; it replaces hot 68K functions with
-native 65816 "escapes" — leaf, **non-leaf (call-bridge)**, and **video (shadow stores)**. **8
-escapes are deployed in free bank-$00 gaps and validated bit-exact**, including the two big ones
-this phase: `entry_25110` (collision, ~12.6%, bridged) and `entry_20e8` (video, ~5.9%, `$41`
-shadow). The multi-bank idea proved **unnecessary** (bank $00 has gaps). **Next = the throughput
-grind: transpile the rest of the hot set until the per-frame path hits the realtime cycle budget.**
-
-### Escapes live (all bit-exact)
-`entry412` (RNG) · `entry_cb9e`/`entry_15b4`/`entry_3e6a` (leaves) · `entry_ce4` ($000CE4 ~12.5%) ·
-`entry_111a` ($00111A ~5.9%) · **`entry_25110`** ($025110 collision ~12.6%, 2 bridged jsr.l) ·
-**`entry_20e8`** ($0020e8 video ~5.9%, shadow stores).
+> NOTE: there is older planning text (STATUS.md, ROADMAP.md, and the prior version of this file)
+> from the "bulk-transpile / 8-escape" phase. The strategic picture has since changed — trust THIS
+> doc and §1 over those.
 
 ---
 
-## What's next (priority order)
+## 1. The reliable mental model (corrected this session — trust this)
 
-1. **Transpile the next hot functions** (mechanical now). From the live profile
-   (`tools/stream_profile.py`), the remaining `$002xxx`/`$025xxx` hot set:
-   - `$0028d4` (video, ~2.4%), `$00267a` (~1.3%) — video-family, use `--video`.
-   - `$025xxx` collision-cluster siblings; `$001140`; others the profiler ranks.
-   - Recipe per function: `tools/transpile.py <addr> [--video]` → deploy in a bank-$00 gap →
-     validate **ON-vs-OFF = 0** (a7-classify stack diffs; diff `$41` shadow for video).
-2. **Measure G3 (realtime cycle budget, <150k SA-1 cycles/frame).** Benchmark steps/frame and the
-   SA-1 cycle count with the hot mass native; decide if the cold interpreter tail needs more
-   transpilation or a faster dispatch. Then cycle-aware `$AC` IRQ pacing for unattended realtime.
-3. **Watch bank-$00 space.** Gaps used: `$D1ED` (entry_25110), `$EC2C` (entry_20e8). `$F149` (1463B)
-   free + smaller. When gaps run dry → a transpiler code-size pass (An-addr caching; non-frame reads
-   are ~6 instrs each) OR revisit a 2nd executable bank (see `multibank-interp` memory — SUPERSEDED
-   for now, but the machinery exists).
-4. **Audio** (YM2610→TAD) in parallel; **integration** → one playable full-level-validated ROM.
+The interpreter (`src/interp.pasm`, 65816 on SA-1) runs Superman 68K code. Per GAME_TICK (`$3A92`)
+it executes **~1900 genuinely-interpreted 68K instructions/tick**. Realtime needs that ~40
+(escape ~99% of per-tick work to native). Each native escape = a transpiled 65816 reimplementation
+of a hot 68K function, dispatched so the interp jumps to it instead of interpreting.
 
----
+**Dispatch families that ACTUALLY FIRE in gameplay (verified with SA-1 exec-hooks):**
+- **jah2 (jsr-class):** `jsr.l`/`jsr (An)`/`bsr` → `jsrabs_hook2` cmp-chain (interp.pasm:16970).
+  Already covers the clean leaves ($412, $CE4, $111A, $295A, $29B6, $25110, …).
+- **jmp-state (the AOT xlat table):** `jmp (a0)` → `op_jmp_idx` → `ojmp_hook` ($00:D1B3) →
+  `xlat_dispatch` ($94:F900), data in `src/xlat_table.bin` from `tools/gen_xlat_table.py`. The
+  PC→native table. Verified firing: d0d0, d5c4, d718, d3f6, etc.
 
-## How to resume (mechanics)
+**What is PROVEN NOT to work (reliable exec-hook evidence, this session):**
+- **rts-class table dispatch fires 0× in gameplay.** `ce4t` and `entry_13bet` NEVER fire. The hot
+  handlers ($CE4, $13BE, …) are reached as **rts returns inside the coroutine scheduler's
+  `rte→task→rts→next` chain**, which bypasses `op_rts_norm→ojmp_hook→xlat`. You CANNOT grind
+  rts-reached "leaf" escapes into the table — they will not fire. `ce4t` is dead weight in the
+  table; its old "fires 63451×" claim was a **corrupted `$07xx` memory-counter artifact**.
 
-```sh
-# build (-> build/interp.sfc, 4194304 bytes)
-bash tools/build_interp.sh
+**The dominant interpreted cost = the coroutine SCHEDULER + the coroutine/handler chains:**
+- `$0500-$07C0` scheduler machinery ≈ **470/tick**. The 16-task cooperative dispatcher is
+  `$074C-$07E8`: per task → check enable bit (`btst d0,$2(a5)`), check flags, set a7=task SP,
+  `rte` to resume. `$0740` region alone = 246/tick (the disabled-task-skip iteration).
+- `$00C1xx` multi-resume coroutine ≈ **227/tick** (c172 = `$C172`).
+- Object handlers ($CB40, $CE80, $CD40…) and bank-`$01` context-switch code ($01C980: `ori #$700,sr`
+  + `lea a7` + `jsr (a6)` = an SP-swapping context switch).
 
-# find the next hot target (fresh Mesen port; $SUPERMN_SCRATCH = the flytick/state dir)
-export SUPERMN_SCRATCH=<scratch-with-flytick/>
-python3 tools/stream_profile.py            # ranked in-game hot 68K functions
-
-# transpile + validate one function
-python3 tools/transpile.py <hexaddr> [--video]
-python3 tools/flyval.py 7000               # ON-vs-OFF; for video also diff $41 (see val_* scripts)
-```
-
-**Deploy recipe (bank-$00 gap):** insert `.org <gap-addr>` + the escape just **before the next
-`.org`** (NOT before `.org $F700` — that shifts code → overflow). Add a tiny dispatch handler
-right after `jah2_e111a` (near `jsrabs_hook2` so the `beq` is short) that `jmp entry_<addr>`. For a
-SECOND escape sharing a region, let it **flow into the gap with no `.org`** (an explicit `.org` over
-dispatch-shifted code corrupts it → hang). Build must stay 32768 with RESP1 intact.
-
-**Validation gotchas:** the lockstep compares work RAM ($40); for a **bridged** escape, raw diffs
-include **dead-stack sentinel bytes below `a7`** — classify vs `a7`, only `≥a7` (live) matters. For
-a **video** escape, work-RAM ($40) won't show the video writes — diff the **`$41` shadow** too.
-Mesen: foreground only, ~90 s/run, **fresh ports each run** (they wedge), no pipes (SIGPIPE).
+**METHODOLOGY RULE (hard-won):** NEVER trust in-memory diag counters at `$07xx` — the game
+overwrites them; they give garbage (read "xlat 63524×" when truth was 73×; "clean13be 56493" was
+noise). ALWAYS measure SA-1 execution with **exec-hooks** (`HOOKTEST`, §2).
 
 ---
 
-## Parked threads (not the main path)
+## 2. Tooling (all in `tools/lockstep_trap.py`, env-var driven)
 
-- **Mesen → Nexen MCP port** (the current split-off). Scoped: `Mesen2/MCP_NEXEN_PORT_SCOPE.md` +
-  `mcp-nexen-port` memory. Strategic infra (gain Andy's RE stack, give him an MCP); NOT a Superman
-  blocker. Do it in parallel/after.
-- **G1 disassembly coverage** — in progress; NOT a hybrid blocker (interpreter is the cold fallback).
-- **Audio** — not started; parallelizable.
+Run: `[ENV=…] python3 tools/lockstep_trap.py <triple-dir> 2F60 <ESC>`
+Triples (MAME-ground-truth GAME_TICK captures) in `/tmp/supermn-scratch/`:
+`ce4trip64`, `trip2500`, `trip4000`, `trip5000`. ESC=1 = escapes on; ESC=0 = pure interp.
+Baseline: ESC=1 on `ce4trip64` = **DIFF=48** (a pre-existing `$0708`-trap/$AC timing artifact);
+ESC=0 = GREEN. A new escape is "clean" if DIFF stays 48 AND the diff *set* is byte-identical to
+baseline (zero added/removed bytes).
 
-## ⚠️ Drive / migration
-The build drive has bad sectors. **[BUILD.md](BUILD.md)** is the migration guide. Toolchain is safe
-on GitHub (Game Garden = `TheAnsarya/{poppy,peony,pansy,game-garden}`; `astrobleem/{mame-mcp,Mesen2}`).
-**Still only on the drive** (copy off / re-derive): the arcade ROM + derived assets
-(`data/superman_m68k.bin`, `tools/mame-trace/gfx1.bin`, `data/cchip_boot_response.bin`) and the
-`$SUPERMN_SCRATCH` flytick/MAME captures. (The MAME-0.287 `.inp` recordings ARE in git now.)
+- **`HOOKTEST=<hex,hex,…>`** — arm SA-1 exec-hooks; prints `hook_diag matchedEventsEmitted` = the
+  TRUE fire count. The reliable fire test. (Escape SA-1 addr: `src/escbank2.sym` `00:XXXX entry_foo`
+  → `$94XXXX`.)
+- **`GPPROF=1`** — dump the genuinely-interpreted (ilog) stream; top 64B regions = real gameplay
+  interpreted cost. (GPPROF clobbers work-RAM $8000+/$C000+ → its wramB DIFF is meaningless in this
+  mode; use only for the stream.)
+- **`PRED=<hex>`** — stream predecessors of a PC (how it's reached).
+- **`STREAMWIN=<hex>` [`STREAMWIN_N=20`]** — ordered stream window before the first hit (traces the
+  true call chain; this revealed the scheduler→rts→handler chain).
+- **`ENTRYCLASS=1`** — tally function entries by dispatch kind (jsr/bsr/rts/jmp/rte). Use to tell
+  jmp-reached (catchable) from rts-reached (NOT catchable).
+- **`B1PC=<hex>` + `REGDUMP=1`** — trap at a PC; dump reg file + `$AC`/`$4A`/vbl (for `$AC` pacing;
+  trap at a yield e.g. `B1PC=C170`).
+- **`FULLDIFF=1`** — list all diff bytes (for symmetric-diff zero-added checks).
 
-## Key memories (recall these first)
-`transpiler-tool` (the tool + deploy recipe) · `bulk-transpile-phase` · `multibank-interp` (why NOT
-needed) · `gameplay-input-validated` · `lockstep-harness-progress` · `timing-8mhz` · `mame-mcp` ·
-`mesen-mcp-validation` · `build-toolchain-migration` · `mcp-nexen-port`.
+---
+
+## 3. VALIDATED escape recipe (jmp-state class) — this WORKS; shipped d718 + d3f6 this way
+
+1. `python3 tools/transpile.py <pc> --bank2 --coroutine` (jmp-state = `--coroutine` convention).
+   `Unsupported` → not tractable yet (see §4 STEP D transpiler hardening).
+2. Splice the body into `src/escbank2.pasm` before `; >>> ESCBANK2_BODIES_END`.
+3. Add the PC to `JMP_STATE_PCS` in `tools/gen_xlat_table.py`.
+4. `bash tools/build_interp.sh`.
+5. Validate (the gate, all on a triple where the handler is jmp-reached — check `ENTRYCLASS=1`):
+   - `HOOKTEST=<entry_addr> … 2F60 1` → matchedEvents > 0 (it FIRES); instr drops.
+   - `FULLDIFF=1 … 2F60 1` → DIFF=48, symmetric diff vs baseline empty.
+   - `… 2F60 0` → GREEN.
+6. Commit only if it FIRES AND zero-added AND GREEN. rts-reached handlers won't fire — don't deploy.
+
+---
+
+## 4. Next steps, prioritized
+
+### STEP A — Nail the `$AC` exact-charge to unblock the COROUTINE class (task #73). **Do this first.**
+This is the gate for the 227/tick coroutine (c172 + siblings) and any big escape. When an escape
+fires it consumes fewer interp-steps than the interpreter would, so `$AC` (frame pacer) drains
+slower, the vblank boundary shifts, and a downstream byte diverges (c172 adds `$F01401`). Small
+escapes (d718/d3f6) didn't cross the boundary; big ones do.
+
+c172 facts: body is PROVEN bit-exact (regs + work-RAM identical at the `$C170` yield, ESC=1 vs 0).
+Native c172 saves ~35 interp-steps vs interp (others held constant). `--accharge` OVER-charges
+(~231 vs needed ~35) because bridge callees run interpreted in BOTH paths.
+
+**Experiment / decision tree (resolve the anomaly first):**
+1. Deploy c172: `transpile c172 --bank2 --coroutine`, splice escbank2, add `CORO_PCS={0xC172}` into
+   gen_xlat_table's `ALLOWED_PCS`, build. It dispatches via op_rte→ors_rte_x→table and FIRES
+   (HOOKTEST on its entry addr).
+2. **THE ANOMALY to resolve:** this session, charge=0 AND charge=35 both gave DIFF=49. Either (a)
+   `esc_ac_charge` (src/escbank2.pasm) isn't actually consuming `$AC`, or (b) `$1401` isn't
+   `$AC`-determined. Verify (a): `REGDUMP=1 B1PC=C170 … 2F60 1` with charge=0 vs charge=N — does
+   `$AC@C170` change by N? If not, FIX `esc_ac_charge` first.
+3. If the charge works: find the exact value = (`$AC@C170` for c172-OFF) − (c172-ON-no-charge),
+   both ESC=1, others constant. Static-charge that delta; DIFF should return to 48.
+4. If `$1401` still won't clear with the exact charge → it's not `$AC`. Use `add_write_hook` on Sa1
+   `$401401` (BYTE-granular matchValue, not word) or `STREAMWIN` around the write to find the writer.
+5. Alternative framing: confirm via multi-tick lockstep (`tools/lockstep.py`) whether the divergence
+   stays BOUNDED across several GAME_TICKs (→ pure `$0708`-trap/$AC measurement artifact, not a
+   gameplay bug; the 48-byte baseline is already this class) — if so, it's defensible to relax the
+   single-frame zero-added gate for body-bit-exact coroutine escapes.
+
+Once `$AC` is solved, c172 ships (first coroutine escape) and the path is validated end-to-end →
+grind the other rte-reached coroutine bodies (`$46DE`, `$7828`, `$11752`, the `$00C1xx` cluster).
+
+### STEP B — More jmp-state escapes via a FIRE-FINDER (task #79). Low-risk, incremental.
+jmp-state handlers active in the current triples are exhausted (d718, d3f6 shipped; rest are rts
+trampolines $CF8A/$D6D8/$D374). Build a fire-finder: scan a MAME playthrough for frames where OTHER
+jmp-state handlers are active (e.g. $CEB6 jmp-reach, $D522, more $D7xx/$D3xx object handlers),
+capture a triple (wramA/wramB/regsA) — reuse `/tmp/supermn-scratch/extract_triple_scan64.py`. Then
+run §3 per handler. Each ~10 interp/tick, but safe and additive.
+
+### STEP C — Escape the SCHEDULER (task #75). Highest value (~246/tick), hardest.
+`$074C-$07E8` won't plain-transpile: no clean `rts` (loops via `rte`); bounds-fail path `$07AA` does
+`jmp $1000ae.l` (SA-1 hardware I/O). Plan:
+- Hand-write a native escape for the **disabled-task-skip loop** `$074C-$0772` (valid 68K: idx load,
+  `btst d0,$2(a5)` enable check, `beq $74c`). Iterate d0 = current+1..16 natively, skip disabled
+  tasks, bail to interpret only on an enabled task or the done path `$07EA`. Collapses most of the
+  246 without touching rte/SP/`$1000ae`.
+- Dispatch hook: find how `$074C` is reached (`STREAMWIN=074C`/`PRED=074C` on a scheduler-active
+  triple) — likely the trap#5/yield → scheduler-resume path, or extend the GAME_TICK escape
+  `entry_3a92`.
+
+### STEP D — Transpiler hardening (as it blocks real handlers).
+This session added the `move-to-mem feeding branch` fix (transpile.py:422). Next limits you'll hit:
+`move.l feeding branch`, `(An)+/-(An)` dst feeding branch, and linear-decode stall on
+no-`rts`/external-jmp functions (give the decoder an explicit end bound for loop/coroutine bodies).
+
+---
+
+## 5. Tasks & memory
+Tasks: #67 (~99% coverage, overarching), #70 (AOT table unify), #72 (ce4t never fires), **#73 (`$AC`
+exact-charge — STEP A)**, #74 (closed, rts-class misread), **#75 (scheduler — STEP C)**, #78 (closed,
+coroutine-dispatch resolution), **#79 (jmp-state/fire-finder — STEP B)**.
+Memory: `rts-class-dispatch-nonfunctional.md` (corrected model + methodology lesson),
+`coroutine-shells-low-value.md`, `escape-bank.md`, `aot-dispatch-table.md`, `transpiler-tool.md`.
+
+## 6. Don't repeat these dead ends
+- Don't grind rts-reached "leaf" escapes into the table — they can't fire (scheduler-dispatched).
+- Don't trust `$07xx` memory counters — use HOOKTEST exec-hooks.
+- Don't expect big/coroutine escapes to be zero-added until `$AC` is solved (STEP A).
+- ce4t is dead weight (never fires); don't "re-validate" it with single-frame zero-added (passes
+  only because it never runs).
+
+**Recommended first action:** STEP A — resolve the "charge=0 and charge=35 both give DIFF=49"
+anomaly (verify `esc_ac_charge` works, then find the exact charge). Solving it unblocks the entire
+coroutine class, the bulk of the remaining interpreted cost.
+
+---
+
+## This session's deltas (2026-06-30, → `59f4b15`)
+- Table 10 → 12: shipped `entry_d718`, `entry_d3f6` (jmp-state, validated firing, zero-added, GREEN).
+- transpile.py: `movea.l (An),An` aliasing fix; `--table` rts `$42` bank-mask; `move-to-mem feeding
+  branch` feature.
+- lockstep_trap.py: HOOKTEST / GPPROF / PRED / STREAMWIN / ENTRYCLASS (reliable tooling).
+- Corrected model: rts-class dispatch is non-functional in gameplay; ce4t never fires (false prior
+  milestone); the bottleneck is the coroutine scheduler. Closed dead-end tasks #74; reopened #72.
