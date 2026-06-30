@@ -153,6 +153,16 @@ CTRLFLOW = BCC | {'bra', 'dbra', 'dbf', 'bsr', 'jsr', 'jmp', 'rte', 'rtr'}  # no
 # ===================== memory address helpers =====================
 def is_frame(an): return an in ('a6', 'a7')
 
+# EA-SPECIALIZATION (cycle lever, ~14-100x/access vs the generic rdw_ea/readbyte helpers): registers
+# that PROVABLY point at work RAM use the fast rdw40/wrw40 ($40-direct) path instead of the ROM/IO/
+# bank-aware helpers. a5 = the global state base ($F00000, set at boot, never ROM/video) -> the whole
+# a5-relative game-state/scheduler/coroutine access pattern goes fast. a6/a7 = frame pointers (already
+# fast). WORKRAM adds escape-specific registers the caller asserts are work RAM (--workram=a0,a1, from
+# the captured entry regs). NOTE: only ever WIDEN this when the register cannot be ROM (reads) -- stores
+# already assume work-RAM-or-video, and RMW already assumes work RAM (writable). Validate bit-exact.
+WORKRAM = set()                                  # --workram=<csv>: extra provably-work-RAM An regs
+def is_workram(an): return an in ('a5', 'a6', 'a7') or an in WORKRAM
+
 def hi_ext(disp): return '#$FFFF' if disp < 0 else '#$0000'   # sign-extend a 16-bit disp into hi16
 
 def ea_setup_romaware(e, an, disp):
@@ -173,7 +183,7 @@ def ea_load_A(e, ea, size):
         e('lda %s' % imm16(ea[1])); return
     if kind in ('(An)', '(An)+', '(d16,An)'):
         an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0
-        if is_frame(an):
+        if is_workram(an):                                       # provably work RAM -> fast $40-direct
             dp = reg_dp(an)
             e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')
             e('jsr rdb40' if size == 'b' else 'jsr rdw40')
@@ -248,7 +258,7 @@ def ea_store_A_from(e, ea, size, load_value):
         return
     if kind in ('(An)', '(An)+', '(d16,An)'):
         an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0; dp = reg_dp(an)
-        if VIDEO and not is_frame(an):
+        if VIDEO and not is_workram(an):                         # work-RAM regs (a5/a6/a7/--workram) -> fast wrw40, skip video routing
             # IO-aware store: writeword/writebyte route video $B0/$D0/$E0 -> $41 shadow, $F0 -> $40.
             # in: $52=An.hi16, $54=An.lo16+disp, $80=value (lo/$80, hi/$81). value MUST be in $80 first.
             load_value(e)
@@ -763,7 +773,7 @@ def load_long_to(e, src, dp):
     """32-bit load src -> reg at dp (no flags)."""
     if src[0] in ('(d16,An)', '(An)', '(An)+'):
         an = src[-1]; disp = src[1] if src[0] == '(d16,An)' else 0
-        if is_frame(an):
+        if is_workram(an):                                       # provably work RAM -> fast (X-held EA = aliasing-safe)
             s = reg_dp(an)
             e('lda $%02X' % s); e('clc'); e('adc %s' % imm16(disp)); e('tax')
             e('jsr rdw40'); e('sta $%02X' % (dp+2)); e('inx'); e('inx'); e('jsr rdw40'); e('sta $%02X' % dp)
@@ -1076,11 +1086,13 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED, BANK2
+    global VIDEO, ESCAPED, BANK2, WORKRAM
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     BANK2 = '--bank2' in sys.argv
     bank1 = '--bank1' in sys.argv or BANK2            # bank2 reuses all of bank1's jsl.l/jml.l transforms
     VIDEO = '--video' in sys.argv
+    for a in sys.argv:                                # --workram=a0,a1: extra provably-work-RAM An regs (EA fast path)
+        if a.startswith('--workram='): WORKRAM |= {r.strip() for r in a.split('=',1)[1].split(',') if r.strip()}
     coroutine = '--coroutine' in sys.argv                 # task-BODY escape (see main-loop-coroutine-arch):
     # entered by the $07E4/op_rte resume hook (reg file already restored, a7 already past the trap
     # frame), NOT by a jsr -> NO re-simulate-push prologue. Decode ends at the yield `bra` (target <

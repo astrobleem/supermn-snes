@@ -3802,11 +3802,11 @@ entry_c172:
     lda $34
     clc
     adc #$2A36
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
     sep #$20
     sta $0C
     rep #$20
@@ -3847,11 +3847,11 @@ Lc172_c186:
     lda $34
     clc
     adc #$2A36
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    sep #$20
+    lda $400000,x
+    rep #$20
+    and #$00FF
     sep #$20
     sta $00
     rep #$20
@@ -3895,23 +3895,21 @@ Lfc172_3:
     lda $34
     clc
     adc #$2A38
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9E
-    lda $34
-    clc
-    adc #$2A3A
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $24
-    lda $9E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $26
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $24
     lda $24
     clc
     adc #$0000
@@ -3949,11 +3947,12 @@ Lfc172_4:
     lda $34
     clc
     adc #$2A3C
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $0C
     lda $24
     clc
@@ -3965,23 +3964,21 @@ Lfc172_4:
     lda $34
     clc
     adc #$2A44
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9E
-    lda $34
-    clc
-    adc #$2A46
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $28
-    lda $9E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $2A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $28
     lda $34
     clc
     adc #$2A3C
@@ -4002,11 +3999,12 @@ Lfc172_4:
     lda $34
     clc
     adc #$2A3C
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sec
     sbc #$00E0
     beq Lfc172_5
@@ -4228,23 +4226,21 @@ Lc172_c1d6:
     lda $34
     clc
     adc #$1CC2
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9E
-    lda $34
-    clc
-    adc #$1CC4
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $20
-    lda $9E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
     ; INDIRECT-BRIDGE jsr (a0) -> interpret callee ($00FD bank-94 sentinel), resume brc172_1
     lda #brc172_1
     sta $54
@@ -4403,23 +4399,21 @@ Lc172_c1f8:
     lda $34
     clc
     adc #$1CBE
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9E
-    lda $34
-    clc
-    adc #$1CC0
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $20
-    lda $9E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
     sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
     ; INDIRECT-BRIDGE jsr (a0) -> interpret callee ($00FD bank-94 sentinel), resume brc172_2
     lda #brc172_2
     sta $54
