@@ -1,7 +1,19 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 29, 2026. Single source of "where we're at." Per-area detail
-lives in the linked docs.
+Last updated: June 29, 2026. Per-area detail lives in the linked docs.
+
+> **UPDATE 2026-06-30 — read [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) for the
+> authoritative current state.** Two things below are now CORRECTED:
+> - **rts-class table dispatch fires 0× in gameplay** (verified with SA-1 exec-hooks). The "rts
+>   class unified bit-exact / ce4t fires 63451×" claim was a corrupted `$07xx`-counter artifact;
+>   `ce4t` never runs. Hot handlers ($CE4/$13BE) are reached via the scheduler's rte→rts chain,
+>   which bypasses the table. Only the **jmp-state** and **coroutine (rte-resume)** classes fire.
+> - The bottleneck is the **coroutine scheduler**, not dispatch. This session: shipped `entry_c172`
+>   (first COROUTINE escape, table 12→13) and `lh_sched` (native scheduler disabled-task-skip via
+>   loop_hook) — interpreted gameplay cost dropped ~125/tick ($0740 region 246→121). The `$AC`
+>   frame-charge question (#73) is resolved (esc_ac_charge works; residual $1401 is vblank timing,
+>   not $AC). See the handoff §1 + the `scheduler-escape-loophook` / `coroutine-shells-low-value`
+>   / `rts-class-dispatch-nonfunctional` memories.
 
 > **The engine is named Cambium** — the graft-union layer where rootstock and scion fuse. It is
 > the whole graft system: the 68K **interpreter rootstock** (`src/interp.pasm`) + the transpiled

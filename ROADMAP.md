@@ -3,6 +3,16 @@
 Last updated: June 29, 2026. Companion to [STATUS.md](STATUS.md) (current state)
 and [METHODOLOGY.md](METHODOLOGY.md) (the reusable recipe).
 
+> **UPDATE 2026-06-30 — [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) is authoritative for the
+> latest plan.** Correction to the "Done + validated" claim below: the **rts convention class does
+> NOT fire in gameplay** (only jmp-state and coroutine/rte-resume do); the table is real but
+> rts-reached handlers bypass it. The bottleneck is the **coroutine scheduler**, not dispatch.
+> Progress this session (steps A–D): `entry_c172` shipped (first coroutine escape), `lh_sched`
+> shipped (native scheduler scan, −125 interp/tick), the `$AC`-charge question resolved, and the
+> transpiler gained `move.l → -(An)` (push-long). Next targets: the residual scheduler re-entries
+> ($0540/$0500), more coroutine bodies ($46DE/$11752 are transpiled + ready), and a fire-finder for
+> rare jmp-state handlers. See handoff §4.
+
 ## DIRECTIONAL UPDATE (June 29) — from hand-escaping to AOT
 
 The thesis below (*interpret-cold / transpile-hot*) is unchanged, but the **method**
