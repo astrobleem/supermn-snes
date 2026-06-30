@@ -1913,6 +1913,787 @@ brd07a_1:
     lda #$0000
     sta $42
     jml.l inext
+; --- ce4t ship-validation 64KB ---
+; --- transpiled from $000CE4 (57 instrs) by tools/transpile.py [bank1] ---
+entry_ce4t:
+    rep #$30
+    lda $000724
+    inc a
+    sta $000724
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsl.l push32_l
+    lda $24
+    sta $54
+    lda $26
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $18
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $14
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $10
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $0C
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $08
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $38
+    clc
+    adc #$0008
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $1C
+    lda $1C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1E
+    lda $34
+    clc
+    adc #$1CF6
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $34
+    clc
+    adc #$20F2
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda $34
+    clc
+    adc #$24EE
+    sta $28
+    lda $36
+    adc #$0000
+    sta $2A
+    lda $30
+    clc
+    adc $1C
+    sta $30
+    lda $32
+    adc $1E
+    sta $32
+    lda $2C
+    clc
+    adc $1C
+    sta $2C
+    lda $2E
+    adc $1E
+    sta $2E
+    lda $28
+    clc
+    adc $1C
+    sta $28
+    lda $2A
+    adc $1E
+    sta $2A
+    lda $38
+    clc
+    adc #$000A
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $18
+    lda $38
+    clc
+    adc #$0010
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $20
+    clc
+    adc #$0004
+    sta $24
+    lda $22
+    adc #$0000
+    sta $26
+    lda $38
+    clc
+    adc #$0014
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $1C
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda #$00EA
+    sta $04
+    lda $38
+    clc
+    adc #$000C
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+Lce4t_d24:
+    lda #$00FA
+    sta $14
+    lda $04
+    sec
+    sbc $14
+    bvs Lfce4t_1
+    bpl Lfce4t_2
+    bra Lfce4t_3
+Lfce4t_1:
+    bmi Lfce4t_2
+    bra Lfce4t_3
+Lfce4t_2:
+    jmp Lce4t_d34
+Lfce4t_3:
+    lda $04
+    sec
+    sbc #$FFFA
+    beq Lfce4t_5
+    bvs Lfce4t_4
+    bmi Lfce4t_5
+    bra Lfce4t_6
+Lfce4t_4:
+    bpl Lfce4t_5
+    bra Lfce4t_6
+Lfce4t_5:
+    jmp Lce4t_d34
+Lfce4t_6:
+    lda $04
+    sta $14
+Lce4t_d34:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $08
+    lda $38
+    clc
+    adc #$000E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $0C
+    lda $0C
+    clc
+    adc #$0000
+    sta $0C
+Lce4t_d40:
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $24
+    clc
+    adc #$0002
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    pla
+    sta $10
+    lda $10
+    bne Lfce4t_7
+    jmp Lce4t_d6c
+Lfce4t_7:
+    lda $0C
+    sec
+    sbc #$FFF0
+    beq Lfce4t_9
+    bvs Lfce4t_8
+    bmi Lfce4t_9
+    bra Lfce4t_10
+Lfce4t_8:
+    bpl Lfce4t_9
+    bra Lfce4t_10
+Lfce4t_9:
+    jmp Lce4t_d50
+Lfce4t_10:
+    lda $0C
+    sec
+    sbc #$0180
+    bvs Lfce4t_11
+    bmi Lfce4t_12
+    bra Lfce4t_13
+Lfce4t_11:
+    bpl Lfce4t_12
+    bra Lfce4t_13
+Lfce4t_12:
+    jmp Lce4t_d56
+Lfce4t_13:
+Lce4t_d50:
+    lda #$00FA
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    jmp Lce4t_d58
+Lce4t_d56:
+    lda $14
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+Lce4t_d58:
+    lda $10
+    clc
+    adc #$2000
+    sta $10
+    lda $10
+    pha
+    lda $28
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $28
+    clc
+    adc #$0002
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    lda $0C
+    sta $10
+    lda $10
+    and #$01FF
+    sta $10
+    lda $10
+    ora $18
+    sta $10
+    lda $10
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    bvs Lfce4t_14
+    bmi Lfce4t_15
+    bra Lfce4t_16
+Lfce4t_14:
+    bpl Lfce4t_15
+    bra Lfce4t_16
+Lfce4t_15:
+    jmp Lce4t_d8a
+Lfce4t_16:
+Lce4t_d6c:
+    lda $0C
+    clc
+    adc #$0010
+    sta $0C
+    lda $08
+    dec a
+    sta $08
+    cmp #$FFFF
+    beq Lfce4t_17
+    jmp Lce4t_d40
+Lfce4t_17:
+    lda $04
+    sec
+    sbc #$0010
+    sta $04
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lfce4t_18
+    jmp Lce4t_d24
+Lfce4t_18:
+    lda $1C
+    bpl Lfce4t_19
+    jmp Lce4t_d8a
+Lfce4t_19:
+    lda #$00FA
+    sta $00
+Lce4t_d84:
+    lda $00
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lfce4t_20
+    jmp Lce4t_d84
+Lfce4t_20:
+Lce4t_d8a:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $08
+    lda $08
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $0C
+    lda $0C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0E
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $10
+    lda $10
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $12
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $14
+    lda $14
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $16
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $18
+    lda $18
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $26
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2E
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $32
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $3A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================

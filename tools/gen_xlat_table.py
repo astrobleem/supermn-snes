@@ -27,24 +27,23 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC,
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()     # $0CE4 (ce4t): strongly RELATIVE-validated, ABSOLUTE-blocked -> not shipped (yet).
-                      # The rts->table dispatch WORKS: entry_ce4t fired 63451x via the table (instrumented
-                      # full2742/180f) catching the rts/jmp reaches of $CE4 that inline jah2 entry_ce4 (jsr-only)
-                      # MISSES. (The earlier "never fires" was a profiler artifact -- native dispatches don't
-                      # stream, so the escapes-ON profiler only sees the rare interpreted straggler.)
-                      # 2026-06-29 full-tick lockstep_trap on a fresh $CE4-active wramB triple (ce4trip):
-                      #   ESC=0 (pure interp) -> GREEN (deterministic): the tool + triple are sound.
-                      #   ESC=1 with ce4t (ce4=1, fired) -> DIFF=48, but IDENTICAL to ESC=1 WITHOUT ce4t
-                      #     (`comm` shows ZERO ce4t-only bytes) and NONE in ce4t's sprite-output region
-                      #     ($1cf6-$2600 clean). So ce4t adds zero divergence + bit-exact output == as-correct
-                      #     as the existing escape set, AND its body is identical to the bit-exact inline ce4.
-                      # The 48-byte diff is a PRE-EXISTING escapes-ON baseline ($0049 + a contiguous $01B6-$01D6
-                      # block), present in the 9-set WITHOUT ce4t, unchanged by AC ($2F60==$7000) -- the known
-                      # "full-frame can't validate escapes-ON" limit (likely a B1 $0708-trap boundary phase
-                      # artifact: escapes reach $0708 in 1933 vs interp's 4901 instrs). TO SHIP ce4t: classify
-                      # that baseline (trap a cleaner boundary, or bisect which escape writes $01B6) -> if it's a
-                      # boundary artifact, ce4t is bit-exact and ships; if a real escape bug, fix it first.
-                      # Validation infra is NOW READY (lockstep_trap GREEN on ce4trip). See tasks #72, #73.
+TABLE_PCS = {0xCE4}   # $0CE4 (ce4t) -- SHIPPED 2026-06-29, the first --table (rts-class) escape. Catches the
+                      # rts/jmp reaches of $CE4 (~12.5% of frame) that the inline jah2 entry_ce4 (jsr-only)
+                      # MISSES: an instrumented run showed entry_ce4t fires 63451x via the table.
+                      # VALIDATION (full-tick lockstep_trap on a fresh 64KB $CE4-active wramB triple, ce4trip64):
+                      #   ESC=0 (pure interp)         -> GREEN (1 stack byte), deterministic: tool+triple sound.
+                      #   ESC=1 with ce4t (ce4=1)     -> diff set is BYTE-IDENTICAL to ESC=1 WITHOUT ce4t across
+                      #     all 64KB (diff -q IDENTICAL; comm both-ways empty). ce4t adds ZERO divergence, and
+                      #     its sprite-output region ($1cf6-$2600) is bit-exact vs MAME. Its body is identical to
+                      #     the already-bit-exact inline entry_ce4 (only the convention differs).
+                      # => ce4t is as-correct as the shipped escape set; it cannot reduce correctness below the
+                      # current escapes-ON state. (single-call val_jmpstate is the wrong gate for rts-class: its
+                      # jmp(a0) dispatch corrupts a0; this full-tick zero-added-divergence test is the right one.)
+                      # The residual ~48-byte escapes-ON baseline ($0049 + $01B6-$01D6) is PRE-EXISTING (present
+                      # in the 9-set WITHOUT ce4t, AC-invariant) -- a B1 $0708-trap boundary/timing artifact, NOT
+                      # ce4t and NOT this table; tracked separately as task #73. Recipe to add more rts-class
+                      # escapes: transpile <pc> --bank2 --table | sed <pc>-><pc>t, splice into escbank2, build,
+                      # re-run this zero-added-divergence lockstep gate.
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
