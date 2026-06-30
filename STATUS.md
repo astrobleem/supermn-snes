@@ -15,6 +15,14 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 >   not $AC). See the handoff §1 + the `scheduler-escape-loophook` / `coroutine-shells-low-value`
 >   / `rts-class-dispatch-nonfunctional` memories.
 
+> **UPDATE 2026-06-30 (pt.3):** the scheduler is now understood as a coroutine CONTEXT-SWITCHER —
+> `lh_sched` only collapsed the `$074C` scan; the switch-IN/OUT machinery is **~30% of the tick** and
+> is the biggest collapsible lever (`tools/sched_trace.py`). A native switch-OUT was built — **body
+> PROVEN bit-exact** but a ~44-byte integration divergence is unpinned, so it's **reverted (build is
+> GREEN)**. STRATEGIC: the SA-1 cycle meter shows we're **24x over the 60fps budget** and **codegen
+> (not coverage) is the wall** — see handoff §0. New single-yield differential toolchain + memories
+> `scheduler-context-switch-lever` / `cycle-budget-realtime-gap`.
+
 > **The engine is named Cambium** — the graft-union layer where rootstock and scion fuse. It is
 > the whole graft system: the 68K **interpreter rootstock** (`src/interp.pasm`) + the transpiled
 > native **scions** (escbank/escbank2, `tools/transpile.py`) + **the global AOT dispatch table that

@@ -1,215 +1,251 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-06-30. **Read this first** in a fresh session, then act. It captures the
-current state, the reliable mental model (several older notes were WRONG — corrected here), the
-tooling, the validated escape-deployment recipe, and prioritized next steps.
+Last updated: 2026-06-30 (pt.3). **Read this first** in a fresh session, then act. It captures the
+current state, the reliable mental model, the strategic reality (read §0 before deciding what to do),
+the tooling, the validated escape recipes, and the prioritized next steps.
 
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
-Repo: clean at `507d692`, branch `boot-scheduler-progress`. AOT table: **13 escapes**
-(c172 = first COROUTINE escape, shipped this session; STEP A resolved).
-Build: `bash tools/build_interp.sh` (→ `build/interp.sfc`).
+Repo: **clean at `58b20cb`**, branch `boot-scheduler-progress`. The scheduler switch-OUT escape from
+this session is **reverted (not in the build)** — the build is GREEN. AOT table: **15 escapes**
+(c172 + the $295A/$29B6 renderers, last session). Build: `bash tools/build_interp.sh` → `build/interp.sfc`.
 
-> NOTE: there is older planning text (STATUS.md, ROADMAP.md, and the prior version of this file)
-> from the "bulk-transpile / 8-escape" phase. The strategic picture has since changed — trust THIS
-> doc and §1 over those.
+> Older planning text in STATUS.md / ROADMAP.md predates the strategic picture below. Trust THIS doc.
 
 ---
 
-## 1. The reliable mental model (corrected this session — trust this)
+## 0. STRATEGIC REALITY — read before choosing what to do (the most important section)
+
+We have a precise SA-1 cycle meter now (`get_cpu_state('Sa1')['cycleCount']`). It reframed everything:
+
+- 60fps budget = **~179,000 SA-1 cyc/frame**. One GAME_TICK must fit one frame.
+- Current state (ce4trip64, all escapes on) = **~4.34M cyc/tick = 24× over budget.**
+- **Escaping MORE handlers alone plateaus at ~5–10× over budget — coverage is NOT the lever.**
+  ~86% of every native escape's cycles is OVERHEAD (dispatch + bridge round-trips + generic-helper
+  codegen), only ~14% is real work. Native escapes amortize to ~429 cyc/68K-instr, only ~4.1× faster
+  than interpretation.
+- **The wall is native-escape codegen, not the interpreter and not the number of handlers escaped.**
+  Realtime needs native escapes **~5.7× cheaper**, via: (a) inline work-RAM EA access instead of the
+  generic `rdw_ea_l`/`writeword_l`/`readbyte` helpers (EA-specialization — STARTED, see §6.A), (b)
+  killing bridge round-trips by escaping the CALLEES so they run inline (PROVEN: c172 = 4.85× by
+  escaping its $295A/$29B6 renderers), (c) bigger amortizing escapes.
+
+**Consequence for planning:** the per-escape codegen win (~2× each, measured) must COMPOUND. A single
+new handler escape — even the whole scheduler (~30% of the tick) — moves 24× → ~17×. The decisive
+work is the transpiler codegen rewrite. See memory [[cycle-budget-realtime-gap]] (the authoritative
+analysis) before committing a session to "escape more functions."
+
+---
+
+## 1. The reliable mental model (dispatch families — verified with SA-1 exec-hooks)
 
 The interpreter (`src/interp.pasm`, 65816 on SA-1) runs Superman 68K code. Per GAME_TICK (`$3A92`)
-it executes **~1900 genuinely-interpreted 68K instructions/tick**. Realtime needs that ~40
-(escape ~99% of per-tick work to native). Each native escape = a transpiled 65816 reimplementation
-of a hot 68K function, dispatched so the interp jumps to it instead of interpreting.
+it executes **~1700–1900 genuinely-interpreted 68K instructions/tick**.
 
-**Dispatch families that ACTUALLY FIRE in gameplay (verified with SA-1 exec-hooks):**
-- **jah2 (jsr-class):** `jsr.l`/`jsr (An)`/`bsr` → `jsrabs_hook2` cmp-chain (interp.pasm:16970).
-  Already covers the clean leaves ($412, $CE4, $111A, $295A, $29B6, $25110, …).
-- **jmp-state (the AOT xlat table):** `jmp (a0)` → `op_jmp_idx` → `ojmp_hook` ($00:D1B3) →
-  `xlat_dispatch` ($94:F900), data in `src/xlat_table.bin` from `tools/gen_xlat_table.py`. The
-  PC→native table. Verified firing: d0d0, d5c4, d718, d3f6, etc.
+**Dispatch families that ACTUALLY FIRE in gameplay (verified):**
+- **jah2 (jsr-class):** `jsr.l`/`jsr (An)`/`bsr` → `jsrabs_hook` cmp-chain. Covers clean leaves.
+- **jmp-state (AOT xlat table):** `jmp (a0)` → `op_jmp_idx` → `ojmp_hook` ($00:D1B3) →
+  `xlat_dispatch` ($94:F900). PC→native table from `tools/gen_xlat_table.py`. Firing: d0d0, d5c4, etc.
+- **coroutine (rte-resume):** `rte` → `ors_rte` ($00:D184) → table. c172 ships this way.
+- **loop_hook (per-fetch):** gated by `$072E` (set in gameplay), fires on every fetched `$40`.
+  Collapses the `$0818` idle spin AND `lh_sched` (the `$074C` scheduler scan). This is how you escape
+  bra/beq-reached hot PCs that the jsr/jmp/rte families can't catch.
 
-**What is PROVEN NOT to work (reliable exec-hook evidence, this session):**
-- **rts-class table dispatch fires 0× in gameplay.** `ce4t` and `entry_13bet` NEVER fire. The hot
-  handlers ($CE4, $13BE, …) are reached as **rts returns inside the coroutine scheduler's
-  `rte→task→rts→next` chain**, which bypasses `op_rts_norm→ojmp_hook→xlat`. You CANNOT grind
-  rts-reached "leaf" escapes into the table — they will not fire. `ce4t` is dead weight in the
-  table; its old "fires 63451×" claim was a **corrupted `$07xx` memory-counter artifact**.
-
-**The dominant interpreted cost = the coroutine SCHEDULER + the coroutine/handler chains:**
-- `$0500-$07C0` scheduler machinery ≈ **470/tick**. The 16-task cooperative dispatcher is
-  `$074C-$07E8`: per task → check enable bit (`btst d0,$2(a5)`), check flags, set a7=task SP,
-  `rte` to resume. `$0740` region alone = 246/tick (the disabled-task-skip iteration).
-- `$00C1xx` multi-resume coroutine ≈ **227/tick** (c172 = `$C172`).
-- Object handlers ($CB40, $CE80, $CD40…) and bank-`$01` context-switch code ($01C980: `ori #$700,sr`
-  + `lea a7` + `jsr (a6)` = an SP-swapping context switch).
-
-**METHODOLOGY RULE (hard-won):** NEVER trust in-memory diag counters at `$07xx` — the game
-overwrites them; they give garbage (read "xlat 63524×" when truth was 73×; "clean13be 56493" was
-noise). ALWAYS measure SA-1 execution with **exec-hooks** (`HOOKTEST`, §2).
+**PROVEN NOT to work:** **rts-class table dispatch fires 0× in gameplay.** `$CE4`/`$13BE`-class
+handlers are reached as rts returns inside the scheduler's `rte→task→rts→next` chain, which bypasses
+`op_rts_norm→ojmp_hook→xlat`. Don't grind rts-reached leaves into the table. (memory
+[[rts-class-dispatch-nonfunctional]].)
 
 ---
 
-## 2. Tooling (all in `tools/lockstep_trap.py`, env-var driven)
+## 2. THE BIGGEST LEVER FOUND THIS SESSION — the coroutine scheduler is ~30% of the tick
 
-Run: `[ENV=…] python3 tools/lockstep_trap.py <triple-dir> 2F60 <ESC>`
-Triples (MAME-ground-truth GAME_TICK captures) in `/tmp/supermn-scratch/`:
-`ce4trip64`, `trip2500`, `trip4000`, `trip5000`. ESC=1 = escapes on; ESC=0 = pure interp.
-Baseline: ESC=1 on `ce4trip64` = **DIFF=48** (a pre-existing `$0708`-trap/$AC timing artifact);
-ESC=0 = GREEN. A new escape is "clean" if DIFF stays 48 AND the diff *set* is byte-identical to
-baseline (zero added/removed bytes).
+`tools/sched_trace.py` (ground-truth: inject ce4trip64, stream every interpreted PC in `$0500-$07FF`,
+disassemble the exact executed PCs) settled what the scheduler actually is:
 
-- **`HOOKTEST=<hex,hex,…>`** — arm SA-1 exec-hooks; prints `hook_diag matchedEventsEmitted` = the
-  TRUE fire count. The reliable fire test. (Escape SA-1 addr: `src/escbank2.sym` `00:XXXX entry_foo`
-  → `$94XXXX`.)
-- **`GPPROF=1`** — dump the genuinely-interpreted (ilog) stream; top 64B regions = real gameplay
-  interpreted cost. (GPPROF clobbers work-RAM $8000+/$C000+ → its wramB DIFF is meaningless in this
-  mode; use only for the stream.)
-- **`PRED=<hex>`** — stream predecessors of a PC (how it's reached).
-- **`STREAMWIN=<hex>` [`STREAMWIN_N=20`]** — ordered stream window before the first hit (traces the
-  true call chain; this revealed the scheduler→rts→handler chain).
-- **`ENTRYCLASS=1`** — tally function entries by dispatch kind (jsr/bsr/rts/jmp/rte). Use to tell
-  jmp-reached (catchable) from rts-reached (NOT catchable).
-- **`B1PC=<hex>` + `REGDUMP=1`** — trap at a PC; dump reg file + `$AC`/`$4A`/vbl (for `$AC` pacing;
-  trap at a yield e.g. `B1PC=C170`).
-- **`FULLDIFF=1`** — list all diff bytes (for symmetric-diff zero-added checks).
+It is a **cooperative coroutine CONTEXT-SWITCHER**, and its cost is pure mechanical plumbing — NOT
+task bodies, NOT bridges. Per tick: ~22 switch-INs + ~21 switch-OUTs ≈ **~740 genuinely-interpreted
+instrs ≈ ~1.29M SA-1 cyc ≈ ~30% of the tick.** The exact code (capstone of the executed PCs):
 
----
+```
+SWITCH-IN  (×22/tick, ALL take this path; the $077A "dispatch" fall-through fires 0×):
+  $074C-$0772  select task: a3=a5+$4E+idx*4 (descriptor), $4a(a5)=a3, d2=(a3), enable recheck
+  $0774 btst #$1e,d2 / $0778 bne $796     bit30 = task READY
+  $079E movea.l (a4),a7                    load the task's saved SP   (context switch IN)
+  $07A4 cmpa.l $4(a0,d1),a7                stack-bounds check
+  $07E4 movem.l (a7)+,d0-d7/a0-a6          restore 15 task registers from its stack
+  $07E8 rte                                pop PC+SR -> RESUME the task body
+SWITCH-OUT ($0532 yield trap, ×21/tick) is the exact mirror:
+  $0532 ori #$700,sr / $0536 movem.l d0-a6,-(a7) (save) / $053E save SP / mark descriptor / bra $74c
+```
 
-## 3. VALIDATED escape recipe (jmp-state class) — this WORKS; shipped d718 + d3f6 this way
-
-1. `python3 tools/transpile.py <pc> --bank2 --coroutine` (jmp-state = `--coroutine` convention).
-   `Unsupported` → not tractable yet (see §4 STEP D transpiler hardening).
-2. Splice the body into `src/escbank2.pasm` before `; >>> ESCBANK2_BODIES_END`.
-3. Add the PC to `JMP_STATE_PCS` in `tools/gen_xlat_table.py`.
-4. `bash tools/build_interp.sh`.
-5. Validate (the gate, all on a triple where the handler is jmp-reached — check `ENTRYCLASS=1`):
-   - `HOOKTEST=<entry_addr> … 2F60 1` → matchedEvents > 0 (it FIRES); instr drops.
-   - `FULLDIFF=1 … 2F60 1` → DIFF=48, symmetric diff vs baseline empty.
-   - `… 2F60 0` → GREEN.
-6. Commit only if it FIRES AND zero-added AND GREEN. rts-reached handlers won't fire — don't deploy.
+`lh_sched` (already shipped, last session) collapses only the `$074C` disabled-task scan. The
+**switch-in ($075C-$07E8) + switch-out ($0532-$0550) machinery is the residual ~30% and is the
+single biggest collapsible lever** — and it's mechanical (SP/reg save-restore + rte), so a faithful
+native reimplementation has low bit-exactness risk. Both ends are loop_hook-catchable.
+(memory [[scheduler-context-switch-lever]].)
 
 ---
 
-## 4. Next steps, prioritized
+## 3. STATUS of the scheduler switch-OUT escape — PARKED (body proven, integration unpinned)
 
-### STEP A — `$AC` exact-charge / COROUTINE class. **RESOLVED 2026-06-30 (task #73 closed). c172 SHIPPED.**
-Resolution (commit 507d692): the "charge=0 and charge=35 both give DIFF=49" anomaly is settled.
-- `esc_ac_charge` WORKS (measured: `--accharge` drains `$AC` by exactly 231 at `$AC@C170`).
-- The exact c172 charge = **35** (isolated: c172-interpreted reaches `$C170` in 562 interp-steps
-  vs 527 escaped). Shipped as ONE static `lda #$0023 / jsr esc_ac_charge` at entry; per-block
-  `--accharge` OVER-charges to 231 (bridged loop charges per-iteration).
-- The residual `$F01401` byte is NOT `$AC`-correctable: the `$0708` lockstep trap is
-  HARDWARE-VBLANK-driven, proven `$AC`-INVARIANT (DIFF=48 across injected `$AC`=2F60/2600/3400).
-  c172's body never writes `$1401` (targets a5+`$2A3x` / a4 `$0004`+8 / a7 `$170A`+0xE); the
-  01-vs-04 is other code shifted by the escape running faster (1878 vs 1913 steps to vblank) — a
-  sub-realtime artifact, same class as the 48-byte baseline. Bounded across 3 triples (49/51/51).
-- RECIPE for the next coroutine's exact charge: toggle `CORO_PCS` in `gen_xlat_table.py`, measure
-  `$AC@<yield>` via `REGDUMP=1 B1PC=<yield>` both ESC=1; the delta is the charge. Splice the body,
-  add a single static charge at entry, validate (FIRES via HOOKTEST + ESC=0 GREEN + bounded diff).
+This session built a native switch-OUT (`entry_swo`, escbank slot 19, bank-$00 trampoline on `$0532`
+in the $FFCA gap, returns `jml lh_sched`). Outcome:
 
-Next coroutine bodies to grind (rte-reached, same path): `$46DE`, `$7828`, `$11752`, the rest of
-the `$00C1xx` cluster. NOTE (from [[coroutine-shells-low-value]]): coroutine shells save only
-~35/tick each — the bigger lever is escaping their bridge CALLEES ($29B6/$295A already escaped).
+- **The body is PROVEN bit-exact** vs the real `$0532-$0550` — `tools/yield_multi.py`: 8/8 real MAME
+  yields, my-asm == 68K-semantics byte-for-byte (a7 $F00200-$F015F8, varied resume-PCs).
+- **But ESC=0 lockstep = DIFF~44** (baseline GREEN) — a real but unpinned **integration** divergence
+  (enable mask $F00001/2 + sprite coords ±1 = ONE task dispatched differently). RULED OUT: body
+  (bit-exact), CCR flags (added N=1/Z=0/V=0/C=0 → 46→47, no help), `$AC` pacing (flat 44-46 across a
+  sweep). The escape was **reverted to GREEN**; the working code + notes are in
+  `docs/handoff/scheduler_switchout_wip.md`.
 
-c172 facts: body is PROVEN bit-exact (regs + work-RAM identical at the `$C170` yield, ESC=1 vs 0).
-Native c172 saves ~35 interp-steps vs interp (others held constant). `--accharge` OVER-charges
-(~231 vs needed ~35) because bridge callees run interpreted in BOTH paths.
+**Why it isn't cracked yet — and the dead end we closed:** debugging needs the interp state right
+after ONE switch-out, escape-vs-committed. Every INJECTION-based path failed:
+- `capture_at_pc` (MAME) has prefetch-skewed SP for stack-frame handlers like `$0532` (memory
+  [[mame-capture-precision]]).
+- `tools/yield_faithful.py` PHASE A captures a clean S0 from the **interp's own** run (no skew) — but
+  PHASE B proves that **re-injecting a mid-tick interp state does NOT reproduce execution** (committed
+  build → corrupt $5E:0036; escape → stuck $0532). Mid-tick state isn't captured by IRAM+workRAM
+  alone: the SA-1 native stack, the `$41` video shadow, `$0700+` control, and SA-1 HW/cycle state all
+  matter. **Single-yield diff via injection is a DEAD END for this handler.**
 
-**Experiment / decision tree (resolve the anomaly first):**
-1. Deploy c172: `transpile c172 --bank2 --coroutine`, splice escbank2, add `CORO_PCS={0xC172}` into
-   gen_xlat_table's `ALLOWED_PCS`, build. It dispatches via op_rte→ors_rte_x→table and FIRES
-   (HOOKTEST on its entry addr).
-2. **THE ANOMALY to resolve:** this session, charge=0 AND charge=35 both gave DIFF=49. Either (a)
-   `esc_ac_charge` (src/escbank2.pasm) isn't actually consuming `$AC`, or (b) `$1401` isn't
-   `$AC`-determined. Verify (a): `REGDUMP=1 B1PC=C170 … 2F60 1` with charge=0 vs charge=N — does
-   `$AC@C170` change by N? If not, FIX `esc_ac_charge` first.
-3. If the charge works: find the exact value = (`$AC@C170` for c172-OFF) − (c172-ON-no-charge),
-   both ESC=1, others constant. Static-charge that delta; DIFF should return to 48.
-4. If `$1401` still won't clear with the exact charge → it's not `$AC`. Use `add_write_hook` on Sa1
-   `$401401` (BYTE-granular matchValue, not word) or `STREAMWIN` around the write to find the writer.
-5. Alternative framing: confirm via multi-tick lockstep (`tools/lockstep.py`) whether the divergence
-   stays BOUNDED across several GAME_TICKs (→ pure `$0708`-trap/$AC measurement artifact, not a
-   gameplay bug; the 48-byte baseline is already this class) — if so, it's defensible to relax the
-   single-frame zero-added gate for body-bit-exact coroutine escapes.
+**The one clean route left to crack it:** INTERP-SIDE INSTRUMENTATION — a debug build whose `$0710`
+freeze RE-FIRES (single-step-on-release, a small ZERO-SHIFT `df_gap` change so it doesn't `stz $0710`
+when a debug flag is set, plus a one-instruction-advance on release). Then diff escape-vs-committed
+**in place** across consecutive `$0532` of ONE faithful tick — no injection, no skew, no df_gap-clear
+trap. Invasive (interp surgery) but the only thing that escapes all three blockers at once.
 
-Once `$AC` is solved, c172 ships (first coroutine escape) and the path is validated end-to-end →
-grind the other rte-reached coroutine bodies (`$46DE`, `$7828`, `$11752`, the `$00C1xx` cluster).
+**Recommendation:** before sinking a session into cracking this, weigh §0 — even fully working, the
+switch-out is ~5% of the tick, and the switch-IN (~the other ~half of the ~30%) needs the same fight.
+The body is banked as proven-correct. Either (a) build the re-firing-freeze debug build and finish
+it, or (b) park it and spend the session on the codegen lever (§0). My read: (b) is higher ROI.
 
-### STEP B — More jmp-state escapes (task #79). INVESTIGATED 2026-06-30: surface is SPARSE, LOW ROI.
-Finding: beyond the shipped 11, the jmp-state surface is largely exhausted. ENTRYCLASS across
-ce4trip64/trip2500/trip4000/trip5000/trip1000/trip1040 shows the only jmp-reached targets are rts
-TRAMPOLINES ($CF8A/$D6D8/$D374 = bare `rts`, escaping them is a no-op) plus the already-shipped
-handlers. $CEB6 and $D522 ARE catchable in principle — both are jmp-reached from `$00D52C: jmp (a0)`
-(the object-dispatch loop, op_jmp_idx-routed) — and transpile+deploy cleanly. BUT their reaches are
-RARE and scene-specific (x1 in one frame's GPPROF stream), so they could NOT be validated FIRING:
-HOOKTEST=0 on trip1000 (732-instr window) AND trip1040 (1181-instr window, ce4t fired 3x). Per the
-§3 gate ("commit only if it FIRES"), they were built+reverted, not shipped. Each is ~10 interp/tick
-anyway. To actually land these you need a true FIRE-FINDER: trace `$00D52C` jmp(a0) targets across
-the MAME playback (`/snap/bin/mame` + vplay.inp), find a frame where target==$CEB6/$D522 with a full
-GAME_TICK->vblank window, capture that triple, then run §3. Deferred as low-value vs STEP C.
-
-### STEP C — Escape the SCHEDULER (task #75). DONE 2026-06-30 (commit 1aaafb2). lh_sched shipped.
-Hand-wrote `lh_sched` (interp.pasm) for the disabled-task-skip loop `$074C-$0772`. Dispatch: NOT a
-new hook — `loop_hook` is ALREADY per-fetch in gameplay ($072E set in notest, it's what collapses
-$0818), and fires on `$40==$074C`. Routed via `lh_gen: jmp lh_sched_pre` (size-neutral swap of
-`jmp gm_memclr` — no loop_hook region growth, which is critical: the region is packed against
-.org $F602). lh_sched scans current+1..15, skips enable-disabled tasks natively, hands the first
-ENABLED task to interp at `$075C` (deeper $0774+ checks; a fail re-fetches $074C -> re-fires) or
-`$07EA` at 16. Sets a4=a5+4 (for $075C's `move.w d0,(a4)`) and d0=found idx. BE reads via lhs_rdbe.
-Placement: lh_sched_pre+main (79B) in the il_skip->$FA00 gap; lhs_rdbe (15B) in the $D1BF gap.
-Behaviorally exact -> runs UNGATED (like $0818 collapse) so ESC=0 catches bugs directly.
-RESULT: ESC=0 GREEN on all 4 triples; ESC=1 DIFF unchanged (zero added); interpreted 1842->1717
-(-125/tick), $0740 region 246->121 (-51%). The residual 121 = ENABLED-task setups ($075C+ real
-work) + the $0540/$0500 trap-handler re-entries (66+44/tick) -- the next scheduler targets.
-NOTE: bank-$00 space is the binding constraint (biggest gaps: 86B@$F9AA, 46B@$D1BF). New bank-$00
-loop_hook escapes must fit those or split; loop_hook itself can't grow (packed vs .org $F602).
-
-### STEP D — Transpiler hardening (as it blocks real handlers).
-Added (commit 7d09bc9): `move.l <long> -> -(An)` (push long) in store_long_from — unblocked $46DE
-(coroutine sibling). $11752 also transpiles clean (31 instrs). Both are READY coroutine escapes
-pending firing-validation (need an rte-reached triple + the STEP A charge cycle). Next limits you'll
-hit: `move.l feeding branch`, `(An)+ dst feeding branch`, and linear-decode stall on
-no-`rts`/external-jmp functions (give the decoder an explicit end bound for loop/coroutine bodies).
+Tools built this session (all committed, reusable): `sched_trace.py` (scheduler ground truth),
+`yield_diff.py`/`yield_sim.py`/`yield_multi.py` (MAME ground-truth + body bit-exactness proof),
+`yield_diff2.py` (full-interp-state diff), `yield_faithful.py` (faithful interp-side capture).
 
 ---
 
-## 5. Tasks & memory
-Tasks: #67 (~99% coverage, overarching), #70 (AOT table unify), #72 (ce4t never fires), #73 (`$AC`
-exact-charge — STEP A, **CLOSED 2026-06-30: c172 shipped, commit 507d692**), #74 (closed, rts-class
-misread), **#75 (scheduler — STEP C)**, #78 (closed, coroutine-dispatch resolution), **#79
-(jmp-state/fire-finder — STEP B)**.
-Memory: `rts-class-dispatch-nonfunctional.md` (corrected model + methodology lesson),
-`coroutine-shells-low-value.md`, `escape-bank.md`, `aot-dispatch-table.md`, `transpiler-tool.md`.
+## 4. Tooling
 
-## 6. Don't repeat these dead ends
-- Don't grind rts-reached "leaf" escapes into the table — they can't fire (scheduler-dispatched).
-- Don't trust `$07xx` memory counters — use HOOKTEST exec-hooks.
-- Don't expect big/coroutine escapes to be zero-added until `$AC` is solved (STEP A).
-- ce4t is dead weight (never fires); don't "re-validate" it with single-frame zero-added (passes
-  only because it never runs).
+**Cycle meter & per-escape harnesses (the §0 work uses these):**
+- `tools/lockstep_trap.py … 2F60 <ESC>` with `CYCLES=1 B1PC=0818` → active-compute SA-1 cyc/tick.
+  ~16% (~700K) overshoot noise from runf chunking; magnitude robust. load_state TRANSPLANTS
+  cycleCount → measure deltas WITHIN one continuous run only.
+- `tools/cycle_isolate.py` — PRECISE per-escape cyc (driver in work RAM + `$0738=$A5A5` interp
+  redirect; 7/8 within 5%). `DRIVER_JMP` mode for jmp-state/coroutine escapes.
+- `tools/cycle_live.py` — LIVE-CONTEXT per-escape cyc (inject full triple, run until the escape
+  naturally dispatches via SA-1 entry hook). For state-dependent escapes.
+- `tools/cycle_rate.py` / `cycle_rate_gp.py` / `probe_*` — interp & native cyc/instr decomposition.
 
-**Recommended first action:** STEP A is DONE. Next: STEP B (fire-finder for more jmp-state escapes,
-low-risk additive) and/or grind the next coroutine bodies via the STEP A recipe. Highest VALUE is
-still STEP C (the ~246/tick scheduler), but it's the hardest.
+**Lockstep / profiling (`tools/lockstep_trap.py`, env-driven):** `HOOKTEST=<hex,…>` (TRUE fire count
+via SA-1 exec-hooks — the reliable test; bank-$00 addrs only, NOT bank-$92/$94), `GPPROF=1`
+(genuinely-interpreted stream), `PRED`/`STREAMWIN`/`ENTRYCLASS` (reach classification),
+`B1PC`+`REGDUMP`, `FULLDIFF`. Baseline: ce4trip64 ESC=1 = DIFF=48 (pre-existing $0708-trap/$AC
+artifact), ESC=0 = GREEN. Triples in `/tmp/supermn-scratch/`: ce4trip64, trip2500/4000/5000.
+
+**Single-yield differential (§3):** `sched_trace.py`, `yield_diff.py` (+`yield_sim`/`yield_multi`),
+`yield_diff2.py`, `yield_faithful.py`. Environment gotchas now in memory: **never `pkill -f mame`**
+(matches the shell's own "mame-trace" cmdline → silent self-kill — use `pkill -x mame`); MAME
+`HERE=Path(..).resolve()` or rompath doubles → code 2; MAME needs `SDL_VIDEODRIVER=dummy`; MAME runs
+need `dangerouslyDisableSandbox` + long Bash timeouts.
 
 ---
 
-## Session deltas (2026-06-30 pt.2, → `7d09bc9`) — STEPS A-D
-- **STEP A (#73 CLOSED):** shipped `entry_c172` (commit 507d692, table 12->13), the FIRST coroutine
-  escape. Resolved the $AC-charge anomaly: esc_ac_charge works; exact charge=35 (static); the
-  residual $1401 is hardware-vblank timing, $AC-invariant (not chargeable). Recipe + memory updated.
-- **STEP B (#79):** investigated — jmp-state surface beyond the shipped 11 is sparse; $CEB6/$D522
-  catchable (from $D52C jmp(a0)) but reaches too rare to firing-validate; not shipped. Low ROI.
-- **STEP C (#75 CLOSED):** shipped `lh_sched` (commit 1aaafb2) — native disabled-task-skip for the
-  $074C scheduler scan via loop_hook. ESC=0 GREEN all triples; interpreted 1842->1717 (-125/tick),
-  $0740 region 246->121. New memory: [[scheduler-escape-loophook]].
-- **STEP D:** transpile.py `move.l -> -(An)` push-long (commit 7d09bc9), unblocks $46DE.
+## 5. VALIDATED escape recipes (these WORK — shipped this way)
 
-## Prior session deltas (→ `59f4b15`)
-- Table 10 → 12: shipped `entry_d718`, `entry_d3f6` (jmp-state, validated firing, zero-added, GREEN).
-- transpile.py: `movea.l (An),An` aliasing fix; `--table` rts `$42` bank-mask; `move-to-mem feeding
-  branch` feature.
-- lockstep_trap.py: HOOKTEST / GPPROF / PRED / STREAMWIN / ENTRYCLASS (reliable tooling).
-- Corrected model: rts-class dispatch is non-functional in gameplay; ce4t never fires (false prior
-  milestone); the bottleneck is the coroutine scheduler. Closed dead-end tasks #74; reopened #72.
+**jmp-state / coroutine class:** `transpile.py <pc> --bank2 --coroutine` → splice into
+`src/escbank2.pasm` → add PC to `JMP_STATE_PCS`/`CORO_PCS` in `gen_xlat_table.py` → build → gate:
+HOOKTEST (FIRES) + FULLDIFF (DIFF=48, zero added) + ESC=0 GREEN. Commit only if FIRES & zero-added &
+GREEN.
+
+**Bridge-callee escape (the §0 lever — PROVEN 4.85×):** deploy a hot bridge callee as a `--table`
+variant + add to `TABLE_PCS`; every bank-2 escape that bridges to it then dispatches it natively
+(routes the jsr(a0) indirect bridge through `ojmp_hook`). This is how c172 went 463K→95K cyc.
+
+**loop_hook / bra-reached class (hand-written, like lh_sched):** add a cmp/beq arm in `loop_hook`'s
+lh_gen chain (or a zero-shift trampoline in a bank-$00 gap), body in a bank-$00 gap (binding
+constraint: biggest gaps ~86B@$F9AA, 46B@$D1BF, 22B@$FFCA; loop_hook itself can't grow — packed vs
+.org $F602) OR an escbank body reached by `jml $928000+slot*3`. Validate ESC=0 GREEN (runs ungated).
+
+**Escbank deploy:** escbank ($92, file $290000) + escbank2 ($94, file $2A0000). Add a jmptab slot
+(`jmp entry_X`), the body, and a bank-$00 dispatcher. `gen_escbank_syms.py` NEEDED[] lists bank-$00
+symbols an escape may reference. Bank-$00 code changes must be ZERO-SHIFT (else regen b0_native via
+`tools/dump_b0_native.py`).
+
+---
+
+## 6. Prioritized next steps (pick ONE strategic track)
+
+**TRACK A — the codegen lever (HIGHEST ROI per §0).** Continue the transpiler EA-specialization
+(commit 38d5388 started it: `is_workram(an)` + `--workram` → inline `lda $400000,x` instead of generic
+helpers). Pick a read+work-RAM-write escape, redeploy through `--workram`, measure with
+`cycle_isolate.py` (expect ~2×). Then escape more bridge CALLEES (c172-style). Compound the 2× wins.
+This is the only track that closes the 24× realtime gap. (memory [[cycle-budget-realtime-gap]].)
+
+**TRACK B — finish the scheduler switch-OUT** (§3). Build the re-firing-freeze debug build, diff
+escape-vs-committed in place, pin the integration bug, ship switch-OUT, then do switch-IN the same way.
+Biggest single coverage win (~30%) but doesn't close the gap alone, and the body is already banked.
+
+**TRACK C — more individual escapes** (jmp-state/coroutine/bridge). Lowest strategic value per §0 but
+lowest risk; good if you want incremental DIFF/coverage progress. Next coroutine bodies: `$46DE`,
+`$7828`, `$11752`, the `$00C1xx` cluster (rte-reached; STEP-A $AC-charge recipe in git history).
+
+**Cross-cutting tasks (open):** #8 realtime soak harness (free-run + fps + divergence detection),
+#9 cycle-weighted reach-classified escape ranker (pick targets by CYCLES not instr-count),
+#10 bank-$00 trampoline so loop_hook bodies can live in escbank2, #16 scheduler switch-IN. (See §8.)
+
+---
+
+## 7. Methodology rules & dead ends (hard-won — don't relearn these)
+- Measure SA-1 execution with **HOOKTEST exec-hooks**, never `$07xx` memory counters (game overwrites
+  them — read "63524×" when truth was 73×). SA-1 hooks fire on bank-$00 addrs only AND only while the
+  interp is RUNNING (idle b0_native/jh_spin doesn't fetch → no fire).
+- **Pick targets by CYCLES, not instruction count** (§0): native overhead dominates; a high-instr
+  handler can be cheaper to leave interpreted than a bridged escape.
+- Don't grind rts-reached leaves into the table (fire 0×).
+- Don't inject a MID-TICK interp state and expect faithful execution (§3 dead end) — SA-1 stack/$41
+  shadow/$0700+/HW state aren't reproduced.
+- `capture_at_pc` SP is prefetch-skewed for stack-frame handlers; the inputs (a5, descriptor, slot)
+  are reliable but SP/[SP] aren't.
+- Bank-$00 is the binding space constraint; new bank-$00 code must be zero-shift or regen b0_native.
+- The 48-byte ce4trip64 ESC=1 baseline DIFF is a $0708-trap/$AC sub-realtime artifact, not a bug.
+
+---
+
+## 8. Open task ledger (status at session end)
+
+| # | task | status / note |
+|---|------|---------------|
+| #5 | Cycle meter SA-1 cyc/tick | **DONE** — `lockstep_trap CYCLES=1 B1PC=0818`; the §0 instrument. |
+| #7 | loop_hook per-fetch tax | **DONE** — below single-tick noise; folded into the ~1880 interp cyc. |
+| #8 | Realtime soak harness | **OPEN** — free-run + fps + divergence/crash detect. Not started. Useful once an escape set is realtime-plausible; low priority now (we're 24× off). |
+| #9 | Cycle-weighted reach-classified ranker | **OPEN** — pick targets by CYCLES not instr-count. Valuable for TRACK A/C target selection; not started. |
+| #10 | Bank-$00 trampoline → escbank2 loop_hook bodies | **OPEN** — partially exercised this session (the $0532 trampoline → escbank slot 19 pattern WORKS and is documented in §5/handoff). Generalizing it into the toolchain is unfinished. |
+| #11 | Bridge round-trip cost | **DONE** — sized the callee-inlining win; led to the c172 4.85×. |
+| #12 | Raw native rate (bridgeless) | **DONE** — ~665 cyc/move.l = helper-bound, no cheap floor (memory). |
+| #13 | Transpiler EA-specialization | **DONE (v1)** — `--workram` inline path built (commit 38d5388). TRACK A continues it (more escapes, measure 2×). |
+| #14 | Interp redirect hook | **DONE** — `$0738=$A5A5` df_gap redirect; unblocked cycle_isolate. |
+| #15 | Native switch-OUT escape ($0532) | **PARKED** (§3) — body PROVEN bit-exact; integration divergence unpinned; reverted to GREEN. Needs the re-firing-freeze debug build (TRACK B). |
+| #16 | Native switch-IN escape ($075C-$07E8) | **OPEN** — the bigger half of the ~30% scheduler lever; do it after switch-OUT is cracked, same method. |
+| #17 | Single-yield differential harness | **DONE** — yield_diff/sim/multi/diff2/faithful built. Proved injection is a dead end; PHASE-A faithful capture works. |
+
+(Deleted earlier: #6 "$CE4 on loop_hook" — superseded by the rts-class-fires-0× finding.)
+
+---
+
+## 9. Session deltas (2026-06-30 pt.3 → `58b20cb`)
+- **FOUND the biggest lever:** scheduler = ~30% of the tick, pure coroutine context-switch plumbing
+  (§2). Built `sched_trace.py`. Memory [[scheduler-context-switch-lever]].
+- **Built + PARKED the switch-OUT escape** (§3): body PROVEN bit-exact (yield_multi 8/8); ESC=0
+  DIFF~44 unpinned integration divergence (not body/flags/pacing). Reverted to GREEN.
+- **Built the single-yield differential toolchain:** yield_diff/sim/multi (commit 464f99c),
+  yield_diff2 (5047d29), yield_faithful (58b20cb). PROVED injection-based single-yield diff is a dead
+  end for mid-tick handlers; the route is interp-side re-firing-freeze instrumentation.
+- Repo GREEN, escape not in the build; switch-OUT code preserved in `docs/handoff/`.
+
+## Prior session deltas (→ `59f4b15` / `507d692`)
+- c172 shipped (first coroutine escape, $AC-charge resolved); c172 bridge callees $295A/$29B6 escaped
+  → 4.85× (the bridge-callee lever). lh_sched shipped (the $074C scan, -125 interp/tick). entry_d718,
+  entry_d3f6 (jmp-state). transpile.py move.l→-(An). Corrected model: rts-class fires 0×, scheduler is
+  the bottleneck.
