@@ -11150,7 +11150,19 @@ lhs_rdbe:
 ; states won't match -> production & lockstep unaffected), re-fetch from $40/$42 instead of executing
 ; the frozen opcode -> cycle_isolate.py points the interp at an injected driver PC. Else normal plx/rts.
 df_gap:
+    ; RE-FIRING-FREEZE debug instrument (task #15/#16, tools/swo_inplace_diff.py): when the harness
+    ; sets $0730=$5A5A, SKIP the one-shot $0710 clear so the freeze stays armed and re-fires at the
+    ; next matching PC -> single-step across every $0532 (or $075C) of ONE faithful tick with no
+    ; injection. A random IRAM / saved-state value won't equal $5A5A, so production + every existing
+    ; lockstep/cycle harness ($0730 unset) is byte-for-byte unaffected. M is 16-bit here (rep #$30),
+    ; matching the $0738/$A5A5 compare below. +8 bytes in the $D1BF gap (lhs_rdbe+df_gap, ~10B slack
+    ; before .org $D1ED) -- if the build errors on overflow, relocate this check zero-shift: replace
+    ; `stz $0710` with `jmp dfg_rff_ext` (3B) and host the lda/cmp/beq + stz in the $F9AA gap.
+    lda $0730
+    cmp #$5A5A
+    beq dfg_rff          ; debug: leave $0710 armed -> re-freeze the next matching PC
     stz $0710            ; one-shot: don't re-freeze the same PC next iteration
+dfg_rff:
     lda $0738
     cmp #$A5A5
     beq df_gap_redir
