@@ -64,12 +64,21 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     if HK:
         for a in HK.split(','): m.add_exec_hook(int(a,16), cpu_type='Sa1')
         print(">>> exec-hooks armed:", HK, flush=True)
+    # CYCLES=1: SA-1 cycle meter. Read the SA-1 cycleCount at tick START (here, just before release)
+    # and tick END (B1 trap) -> SA-1 cycles for one GAME_TICK. Measure DELTAS within this continuous
+    # run only (load_state transplants cycleCount -- never span an injection). Compare ESC=0 vs 1.
+    CYC=os.environ.get('CYCLES')
+    cyc0 = m.get_cpu_state('Sa1').get('cycleCount') if CYC else None
     w16(0x0712,0); w16(0x0710,0); w16(0x0714,1); runf(1); w16(0x0714,0)
     if GPPROF: w16(0x0718,0); w16(0x0762,0)   # enable dbg_fetch (ALL) + ilog (REAL interpreted) streams
     b1=False
     for _ in range(400):
         w16(0x0710,B1PC); w16(0x0716,0); runf(4)
         if r16(0x0712): b1=True; break
+    if CYC:
+        cyc1 = m.get_cpu_state('Sa1').get('cycleCount')
+        dc = (cyc1-cyc0) if (cyc0 is not None and cyc1 is not None) else None
+        print(">>> SA-1 cycles this tick (B0->B1, ESC=%d) = %s  [cyc0=%s cyc1=%s]"%(ESC,dc,cyc0,cyc1),flush=True)
     if HK:
         print(">>> hook_diag:", m.hook_diag(), flush=True)
         for h in m.list_hooks(): print(">>>   hook:", h, flush=True)
