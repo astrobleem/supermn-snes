@@ -3781,6 +3781,733 @@ Ld3f6_d50c:
     sta $42
     jml.l inext
 
+; --- transpiled from $00C172 (51 instrs) by tools/transpile.py [bank1] ---
+entry_c172:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    php
+    rep #$30
+    lda #$0023      ; 35 = exact c172 native-vs-interp saving to first yield (STEP A)
+    jsr esc_ac_charge
+    plp
+    lda #$000D
+    sta $18
+    lda $34
+    clc
+    adc #$29B2
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $34
+    clc
+    adc #$2A36
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $0C
+    pha
+    lda $34
+    clc
+    adc #$2A32
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A34
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc $0C
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+Lc172_c186:
+    lda #$0000
+    sta $00
+    sta $02
+    lda $34
+    clc
+    adc #$2A36
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $30
+    clc
+    adc #$0000
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sec
+    sbc $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$FFC0
+    beq Lfc172_3
+    bvs Lfc172_1
+    bpl Lfc172_2
+    bra Lfc172_3
+Lfc172_1:
+    bmi Lfc172_2
+    bra Lfc172_3
+Lfc172_2:
+    jmp Lc172_c1f8
+Lfc172_3:
+    lda $34
+    clc
+    adc #$2A38
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $34
+    clc
+    adc #$2A3A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $24
+    lda $9E
+    sta $26
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bne Lfc172_4
+    jmp Lc172_c22a
+Lfc172_4:
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $24
+    lda $9E
+    sta $26
+    lda #$0000
+    sta $0C
+    sta $0E
+    lda $34
+    clc
+    adc #$2A3C
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $0C
+    lda $24
+    clc
+    adc $0C
+    sta $24
+    lda $26
+    adc $0E
+    sta $26
+    lda $34
+    clc
+    adc #$2A44
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $34
+    clc
+    adc #$2A46
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $28
+    lda $9E
+    sta $2A
+    lda $34
+    clc
+    adc #$2A3C
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$0038
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A3C
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$00E0
+    beq Lfc172_5
+    jmp Lc172_c1d6
+Lfc172_5:
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A3A
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$0004
+    php
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A38
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    plp
+    adc #$0000
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A46
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$0002
+    php
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A44
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    plp
+    adc #$0000
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+Lc172_c1d6:
+    lda $30
+    clc
+    adc #$0000
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$01C0
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $56
+    jsl.l push32_l
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1CC2
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $34
+    clc
+    adc #$1CC4
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    ; INDIRECT-BRIDGE jsr (a0) -> interpret callee ($00FD bank-94 sentinel), resume brc172_1
+    lda #brc172_1
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l inext
+brc172_1:
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+Lc172_c1f8:
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    lda #$0000
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    inx
+    inx
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0002
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1CBE
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $34
+    clc
+    adc #$1CC0
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    ; INDIRECT-BRIDGE jsr (a0) -> interpret callee ($00FD bank-94 sentinel), resume brc172_2
+    lda #brc172_2
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l inext
+brc172_2:
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $30
+    clc
+    adc #$0008
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lfc172_6
+    jmp Lc172_c186
+Lfc172_6:
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A36
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$C170
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Lc172_c22a:
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A37
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A32
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A36
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$C236
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================

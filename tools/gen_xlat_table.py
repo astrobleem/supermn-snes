@@ -45,7 +45,11 @@ TABLE_PCS = {0xCE4}   # $0CE4 (ce4t) -- SHIPPED 2026-06-29, the first --table (r
                       # escapes: transpile <pc> --bank2 --table | sed <pc>-><pc>t, splice into escbank2, build,
                       # re-run this zero-added-divergence lockstep gate.
 
-ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
+# COROUTINE class (transpile.py --coroutine; NO return-push; reached by op_rte resume -> ors_rte ->
+# ors_rte_x -> ojmp_hook -> xlat_dispatch). c172 = first coroutine escape (TASK #73 / STEP A).
+CORO_PCS = {0xC172}
+
+ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS | CORO_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
 
 def load_native_addrs():
