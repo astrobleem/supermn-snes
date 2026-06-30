@@ -21,8 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ESC, ESC2 = ROOT / "src/escbank.pasm", ROOT / "src/escbank2.pasm"
 PY = sys.executable
 BODIES_END = "; >>> ESCBANK2_BODIES_END"
-SCAN_ANCHOR = ("    ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<\n"
-               "    cmp #$2DF0")
+SCAN_ANCHOR = "    ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<"
 
 def deployed(addr):
     return ("entry_%x:" % addr) in ESC2.read_text() or ("entry_%x:" % addr) in ESC.read_text()
@@ -41,9 +40,11 @@ def deploy_one(addr):
     # 2) jah2_ext cross-bank dispatch -> escbank ($92)
     s = ESC.read_text()
     jx = "jx_%x" % addr
-    disp = ("    ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<\n"
+    # insert the new cmp/bne/dispatch block RIGHT AFTER the anchor (the chain already has earlier blocks
+    # between the anchor and the original `cmp #$2DF0`; appending here keeps it idempotent + order-stable).
+    disp = (SCAN_ANCHOR + "\n"
             "    cmp #$%04X\n    bne %s\n    inc $0764\n    plp\n    pla\n    lda $54\n    sta $40\n    jml %s\n"
-            "%s:\n    cmp #$2DF0" % (addr & 0xFFFF, jx, name, jx))
+            "%s:" % (addr & 0xFFFF, jx, name, jx))
     if SCAN_ANCHOR not in s:
         return False, "JAH2_EXT_SCAN anchor missing in escbank.pasm"
     ESC.write_text(s.replace(SCAN_ANCHOR, disp, 1))
