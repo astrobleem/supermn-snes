@@ -22,7 +22,7 @@ from pathlib import Path
 # d0d0 diverges -- a real escape INTERACTION (shared $D0-$D3 state) that routing real dispatch through
 # the table exposed (the old ojmp cmp-chain never co-dispatched them). They fall through to the
 # interpreter (bit-exact) until that interaction is debugged. See task #70 / memory.
-JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0}  # re-testing d386/d3b0 under lockstep_trap
+JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC, 0xD07A}  # re-testing d386/d3b0 under lockstep_trap
 
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest

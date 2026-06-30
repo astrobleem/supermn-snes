@@ -1329,6 +1329,590 @@ L1008_106e:
     sta $3C
     jml.l ors_pre
 
+; --- $00D01A jmp-state object handler ($CEB6 dispatch sibling of d0d0) ---
+; --- transpiled from $00D01A (16 instrs) by tools/transpile.py [bank1] ---
+entry_d01a:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$2A4C
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    bne Lfd01a_1
+    jmp Ld01a_d028
+Lfd01a_1:
+    lda $34
+    clc
+    adc #$2A58
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+Ld01a_d028:
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$FFFC
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFFC
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sec
+    sbc #$0011
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $2C
+    clc
+    adc #$0004
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc #$001F
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0020
+    pha
+    lda $30
+    clc
+    adc #$FFF9
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA4
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0008
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$CEC2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+; --- $00D05E jmp-state object handler ($CEB6 dispatch sibling of d0d0) ---
+; --- transpiled from $00D05E (7 instrs) by tools/transpile.py [bank1] ---
+entry_d05e:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$01A0
+    bvs Lfd05e_1
+    bmi Lfd05e_2
+    bra Lfd05e_3
+Lfd05e_1:
+    bpl Lfd05e_2
+    bra Lfd05e_3
+Lfd05e_2:
+    jmp Ld05e_d076
+Lfd05e_3:
+    lda #$0010
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+Ld05e_d076:
+    lda #$CEC2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+; --- $00D0BC jmp-state object handler ($CEB6 dispatch sibling of d0d0) ---
+; --- transpiled from $00D0BC (6 instrs) by tools/transpile.py [bank1] ---
+entry_d0bc:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    clc
+    adc $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF9
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc $00
+    php
+    pha
+    lda $30
+    clc
+    adc #$FFF9
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    plp
+    beq Lfd0bc_2
+    bvs Lfd0bc_1
+    bmi Lfd0bc_2
+    bra Lfd0bc_3
+Lfd0bc_1:
+    bpl Lfd0bc_2
+    bra Lfd0bc_3
+Lfd0bc_2:
+    jmp Ltjd0bc_d07a
+Lfd0bc_3:
+    lda #$CEC2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjd0bc_d07a:
+    lda #$D07A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+; --- $00D07A jmp-state object handler ($CEB6 dispatch sibling of d0d0) ---
+; --- transpiled from $00D07A (20 instrs) by tools/transpile.py [bank1] ---
+entry_d07a:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2E
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $38
+    clc
+    adc #$FF1E
+    sta $2C
+    lda $3A
+    adc #$0000
+    sta $2E
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    bne Lfd07a_1
+    jmp Ld07a_d094
+Lfd07a_1:
+    lda $38
+    clc
+    adc #$FF1C
+    sta $2C
+    lda $3A
+    adc #$0000
+    sta $2E
+Ld07a_d094:
+    lda $34
+    clc
+    adc #$2AA4
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF4
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sec
+    sbc $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0001
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C9A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $22
+    lda $34
+    clc
+    adc #$1C9C
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> interpret callee ($00FD bank-94 sentinel), resume brd07a_1
+    lda #brd07a_1
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l inext
+brd07a_1:
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    lda #$CF8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================
