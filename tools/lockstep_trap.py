@@ -96,6 +96,18 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
                 try: ins=next(_MD.disasm(_ROM[0x10000+(pp&0x3FFFFF):0x10000+(pp&0x3FFFFF)+8],pp)); d='%s %s'%(ins.mnemonic,ins.op_str)
                 except StopIteration: d='?'
                 print(">>>   from $%06X x%-3d [%s]"%(pp,c,d),flush=True)
+        sw=os.environ.get('STREAMWIN')
+        if sw:
+            t=int(sw,16)
+            idx=next((i for i,p in enumerate(real) if (p&0xFFFFFF)==t), None)
+            if idx is None: print(">>> STREAMWIN: $%06X not in stream"%t,flush=True)
+            else:
+                print(">>> ordered stream around FIRST $%06X (idx %d):"%(t,idx),flush=True)
+                for j in range(max(0,idx-int(os.environ.get("STREAMWIN_N","20"))), min(len(real),idx+4)):
+                    p=real[j]&0xFFFFFF
+                    try: ins=next(_MD.disasm(_ROM[0x10000+(p&0x3FFFFF):0x10000+(p&0x3FFFFF)+8],p)); d='%s %s'%(ins.mnemonic,ins.op_str)
+                    except StopIteration: d='?'
+                    print(">>>   [%d] $%06X  %s%s"%(j,p,d," <<<" if j==idx else ""),flush=True)
         if os.environ.get('ENTRYCLASS'):
             # classify FUNCTION ENTRIES: an interpreted PC whose predecessor is a control transfer.
             def mn(pc):
