@@ -27,11 +27,16 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC,
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = set()     # $0CE4 in DETERMINISTIC gameplay is JSR-reached (already covered by the inline
-                      # jah2 entry_ce4); ce4t (rts/jmp table) never fired (ce4=0) -> its rts-reach was a
-                      # free-run artifact. The TABLE ITSELF is PROVEN to compose GREEN in-context (3
-                      # jmp-state escapes, lockstep_trap, guaranteed jah2-off: 1B). Add table escapes only
-                      # for PCs genuinely jmp/rts-reached in deterministic gameplay.
+TABLE_PCS = set()     # $0CE4 RE-INVESTIGATED 2026-06-29: it IS reached by an interpreted rts (from $0047FE,
+                      # exactly 1x/period in full2742) NOT jsr, so inline jah2 entry_ce4 misses it. Wired
+                      # ce4t in + built GREEN (table blob VERIFIED correct: page[$0C]=$0200, entry $4AC ->
+                      # $948F68) -- but it STILL did NOT fire (the $D40 loop stayed interpreted x66). ROOT
+                      # CAUSE localized: all 9 validated entries dispatch via the JMP(a0) path (op_jmp_idx
+                      # -> ojmp_hook); ce4t is the FIRST entry meant to be caught via the RTS path (op_rts ->
+                      # ors_pre -> ors_94chk -> op_rts_sentinel -> op_rts_norm -> ojmp_hook). That rts->table
+                      # path has NEVER activated an entry. NEXT: instrument xlat_dispatch with a reached-
+                      # counter + check $42 (bank) on the $CE4 rts (suspect $42!=0 -> xd_miss, OR a broken
+                      # link in the op_rts_norm chain). Reverted to the clean firing 9-set meanwhile.
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
