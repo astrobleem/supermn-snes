@@ -66,9 +66,23 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         if r16(0x0712): b1=True; break
     instr=r16(0x4A)|(r16(0x4C)<<16)
     print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC),flush=True)
+    if os.environ.get('REGDUMP'):
+        rf=bytes(m.read_memory('Sa1Memory',0x00,0x40))
+        nm=['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6','a7']
+        print("=== reg file @ B1 (PC=$%04X) ==="%B1PC,flush=True)
+        print("  \$AC=$%04X  \$4A/4C(instr)=%d  \$AA(vbl)=$%04X  \$A8=$%04X"%(r16(0xAC),r16(0x4A)|(r16(0x4C)<<16),r16(0xAA),r16(0xA8)),flush=True)
+        for i in range(16):
+            lo=rf[i*4]|(rf[i*4+1]<<8); hi=rf[i*4+2]|(rf[i*4+3]<<8)
+            print("  %s=$%04X%04X"%(nm[i],hi,lo),flush=True)
+        md=os.environ.get("MEMDUMP")
+        if md:
+            for rng in md.split(","):
+                a=int(rng,16); b=bytes(m.read_memory("snesMemory",0x400000+a,16))
+                print("  $F0%04X: %s"%(a," ".join("%02X"%x for x in b)),flush=True)
     out=bytes(m.read_memory('snesMemory',0x400000,WN))
     excl=set(range(0x170A-0x80,0x170A+0x80))
     diff=[i for i in range(WN) if out[i]!=wramB[i] and i not in excl]
     print(">>> $40 diff vs MAME wramB = %d bytes (stack-excl)"%len(diff),flush=True)
-    for i in diff[:20]: print("   $F0%04X: interp=%02X mame=%02X (A=%02X)"%(i,out[i],wramB[i],wramA[i]),flush=True)
+    lim=len(diff) if os.environ.get('FULLDIFF') else 20
+    for i in diff[:lim]: print("   $F0%04X: interp=%02X mame=%02X (A=%02X)"%(i,out[i],wramB[i],wramA[i]),flush=True)
     print(">>>", "GREEN" if len(diff)<=8 else "DIFF=%d"%len(diff),flush=True)

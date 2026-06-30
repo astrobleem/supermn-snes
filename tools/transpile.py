@@ -761,8 +761,13 @@ def load_long_to(e, src, dp):
             e('lda $%02X' % s); e('clc'); e('adc %s' % imm16(disp)); e('tax')
             e('jsr rdw40'); e('sta $%02X' % (dp+2)); e('inx'); e('inx'); e('jsr rdw40'); e('sta $%02X' % dp)
         else:
-            ea_setup_romaware(e, an, disp); e('jsr rdw_ea'); e('sta $%02X' % (dp+2))   # hi16 @ addr
-            ea_setup_romaware(e, an, disp+2); e('jsr rdw_ea'); e('sta $%02X' % dp)     # lo16 @ addr+2
+            # Both reads re-derive the EA from An's reg slots ($s/$s+2), so we must NOT write any
+            # part of dp until BOTH reads are done: `movea.l (a1),a1` (dp aliases An's slots) would
+            # otherwise clobber the base hi word before the lo16 read -> a corrupted-bank lo read
+            # (the c172 coroutine bug: bad a1 -> wrong sprite-draw bridge arg). Stash hi16 in TMP.
+            ea_setup_romaware(e, an, disp); e('jsr rdw_ea'); e('sta $%02X' % TMP)      # hi16 @ addr -> scratch
+            ea_setup_romaware(e, an, disp+2); e('jsr rdw_ea'); e('sta $%02X' % dp)     # lo16 @ addr+2 -> dp
+            e('lda $%02X' % TMP); e('sta $%02X' % (dp+2))                              # hi16 -> dp+2 (after both reads)
             # NB: re-setup the address; rdw_ea leaves $54 = addr+1 (it inc's between byte reads),
             # so the old `inc $54 / inc $54` read addr+3 (off by one). Recompute = robust.
         if src[0] == '(An)+': bump_an(e, an, 4)
