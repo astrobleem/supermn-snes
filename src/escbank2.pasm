@@ -2718,6 +2718,394 @@ Lce4_d8a:
     sta $3C
     jml.l ors_pre
 
+; --- $00D718 jmp-state object handler (jmp(a0)-reached, 2 call-bridges) ---
+; --- transpiled from $00D718 (43 instrs) by tools/transpile.py [bank1] ---
+entry_d718:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$2AAA
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd718_1
+    bmi Lfd718_1
+    bra Lfd718_2
+Lfd718_1:
+    jmp Ld718_d726
+Lfd718_2:
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFF5
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp Ld718_d738
+Ld718_d726:
+    lda $34
+    clc
+    adc #$2AAB
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd718_3
+    bmi Lfd718_3
+    bra Lfd718_4
+Lfd718_3:
+    jmp Ld718_d736
+Lfd718_4:
+    lda #$0001
+    pha
+    lda $30
+    clc
+    adc #$FFF5
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp Ld718_d738
+Ld718_d736:
+    lda #$D6D8
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ld718_d738:
+    ; CALL-BRIDGE jsr $24920.l -> interpret callee, resume brd718_1
+    lda #brd718_1
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda #$4920
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l inext
+brd718_1:
+    lda $1C
+    bne Lfd718_5
+    jmp Ld718_d7a8
+Lfd718_5:
+    lda $1C
+    sta $9A
+    lda $1E
+    sta $9C
+    lda $9C
+    pha
+    lda $30
+    clc
+    adc #$FFF0
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $9A
+    pha
+    lda $30
+    clc
+    adc #$FFF2
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A4C
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda #$8030
+    sta $14
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    bne Lfd718_6
+    jmp Ld718_d75e
+Lfd718_6:
+    lda $34
+    clc
+    adc #$2A58
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda #$8050
+    sta $14
+Ld718_d75e:
+    lda #$0057
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    ; CALL-BRIDGE jsr $2d8a.l -> interpret callee, resume brd718_2
+    lda #brd718_2
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+brd718_2:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $1C
+    sta $28
+    lda $1E
+    sta $2A
+    lda #$0000
+    pha
+    lda $28
+    clc
+    adc #$000E
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$00C0
+    pha
+    lda $28
+    clc
+    adc #$000C
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0001
+    pha
+    lda $28
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0010
+    pha
+    lda $28
+    clc
+    adc #$000D
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $14
+    pha
+    lda $28
+    clc
+    adc #$000A
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2AAA
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0001
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0004
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$D6BC
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ld718_d7a8:
+    lda $34
+    clc
+    adc #$2AAA
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda #$D6D8
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================
