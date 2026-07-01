@@ -2,6 +2,19 @@
 
 Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 
+> **UPDATE 2026-07-01 — rts-class dispatch is RESOLVED; a transpiler flag bug was found + fixed.**
+> The "rts-class dispatch fires 0×" blocker below is superseded: a bank-$00 `jsr choke_tramp` FETCH-
+> CHOKEPOINT at the interpreter's `lh_off` routes the about-to-decode PC through the AOT table, so
+> rts/branch-reached hot handlers dispatch natively regardless of reach. `$0CE4` (entry_ce4t) — the
+> hottest cluster — now dispatches **bit-exact** (all 6 ce4 triples + 20-tick self-diff). An every-
+> fetch cross-bank `jml` round-trip is FATAL; the bank-$00 `jsr`/`rts` trampoline is the fix. This
+> exposed + fixed a **transpiler D1 gap**: escapes never wrote the 68K CCR memory an interp-caller
+> reads after `rts` (stale flags → the trip1000 divergence); `transpile.py` now materializes the CCR at
+> branch-to-exit edges (`emit_ccr_native`). ce4t regenerated from the fixed transpiler. Strategic
+> picture UNCHANGED (still 24× over budget; codegen is the wall — the chokepoint is a dispatch enabler +
+> correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
+> block + memory `fetch-chokepoint-rts-escape`.
+
 > **UPDATE 2026-06-30 — read [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) for the
 > authoritative current state.** Two things below are now CORRECTED:
 > - **rts-class table dispatch fires 0× in gameplay** (verified with SA-1 exec-hooks). The "rts

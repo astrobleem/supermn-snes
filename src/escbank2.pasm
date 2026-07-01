@@ -1936,7 +1936,6 @@ brd07a_1:
     lda #$0000
     sta $42
     jml.l inext
-; --- ce4t ship-validation 64KB ---
 ; --- transpiled from $000CE4 (57 instrs) by tools/transpile.py [bank1] ---
 entry_ce4t:
     rep #$30
@@ -2399,6 +2398,25 @@ Lfce4_14:
     bpl Lfce4_15
     bra Lfce4_16
 Lfce4_15:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
     jmp Lce4_d8a
 Lfce4_16:
 Lce4_d6c:
@@ -2426,6 +2444,19 @@ Lfce4_17:
 Lfce4_18:
     lda $1C
     bpl Lfce4_19
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
     jmp Lce4_d8a
 Lfce4_19:
     lda #$00FA
@@ -5357,6 +5388,412 @@ Lf29b6_4:
     jml.l ors_pre
 
 
+; --- transpiled from $0013BE (36 instrs) by tools/transpile.py [bank1] ---
+entry_13bet:
+    rep #$30
+    lda $000730
+    inc a
+    sta $000730
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $00
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $38
+    clc
+    adc #$0008
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $1C
+    lda $1C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1E
+    lda $34
+    clc
+    adc #$1CF6
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $34
+    clc
+    adc #$20F2
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda $34
+    clc
+    adc #$24EE
+    sta $28
+    lda $36
+    adc #$0000
+    sta $2A
+    lda $30
+    clc
+    adc $1C
+    sta $30
+    lda $32
+    adc $1E
+    sta $32
+    lda $2C
+    clc
+    adc $1C
+    sta $2C
+    lda $2E
+    adc $1E
+    sta $2E
+    lda $28
+    clc
+    adc $1C
+    sta $28
+    lda $2A
+    adc $1E
+    sta $2A
+    lda $38
+    clc
+    adc #$0010
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $1C
+    lda $1C
+    bne Lf13be_1
+    jmp L13be_1414
+Lf13be_1:
+    lda $1C
+    clc
+    adc #$2000
+    sta $1C
+    lda #$00EA
+    sta $00
+    lda $38
+    clc
+    adc #$000C
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    lda $00
+    sec
+    sbc #$00FA
+    bvs Lf13be_2
+    bpl Lf13be_3
+    bra Lf13be_4
+Lf13be_2:
+    bmi Lf13be_3
+    bra Lf13be_4
+Lf13be_3:
+    jmp L13be_1414
+Lf13be_4:
+    lda $00
+    sec
+    sbc #$FFFA
+    beq Lf13be_6
+    bvs Lf13be_5
+    bmi Lf13be_6
+    bra Lf13be_7
+Lf13be_5:
+    bpl Lf13be_6
+    bra Lf13be_7
+Lf13be_6:
+    jmp L13be_1414
+Lf13be_7:
+    lda $38
+    clc
+    adc #$000E
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $04
+    lda $04
+    clc
+    adc #$0000
+    sta $04
+    lda $04
+    sec
+    sbc #$FFF0
+    beq Lf13be_9
+    bvs Lf13be_8
+    bmi Lf13be_9
+    bra Lf13be_10
+Lf13be_8:
+    bpl Lf13be_9
+    bra Lf13be_10
+Lf13be_9:
+    jmp L13be_1414
+Lf13be_10:
+    lda $04
+    sec
+    sbc #$0180
+    bvs Lf13be_11
+    bmi Lf13be_12
+    bra Lf13be_13
+Lf13be_11:
+    bpl Lf13be_12
+    bra Lf13be_13
+Lf13be_12:
+    jmp L13be_1418
+Lf13be_13:
+L13be_1414:
+    lda #$00FA
+    sta $00
+L13be_1418:
+    lda $04
+    and #$01FF
+    sta $04
+    lda $38
+    clc
+    adc #$000A
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $9E
+    lda $04
+    ora $9E
+    sta $04
+    lda $1C
+    pha
+    lda $28
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $00
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $04
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2E
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $32
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $3A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    and #$00FF
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================
@@ -5415,3 +5852,29 @@ xd_hit:                      ; dispatch via push+RTL (avoids the Poppy-mis-sized
     txa
     pha                      ; push PCH:PCL (native lo16 - 1)
     rtl                      ; -> native bank:lo16
+
+; xlat_choke — FETCH-CHOKEPOINT (interp lh_off does `jml $94F980` per genuinely-interpreted fetch).
+; Routes the about-to-be-decoded 68K PC through the AOT table so rts/branch-reached escapes (e.g.
+; $CE4/entry_ce4t) dispatch REGARDLESS of reach (the coroutine scheduler's rts-chain bypasses
+; op_rts_norm, so those reaches never hit ojmp_hook/xlat otherwise). Matches ilog's contract exactly
+; (rep #$30, preserves X = decoder state, clobbers A+flags) so nolog's entry contract is UNCHANGED.
+; HIT is guaranteed (the PC is in the table) so `jml xlat_dispatch` can't fall to its inext-miss ->
+; no refetch loop. MISS/gated-off/non-match -> `jml nolog` ($00:8102) to decode the fetched opcode.
+; PoC scope: ce4 only (`cmp #$0CE4`; flip to #$FFFF for the pure-swap-overhead measurement).
+.org $F980
+xlat_choke:
+    rep #$30
+    lda $073A            ; DEDICATED chokepoint gate (free IRAM flag; harness sets it). Independent
+    beq xc_dec           ; of $071A -> A/B ce4-native-dispatch on the GREEN ESC=0 baseline, isolating
+                         ; the chokepoint from the ESC=1 escapes (which have a separate DIFF=105 bug).
+    lda $42
+    bne xc_dec           ; PC bank != 0 -> not a bank-0 table PC
+    lda $40
+    cmp #$0CE4           ; PoC: ce4 only -> guaranteed table HIT (no xlat miss-loop)
+    bne xc_dec
+    lda $407FE0          ; DIAG counter (safe scratch $40:7FE0): count real ce4 dispatches
+    inc a
+    sta $407FE0
+    jml xlat_dispatch    ; $94F900 (guaranteed HIT -> push+RTL dispatches entry_ce4t, bit-exact)
+xc_dec:
+    jml $008102          ; nolog: decode the already-fetched opcode (bank $00)

@@ -80,6 +80,42 @@ Because we lower every 32-bit op into our own multi-precision sequence (D2), X
 lives only *inside* those sequences. **Rule:** never emit a flag-clobbering
 instruction between the low-half and high-half of a lowered 32-bit add/sub.
 
+### CCR at a function boundary — materialization (implemented 2026-07-01)
+
+The rules above lower each 68K branch to **native 65816 flags** at the branch
+site. That is correct *inside* a transpiled function. But a 68K subroutine leaves
+its CCR live across `rts`, and an escape's **caller may be interpreted** — the
+interpreter reads the CCR from **memory** (`$60`=Z, `$6E`=C, `$70`=N, `$72`=V,
+`$A2`=X; nonzero = set). A transpiled escape that only touches native flags leaves
+that memory **stale at its `rts`** → the interp-caller's next conditional branch
+reads the wrong flags. (This was a live bug: `entry_ce4t` diverged on the
+`trip1000` state at `$F0104F` — root-caused to a stale exit CCR from a `subq`
+that the caller branched on. See memory `fetch-chokepoint-rts-escape`.)
+
+**Rule:** at every point where native code returns to the interpreter with a live
+CCR — i.e. a **branch whose target is the epilogue/rts** — materialize the 68K CCR
+memory from the live native flags, with provenance:
+- **sub/cmp path** (`fsrc='signed'`, from `SEC:SBC`): `Z/N/V` = native, **`C = !nativeC`**
+  (68K sub-borrow inversion), `X = C`.
+- **move/logic/tst path** (`fsrc='tst'`): `Z/N` = native, `V = 0`, `C = 0`, `X` untouched.
+
+Implementation (`tools/transpile.py`): `emit_ccr_native(e, fsrc)` emits the
+materialization; the driver computes `e.exit_addrs` (the straight-line flag-
+preserving epilogue run — `movem/unlk/lea/pea/nop/movea/link/adda/suba` + `rts`,
+walked back from each `rts`, stopping at control flow); `emit_branch` inserts the
+materialization on any taken-jump whose target is in `exit_addrs`. This is
+**exit-only, per-path** — native flags are live at the branch edge, and hot loops
+get **zero** materializations (the win is preserved).
+
+**Scope/known gaps (2026-07-01):** (1) *fall-through* into the epilogue through
+flag-clobbering glue (`dbra`/`movea`) is not yet materialized (needs value-reload
+from the last flag-op's result reg — deferred, test-driven; no confirmed case).
+(2) X-stickiness: `fsrc='signed'` conflates `subq` (X=C) with `cmp` (X untouched),
+and an add-fed `tst`-class branch loses the add's real C — both rare (only matter
+to a following `ADDX/SUBX/NEGX/ROXx` or a caller reading that exact C). Only
+escapes that RETURN via `rts` and have a branch-to-exit edge are affected; coroutine/
+jmp-state escapes (end in a tail-jump, no `rts`) never observe this.
+
 ---
 
 ## D2 — Register file: 32-bit 68K regs in direct page (hazard H2)

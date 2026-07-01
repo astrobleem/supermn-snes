@@ -303,10 +303,33 @@ def emit_tailjump_stubs(e):
         e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
         e('jmp inext')
 
+def emit_ccr_native(e, fsrc):
+    """Materialize the 68K CCR MEMORY ($60=Z $6E=C $70=N $72=V $A2=X) that the interp-CALLER's
+    op_bcc/op_beq read after this escape's rts, from the LIVE native 65816 flags. The transpiler
+    otherwise only lowers branches to native flags -> the CCR memory is stale at a function boundary
+    (D1 gap; trip1000 $104F). Called at a branch-to-EXIT edge (native flags = the fused op's, live).
+    fsrc='signed' (sec;sbc = sub/cmp): Z/N/V native, C=!nativeC (68K borrow), X=C. (cmp X-untouched
+    is a KNOWN GAP -- rare; X only matters to a following ADDX/SUBX/NEGX/ROXx.)
+    fsrc='tst' (move/logic/tst = N,Z; V=0,C=0): Z/N native, V=0, C=0, X untouched. (add-reloaded-as-
+    tst loses the add's real C -> also a known gap; the transpiler already can't feed C from an add.)
+    Scratch $50 (dead at every escape exit; the epilogue reloads regs, never reads $50)."""
+    e('php'); e('sep #$20'); e('pla'); e('rep #$30'); e('and #$00FF'); e('sta $50')
+    e('and #$0002'); e('sta $60')                  # Z <- P.b1
+    e('lda $50'); e('and #$0080'); e('sta $70')    # N <- P.b7
+    if fsrc == 'signed':
+        e('lda $50'); e('and #$0040'); e('sta $72')                 # V <- P.b6
+        e('lda $50'); e('and #$0001'); e('eor #$0001')              # C <- !P.b0 (68K sub borrow)
+        e('sta $6E'); e('sta $A2')                                  # X = C
+    else:                                          # 'tst': move/logic/tst -> V=0, C=0, X untouched
+        e('stz $72'); e('stz $6E')
+
 def emit_branch(e, base, tgt, fsrc):
     """fsrc: 'signed' (N,V,Z,C from sec;sbc) | 'tst' (N,Z; V=0). end: falls through if not taken."""
     L = branch_label(e, tgt)
-    def jmp(): e('jmp %s' % L)
+    def jmp():
+        if tgt in getattr(e, 'exit_addrs', ()):    # branch to the epilogue/rts: sync CCR for the caller
+            emit_ccr_native(e, fsrc)
+        e('jmp %s' % L)
     def over(short_skip_cc):                       # `cc _s ; jmp L ; _s:`  (cc skips the jmp)
         s = e.fresh(); e('%s %s' % (short_skip_cc, s)); jmp(); e.lbl(s)
     if base == 'bra': jmp(); return
@@ -1118,6 +1141,17 @@ def main():
     e = Emit(pfx='%x' % entry)                       # per-function label namespace (global Poppy syms)
     e.entry, e.end = fn_lo, fn_hi                    # function bounds (for tail-jump detection in gen)
     e.tailjumps = set()                              # out-of-fn conditional-branch targets -> stubs
+    # exit_addrs: the STRAIGHT-LINE flag-preserving epilogue run(s) ending at each rts (movem/unlk/
+    # lea/pea/nop/movea/link/adda/suba + the rts). movem/unlk/rts DON'T touch the 68K CCR, so the CCR
+    # is constant across the epilogue -> a branch to any of these reaches the caller's rts with NO
+    # further flag-setting op. emit_branch materializes the 68K CCR at such a branch edge (D1-gap fix).
+    FP = {'movem', 'unlk', 'lea', 'pea', 'nop', 'movea', 'link', 'adda', 'suba', 'rts'}
+    e.exit_addrs = set()
+    for k in range(len(insns)):
+        if insns[k].mnemonic != 'rts': continue
+        j = k
+        while j >= 0 and insns[j].mnemonic.split('.')[0] in FP:
+            e.exit_addrs.add(insns[j].address); j -= 1
     e.lines.append('; --- transpiled from $%06X (%d instrs) by tools/transpile.py%s ---'
                    % (entry, len(insns), ' [bank1]' if bank1 else ''))
     e.lbl(name)

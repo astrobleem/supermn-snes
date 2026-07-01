@@ -35,11 +35,12 @@ entry_d05e=$948C3D
 entry_d0bc=$948CD7
 entry_d07a=$948D79
 entry_ce4t=$948F7F
-entry_d718=$9495DA
-entry_d3f6=$9498F6
-entry_c172=$949E69
-entry_295at=$94A45A
-entry_29b6t=$94A5CA
+entry_d718=$94961F
+entry_d3f6=$94993B
+entry_c172=$949EAE
+entry_295at=$94A49F
+entry_29b6t=$94A60F
+entry_13bet=$94ABC8
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000

@@ -11,6 +11,45 @@ this session is **reverted (not in the build)** — the build is GREEN. AOT tabl
 
 > Older planning text in STATUS.md / ROADMAP.md predates the strategic picture below. Trust THIS doc.
 
+> **UPDATE 2026-07-01 — the rts-class dispatch blocker is RESOLVED (corrects §1 below).** A bank-$00
+> `jsr choke_tramp` FETCH-CHOKEPOINT at the interpreter's `lh_off` (runs per genuinely-interpreted
+> fetch) routes the about-to-decode 68K PC through the AOT table, so rts/branch-reached hot handlers
+> dispatch natively **regardless of how they're reached**. `$0CE4` (entry_ce4t) — the hottest cluster,
+> previously uncatchable by any hook — now dispatches natively **bit-exact** (all 6 ce4 triples +
+> 20-tick self-diff; ~277 interp-68K-instr/call eliminated, ~285K SA-1 cyc/call). GOTCHA: an every-
+> fetch cross-bank `jml $94…jml $00` round-trip is FATAL (silently breaks GAME_TICK — `jsr $3A92`
+> lands on an rts, the tick is skipped); the bank-$00 `jsr`/`rts` trampoline (cross to $94 only on the
+> rare HIT) is the fix. This work ALSO exposed + fixed a **transpiler D1 gap**: transpiled escapes
+> lowered branches to native flags but never wrote the 68K CCR memory ($60/$6E/$70/$72/$A2) that an
+> interp-CALLER reads after the escape's `rts` → stale flags (the trip1000 `$104F` divergence).
+> `transpile.py` now materializes the CCR at branch-to-exit edges with provenance (`emit_ccr_native` +
+> `exit_addrs`); entry_ce4t was regenerated FROM the fixed transpiler (not hand-patched), win intact.
+> rts-class/xlat rollout **complete** (ce4t was the only exit-edge case; 295a/29b6 are straight-line).
+> Existing escapes carry transpiler drift → they heal on their NEXT natural re-transpile (transpiler
+> now correct); no risky mass-force-regen. STRATEGIC (§0) UNCHANGED: still 24× over budget, codegen is
+> the wall — the chokepoint is a *dispatch enabler + correctness fix*, not the 24×-closer. Tools:
+> `lockstep_choke.py` / `multitick_choke.py` (self-differential), `reg_probe.py` / `find_writer.py`
+> (root-cause). Memories [[fetch-chokepoint-rts-escape]] (breakthrough + fix + rollout),
+> [[rts-class-dispatch-nonfunctional]] (partially superseded). Build GREEN (working tree, uncommitted).
+
+> **UPDATE 2026-07-01 (pt.2) — chokepoint GENERALIZED to $13BE + the measurement reckoning.** The
+> chokepoint now dispatches a 2nd handler ($0013BE) bit-exact (2-way allowlist; entry_13bet fresh
+> `--table`). Correctness GREEN: 6-triple SP-aware self-diff, 0 LIVE diffs (sole diff $15F9 is DEAD
+> STACK below SP — link/trap pushes, never read live). **$001400 DROPPED: it is an INTERNAL label of
+> $13BE** (the profiler's "$13BE 38 + $1400 30/fr" is one fn in two histogram buckets), so entry_13bet
+> already covers it. **The strategic payoff is a MEASURED number, not the coverage:** trajectory-
+> controlled single-tick (the ONLY valid escape-delta metric — free-run cyc/tick is corrupted by
+> spin-wait trajectory divergence) gives **1832 cyc/interp-instr** (real interp rate) and **~1151 cyc
+> net saved per interp-instr escaped ⇒ escaping keeps ~63% of interp cost**. That is §0's "codegen is
+> the wall" thesis, now confirmed with a real number instead of a 9× proxy spread. **Phase-2 BLOCKER
+> (do not skip):** the triples fire ce4/13be only ~2/tick, not the "66/frame" the thesis cites, and
+> measured 8.55M cyc/GAME_TICK is ~2× the canonical 4.34M "24×" figure → **the 24× number's provenance
+> is now suspect, and a representative reconciled budget is BLOCKED on an ACTIVE-GAMEPLAY triple**
+> ([[new-freeze-camera-gating]]). Getting that triple is the explicit precondition for committing a
+> multi-session codegen rewrite; do not manufacture a budget from these low-activity triples. Tool
+> fixes: `multitick_choke.py` SP-aware, `cycle_rate_gp.py` CHOKE+PORT env. Details:
+> [[fetch-chokepoint-rts-escape]] + `/tmp/supermn-scratch/chokegen/RESULTS.md`.
+
 ---
 
 ## 0. STRATEGIC REALITY — read before choosing what to do (the most important section)
@@ -50,10 +89,18 @@ it executes **~1700–1900 genuinely-interpreted 68K instructions/tick**.
   Collapses the `$0818` idle spin AND `lh_sched` (the `$074C` scheduler scan). This is how you escape
   bra/beq-reached hot PCs that the jsr/jmp/rte families can't catch.
 
-**PROVEN NOT to work:** **rts-class table dispatch fires 0× in gameplay.** `$CE4`/`$13BE`-class
-handlers are reached as rts returns inside the scheduler's `rte→task→rts→next` chain, which bypasses
-`op_rts_norm→ojmp_hook→xlat`. Don't grind rts-reached leaves into the table. (memory
-[[rts-class-dispatch-nonfunctional]].)
+- **fetch-chokepoint (per-fetch, NEW 2026-07-01):** bank-$00 `jsr choke_tramp` at `lh_off` routes the
+  about-to-decode PC through the AOT table (HIT → dispatch, MISS → `rts` back to decode). Catches
+  rts/branch-reached handlers the jsr/jmp/rte families CAN'T. `$0CE4` (entry_ce4t) ships this way,
+  bit-exact. Gated by `$073A` (PoC). This is the fix for the class the next bullet used to call dead.
+
+**~~PROVEN NOT to work~~ RESOLVED 2026-07-01 (was: rts-class table dispatch fires 0×).** `$CE4`/`$13BE`
+handlers ARE reached as rts returns inside the scheduler's `rte→task→rts→next` chain, which bypasses
+`op_rts_norm→ojmp_hook→xlat` — so the *table lookup on rts* never fires. The FIX is upstream of the
+reach question entirely: the **fetch-chokepoint** above intercepts at instruction FETCH, so `$0CE4`
+dispatches regardless of how it was reached (proven bit-exact). Don't route rts-reached leaves through
+`op_rts`→xlat (that's the dead path); route them through the chokepoint. (memories
+[[fetch-chokepoint-rts-escape]], [[rts-class-dispatch-nonfunctional]] — the latter partially superseded.)
 
 ---
 

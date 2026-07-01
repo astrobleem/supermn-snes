@@ -48,6 +48,14 @@ What each tool does and how reusable it is for the **next** game. See
   the live state to match tick B / each other). KEY: classify diffs vs `a7` (bridge
   sentinels below SP are dead, not bugs); diff the `$41` shadow for `--video` escapes.
   `$SUPERMN_SCRATCH` parameterizes the data dir.
+- **Fetch-chokepoint + self-differential (2026-07-01)** — for rts/branch-reached escapes the
+  chokepoint dispatches (e.g. ce4). `lockstep_choke.py` (`CHOKE=0/1` toggles the `$073A` chokepoint
+  gate on the GREEN ESC=0 baseline; reports SA-1 cycles + interp instr + wramB diff) and
+  `multitick_choke.py` (`NTICKS` N-tick run, dumps 64KB work RAM). The CLEAN gate is the
+  **self-differential**: `CHOKE=0` dump vs `CHOKE=1` dump (MAME residuals cancel → isolates
+  native-vs-interp for the escaped fn); 0 bytes (excl the `$40:7FE0` diag counter) = bit-exact.
+  Root-cause helpers: `reg_probe.py` (dump the 68K register file + CCR flags at a trapped PC —
+  found the ce4 exit-CCR bug), `find_writer.py` (write-hook: who writes an address this tick).
 
 ## AOT dispatch table (the pivot — unify escape dispatch)
 The strategic shift from per-target dispatch hooks (one hardcoded cmp-chain per

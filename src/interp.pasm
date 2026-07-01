@@ -240,11 +240,11 @@ ifetch_go:
     bcc lh_off
     jmp irq_none
 lh_off:
-    jsr ilog             ; LOOP-HOOK-AWARE PROFILE: log GENUINELY-interpreted PCs (collapsed loops
-    nop                  ; jmp irq_none BEFORE here, so they're excluded). Gated by $0762; ~nil
-    nop                  ; overhead in production ($0762=$3FF8). Stream -> $40:C000 (vs dbg_fetch's
-    nop                  ; $40:8000 = ALL fetched PCs incl collapsed-loop entries). Diff = collapsed.
-    nop                  ; (jsr ilog = 3 bytes + 4 nops = 7 = the reserved sled; nolog stays put.)
+    jsr choke_tramp      ; -> bank-$00 fetch-chokepoint trampoline (jsr/rts, ilog's exact shape).
+    nop                  ; MISS=rts (per-fetch stays in bank $00); HIT (ce4) crosses to $94:F900 only.
+    nop                  ; Advisor experiment: does a bank-$00 jsr hook freeze B0 where the every-fetch
+    nop                  ; cross-bank jml round-trip did not? jsr(3B)+4nop(4B)=7B -> nolog stays $8102.
+    nop
 nolog:
     ; CLR <ea> ($42xx, ss!=11) via the correct general handler. The specific CLR handlers
     ; no-op'd / omitted memory modes (op_clr = no-op for (An)+; no CLR -(An) handler at all),
@@ -18900,27 +18900,41 @@ ors_pre_94:
 ; .org-pinned: the preceding `jml [$0040]` (ors_pre_94) mis-sizes in Poppy (tracked 2, emitted 3)
 ; and drifts this label by 1 onto a $00=BRK byte (same gotcha as ors_rte) -> pin past the drift.
 .org $F980
+; choke_tramp — bank-$00 fetch-chokepoint trampoline (replaces the now-dead ilog; SAME 42-byte size
+; so lh_sched_pre below does not shift). jsr'd from lh_off per genuinely-interpreted fetch. MISS/gated
+; -> rts (ilog's exact contract: 16-bit M/X, X preserved, A clobbered -> nolog reloads $44). HIT (ce4,
+; only when $073A!=0) -> drop the jsr-return (16-bit pla) + jml xlat_dispatch ($94:F900). The per-fetch
+; common path NEVER crosses banks (the every-fetch cross-bank jml round-trip broke GAME_TICK's B0).
 ilog:
-    rep #$30             ; assert 16-bit M/X for Poppy (jsr'd into a .org region; else cpx mis-sizes)
-    phx
-    ldx $0718            ; gate on dbg_fetch's enable ($FFF8=off at boot) -> auto-off in production
-    cpx #$FFF8           ; + val (no boot-init shift, no val change needed). Profiler sets $0718=0.
-    bcs il_skip
-    ldx $0762            ; ilog buffer position (profiler resets to 0; caps at $3FF8)
-    cpx #$3FF8
-    bcs il_skip
-    lda $40
-    sta $40C000,x
+choke_tramp:
+    rep #$30             ; 16-bit M/X (jsr'd into a .org region)
+    lda $073A            ; dedicated chokepoint gate (0 = inert baseline)
+    beq ct_ret
     lda $42
-    sta $40C002,x
-    txa
-    clc
-    adc #4
-    tax
-    stx $0762
-il_skip:
-    plx
+    bne ct_ret           ; PC bank != 0 -> not a bank-0 table PC
+    lda $40              ; A = 68K PC lo16 (cmp preserves A -> still live at ct_hit)
+    cmp #$0CE4           ; allowlist, hottest-first; per-handler counters live in the escape bodies
+    beq ct_hit
+    cmp #$13BE           ; ($1400 is an INTERNAL label of $13BE, covered by entry_13bet -> not a target)
+    bne ct_ret
+ct_hit:
+    pla                  ; drop the jsr choke_tramp return (16-bit) -> dispatch at inext stack level
+    jml $94F900          ; xlat_dispatch (guaranteed HIT for an allowlisted PC; symbol in escbank2)
+ct_ret:
     rts
+    nop                  ; --- padding: keep choke_tramp == ilog's 42 bytes (no shift of lh_sched_pre) ---
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 ; lh_sched — native disabled-task-skip scan for the coroutine scheduler (STEP C). The $074C-$0772
 ; scan ("$0740" region = ~246/tick, the single largest interpreted cost) iterates tasks current+1..15
