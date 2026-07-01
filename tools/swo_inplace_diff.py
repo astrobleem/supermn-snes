@@ -259,6 +259,29 @@ if os.environ.get('SELFFREEZE'):
     r=capture_selffreeze(ESC,7562)
     if r: analyze_selffreeze(*r)
     sys.exit(0)
+
+if os.environ.get('VALIDATE'):
+    # Full-tick escape-vs-MAME using the PROVEN staging (to_3a92 + inject_ce4 -- the path that ran
+    # entry_swo correctly in SELFFREEZE). Run one tick to the idle-loop trap ($0818), diff vs wramB.
+    # VROM selects the ROM (default escape); compare to committed with VROM=<committed path>.
+    rom=os.environ.get('VROM',ESC); WB=open(TD+'/wramB.bin','rb').read()
+    with sess(rom,7563) as m:
+        r16,w16,wh,runf=helpers(m)
+        to_3a92(m); inject_ce4(m)
+        w16(0x0716,0); w16(0x0710,0x0818); w16(0x0730,0)   # trap the idle loop = one tick done
+        w16(0x0712,0); w16(0x0714,1)
+        hit=False
+        for _ in range(400):
+            if r16(0x0712): hit=True; break
+            runf(2)
+        instr=r16(0x4A)|(r16(0x4C)<<16); ac=r16(0xAC)
+        out=bytes(m.read_memory('snesMemory',0x400000,WN))
+        excl=set(range(0x170A-0x80,0x170A+0x80))            # stack window (match lockstep_trap)
+        diff=[i for i in range(WN) if out[i]!=WB[i] and i not in excl]
+        print(">>> VALIDATE %s: idle-trap=%s instr=%d $AC=$%04X  DIFF vs wramB = %d bytes"%(
+            os.path.basename(rom),hit,instr,ac,len(diff)),flush=True)
+        for i in diff[:60]: print("   $F0%04X interp=%02X mame=%02X (A=%02X)"%(i,out[i],WB[i],wramA[i]),flush=True)
+    sys.exit(0)
 snC=capture(COM,7561,'committed')
 snE=capture(ESC,7562,'escape')
 if snE: dump_swo_inputs(snE[0],'escape   ')   # the real entry_swo inputs (pre-fire)
