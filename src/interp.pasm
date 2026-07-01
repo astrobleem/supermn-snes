@@ -18369,7 +18369,7 @@ lh_chk_adbe:
     jmp lh_adbe          ; $ADBE: walking-bit WORD RAM test -> net memset 0 (721K instr)
                          ; ($3F86 byte verify retired -> subsumed by the generic gm_verify)
 lh_gen:
-    jmp lh_sched_pre     ; STEP C: check the scheduler-scan PC ($074C), else fall to gm_memclr
+    jmp swo_tramp        ; STEP C: $0532 switch-OUT trampoline, then $074C scan (lh_sched_pre), else gm_memclr
 lh_nofire:
     clc
     rts
@@ -19795,6 +19795,18 @@ oror_dir0:
     sta $9E              ; kind = Dn direct -> ea_write does the sized Dn writeback
     jsr ea_write
     jmp imm_pc
+
+; swo_tramp — scheduler SWITCH-OUT trampoline (STEP C). lh_gen's `jmp lh_sched_pre` is retargeted
+; here (zero-shift). A = $40 (PC). $0532 = the coroutine yield-trap handler -> dispatch the native
+; switch-out (escbank slot 19 @ $928039); any other PC falls through to lh_sched_pre unchanged.
+; Lives in the free $FFCA-$FFDF gap (zero-run before the vectors), so it adds no bytes to lh_gen.
+.org $FFCA
+swo_tramp:
+    cmp #$0532
+    bne swo_pass
+    jml $928039          ; entry_swo (escbank jmptab slot 19) -> does the save, jml lh_sched
+swo_pass:
+    jmp lh_sched_pre
 
 .org $FFE0
 .word $0000,$0000,irq,irq,$0000,nmi,reset,irq

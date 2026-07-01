@@ -26,6 +26,7 @@ ojmp_hook=$00D1B3
 jsrabs_hook=$00E200
 bhp_after=$00E454
 ors_pre=$00D16F
+lh_sched=$00F9B2
 entry_c9f8=$948039
 entry_d5a0=$94849E
 entry_1008=$94855B
@@ -62,6 +63,7 @@ escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jm
     jmp entry_2bc2               ; slot 16 ($928030)  <- $002BC2 gf260-reached, C-Chip abs
     jmp entry_ccd8               ; slot 17 ($928033)  <- $00CCD8 frame-sharing
     jmp entry_cc10               ; slot 18 ($928036)  <- $00CC10 frame-sharing leaf (move.l fixed)
+    jmp entry_swo                ; slot 19 ($928039)  <- $0532 scheduler switch-OUT (yield trap)
 
 ; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
 entry_d96:
@@ -14036,6 +14038,138 @@ ib_miss:
     lda $50
     sta $42
     jml.l inext
+
+; ===================== SCHEDULER SWITCH-OUT ($0532 yield trap) =====================
+; entry_swo — native coroutine SWITCH-OUT. Reached from bank-$00 swo_tramp (jml $928039) when the
+; interp is about to fetch $0532 (a task yielded via trap; op_trap already pushed PC+SR, so a7 = the
+; post-trap SP). Faithfully replicates $0532-$0550 (verified vs the disasm + op_movem_pre/op_ori_sr):
+;   $0532 ori #$700,sr      -> mask=7   (sr_apply model: $7C = (SR>>8)&7, so $7C|=7)
+;   $0536 movem.l d0-a6,-(a7) -> a7-=60; save 15 regs (slots $00..$38) ascending, BIG-ENDIAN
+;   $053A movea.l $6(a5),a6 ; $053E move.l a7,(a6)   -> a6=*(a5+6); save the new task SP there
+;   $0540 movea.l $4a(a5),a4 ; $0544-$054E  -> a4=*(a5+$4a); (a4).w = ((a4)&$cfff)|$c000  (yield mark)
+;   $0550 bra $74c          -> re-enter the scheduler scan (we jml lh_sched, collapsing it too).
+; DP reg file: D0=$00..D7=$1C, A0=$20..A6=$38, A7=$3C/$3E, a5=$34/$36. Work RAM = $400000+(addr&FFFF).
+entry_swo:
+    rep #$30
+    lda $7C              ; $0532 ori #$700,sr : mask |= 7
+    ora #$0007
+    sta $7C
+    ; --- $0536 movem.l d0-a6,-(a7) : a7 -= 60 (lo16 only, faithful to op_movem_pre) ---
+    lda $3C
+    sec
+    sbc #$003C           ; -60
+    sta $3C              ; new a7 lo16 ($3E hi16 unchanged)
+    sta $54              ; $54 = work-RAM write ptr
+    stz $56              ; $56 = reg slot (0,4,..,$38)
+    ldy #$000F           ; Y = fixed iteration count (15 regs: D0..A6). ROBUST termination: the old
+                         ; `$56==$3C` exact-match terminator was being missed at runtime -> the loop
+                         ; ran away, overran work RAM/stack and crashed. A Y-countdown can't run away.
+swo_lp:
+    ldx $56
+    lda $0002,x          ; reg hi16
+    sta $50
+    lda $0000,x          ; reg lo16
+    sta $52
+    ldx $54
+    sep #$20
+    lda $51              ; bits31-24
+    sta $400000,x
+    inx
+    lda $50              ; bits23-16
+    sta $400000,x
+    inx
+    lda $53              ; bits15-8
+    sta $400000,x
+    inx
+    lda $52              ; bits7-0
+    sta $400000,x
+    inx
+    rep #$20
+    stx $54              ; advance write ptr (X += 4)
+    lda $56
+    clc
+    adc #$0004
+    sta $56
+    dey                  ; 15 iterations exactly (D0..A6); $56 still tracks the slot for the reads
+    bne swo_lp
+    ; --- $053A movea.l $6(a5),a6 : a6 = BE long at (a5+6) ---
+    lda $34
+    clc
+    adc #$0006
+    tax
+    sep #$20
+    lda $400000,x
+    sta $3B              ; a6 bits31-24
+    inx
+    lda $400000,x
+    sta $3A              ; bits23-16
+    inx
+    lda $400000,x
+    sta $39              ; bits15-8
+    inx
+    lda $400000,x
+    sta $38              ; bits7-0
+    rep #$20
+    ; --- $053E move.l a7,(a6) : write new a7 as BE long ---
+    ldx $38              ; a6 lo16
+    sep #$20
+    lda $3F              ; a7 bits31-24
+    sta $400000,x
+    inx
+    lda $3E
+    sta $400000,x
+    inx
+    lda $3D
+    sta $400000,x
+    inx
+    lda $3C
+    sta $400000,x
+    rep #$20
+    ; --- $0540 movea.l $4a(a5),a4 : a4 = BE long at (a5+$4a) ---
+    lda $34
+    clc
+    adc #$004A
+    tax
+    sep #$20
+    lda $400000,x
+    sta $33              ; a4 bits31-24
+    inx
+    lda $400000,x
+    sta $32
+    inx
+    lda $400000,x
+    sta $31
+    inx
+    lda $400000,x
+    sta $30              ; a4 bits7-0
+    rep #$20
+    ; --- $0544-$054E  d0.w = ((a4).w & $cfff) | $c000 ; (a4).w = d0.w  (BE word) ---
+    ldx $30              ; a4 lo16
+    sep #$20
+    lda $400000,x        ; hi byte
+    sta $51
+    inx
+    lda $400000,x        ; lo byte
+    sta $50
+    rep #$20
+    lda $50              ; $51:$50 = BE word
+    and #$CFFF
+    ora #$C000
+    sta $50
+    sta $00              ; move.w d0,... : d0 lo16 = result (d0 hi16 $02 unchanged)
+    ldx $30
+    sep #$20
+    lda $51              ; hi byte
+    sta $400000,x
+    inx
+    lda $50              ; lo byte
+    sta $400000,x
+    rep #$20
+    ; --- $0550 bra $74c : re-enter the scheduler scan natively ---
+    lda #$074C
+    sta $40
+    stz $42
+    jml lh_sched         ; lh_sched scans current+1.. and exits via lhs_found (sec;rts -> re-fetch)
 
 ; ===================== JMP-TABLE STATE-HANDLER DISPATCH ($92:F900) =====================
 ; Reached from bank-$00 ojmp_hook via `jml $92F900`. $40 = the jmp(a0) target (a state-machine

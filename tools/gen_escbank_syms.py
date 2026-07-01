@@ -15,7 +15,8 @@ NEEDED = ["inext", "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
           "rdw_ea_l", "readbyte_l", "writeword_l", "writebyte_l", "usmul_l", "op_rts_sentinel", "ojmp_hook",
           "jsrabs_hook",  # jah2_ext (escbank extension chain) tail-calls the original miss handler
           "bhp_after",    # jah2_ext_bsr tail-calls back into bsr_hookpush's miss continuation
-          "ors_pre"]      # an escbank escape's terminal rts routes here (bank-aware sentinel resume)
+          "ors_pre",      # an escbank escape's terminal rts routes here (bank-aware sentinel resume)
+          "lh_sched"]     # entry_swo (scheduler switch-OUT) tail-jumps into the native $074C scan
 
 sym_path = Path("src/interp.sym")
 esc_path = Path("src/escbank.pasm")
