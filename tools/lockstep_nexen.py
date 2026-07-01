@@ -49,11 +49,17 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     for o in range(0,WN,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
     # release -> run exactly one game tick -> freeze at B1
+    try: cyc0=m.get_cpu_state('Sa1').get('cycleCount')
+    except Exception: cyc0=None
     w16(0x0702,0); w16(0x0704,1)
     b1=False
     for _ in range(200):
         runf(20)
         if r16(0x0702): b1=True; break
+    try: cyc1=m.get_cpu_state('Sa1').get('cycleCount')
+    except Exception: cyc1=None
+    if b1 and cyc0 is not None and cyc1 is not None:
+        print(">>> SA-1 cycles B0->B1 (one tick) = %d"%(cyc1-cyc0),flush=True)
     instr=r16(0x4A)|(r16(0x4C)<<16)
     print("B1 frozen=%s instr(B0->B1)=%d  ce4=%d 13be=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),ESC),flush=True)
     if not b1:   # runaway: dump the 68K PC ring ($0400, 128 entries lo16/hi16, write idx @ $48) to see where
