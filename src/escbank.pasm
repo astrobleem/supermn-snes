@@ -14049,6 +14049,12 @@ ib_miss:
 ;   $0540 movea.l $4a(a5),a4 ; $0544-$054E  -> a4=*(a5+$4a); (a4).w = ((a4)&$cfff)|$c000  (yield mark)
 ;   $0550 bra $74c          -> re-enter the scheduler scan (we jml lh_sched, collapsing it too).
 ; DP reg file: D0=$00..D7=$1C, A0=$20..A6=$38, A7=$3C/$3E, a5=$34/$36. Work RAM = $400000+(addr&FFFF).
+; RELOCATED to $92:FA00 (free space after ojmp_disp, which ends ~$F92E). entry_swo is ~240B; the old
+; sequential placement at $F86E left only 146B before the `.org $F900` (ojmp_disp), so Poppy SILENTLY
+; let ojmp_disp overwrite entry_swo's tail (SP-save 4th store + a4/descriptor/jml) -> the switch-out
+; fell into ojmp_disp and hung (the .org-overlap silent-break, see memory escape-deploy-shift-safe).
+; The jmptab `jmp entry_swo` (slot 19) auto-follows this label. $FA00+240 = $FAF0 < $FFFF, no overlap.
+.org $FA00
 entry_swo:
     rep #$30
     lda $7C              ; $0532 ori #$700,sr : mask |= 7
