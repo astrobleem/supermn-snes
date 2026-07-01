@@ -1,13 +1,30 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-06-30 (pt.3). **Read this first** in a fresh session, then act. It captures the
+Last updated: 2026-07-01 (pt.4). **Read this first** in a fresh session, then act. It captures the
 current state, the reliable mental model, the strategic reality (read §0 before deciding what to do),
 the tooling, the validated escape recipes, and the prioritized next steps.
 
+> ## ⇒ IMMEDIATE NEXT ACTION (fresh session): execute the approved Phase-2 plan
+> **Read `/home/chad/.claude/plans/yes-please-enter-plan-splendid-brooks.md` in full and begin.** It is
+> a self-contained, APPROVED, cost-confirmed plan for **Phase-2 Campaign 1 — native scheduler
+> SWITCH-IN** (the *measured-hottest* un-escaped persistent cost: ~19–28 full context-restores/tick,
+> ~0.9–1.5M cyc/tick ≈ 5–8× the 179K budget). The plan's **"Execution log"** section carries everything
+> to resume: the decisions (intercept = **Option B, extend `lh_sched`**; cost-confirm **DONE, positive**),
+> the exact 68K switch-IN sequence to replicate, the `entry_swo` template + `op_rte` tail, and the
+> reg-file mapping at the intercept. **Start at plan task #10 (write `entry_swin`).** Validate with the
+> Phase-1 tools: `tools/multitick_choke.py` (SP-aware self-diff — 0 LIVE diffs is the gate),
+> `tools/lockstep_choke.py` (gated same-tick A/B cyc = Verification step 1), `tools/sched_trace.py`.
+> Triples in `/tmp/supermn-scratch/`: `ce4trip64` (moderate), `span_heavy` (heavy), `span_quiet` (quiet).
+> Substantial multi-session hand-assembly campaign (same order as the switch-OUT effort). Do NOT re-pick
+> a target by structure — the plan already did the measured-cost gate (ce58 call-tree was COLD/rejected).
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
-Repo: **clean at `58b20cb`**, branch `boot-scheduler-progress`. The scheduler switch-OUT escape from
-this session is **reverted (not in the build)** — the build is GREEN. AOT table: **15 escapes**
-(c172 + the $295A/$29B6 renderers, last session). Build: `bash tools/build_interp.sh` → `build/interp.sfc`.
+Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
+generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
+tree clean at that commit. `entry_swo` (scheduler switch-**OUT**) is **deployed & GREEN** (bit-exact;
+measurement showed it escaped the *rare* half — 1×/tick — which is why it read as "not a cycle win"; the
+frequent half, switch-**IN** at ~19–28×/tick, is the open target). AOT table: **16 escapes** (15 prior +
+`entry_13bet`). Build: `bash tools/build_interp.sh` → `build/interp.sfc`.
 
 > Older planning text in STATUS.md / ROADMAP.md predates the strategic picture below. Trust THIS doc.
 

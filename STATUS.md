@@ -15,6 +15,14 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 > correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
 > block + memory `fetch-chokepoint-rts-escape`.
 
+> **UPDATE 2026-07-01 (pt.2) — chokepoint generalized ($13BE, shipped `a013dee`); Phase-2 plan APPROVED.**
+> Reconciled activity-spectrum budget (bit-exact): per-tick cost is scene-dependent 2.7M(quiet)..12.6M
+> (heavy combat) cyc — worst-case ~70× budget. Measured-cost gate picked the first Phase-2 campaign:
+> **native scheduler SWITCH-IN** (~19–28 restores/tick, ~0.9–1.5M cyc/tick), rejecting the structurally-
+> tempting-but-COLD ce58 call-tree (0× measured). **NEXT ACTION: execute
+> `/home/chad/.claude/plans/yes-please-enter-plan-splendid-brooks.md`** (self-contained, cost-confirmed;
+> start at task #10). See the [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) "IMMEDIATE NEXT ACTION".
+
 > **UPDATE 2026-06-30 — read [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) for the
 > authoritative current state.** Two things below are now CORRECTED:
 > - **rts-class table dispatch fires 0× in gameplay** (verified with SA-1 exec-hooks). The "rts
