@@ -127,6 +127,31 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > per-entry-PC identification (the c172/d5c4 pattern). Or the bank-$00 compaction to unblock more
 > loop_hook-class escapes. Re-run the ALLSTREAM gate first.
 
+> ## ⏸ Campaign 5 — GATE DONE: clean levers EXHAUSTED; remaining = complex game-logic (2026-07-02 pt.11)
+> Re-profiled full-on (incl. lhs_sel): moderate 4666→3714 done; remaining ~1046 interp-instr is
+> dominated by **complex game-logic / state-machine clusters, none a clean mechanical escape:**
+> - **`$01C9xx-$01F1xx` (~177, biggest):** the main **object-update loop** — 16-object physics +
+>   animation, `ori #$700,sr; set a7; jsr(a6)` DYNAMIC dispatch, table-driven fixed-point math,
+>   branches to `$1cd38/$1ca48`. Core game logic, dynamic-dispatch — a transpile rabbit hole (high
+>   risk, bridge-dominated). NOT the mechanical-scheduler class C1/C4 escaped.
+> - **`$00CBxx` (~109):** a big linked function (a6-frame locals, jump tables `$32578/$32d16`) with an
+>   object-copy loop + `bsr $cb9e`/iter. Also game logic; no clean entry (link >$140 back).
+> - **`$023xx-$024xx` (~94):** coroutine `trap #$5`. **`$012xx` (~58):** small `bsr`-reached fns —
+>   only `$12A92` (22 instr) / `$12B6C` (8) transpile clean, and each fires ~1×/tick (~30 instr total,
+>   token value); `$129C6` (bset-dyn) + `$12C1A` (stray blt) are UNIMPLEMENTED.
+>
+> **STRATEGIC INFLECTION (the honest read after C1-4 + the transpiler fix):** the escape-COVERAGE
+> approach has now captured the mechanical/scheduler/background levers. What remains is game logic that
+> is expensive+risky to escape cleanly and (per [[cycle-budget-realtime-gap]]) bridge-dominated /
+> diminishing. Coverage alone plateaus at ~5-10× over the 179K budget; we're still ~24-40× off. The
+> real levers from here are **not more coverage** but: (a) **codegen efficiency** (the thesis's actual
+> lever — but [[workram-lever-bounded]] pins EA-specialization at ≤20%, ~1.2×, not the ~5.7× realtime
+> needs); (b) a **big game-logic transpile** (the object-update loop — high effort, uncertain net given
+> dynamic dispatch); (c) **accept sub-realtime** and bank the C1-4 progress; or (d) reconsider the
+> hybrid interp+escape ARCHITECTURE vs full-AOT for the realtime goal. Campaign 5 did NOT ship — the
+> disciplined call is to surface this fork rather than grind a marginal/risky escape. Tools ready
+> (lockstep_trap/choke/multitick all have SEL/$0736; `val_branch32.py` guards the transpiler).
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working

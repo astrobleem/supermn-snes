@@ -55,7 +55,8 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     w16(0x073A,int(os.environ.get('CHOKE','0')))          # fetch-chokepoint gate (ce4/13be)
     w16(0x073C,0xA55A if os.environ.get('SWIN')=='1' else 0)  # switch-IN escape gate (magic-match)
     w16(0x073E,1 if os.environ.get('C9A6OFF')=='1' else 0)    # c9a6 validation toggle (1=skip=without-c9a6 baseline)
-    for _a in (0x407FE0,0x407FE2,0x407FE4,0x407FE6,0x407FE8): m.write_u16(_a,0,'snesMemory')  # ce4t/swin/8fa/fd2/c9a6 counters
+    w16(0x0736,0x5EEC if os.environ.get('SEL')=='1' else 0)   # scheduler-SELECT escape gate (lhs_sel)
+    for _a in (0x407FE0,0x407FE2,0x407FE4,0x407FE6,0x407FE8,0x407FEA): m.write_u16(_a,0,'snesMemory')  # ce4t/swin/8fa/fd2/c9a6/sel counters
     if os.environ.get('LH072E') is not None: w16(0x072E, int(os.environ['LH072E'],0))  # loop_hook enable (per-fetch tax probe)
     for o in range(0,WN,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
@@ -157,10 +158,10 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
                 except StopIteration: d='?'
                 print(">>>   %-4s $%06X x%-4d [%s]"%(k,t,c,d),flush=True)
     instr=r16(0x4A)|(r16(0x4C)<<16)
-    c=m.read_memory('snesMemory',0x407FE0,10)
-    ce4t=c[0]|(c[1]<<8); swn=c[2]|(c[3]<<8); f8fa=c[4]|(c[5]<<8); ffd2=c[6]|(c[7]<<8); fc9a6=c[8]|(c[9]<<8)
-    print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d  [ctrs: ce4t=%d swin=%d 8fa=%d fd2=%d c9a6=%d]"%(
-        b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC,ce4t,swn,f8fa,ffd2,fc9a6),flush=True)
+    c=m.read_memory('snesMemory',0x407FE0,12)
+    ce4t=c[0]|(c[1]<<8); swn=c[2]|(c[3]<<8); f8fa=c[4]|(c[5]<<8); ffd2=c[6]|(c[7]<<8); fc9a6=c[8]|(c[9]<<8); fsel=c[10]|(c[11]<<8)
+    print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d  [ctrs: ce4t=%d swin=%d 8fa=%d fd2=%d c9a6=%d sel=%d]"%(
+        b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC,ce4t,swn,f8fa,ffd2,fc9a6,fsel),flush=True)
     if os.environ.get('REGDUMP'):
         rf=bytes(m.read_memory('Sa1Memory',0x00,0x40))
         nm=['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6','a7']
