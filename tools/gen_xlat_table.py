@@ -27,7 +27,10 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC,
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = {0xCE4, 0x295A, 0x29B6, 0x13BE}   # $13BE (2026-07-01): rts-class LEAF handler added to the fetch-chokepoint allowlist (see interp choke_tramp). [$1400 dropped: it is an INTERNAL label of $13BE, covered by entry_13bet.] $0CE4 (ce4t) -- SHIPPED 2026-06-29, the first --table (rts-class) escape. Catches the
+TABLE_PCS = {0xCE4, 0x295A, 0x29B6, 0x13BE,
+             0x8FA,   # CAMPAIGN 2 (2026-07-01): $0008FA long block-copy, jsr-reached, 446 interp-instr/heavy-tick -> entry_8fat (chokepoint allowlist)
+             0xFD2}   # CAMPAIGN 2: $000FD2 = MID-LOOP RESUME of the $0FB8 fill (IRQ slices the fill; ISR-exit rte resumes at $0FD2 -- unreachable by jsr/jmp/rte tables), 595 interp-instr/heavy-tick -> entry_fd2t
+             # $13BE (2026-07-01): rts-class LEAF handler added to the fetch-chokepoint allowlist (see interp choke_tramp). [$1400 dropped: it is an INTERNAL label of $13BE, covered by entry_13bet.] $0CE4 (ce4t) -- SHIPPED 2026-06-29, the first --table (rts-class) escape. Catches the
                       # rts/jmp reaches of $CE4 (~12.5% of frame) that the inline jah2 entry_ce4 (jsr-only)
                       # MISSES: an instrumented run showed entry_ce4t fires 63451x via the table.
                       # VALIDATION (full-tick lockstep_trap on a fresh 64KB $CE4-active wramB triple, ce4trip64):

@@ -52,6 +52,9 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     w16(0x60,Z);w16(0x6E,C);w16(0x70,N);w16(0x72,V);w16(0xA2,X);w16(0x7C,SR&7 or 7)
     w16(0xA4,USP&0xFFFF);w16(0xA6,(USP>>16)&0xFFFF);w16(0xA8,1);w16(0xAA,0);w16(0x4A,0);w16(0x4C,0)
     w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x0734,0); w16(0x071A,ESC)
+    w16(0x073A,int(os.environ.get('CHOKE','0')))          # fetch-chokepoint gate (ce4/13be)
+    w16(0x073C,0xA55A if os.environ.get('SWIN')=='1' else 0)  # switch-IN escape gate (magic-match)
+    m.write_u16(0x407FE0,0,'snesMemory'); m.write_u16(0x407FE2,0,'snesMemory')  # ce4t/swin counters
     if os.environ.get('LH072E') is not None: w16(0x072E, int(os.environ['LH072E'],0))  # loop_hook enable (per-fetch tax probe)
     for o in range(0,WN,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
@@ -87,7 +90,16 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         import collections
         na,nr=r16(0x0718),r16(0x0762)
         def dec(buf,nb): return [((buf[i+2]|(buf[i+3]<<8))<<16)|(buf[i]|(buf[i+1]<<8)) for i in range(0,min(nb,len(buf))-3,4)]
-        real=dec(bytes(m.read_memory('snesMemory',0x40C000,min(nr,0x3FF8))),nr)
+        if os.environ.get('ALLSTREAM'):
+            # ilog is DEAD (choke_tramp replaced it) -> use the dbg_fetch ALL stream ($0718 @ $40:8000).
+            # With escapes armed, "all fetched" ~= genuinely-interpreted + 1-entry dispatch markers.
+            nb=min(na,0x7FF8)
+            raw=b''
+            for o in range(0,nb,0x1000): raw+=bytes(m.read_memory('snesMemory',0x408000+o,min(0x1000,nb-o)))
+            real=dec(raw,nb)
+            print(">>> ALLSTREAM: %d fetched PCs ($0718=%d bytes%s)"%(len(real),na," CAPPED" if na>=0x7FF8 else ""),flush=True)
+        else:
+            real=dec(bytes(m.read_memory('snesMemory',0x40C000,min(nr,0x3FF8))),nr)
         reg=collections.Counter(p&0xFFFFC0 for p in real)
         print(">>> GAMEPLAY interpreted stream: %d REAL PCs, top 64B regions:"%len(real),flush=True)
         import capstone as _cs; _MD=_cs.Cs(_cs.CS_ARCH_M68K,_cs.CS_MODE_BIG_ENDIAN)
@@ -96,6 +108,16 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
             try: ins=next(_MD.disasm(_ROM[0x10000+(reg64&0x3FFFFF):0x10000+(reg64&0x3FFFFF)+8],reg64)); d='%s %s'%(ins.mnemonic,ins.op_str)
             except StopIteration: d='?'
             print(">>>   $%06X  x%-4d  [%s]"%(reg64,cnt,d),flush=True)
+        ex=os.environ.get('EXACT')   # "lo-hi[,lo-hi...]" hex ranges -> exact-PC histogram
+        if ex:
+            for rng in ex.split(','):
+                lo,hi=[int(x,16) for x in rng.split('-')]
+                h=collections.Counter(p&0xFFFFFF for p in real if lo<=(p&0xFFFFFF)<=hi)
+                print(">>> EXACT $%06X-$%06X (%d PCs):"%(lo,hi,sum(h.values())),flush=True)
+                for pc,c in sorted(h.items()):
+                    try: ins=next(_MD.disasm(_ROM[0x10000+(pc&0x3FFFFF):0x10000+(pc&0x3FFFFF)+8],pc)); d='%s %s'%(ins.mnemonic,ins.op_str)
+                    except StopIteration: d='?'
+                    print(">>>   $%06X x%-4d %s"%(pc,c,d),flush=True)
         tgt=os.environ.get('PRED')
         if tgt:
             t=int(tgt,16); preds=collections.Counter()
@@ -134,7 +156,9 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
                 except StopIteration: d='?'
                 print(">>>   %-4s $%06X x%-4d [%s]"%(k,t,c,d),flush=True)
     instr=r16(0x4A)|(r16(0x4C)<<16)
-    print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d"%(b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC),flush=True)
+    _sw=m.read_memory('snesMemory',0x407FE2,2); _ce=m.read_memory('snesMemory',0x407FE0,2)
+    print("B1 trap=%s instr=%d ce4=%d 13be=%d ceb6=%d esc=%d  [wram ctrs: ce4t=%d swin=%d]"%(
+        b1,instr,r16(0x0724),r16(0x0730),r16(0x0734),ESC,_ce[0]|(_ce[1]<<8),_sw[0]|(_sw[1]<<8)),flush=True)
     if os.environ.get('REGDUMP'):
         rf=bytes(m.read_memory('Sa1Memory',0x00,0x40))
         nm=['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6','a7']

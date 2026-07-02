@@ -5794,6 +5794,508 @@ L13be_1418:
     sta $3C
     jml.l ors_pre
 
+; ===== CAMPAIGN 2 (2026-07-01): heavy-tick background-work escapes (fetch-chokepoint reached) ====
+; entry_8fat  <- $0008FA long block-copy (jsr-reached x3/heavy-tick; 446 interp-instr measured).
+; entry_fd2t  <- $000FD2 MID-LOOP RESUME segment of the $0FB8 word-fill (entry_fb8 slot 1 covers
+;               fresh jsr calls, but the frame-IRQ slices long fills and the ISR-exit rte resumes
+;               at $0FD2 -- a mid-function PC no jsr/jmp/rte table knows; 595 interp-instr/heavy
+;               tick measured). Both dispatch via choke_tramp allowlist + TABLE_PCS (--table conv:
+;               return already on the 68K stack). CCR materialized at the dbra-fallthrough exit
+;               edges BY HAND (transpiler gap: emit_ccr_native covers Bcc-to-exit only).
+; --- transpiled from $0008FA (12 instrs) by tools/transpile.py [bank1] ---
+entry_8fat:
+    rep #$30
+    lda $407FE4          ; fire counter (work-RAM scratch; $7FE0-block convention)
+    inc a
+    sta $407FE4
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $24
+    sta $54
+    lda $26
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $04
+    sta $54
+    lda $06
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$0008
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $20
+    clc
+    adc #$0002
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    pla
+    sta $00
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $24
+    lda $9E
+    sta $26
+    lda $20
+    clc
+    adc #$0004
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $20
+    clc
+    adc #$0004
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $9A
+    sta $04
+    lda $9C
+    sta $06
+    lda $34
+    clc
+    adc #$1B12
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    ora $06
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1B14
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    ora $04
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+L8fa_910:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $20
+    clc
+    adc #$0004
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $9C
+    pha
+    lda $24
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $9A
+    pha
+    lda $24
+    clc
+    adc #$0002
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $24
+    clc
+    adc #$0004
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lf8fa_1
+    jmp L8fa_910
+Lf8fa_1:
+    ; --- CCR at exit (hand-added; dbra-fallthrough gap): last op = move.l (a0)+,(a1)+ ->
+    ;     N=bit31 ($9C=hi16 of the last-copied long), Z=(32-bit==0, $9C|$9A), V=0, C=0.
+    lda $9C
+    and #$8000
+    sta $70              ; N
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    stz $60              ; Z=0 (assume nonzero)
+    lda $9C
+    ora $9A
+    bne Lf8fa_ccrx
+    inc $60              ; Z=1
+Lf8fa_ccrx:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $02
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $06
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $04
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $26
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $3A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    and #$00FF
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- transpiled from $000FD2 (5 instrs) by tools/transpile.py [bank1] ---
+entry_fd2t:
+    rep #$30
+    lda $407FE6          ; fire counter (work-RAM scratch; $7FE0-block convention)
+    inc a
+    sta $407FE6
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+Lfd2_fd2:
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0002
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lffd2_1
+    jmp Lfd2_fd2
+Lffd2_1:
+    ; --- CCR at exit (hand-added; dbra-fallthrough gap): last op = move.w d0,(a0)+ ->
+    ;     N=bit15 of d0.w ($00, still live pre-movem), Z=(d0.w==0), V=0, C=0.
+    lda $00
+    and #$8000
+    sta $70              ; N
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    stz $60              ; Z=0 (assume nonzero)
+    lda $00
+    bne Lffd2_ccrx
+    inc $60              ; Z=1
+Lffd2_ccrx:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $02
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $3A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    and #$00FF
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================

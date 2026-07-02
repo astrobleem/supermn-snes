@@ -13,6 +13,7 @@ TD=sys.argv[1] if len(sys.argv)>1 else '/tmp/supermn-scratch/ce4trip64'
 NTICKS=int(os.environ.get('NTICKS','20'))
 CHOKE=int(os.environ.get('CHOKE','0'))
 SWIN=int(os.environ.get('SWIN','0'))   # scheduler switch-IN escape (entry_swin): 1 -> arm $073C=$A55A
+ESC=int(os.environ.get('ESC','0'))     # $071A global escape gate; default 0 = historical baseline
 OUT=os.environ.get('OUT','/tmp/mt_dump.bin')
 PORT=int(os.environ.get('PORT','7523'))
 AC=int(os.environ.get('AC','2F60'),16)
@@ -23,7 +24,7 @@ SP=be32(regs,15*4); USP=be32(regs,16*4); SR=be32(regs,17*4)&0xFFFF
 Z=(SR>>2)&1;C=SR&1;N=(SR>>3)&1;V=(SR>>1)&1;X=(SR>>4)&1
 def le32(v): return '%02x%02x%02x%02x'%(v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF)
 WN=len(wramA); NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT='/tmp/b0_native.mss'
-print("triple %s CHOKE=%d SWIN=%d NTICKS=%d"%(TD,CHOKE,SWIN,NTICKS),flush=True)
+print("triple %s CHOKE=%d SWIN=%d ESC=%d NTICKS=%d"%(TD,CHOKE,SWIN,ESC,NTICKS),flush=True)
 with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=PORT,boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a): b=m.read_memory('Sa1Memory',a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)
@@ -42,11 +43,13 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     wh(0x40, le32(0x00003A92)); w16(0x3C, SP&0xFFFF); w16(0x3E,(SP>>16)&0xFF)
     w16(0x60,Z);w16(0x6E,C);w16(0x70,N);w16(0x72,V);w16(0xA2,X);w16(0x7C,SR&7 or 7)
     w16(0xA4,USP&0xFFFF);w16(0xA6,(USP>>16)&0xFFFF);w16(0xA8,1);w16(0xAA,0);w16(0x4A,0);w16(0x4C,0)
-    w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x071A,0)
+    w16(0xAC,AC); w16(0x0718,0xFFF8); w16(0x0724,0); w16(0x0730,0); w16(0x071A,ESC)
     for o in range(0,WN,0x2000): wh(0x400000+o, wramA[o:o+0x2000].hex(),'snesMemory')
     w16(0x410000,0,'snesMemory'); w16(0x410002,0,'snesMemory')
     m.write_u16(0x407FE0,0,'snesMemory')
     m.write_u16(0x407FE2,0,'snesMemory')   # zero swin commit counter
+    m.write_u16(0x407FE4,0,'snesMemory')   # zero 8fat counter (campaign 2)
+    m.write_u16(0x407FE6,0,'snesMemory')   # zero fd2t counter (campaign 2)
     w16(0x073A,CHOKE)
     w16(0x073C,0xA55A if SWIN else 0)  # arm switch-IN escape (magic-match gate in entry_swin)
     ticks=0
@@ -64,9 +67,10 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
             print("  tick %d: $073C=%04X swin_cnt=%d"%(ticks,r16(0x073C),swd[0]|(swd[1]<<8)),flush=True)
             if os.environ.get('REARM'): w16(0x073C,0xA55A if SWIN else 0)
     c_ce4=r16(0x0724); c_13be=r16(0x0730)
-    sw=m.read_memory('snesMemory',0x407FE2,2); c_swin=sw[0]|(sw[1]<<8)
+    ctr=m.read_memory('snesMemory',0x407FE2,6)
+    c_swin=ctr[0]|(ctr[1]<<8); c_8fa=ctr[2]|(ctr[3]<<8); c_fd2=ctr[4]|(ctr[5]<<8)
     sp=r16(0x3C)|(r16(0x3E)<<16)   # 68K a7 at the $3A92 boundary: diffs below SP (dead stack) are benign
-    print("completed %d/%d ticks   dispatch: ce4=%d 13be=%d swin=%d   boundarySP=$%06X"%(ticks,NTICKS,c_ce4,c_13be,c_swin,sp),flush=True)
+    print("completed %d/%d ticks   dispatch: ce4=%d 13be=%d swin=%d 8fa=%d fd2=%d   boundarySP=$%06X"%(ticks,NTICKS,c_ce4,c_13be,c_swin,c_8fa,c_fd2,sp),flush=True)
     out=bytes(m.read_memory('snesMemory',0x400000,WN))
     open(OUT,'wb').write(out)
     print("dumped %d bytes -> %s"%(len(out),OUT),flush=True)

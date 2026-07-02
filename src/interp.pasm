@@ -18916,23 +18916,17 @@ choke_tramp:
     cmp #$0CE4           ; allowlist, hottest-first; per-handler counters live in the escape bodies
     beq ct_hit
     cmp #$13BE           ; ($1400 is an INTERNAL label of $13BE, covered by entry_13bet -> not a target)
-    bne ct_ret
+    beq ct_hit
+    cmp #$08FA           ; CAMPAIGN 2: block-copy, jsr-reached (446 instr/heavy-tick) -> entry_8fat
+    beq ct_hit
+    cmp #$0FD2           ; CAMPAIGN 2: $0FB8-fill MID-LOOP RESUME (IRQ-sliced; ISR-exit rte lands
+    bne ct_ret           ;   here -- no jsr/jmp/rte table can catch it; 595 instr/heavy-tick) -> entry_fd2t
 ct_hit:
     pla                  ; drop the jsr choke_tramp return (16-bit) -> dispatch at inext stack level
     jml $94F900          ; xlat_dispatch (guaranteed HIT for an allowlisted PC; symbol in escbank2)
 ct_ret:
     rts
     nop                  ; --- padding: keep choke_tramp == ilog's 42 bytes (no shift of lh_sched_pre) ---
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
     nop
     nop
 
