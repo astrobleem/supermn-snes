@@ -41,6 +41,27 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > the $C8C0-$CAFF helper cluster (~300 instr). Re-run the ALLSTREAM gate first; watch for more
 > IRQ-slice resume-class PCs (check mid-loop PCs of any hot dbra loop).
 
+> ## ✅ Phase-2 Campaign 3 (HUD decimal formatter) — COMPLETE, SHIPPED `11078ba` (2026-07-01 pt.7)
+> **Gate** (re-profiled current build, ESC=1 all-armed): the `$C8C0-$CAFF` HUD/score cluster is the
+> heavy tick's largest remaining interp region (~300 instr); `$00C9A6` (number→ASCII decimal) is its
+> hottest leaf (~130 instr). Shipped **`entry_c9a6`** — reached `jsr.l` + `bsr`($C90C/$C960) → wired
+> into BOTH jah2 chains (`jah2_ext` + `jah2_ext_bsr`) with a cross-bank `jml` to a `$94` body
+> (default convention, proven by `entry_8c2`; counter `$40:7FE8`; normally-on validation toggle
+> `$073E`). **Cost (ESC=1 single-tick heavy): 3.14M → 2.80M cyc (−337K/3 fires; instr 660→514).**
+> Fires only when the HUD redraws (heavy 3×, all bsr; moderate/quiet 0×).
+> **⚠ Found TWO GENERAL transpiler bugs** (memory [[transpiler-32bit-flag-bug]]): `emit_signed_cmp`
+> and `tst` use the `.w`-only `ea_load_A`, so **all `.l` cmp/cmpi/cmpa/tst compare only the LOW
+> word.** Bit c9a6 as `cmpi.l #$1869F` (clamp misfire → "99999") and `tst.l d0` (digit-loop exit one
+> early). Hand-fixed both in the body (like the Campaign-2 dbra-CCR gap); **proper transpiler fix is
+> TODO and matters for the Gigandes port.** Validated: all-off regression unshifted; ESC=1 c9a6-ON
+> vs-MAME GREEN on heavy (BOTH interpreted and native arms match the MAME oracle).
+> **NEXT (Campaign 4):** re-run the ALLSTREAM gate; remaining heavy clusters are the `$C8E0/$C958`
+> HUD-draw parents (bridge c9a6 — now escaped — + the `jsr(a0)` blitters via `$1c9e/$1cae(a5)`) and
+> the `$044x`/`$0572x`/`$072-73xx` regions; moderate is scheduler-select + `$01C9/$01E7/$023-24xxx`.
+> **Strategic:** fixing the transpiler 32-bit-flag bug is a high-value cross-cutting task (unblocks
+> clean `--table`/`--bank2` escapes of any arithmetic-heavy fn + Gigandes) — consider it before/【as】
+> Campaign 4.
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working

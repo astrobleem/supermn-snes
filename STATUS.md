@@ -15,6 +15,14 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 > correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
 > block + memory `fetch-chokepoint-rts-escape`.
 
+> **UPDATE 2026-07-01 (pt.5) — Phase-2 Campaign 3 COMPLETE: HUD formatter shipped `11078ba`.**
+> `entry_c9a6` ($00C9A6 number→ASCII decimal, the hottest leaf of the $C8C0-$CAFF HUD cluster;
+> bsr+jsr.l → both jah2 chains, $94 cross-bank). ESC=1 heavy: 3.14M → 2.80M cyc (−337K/3 fires).
+> All gates GREEN (all-off regression unshifted; ESC=1 c9a6-ON matches the MAME oracle). **Surfaced a
+> GENERAL transpiler bug** (`.l` cmp/cmpi/cmpa/tst compare only the LOW word — `ea_load_A` is
+> `.w`-only); hand-fixed cmpi.l+tst.l in the body, proper transpiler fix TODO (matters for Gigandes).
+> See MAIN_PLANNING_HANDOFF.md pt.7 + memory `transpiler-32bit-flag-bug`.
+
 > **UPDATE 2026-07-01 (pt.4) — Phase-2 Campaign 2 COMPLETE: heavy-tick background loops shipped `5aea367`.**
 > ALLSTREAM profile gate found 62% of the heavy tick's remaining interp = the $0008FA block-copy +
 > the $0FB8 fill's **IRQ-slice mid-loop resume at $0FD2** (a NEW reach class: ISR-exit rte lands at a
