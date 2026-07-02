@@ -57,6 +57,16 @@ if _osp.exists("src/xlat_table.bin"):
     assert len(XLAT) <= 0x8000, ("xlat table %d bytes overflows the $2B0000..$2B8000 bank" % len(XLAT))
     ROM[0x2B0000:0x2B0000+len(XLAT)] = XLAT          # @ SA-1 $96:8000 (file $2B0000)
 
+# --- THIRD SA-1 escape bank ($97:8000, file $2B8000) ---
+# entry_25110 (collision, $025110): its 8KB body overflowed its bank-$00 inline gap ($D1ED..$E000)
+# and was silently clobbered by the following .org routines. Relocated to this fresh 32KB bank (the
+# SA-1 MMC maps file $200000-$2FFFFF -> $80-$9F uniformly, so file $2B8000 = $97:8000, executable
+# like $92/$94). Bank $00's dead inline entry_25110 @ $D1ED is redirected here via `jml $978000`.
+if _osp.exists("src/escbank3.bin"):
+    ESC3 = Path("src/escbank3.bin").read_bytes()
+    assert len(ESC3) <= 0x8000, ("escbank3 %d bytes overflows the $2B8000..$2C0000 bank" % len(ESC3))
+    ROM[0x2B8000:0x2B8000+len(ESC3)] = ESC3          # @ SA-1 $97:8000 (file $2B8000)
+
 # --- SA-1 LoROM mirror of the interpreter ---
 # Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style
 # (32KB/bank): $00:8000-FFFF -> FILE $0-$7FFF, so $00:FFFC (reset) -> FILE $7FFC and the

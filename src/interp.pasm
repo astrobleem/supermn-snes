@@ -11181,9 +11181,14 @@ df_gap_redir:
 ; from MAME (data/cchip_boot_response.bin). Read at $00:F700 via DBR=$00.
 .org $D1ED
 ; --- transpiled from $025110 (545 instrs) by tools/transpile.py ---
+; RELOCATED 2026-07-02: this inline body OVERFLOWS its $D1ED..$E000 gap (8003B into 3603B) -> its back
+; half ($E000+) is silently overwritten by op_mw_d16d16_v2/jsrabs_hook/dbg_fetch, so native ran garbage
+; past $E000 in combat. The body now lives in escbank3 ($97:8000); the entry below is a zero-shift
+; redirect (`jml $978000` + `nop` = 5B = the old `rep #$30`+`inc $072A`). Everything after is DEAD CODE
+; (kept only to avoid a bank-$00 shift; it still harmlessly overlaps the .org $E000 routines as before).
 entry_25110:
-    rep #$30
-    inc $072A
+    jml $978000          ; -> escbank3 entry_25110 ($97:8000 = file $2B8000)
+    nop
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
     sta $54
@@ -17021,10 +17026,10 @@ jsrabs_hook2:
 jah2_gated:
     lda $50
     beq jah2_bank0       ; bank==0 -> the bank-$00 cmp chain below
-    jmp jah2_miss        ; $025110 (the ONLY bank!=0 jah2 escape) DISABLED -> interpret. entry_25110
-                         ; (collision) is the task-#73 divergence source: its native exit leaves a
-                         ; register/CCR != interp, so the coroutine scheduler saves a divergent task
-                         ; context ($F001B6-$205 + $0049). Bisected 2026-07-02 (was: jmp jah2_b2).
+    jmp jah2_b2          ; $025110 (the ONLY bank!=0 jah2 escape) -> jah2_e25110 -> the inline entry_25110
+                         ; @ $D1ED, which is now a `jml $978000` REDIRECT to escbank3 ($97:8000). The
+                         ; body was relocated 2026-07-02 because its 8003B inline body overflowed its
+                         ; $D1ED..$E000 gap and its back half was clobbered by the .org $E000 routines.
 jah2_bank0:
     lda $52
     ; DISPATCH-SCALING: bne-skip + jmp (the dispatcher blocks span >127B; a plain `beq`
@@ -18641,6 +18646,20 @@ gv_nohi:
     sec
     rts
 
+; ors_97chk / ors_pre_97 — bank-$97 (escbank3) CALL-BRIDGE sentinel resume. Reached from ors_94chk's
+; `jmp ors_97chk` when the popped return bank != $00FE/$00FD. $00FC -> resume the native continuation
+; in bank $97 (escbank3, file $2B8000; entry_25110's 2 call-bridges). Mirrors ors_pre_94 exactly.
+; Placed in the free $F6EA..$F700 gap (the $F602 section ends `sec;rts` @ $F6E9) so it shifts nothing.
+.org $F6EA
+ors_97chk:
+    cmp #$00FC
+    beq ors_pre_97
+    jmp op_rts_sentinel
+ors_pre_97:
+    lda #$0097
+    sta $42
+    jml [$0040]
+
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
@@ -18892,7 +18911,7 @@ svb_done:
 ors_94chk:
     cmp #$00FD
     beq ors_pre_94
-    jmp op_rts_sentinel
+    jmp ors_97chk        ; (was op_rts_sentinel) -> check the bank-$97 sentinel ($00FC) too, then fall through
 ors_pre_94:
     lda #$0094
     sta $42
