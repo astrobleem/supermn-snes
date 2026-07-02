@@ -78,6 +78,37 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > triples; also older mem-codegen) → they heal on next natural re-transpile (regen isn't a clean swap;
 > needs each escape's gate re-validated). See memory [[transpiler-32bit-flag-bug]].
 
+> ## ⏸ Campaign 4 — GATE DONE, hit the bank-$00 wall (2026-07-01 pt.9); STRATEGIC FORK, nothing shipped
+> Re-profiled the current build (ALLSTREAM, ESC=1 all-armed). **Remaining interp, ranked:**
+> - **Scheduler SELECT `$075C-$0778` = the biggest lever: 121/tick moderate (~10% of the tick), 45/tick
+>   heavy.** 11 instr × ~11 task-selects; it's the descriptor-setup+readiness `lh_sched` hands off at
+>   `$075C` and `entry_swin` picks up at `$0796`. Pure mechanical (low risk), composes with entry_swin,
+>   and is **cleanly measurable** (loop_hook-reached → ESC=0 lockstep_choke, dedicated gate). BUT it's
+>   **BANK-$00-BLOCKED for a *gated* trampoline:** catching `$075C`→escbank needs a bank-$00 gate check
+>   (else lh_sched always cross-bank-round-trips → regresses the off-by-default state). `swo_tramp`
+>   ($FFCA, 21/22B) + `lhs_found` (5B, →$FA00) + `lh_sched_pre` are all packed; no zero-shift room for
+>   the gate. The ungated 5→5B `lhs_found`→`jml lhs_sel` is zero-shift but regresses off-default
+>   (round-trip w/ no benefit). **This is the recurring bank-$00 wall (task #10 / loop_hook-can't-grow).**
+> - **HUD parents `$C8E0/$C958/$C9F8/$CA9A` (heavy ~152): bridge-dominated → LOW-VALUE.** Built + tested
+>   `entry_c8e0` + a `--table` `entry_c9a6t` bridge-callee (so `bsr c9a6` stays native, no C3 regress).
+>   **entry_c8e0 is BIT-EXACT** and the bridge-callee works — BUT it's mostly arg-marshalling + 2
+>   `jsr(a0)` blitter bridges + the c9a6 bridge (exactly [[cycle-budget-realtime-gap]]'s low-value
+>   class), and its cyc win is **below the ESC=1 measurement noise** (jah2/`$071A` escapes shift the
+>   `$AC`-paced `$0708`-trap window — can't isolate a clean delta like the ESC=0-gated chokepoint/swin).
+>   **Reverted** (working tree clean at `4ce26af`) — not shipping an unmeasurable, bridge-dominated escape.
+> - **Moderate state clusters `$01C9xx/$01E7xx` (~165) + `$00CBxx` (~109):** jmp-state/coroutine handlers
+>   (dispatched via `$CEB6`: `lea $cf8c(pc),a0; jmp(a0)`). Escbank-deployable via the xlat table (no
+>   bank-$00 fight) BUT need per-entry-PC identification + convention work (the c172/d5c4 pattern, mid-flow
+>   entries, bsr-subroutine bridges). Research-heavy, uncertain per-entry value.
+>
+> **STRATEGIC READ:** the clean single-function escapes are exhausted; every remaining big lever is either
+> bank-$00-blocked (the select, #1) or bridge-dominated (HUD) or multi-entry-research (state clusters).
+> **The unblocking work is bank-$00 space recovery** (task #10): a compaction/relocation pass (e.g. move
+> the `$F700` RESP1 buffer or replace a packed cmp-chain with a jump table) to free room for a *gated*
+> `$075C` trampoline — that ships the select (121/tick) AND unblocks future loop_hook-class escapes. This
+> is the highest-ROI next step, but it's infrastructure, not a drop-in escape. Tools/counters for the
+> select A/B are ready (lockstep_choke gates + `$40:7FEx` counter convention).
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
