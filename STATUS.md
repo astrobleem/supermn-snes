@@ -15,6 +15,14 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 > correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
 > block + memory `fetch-chokepoint-rts-escape`.
 
+> **UPDATE 2026-07-02 (pt.7) — Codegen efficiency: 16-bit INLINE_MEM shipped `c4a5e60`.**
+> Inline work-RAM access rewritten 8-bit byte-by-byte → 16-bit `lda $400000,x`+`xba` (LE load+swap =
+> 68K BE word): ~2× cheaper on EVERY inline word/byte access, all escapes uniformly (distinct from the
+> bounded --workram). Rolled out to ce4t/13bet/29b6t/295at (~309 native ops/tick removed); bit-exact
+> (ESC=0 unshifted; vs-MAME GREEN; 20-tick self-diffs 0 LIVE). Codegen is polish, not the realtime
+> closer. (Campaign 5 gate found no clean coverage escape left — strategic fork stands.) See handoff
+> pt.12 + memory `inline-mem-16bit-codegen`.
+
 > **UPDATE 2026-07-01 (pt.6) — Campaign 4 COMPLETE: native scheduler SELECT shipped `0a36f95`.**
 > `lhs_sel` ($075C-$0778 task-select+readiness, the biggest moderate lever) via a ZERO-SHIFT
 > lhs_found→`jml $92FD00` (5B→5B; no bank-$00 space fight). Completes lh_sched→select→entry_swin.

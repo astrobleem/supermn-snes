@@ -152,6 +152,23 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > disciplined call is to surface this fork rather than grind a marginal/risky escape. Tools ready
 > (lockstep_trap/choke/multitick all have SEL/$0736; `val_branch32.py` guards the transpiler).
 
+> ## ✅ Codegen efficiency (user pick) — 16-bit INLINE_MEM, ~2× cheaper inline access, `c4a5e60` (pt.12)
+> The escape bodies' inline work-RAM access was byte-by-byte BE assembly in 8-bit mode (`sep #$20; lda
+> $400000,x; xba; lda $400001,x; rep #$20` = 5 ops). A **16-bit `lda $400000,x`** reads both bytes LE;
+> **`xba`** → the 68K BE word = **2 ops, no sep/rep** (rdw40 5→2, wrw40 6→3, rdb40 4→2; wrb40 stays
+> 8-bit). Pure equivalence, the common path in EVERY escape body → ~2× cheaper on every inline word/byte
+> access, all escapes uniformly, no per-escape validation. NEW general codegen win, DISTINCT from
+> `--workram` (bounded ≤20%, already-mostly-done); it speeds the accesses the transpiler ALREADY inlines
+> (a5/a6/a7 + `--workram`), which dominate the bodies. Rolled out (regenerated + re-spliced) to the clean
+> `--table` gameplay escapes: **ce4t 780→660 ops, 29b6t −96, 13bet −66, 295at −27** (~309 native ops/tick
+> removed; 29b6t/295at kept `--video`). Validated bit-exact (ESC=0 unshifted; full-on vs-MAME GREEN
+> mod+heavy; ce4 native-vs-interp + full-on-vs-all-off 20-tick self-diffs 0 LIVE). Win = op-count (exact);
+> full-tick cyc delta is below the ~0.7M runf noise. **NOT re-done:** 8fat/fd2t (hand counter + still-open
+> **dbra-fallthrough CCR gap**), c172 ($AC-charge), attract/gap escapes → heal on next natural re-transpile.
+> **NEXT codegen levers:** (a) close the dbra-CCR gap → re-transpile 8fat/fd2t clean+cheaper; (b) the
+> `[dp],y` copy prize for future memcpy escapes; (c) broad `--workram`. All bounded — codegen is polish,
+> not the 24×-closer; the pt.11 realtime fork still stands.
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
