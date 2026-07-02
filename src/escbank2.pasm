@@ -1983,93 +1983,69 @@ entry_ce4t:
     sta $3C
     ldx $3C
     lda $18
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $14
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $10
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $0C
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $08
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $04
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $1C
     lda $1C
     asl a
@@ -2123,29 +2099,20 @@ entry_ce4t:
     clc
     adc #$000A
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $18
     lda $38
     clc
     adc #$0010
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $22
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $20
     lda $20
     clc
@@ -2158,11 +2125,8 @@ entry_ce4t:
     clc
     adc #$0014
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $1C
     lda $20
     clc
@@ -2179,11 +2143,8 @@ entry_ce4t:
     clc
     adc #$000C
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $9E
     lda $04
     sec
@@ -2233,11 +2194,8 @@ Lce4_d34:
     clc
     adc #$000E
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $0C
     lda $0C
     clc
@@ -2299,12 +2257,9 @@ Lce4_d50:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $30
     clc
     adc #$0002
@@ -2321,12 +2276,9 @@ Lce4_d56:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $30
     clc
     adc #$0002
@@ -2346,12 +2298,9 @@ Lce4_d58:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $28
     clc
     adc #$0002
@@ -2374,12 +2323,9 @@ Lce4_d58:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $2C
     clc
     adc #$0002
@@ -2469,12 +2415,9 @@ Lce4_d84:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $30
     clc
     adc #$0002
@@ -2491,11 +2434,8 @@ Lce4_d84:
 Lfce4_20:
 Lce4_d8a:
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $00
     lda $00
     asl a
@@ -2508,11 +2448,8 @@ Lce4_d8a:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $04
     lda $04
     asl a
@@ -2525,11 +2462,8 @@ Lce4_d8a:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $08
     lda $08
     asl a
@@ -2542,11 +2476,8 @@ Lce4_d8a:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $0C
     lda $0C
     asl a
@@ -2559,11 +2490,8 @@ Lce4_d8a:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $10
     lda $10
     asl a
@@ -2576,11 +2504,8 @@ Lce4_d8a:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $14
     lda $14
     asl a
@@ -2593,11 +2518,8 @@ Lce4_d8a:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $18
     lda $18
     asl a
@@ -2610,95 +2532,65 @@ Lce4_d8a:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $22
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $26
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $24
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2E
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $32
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $30
     lda $3C
     clc
@@ -2709,39 +2601,27 @@ Lce4_d8a:
     lda $3A
     sta $3E
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $3A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     and #$00FF
     sta $42
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $40
     lda $3C
     clc
@@ -2749,7 +2629,6 @@ Lce4_d8a:
     sta $3C
     jml.l ors_pre
 
-; --- $00D718 jmp-state object handler (jmp(a0)-reached, 2 call-bridges) ---
 ; --- transpiled from $00D718 (43 instrs) by tools/transpile.py [bank1] ---
 entry_d718:
     rep #$30
@@ -4555,11 +4434,8 @@ entry_295at:
     clc
     adc #$0008
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $1C
     lda $1C
     lsr a
@@ -4593,11 +4469,8 @@ entry_295at:
     clc
     adc #$000E
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $1C
     lda $1C
     sta $80
@@ -4622,11 +4495,8 @@ entry_295at:
     clc
     adc #$000C
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $9E
     lda $1C
     sec
@@ -4643,19 +4513,13 @@ entry_295at:
     sta $52
     jsl.l writeword_l
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $32
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $30
     lda $3C
     clc
@@ -4666,39 +4530,27 @@ entry_295at:
     lda $3A
     sta $3E
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $3A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     and #$00FF
     sta $42
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $40
     lda $3C
     clc
@@ -4750,93 +4602,69 @@ entry_29b6t:
     sta $3C
     ldx $3C
     lda $18
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $14
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $10
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $0C
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $08
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $04
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $1C
     lda #$0800
     sta $30
@@ -4880,19 +4708,13 @@ entry_29b6t:
     clc
     adc #$0010
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2E
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2C
     lda #$0004
     sta $1C
@@ -4902,11 +4724,8 @@ entry_29b6t:
     clc
     adc #$000A
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $00
     lda #$1FFF
     sta $08
@@ -5129,11 +4948,8 @@ L29b6_2a38:
     jmp L29b6_2a20
 Lf29b6_4:
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $00
     lda $00
     asl a
@@ -5146,11 +4962,8 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $04
     lda $04
     asl a
@@ -5163,11 +4976,8 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $08
     lda $08
     asl a
@@ -5180,11 +4990,8 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $0C
     lda $0C
     asl a
@@ -5197,11 +5004,8 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $10
     lda $10
     asl a
@@ -5214,11 +5018,8 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $14
     lda $14
     asl a
@@ -5231,11 +5032,8 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $18
     lda $18
     asl a
@@ -5248,95 +5046,65 @@ Lf29b6_4:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $22
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $26
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $24
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2E
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $32
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $30
     lda $3C
     clc
@@ -5347,46 +5115,33 @@ Lf29b6_4:
     lda $3A
     sta $3E
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $3A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     and #$00FF
     sta $42
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $40
     lda $3C
     clc
     adc #$0004
     sta $3C
     jml.l ors_pre
-
 
 ; --- transpiled from $0013BE (36 instrs) by tools/transpile.py [bank1] ---
 entry_13bet:
@@ -5425,33 +5180,24 @@ entry_13bet:
     sta $3C
     ldx $3C
     lda $04
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $3C
     sec
     sbc #$0002
     sta $3C
     ldx $3C
     lda $00
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $38
     clc
     adc #$0008
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $1C
     lda $1C
     asl a
@@ -5505,11 +5251,8 @@ entry_13bet:
     clc
     adc #$0010
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $1C
     lda $1C
     bne Lf13be_1
@@ -5525,11 +5268,8 @@ Lf13be_1:
     clc
     adc #$000C
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $9E
     lda $00
     sec
@@ -5564,11 +5304,8 @@ Lf13be_7:
     clc
     adc #$000E
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $04
     lda $04
     clc
@@ -5610,11 +5347,8 @@ L13be_1418:
     clc
     adc #$000A
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $9E
     lda $04
     ora $9E
@@ -5626,12 +5360,9 @@ L13be_1418:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $00
     pha
     lda $30
@@ -5639,12 +5370,9 @@ L13be_1418:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $04
     pha
     lda $2C
@@ -5652,18 +5380,12 @@ L13be_1418:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $00
     lda $00
     asl a
@@ -5676,11 +5398,8 @@ L13be_1418:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $04
     lda $04
     asl a
@@ -5693,57 +5412,39 @@ L13be_1418:
     adc #$0002
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $28
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2E
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $2C
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $32
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $30
     lda $3C
     clc
@@ -5754,39 +5455,27 @@ L13be_1418:
     lda $3A
     sta $3E
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $3A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     and #$00FF
     sta $42
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $40
     lda $3C
     clc
@@ -5794,14 +5483,6 @@ L13be_1418:
     sta $3C
     jml.l ors_pre
 
-; ===== CAMPAIGN 2 (2026-07-01): heavy-tick background-work escapes (fetch-chokepoint reached) ====
-; entry_8fat  <- $0008FA long block-copy (jsr-reached x3/heavy-tick; 446 interp-instr measured).
-; entry_fd2t  <- $000FD2 MID-LOOP RESUME segment of the $0FB8 word-fill (entry_fb8 slot 1 covers
-;               fresh jsr calls, but the frame-IRQ slices long fills and the ISR-exit rte resumes
-;               at $0FD2 -- a mid-function PC no jsr/jmp/rte table knows; 595 interp-instr/heavy
-;               tick measured). Both dispatch via choke_tramp allowlist + TABLE_PCS (--table conv:
-;               return already on the 68K stack). CCR materialized at the dbra-fallthrough exit
-;               edges BY HAND (transpiler gap: emit_ccr_native covers Bcc-to-exit only).
 ; --- transpiled from $0008FA (12 instrs) by tools/transpile.py [bank1] ---
 entry_8fat:
     rep #$30

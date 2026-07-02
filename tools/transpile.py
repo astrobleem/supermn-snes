@@ -1209,11 +1209,17 @@ def bank1_transform(lines):
 # a bank-$00 gap escape AND a bank-$92 escape-bank escape (no `_l` rtl-wrapper, no jsl/jsr/rtl/rts
 # overhead). X holds the work-RAM offset (set by the caller's `tax`); 16-bit X is preserved (sep #$20
 # touches only M). Work RAM is big-endian: [X]=hi, [X+1]=lo.
+# 16-bit BE work-RAM access (M=16 throughout -> no sep/rep). A 16-bit `lda $400000,x` reads the two
+# bytes [x],[x+1] LITTLE-endian (A = [x+1]<<8 | [x]); `xba` swaps them to the 68K BIG-endian word
+# ([x]<<8 | [x+1]). Symmetric for the store. ~2x fewer ops than the old byte-by-byte 8-bit assembly
+# (rdw40 5->2, wrw40 6->3, rdb40 4->2) -> ~2x cheaper on EVERY inline work-RAM word/byte access, which
+# dominates every escape body. Pure equivalence (same bytes, same result); the escape is already M=16.
+# wrb40 stays 8-bit: a 16-bit `sta` would clobber the adjacent byte [x+1].
 INLINE_MEM = {
-    'rdw40': ['sep #$20', 'lda $400000,x', 'xba', 'lda $400001,x', 'rep #$20'],
-    'wrw40': ['sep #$20', 'xba', 'sta $400000,x', 'xba', 'sta $400001,x', 'rep #$20'],
-    'rdb40': ['sep #$20', 'lda $400000,x', 'rep #$20', 'and #$00FF'],
-    'wrb40': ['sep #$20', 'sta $400000,x', 'rep #$20'],
+    'rdw40': ['lda $400000,x', 'xba'],                       # LE word load + swap = BE word
+    'wrw40': ['xba', 'sta $400000,x', 'xba'],                # swap -> LE store = BE word; restore A
+    'rdb40': ['lda $400000,x', 'and #$00FF'],                # byte at [x] = low byte of the LE load
+    'wrb40': ['sep #$20', 'sta $400000,x', 'rep #$20'],      # byte store: MUST stay 8-bit (else [x+1] clobbered)
 }
 def inline_mem_ops(lines):
     """Replace `jsr <rdw40|wrw40|rdb40|wrb40>` leaf calls with their inline bodies. Run BEFORE
