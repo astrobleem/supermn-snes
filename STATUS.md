@@ -15,6 +15,14 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 > correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
 > block + memory `fetch-chokepoint-rts-escape`.
 
+> **UPDATE 2026-07-01 (pt.6) — Campaign 4 COMPLETE: native scheduler SELECT shipped `0a36f95`.**
+> `lhs_sel` ($075C-$0778 task-select+readiness, the biggest moderate lever) via a ZERO-SHIFT
+> lhs_found→`jml $92FD00` (5B→5B; no bank-$00 space fight). Completes lh_sched→select→entry_swin.
+> All gates GREEN (ESC=0 regression unshifted; 20-tick self-diff 0 LIVE ×3; composes with entry_swin
+> + full-on 0 LIVE). Measured: moderate −110 interp-instr/tick (10 selects; ~7%). Cumulative C1-4
+> full-on: moderate 4666→3714 interp-instr, heavy 8010→2917. Also this session: the transpiler 32-bit
+> .l flag bug FIXED properly (97d5049, guard tools/val_branch32.py). See MAIN_PLANNING_HANDOFF.md pt.10.
+
 > **UPDATE 2026-07-01 (pt.5) — Phase-2 Campaign 3 COMPLETE: HUD formatter shipped `11078ba`.**
 > `entry_c9a6` ($00C9A6 number→ASCII decimal, the hottest leaf of the $C8C0-$CAFF HUD cluster;
 > bsr+jsr.l → both jah2 chains, $94 cross-bank). ESC=1 heavy: 3.14M → 2.80M cyc (−337K/3 fires).

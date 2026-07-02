@@ -109,6 +109,24 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > is the highest-ROI next step, but it's infrastructure, not a drop-in escape. Tools/counters for the
 > select A/B are ready (lockstep_choke gates + `$40:7FEx` counter convention).
 
+> ## ✅ Campaign 4 SHIPPED after all — native scheduler SELECT (`lhs_sel`), `0a36f95` (2026-07-01 pt.10)
+> The pt.9 "bank-$00-blocked" read was too pessimistic: found a **zero-shift** deploy. `lhs_found`
+> (`lda #$075C; bra lhs_exit`, 5B) → `jml $92FD00; nop` (5B) — `lhs_done`/`lhs_exit`/all anchors
+> UNCHANGED. `lhs_sel` (escbank `$92:FD00`) does `$075C-$0778` natively and sets `$40` to the
+> continuation (`$0796` ready→entry_swin / `$077A` defer / `$074C` disabled), producing EXACTLY
+> entry_swin's input reg-file. Gate `$0736==$5EEC`; OFF → replicate the handoff + re-fetch `$075C`
+> (swo_tramp has no `$075C` arm → decodes normally, **no loop** — the key that made this work without a
+> swo_tramp arm or dropping entry_swo). `pla` drops the loop_hook return (entry_swin pattern).
+> **Validated:** ESC=0 regression unshifted (4666/8010/1259 GREEN); vs-MAME GREEN both arms ×3; 20-tick
+> self-diff **0 LIVE ×3**; composes with entry_swin (sel=10→swin=11) + full-on 20-tick self-diff 0 LIVE.
+> **Measured:** moderate **−110 interp-instr/tick** (10 selects×11; exact) ≈ ~7% of the tick; heavy/quiet
+> do few selects/tick (~neutral there). **Cumulative C1-4 full-on: moderate tick 4666→3714 interp-instr,
+> heavy 8010→2917.** Off-default cost negligible (native round-trip, 0 added interp-instr).
+> **NEXT (Campaign 5):** the moderate state clusters `$01C9xx/$01E7xx` (~165) + `$00CBxx` (~109) —
+> jmp-state/coroutine via the `$CEB6` dispatcher → xlat table (escbank, no bank-$00 fight); needs
+> per-entry-PC identification (the c172/d5c4 pattern). Or the bank-$00 compaction to unblock more
+> loop_hook-class escapes. Re-run the ALLSTREAM gate first.
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
