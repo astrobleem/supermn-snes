@@ -1,6 +1,37 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: June 29, 2026. Per-area detail lives in the linked docs.
+Last updated: July 2, 2026. Per-area detail lives in the linked docs.
+
+> ## ✅ BANKED — Phase-2 escape/codegen sprint complete (2026-07-02, branch `boot-scheduler-progress`)
+> The escape-coverage + transpiler-correctness work of this sprint is committed, pushed, and validated
+> bit-exact. **Banking here** — the mechanical/scheduler/background/HUD levers are captured, the
+> transpiler is now correct + cheaper, and the remaining moderate cost is dynamic-dispatch game-logic
+> that does not escape cleanly (the coverage floor). Realtime (~24-40× over the 179K/frame budget) is
+> NOT reachable by more coverage; the next move is a strategic-direction decision, not another campaign.
+>
+> **Shipped this sprint (all bit-exact: ESC=0 regression unshifted, vs-MAME GREEN, 20-tick self-diff 0 LIVE):**
+> | | what | commit |
+> |---|---|---|
+> | Campaign 1 | native scheduler SWITCH-IN (`entry_swin`) | `2e39b98` |
+> | Campaign 2 | heavy-tick background loops (`8fat`/`fd2t`) — heavy tick **−48%** | `5aea367` |
+> | Campaign 3 | HUD decimal formatter (`entry_c9a6`) | `11078ba` |
+> | Campaign 4 | native scheduler SELECT (`lhs_sel`) — biggest moderate lever, zero-shift | `0a36f95` |
+> | transpiler fix | 32-bit `.l` cmp/cmpi/cmpa/tst/sub flag codegen (+ `val_branch32.py` guard) | `97d5049` |
+> | transpiler fix | dbra-fallthrough CCR gap → **escbank2 now 0 hand-patches** | `8600fc6` |
+> | codegen | 16-bit `INLINE_MEM` — ~2× cheaper inline work-RAM access (all escapes) | `c4a5e60` |
+>
+> **Cumulative (full-on, all escapes armed):** moderate GAME_TICK 4666→3714 interp-instr, heavy 8010→2917.
+>
+> **Coverage FLOOR reached (Campaign 5 verdict, `51c017f`):** the remaining moderate clusters
+> (`$01C9xx` object-processor — a >300-instr coroutine with dynamic `jsr(a4)`, doesn't transpile;
+> `$00CBxx`/`$023xx` jump-table/coroutine fns; `$012xx` mid-flow) are core game-logic — no clean,
+> low-risk escape. Both transpiler CCR gaps are closed, so future escapes transpile correct.
+>
+> **STANDING DECISION (the realtime goal, deferred to the user — see MAIN_PLANNING_HANDOFF.md pt.11):**
+> more coverage won't close the ~24× gap. Options: (a) codegen efficiency (bounded ~1.2×);
+> (b) a big game-logic transpile (blocked — needs major transpiler work, bridge-dominated);
+> (c) **accept sub-realtime & bank** (this snapshot); (d) re-architect hybrid→full-AOT. No work is
+> queued against realtime pending that call.
 
 > **UPDATE 2026-07-01 — rts-class dispatch is RESOLVED; a transpiler flag bug was found + fixed.**
 > The "rts-class dispatch fires 0×" blocker below is superseded: a bank-$00 `jsr choke_tramp` FETCH-

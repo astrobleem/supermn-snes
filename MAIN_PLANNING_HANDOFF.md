@@ -1,8 +1,19 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-01 (pt.4). **Read this first** in a fresh session, then act. It captures the
+Last updated: 2026-07-02 (pt.14). **Read this first** in a fresh session, then act. It captures the
 current state, the reliable mental model, the strategic reality (read §0 before deciding what to do),
 the tooling, the validated escape recipes, and the prioritized next steps.
+
+> ## ⇒ STATE (2026-07-02): the Phase-2 escape/codegen sprint is BANKED. DO NOT auto-start a campaign.
+> The escape-coverage thread is COMPLETE and validated — see `STATUS.md`'s "BANKED" block for the
+> shipped table (Campaigns 1-4 + 2 transpiler CCR fixes + the ~2× INLINE_MEM codegen win; cumulative
+> moderate 4666→3714 / heavy 8010→2917 interp-instr, all bit-exact). The coverage FLOOR is reached
+> (pt.14 verdict below): the remaining moderate clusters are dynamic-dispatch game-logic that doesn't
+> transpile. **More coverage will NOT close the ~24-40× realtime gap.** The open item is a
+> STRATEGIC-DIRECTION decision (pt.11 fork: codegen-efficiency / big-transpile / accept-sub-realtime /
+> re-architect), which is the USER's to make — no realtime work is queued pending it. The chronological
+> campaign-completion blocks below (pt.5→pt.14) are the sprint record; the mental model / tooling /
+> recipes (§1-8) remain current and correct.
 
 > ## ✅ Phase-2 Campaign 1 (scheduler SWITCH-IN) — COMPLETE, SHIPPED `2e39b98` (2026-07-01 pt.5)
 > **`entry_swin` is deployed & fully validated** (escbank `.org $FB00` + `swo_tramp` $0796 arm;
