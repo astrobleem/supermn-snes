@@ -323,8 +323,73 @@ def emit_ccr_native(e, fsrc):
     else:                                          # 'tst': move/logic/tst -> V=0, C=0, X untouched
         e('stz $72'); e('stz $6E')
 
+def _branch32(e, base, jmp, fsrc, low):
+    """Emit a branch off a FULL 32-bit compare/tst. State on entry: processor N,V,C valid for the
+    whole 32 bits, processor Z = (HIGH word == 0); `low` = DP ref of the LOW-word diff/value (for the
+    full Z). `jmp()` emits the taken-branch; falls through when not taken. Every flag-branch precedes
+    any `lda low` (which clobbers flags), so the processor flags stay live until they've been read."""
+    tst = (fsrc == 'tst32')                        # tst32: V=0, C=0, N=bit31, Z=full
+    if base == 'bra': jmp(); return
+    if base == 'beq':                              # Z_full: hi==0 AND low==0
+        s = e.fresh(); e('bne %s' % s); e('lda %s' % low); e('bne %s' % s); jmp(); e.lbl(s); return
+    if base == 'bne':                              # !Z_full
+        tk, s = e.fresh(), e.fresh()
+        e('bne %s' % tk); e('lda %s' % low); e('beq %s' % s); e.lbl(tk); jmp(); e.lbl(s); return
+    if base == 'bmi':                              # N = bit31 (valid in both)
+        s = e.fresh(); e('bpl %s' % s); jmp(); e.lbl(s); return
+    if base == 'bpl':
+        s = e.fresh(); e('bmi %s' % s); jmp(); e.lbl(s); return
+    if tst:
+        if base == 'blt':                          # V=0 -> N!=V == N
+            s = e.fresh(); e('bpl %s' % s); jmp(); e.lbl(s); return
+        if base == 'bge':                          # V=0 -> N==V == !N
+            s = e.fresh(); e('bmi %s' % s); jmp(); e.lbl(s); return
+        if base == 'ble':                          # N OR Z_full
+            tk, s = e.fresh(), e.fresh()
+            e('bmi %s' % tk); e('bne %s' % s); e('lda %s' % low); e('bne %s' % s)
+            e.lbl(tk); jmp(); e.lbl(s); return
+        if base == 'bgt':                          # !N AND !Z_full
+            tk, s = e.fresh(), e.fresh()
+            e('bmi %s' % s); e('bne %s' % tk); e('lda %s' % low); e('bne %s' % tk); e('bra %s' % s)
+            e.lbl(tk); jmp(); e.lbl(s); return
+        raise Unsupported('tst32-fed branch %s' % base)
+    # signed32: N,V,C valid (32-bit); Z_full via `low`.
+    if base in ('bcc', 'bcs'):                     # 68K carry inverted vs sec;sbc -> same-name skip
+        s = e.fresh(); e('%s %s' % (base, s)); jmp(); e.lbl(s); return
+    if base == 'bhi':                              # C set (65816) AND !Z_full
+        s, tk = e.fresh(), e.fresh()
+        e('bcc %s' % s); e('bne %s' % tk); e('lda %s' % low); e('beq %s' % s)
+        e.lbl(tk); jmp(); e.lbl(s); return
+    if base == 'bls':                              # C clear OR Z_full
+        tk, s = e.fresh(), e.fresh()
+        e('bcc %s' % tk); e('bne %s' % s); e('lda %s' % low); e('bne %s' % s)
+        e.lbl(tk); jmp(); e.lbl(s); return
+    if base in ('blt', 'bge'):                     # N vs V only (no Z)
+        v1, tk, s = e.fresh(), e.fresh(), e.fresh()
+        if base == 'blt':                          # N!=V
+            e('bvs %s' % v1); e('bmi %s' % tk); e('bra %s' % s)
+            e.lbl(v1); e('bpl %s' % tk); e('bra %s' % s)
+        else:                                      # bge: N==V
+            e('bvs %s' % v1); e('bpl %s' % tk); e('bra %s' % s)
+            e.lbl(v1); e('bmi %s' % tk); e('bra %s' % s)
+        e.lbl(tk); jmp(); e.lbl(s); return
+    if base == 'ble':                              # Z_full OR N!=V
+        v1, tk, s = e.fresh(), e.fresh(), e.fresh()
+        e('bvs %s' % v1); e('bmi %s' % tk); e('bne %s' % s)
+        e('lda %s' % low); e('bne %s' % s); e('bra %s' % tk)
+        e.lbl(v1); e('bpl %s' % tk); e('bra %s' % s)
+        e.lbl(tk); jmp(); e.lbl(s); return
+    if base == 'bgt':                              # !Z_full AND N==V
+        v1, tk, s = e.fresh(), e.fresh(), e.fresh()
+        e('bvs %s' % v1); e('bmi %s' % s); e('bne %s' % tk)
+        e('lda %s' % low); e('bne %s' % tk); e('bra %s' % s)
+        e.lbl(v1); e('bmi %s' % tk); e('bra %s' % s)
+        e.lbl(tk); jmp(); e.lbl(s); return
+    raise Unsupported('signed32-fed branch %s' % base)
+
 def emit_branch(e, base, tgt, fsrc):
-    """fsrc: 'signed' (N,V,Z,C from sec;sbc) | 'tst' (N,Z; V=0). end: falls through if not taken."""
+    """fsrc: 'signed'/'signed32' (N,V,Z,C from sec;sbc) | 'tst'/'tst32' (N,Z; V=0). The *32 variants
+    come from a FULL 32-bit cmp/tst -> _branch32 (Z reconstructed). end: falls through if not taken."""
     L = branch_label(e, tgt)
     def jmp():
         if tgt in getattr(e, 'exit_addrs', ()):    # branch to the epilogue/rts: sync CCR for the caller
@@ -332,6 +397,10 @@ def emit_branch(e, base, tgt, fsrc):
         e('jmp %s' % L)
     def over(short_skip_cc):                       # `cc _s ; jmp L ; _s:`  (cc skips the jmp)
         s = e.fresh(); e('%s %s' % (short_skip_cc, s)); jmp(); e.lbl(s)
+    if fsrc in ('signed32', 'tst32'):
+        if tgt in getattr(e, 'exit_addrs', ()):    # CCR-materialization for a .l cmp at a fn-exit edge
+            raise Unsupported('.l cmp/tst branching to a function-exit epilogue (32-bit CCR-at-exit not modeled)')
+        _branch32(e, base, jmp, fsrc, e._cmp32_low); return
     if base == 'bra': jmp(); return
     if base == 'beq': over('bne'); return
     if base == 'bne': over('beq'); return
@@ -386,8 +455,44 @@ def split_mn(ins):
 def operands(ins):
     return [parse_ea(x) for x in ins.op_str.split(',')] if ins.op_str else []
 
+CMP32_LO = 0x8A     # scratch: low-word diff of a 32-bit compare (emit_branch 'signed32'/'tst32'
+                    # reads it to reconstruct the FULL 32-bit Z; dead across the fused cmp->branch).
+CMP32_PAIR = 0x9A   # scratch DP pair for a MEMORY .l operand (same slot gen_movel uses; transient).
+
+def _ref32(e, ea, pair):
+    """Materialize a 32-bit operand as (lo_ref, hi_ref) usable directly by `sbc`/`lda`.
+    imm -> two #immediates; Dn/An -> its DP pair; memory -> load_long_to `pair`, return that pair.
+    (pc-rel/abs .l operands are rejected -- add via load_long_to if they ever appear.)"""
+    k = ea[0]
+    if k == 'imm':
+        if ea[1] is None: raise Unsupported('.l PC-relative immediate compare')
+        return ('#'+hx(ea[1] & 0xFFFF), '#'+hx((ea[1] >> 16) & 0xFFFF))
+    if k in ('Dn', 'An'):
+        s = reg_dp(ea[1]); return ('$%02X' % s, '$%02X' % (s+2))
+    if k in ('(An)', '(An)+', '(d16,An)'):
+        load_long_to(e, ea, pair); return ('$%02X' % pair, '$%02X' % (pair+2))
+    raise Unsupported('.l compare operand %r' % (ea,))
+
 def emit_signed_cmp(e, dest_ea, src_ea, size, store_dp=None):
-    """lda dest; sec; sbc src  (sets N,V,Z,C). if store_dp: sta dest (sub-family)."""
+    """lda dest; sec; sbc src  (sets N,V,Z,C). if store_dp: sta dest (sub-family).
+    size 'l': FULL 32-bit subtract -- two chained sbc's leave N,V,C valid for the whole 32 bits
+    and processor Z = (HIGH word == 0); the low-word diff is saved (store_dp for sub.l, else CMP32_LO)
+    so emit_branch('signed32') can rebuild the full Z. (ea_load_A is .w-only -- the historical bug was
+    a single 16-bit sbc, so cmp/cmpi/cmpa/sub.l compared only the low word.)"""
+    if size == 'l':
+        # At most ONE operand is memory here (cmp/cmpa/sub.l dst is a reg; cmpi src is imm) -> one
+        # scratch pair suffices. Load it (side effects like (An)+ happen once, in operand order).
+        MEM = ('(An)', '(An)+', '(d16,An)')
+        if src_ea[0] in MEM and dest_ea[0] in MEM:
+            raise Unsupported('.l compare with two memory operands')
+        slo, shi = _ref32(e, src_ea, CMP32_PAIR)
+        dlo, dhi = _ref32(e, dest_ea, CMP32_PAIR)
+        low = store_dp if store_dp is not None else CMP32_LO
+        e('lda %s' % dlo); e('sec'); e('sbc %s' % slo); e('sta $%02X' % low)   # low diff (sta: no flag change)
+        e('lda %s' % dhi); e('sbc %s' % shi)                                   # high diff: N,V,C 32-bit-valid; Z=(hi==0)
+        if store_dp is not None: e('sta $%02X' % (store_dp+2))                 # sub.l: store the high result too
+        e._cmp32_low = '$%02X' % low
+        return
     k = src_ea[0]
     if k == 'imm':
         ea_load_A(e, dest_ea, size); e('sec'); e('sbc %s' % imm16(src_ea[1]))
@@ -672,6 +777,12 @@ def gen(e, ins, nxt):
         else: raise Unsupported('ext.w (byte->word)')
         return 1
     if base == 'tst':
+        if size == 'l':                                  # FULL 32-bit test (ea_load_A is .w-only):
+            lo, hi = _ref32(e, ops[0], CMP32_PAIR)       # N = bit31, Z_full = (hi==0 && lo==0)
+            e('lda %s' % hi)                             # sets N (bit31) + Z=(hi==0); lo saved for Z_full
+            e._cmp32_low = lo
+            if fuses: emit_branch(e, nb, branch_target(nxt), 'tst32'); return 2
+            return 1
         ea_load_A(e, ops[0], size)
         if fuses: emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
@@ -736,7 +847,7 @@ def gen(e, ins, nxt):
     if base in ('cmp', 'cmpi', 'cmpa'):
         src, dst = ops
         emit_signed_cmp(e, dst, src, size)
-        if fuses: emit_branch(e, nb, branch_target(nxt), 'signed'); return 2
+        if fuses: emit_branch(e, nb, branch_target(nxt), 'signed32' if size == 'l' else 'signed'); return 2
         raise Unsupported('%s not feeding a branch' % base)
 
     if base == 'trap':
@@ -1022,7 +1133,7 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
     if is_sub:
         if dst[0] == 'Dn':                                      # register dest: sbc + sta $dp (flags live)
             emit_signed_cmp(e, dst, src, size, store_dp=store_dp)
-            if fuses: emit_branch(e, nb, branch_target(nxt), 'signed'); return 2
+            if fuses: emit_branch(e, nb, branch_target(nxt), 'signed32' if size == 'l' else 'signed'); return 2
             return 1
         # MEMORY dest: sub is read-modify-WRITE (not a flagless cmp). emit the sub into A with flags,
         # then write A back to the EA preserving the sub's N,V,Z,C across the (flag-clobbering) store.

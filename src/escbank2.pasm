@@ -6298,12 +6298,10 @@ Lffd2_ccrx:
 
 ; ===== CAMPAIGN 3 (2026-07-01): HUD/score decimal formatter =====================
 ; entry_c9a6 <- $00C9A6 number->ASCII decimal (divu#10 digit loop + '_' left-pad). The hottest
-; leaf of the $C8C0-$CAFF HUD cluster (~130 of its ~300 interp-instr/heavy-tick; its $C9CC divu
-; loop + $C9E4 pad loop are the x130/$C9C0-region PCs). Pure leaf (no calls; divu -> esc_udiv).
-; Reached jsr.l + bsr($C90C/$C960) -> BOTH jah2 chains (jsr: jah2_ext / bsr: jah2_ext_bsr),
-; cross-bank `jml entry_c9a6` ($94, fed by gen_escbank_syms). DEFAULT convention (the jah2/bsr
-; hook sets $40=return + drops the push; the body re-pushes $40 and rts's via ors_pre) -- NOT
-; --table (that's for the return-already-pushed chokepoint/xlat reach). Counter $40:7FE8.
+; leaf of the $C8C0-$CAFF HUD cluster. Pure leaf (divu -> esc_udiv). Reached jsr.l + bsr($C90C/
+; $C960) -> BOTH jah2 chains, cross-bank `jml entry_c9a6` ($94). DEFAULT convention. Counter
+; $40:7FE8. REGENERATED from the fixed transpiler (cmpi.l/tst.l now full 32-bit -- see
+; [[transpiler-32bit-flag-bug]]); no longer hand-patched.
 ; --- transpiled from $00C9A6 (28 instrs) by tools/transpile.py [bank1] ---
 entry_c9a6:
     rep #$30
@@ -6375,25 +6373,21 @@ entry_c9a6:
     sta $00
     lda $9C
     sta $02
-    ; --- cmpi.l #$1869F,d0 / ble $c9c4  (HAND-FIX Campaign 3: transpiler emit_signed_cmp does a
-    ;     single 16-bit sbc for ALL sizes -> a 32-bit cmpi only compared the LOW word; with imm
-    ;     high word $0001 it clamped every small value to 99999. Correct full 32-bit signed compare
-    ;     below; N/V/C from the high sbc are 32-bit-valid, Z_full computed via the saved low diff.) ---
     lda $00
     sec
-    sbc #$869F           ; low diff; C = no-borrow into the high word
-    sta $96              ; save low diff for the equality (Z_full) test
+    sbc #$869F
+    sta $8A
     lda $02
-    sbc #$0001           ; high diff; N,V,C valid for the full 32-bit compare; Z = (high==0)
-    bvs Lfc9a6_1         ; V=1: signed-less-than iff N=0
-    bmi Lfc9a6_2         ; V=0,N=1 -> d0 < imm -> ble taken
-    bne Lfc9a6_3         ; V=0,N=0,high!=0 -> d0 > imm -> not taken
-    lda $96
-    bne Lfc9a6_3         ; low!=0 -> d0 > imm -> not taken
-    bra Lfc9a6_2         ; d0 == imm -> ble taken (<=)
+    sbc #$0001
+    bvs Lfc9a6_1
+    bmi Lfc9a6_2
+    bne Lfc9a6_3
+    lda $8A
+    bne Lfc9a6_3
+    bra Lfc9a6_2
 Lfc9a6_1:
-    bpl Lfc9a6_2         ; V=1,N=0 -> d0 < imm -> taken
-    bra Lfc9a6_3         ; V=1,N=1 -> d0 > imm -> not taken
+    bpl Lfc9a6_2
+    bra Lfc9a6_3
 Lfc9a6_2:
     jmp Lc9a6_c9c4
 Lfc9a6_3:
@@ -6442,10 +6436,11 @@ Lc9a6_c9cc:
     lda $94
     sta $02
 dvovc9a6_1:
-    lda $00              ; tst.l d0 / beq $c9e4  (HAND-FIX Campaign 3: same transpiler 32-bit-as-16-bit
-    ora $02              ;   bug as the cmpi.l above -- tst used ea_load_A (.w-only), so the LAST digit
-    bne Lfc9a6_4         ;   (quotient=0, remainder in the HIGH word) read low16=0 -> exited a digit
-    jmp Lc9a6_c9e4       ;   early. `ora $02` makes Z the full 32-bit zero test (beq needs only Z).
+    lda $02
+    bne Lfc9a6_4
+    lda $00
+    bne Lfc9a6_4
+    jmp Lc9a6_c9e4
 Lfc9a6_4:
     lda $00
     tax
