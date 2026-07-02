@@ -323,6 +323,48 @@ def emit_ccr_native(e, fsrc):
     else:                                          # 'tst': move/logic/tst -> V=0, C=0, X untouched
         e('stz $72'); e('stz $6E')
 
+def emit_ccr_from_value(e, val):
+    """Materialize the 68K CCR (N,Z; V=0,C=0; X untouched) from a MOVE's result VALUE (not the native
+    flags). Used at a dbra-loop fall-through to a function exit: 68K `dbra`/`dbf` PRESERVE the CCR, so
+    the caller reads N/Z of the loop body's last moved value -- but (a) the transpiler's dbra emits
+    `cmp #$FFFF` (corrupting the native flags) and (b) for move.l (An)+ the native flags are the
+    pointer-bump's, not the moved value's. So compute N/Z from the value directly. `val` is
+    (dp,size) [word@dp / long@dp,dp+2] or ('imm',const,size). Byte layout matches the pre-fix
+    hand-materialization in entry_8fat/entry_fd2t. Scratch: A only."""
+    kind = val[0]
+    if kind == 'imm':
+        _, c, sz = val
+        n = (c >> (31 if sz == 'l' else 15)) & 1
+        z = 1 if (c & (0xFFFFFFFF if sz == 'l' else 0xFFFF)) == 0 else 0
+        e('lda #$%04X' % (0x8000 if n else 0)); e('sta $70')   # N
+        e('stz $72'); e('stz $6E')                             # V=0, C=0
+        e('lda #$%04X' % (1 if z else 0)); e('sta $60')        # Z (const)
+        return
+    dp, sz = val
+    hi = dp + 2 if sz == 'l' else dp
+    e('lda $%02X' % hi); e('and #$8000'); e('sta $70')         # N = bit(msb) of the moved value
+    e('stz $72')                                                # V = 0
+    e('stz $6E')                                                # C = 0
+    e('stz $60')                                                # Z = 0 (assume nonzero)
+    if sz == 'l': e('lda $%02X' % dp); e('ora $%02X' % (dp + 2))
+    else: e('lda $%02X' % dp)
+    s = e.fresh(); e('bne %s' % s); e('inc $60'); e.lbl(s)      # Z = 1 iff value == 0
+
+def dbra_exit_ccr_val(prev):
+    """The (dp,size)/('imm',..) whose N/Z the caller reads after a dbra loop whose body's last op is
+    `prev` (a move). None if not determinable -> leave the CCR unmaterialized (the pre-existing
+    behaviour; only matters if the caller branches on it, which is exactly the case this closes)."""
+    if prev is None: return None
+    b, sz = split_mn(prev)
+    if b != 'move' or sz not in ('w', 'l'): return None
+    ops = operands(prev)
+    if len(ops) != 2: return None
+    src, dst = ops
+    if sz == 'l' and src[0] == '(An)+' and dst[0] == '(An)+': return (0x9A, 'l')  # gen_movel scratch
+    if src[0] == 'Dn': return (reg_dp(src[1]), sz)                                 # move Dn,<mem>: value = Dn
+    if src[0] == 'imm': return ('imm', src[1], sz)                                 # move #imm,<mem>
+    return None
+
 def _branch32(e, base, jmp, fsrc, low):
     """Emit a branch off a FULL 32-bit compare/tst. State on entry: processor N,V,C valid for the
     whole 32 bits, processor Z = (HIGH word == 0); `low` = DP ref of the LOW-word diff/value (for the
@@ -1317,6 +1359,14 @@ def main():
         i0 = i
         try:
             i += gen(e, ins, nxt)
+            # dbra/dbf whose FALL-THROUGH is a function exit: 68K dbra preserves the CCR, so the caller
+            # reads N/Z of the loop body's last moved value. gen() already emitted the fall-through label;
+            # materialize the CCR here (right after it) from that value. (emit_ccr_native only fires at
+            # Bcc-to-exit edges; the dbra fall-through is neither a branch nor flag-preserving.)
+            if ins.mnemonic.split('.')[0] in ('dbra', 'dbf') and i < len(insns) \
+               and insns[i].address in e.exit_addrs:
+                v = dbra_exit_ccr_val(insns[i0-1] if i0 > 0 else None)
+                if v is not None: emit_ccr_from_value(e, v)
         except Unsupported as ex:
             e.cmt('!! UNIMPLEMENTED: %-9s %s   (%s)' % (ins.mnemonic, ins.op_str, ex))
             unimpl['%s %s' % (ins.mnemonic, ins.op_str.split(',')[0] if ins.op_str else '')] = str(ex)

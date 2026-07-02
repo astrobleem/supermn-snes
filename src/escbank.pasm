@@ -38,15 +38,15 @@ entry_d05e=$948C3D
 entry_d0bc=$948CD7
 entry_d07a=$948D79
 entry_ce4t=$948F7F
-entry_d718=$9494DF
-entry_d3f6=$9497FB
-entry_c172=$949D6E
-entry_295at=$94A35F
-entry_29b6t=$94A487
-entry_13bet=$94A940
-entry_8fat=$94ABD4
-entry_fd2t=$94AEE5
-entry_c9a6=$94AFEF
+entry_d718=$9494F2
+entry_d3f6=$94980E
+entry_c172=$949D81
+entry_295at=$94A372
+entry_29b6t=$94A49A
+entry_13bet=$94A953
+entry_8fat=$94ABE7
+entry_fd2t=$94AE58
+entry_c9a6=$94AF1A
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000

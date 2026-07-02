@@ -2432,6 +2432,16 @@ Lce4_d84:
     beq Lfce4_20
     jmp Lce4_d84
 Lfce4_20:
+    lda $00
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $00
+    bne Lfce4_21
+    inc $60
+Lfce4_21:
 Lce4_d8a:
     ldx $3C
     lda $400000,x
@@ -5486,7 +5496,7 @@ L13be_1418:
 ; --- transpiled from $0008FA (12 instrs) by tools/transpile.py [bank1] ---
 entry_8fat:
     rep #$30
-    lda $407FE4          ; fire counter (work-RAM scratch; $7FE0-block convention)
+    lda $407FE4          ; fire counter (work-RAM $7FE0-block convention)
     inc a
     sta $407FE4
     ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
@@ -5523,19 +5533,13 @@ entry_8fat:
     clc
     adc #$0008
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $22
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $20
     lda $20
     clc
@@ -5617,34 +5621,22 @@ entry_8fat:
     clc
     adc #$1B12
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     ora $06
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $34
     clc
     adc #$1B14
     tax
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     ora $04
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
 L8fa_910:
     lda $20
     clc
@@ -5680,12 +5672,9 @@ L8fa_910:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $9A
     pha
     lda $24
@@ -5693,12 +5682,9 @@ L8fa_910:
     adc #$0002
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $24
     clc
     adc #$0004
@@ -5713,90 +5699,64 @@ L8fa_910:
     beq Lf8fa_1
     jmp L8fa_910
 Lf8fa_1:
-    ; --- CCR at exit (hand-added; dbra-fallthrough gap): last op = move.l (a0)+,(a1)+ ->
-    ;     N=bit31 ($9C=hi16 of the last-copied long), Z=(32-bit==0, $9C|$9A), V=0, C=0.
     lda $9C
     and #$8000
-    sta $70              ; N
-    stz $72              ; V=0
-    stz $6E              ; C=0
-    stz $60              ; Z=0 (assume nonzero)
-    lda $9C
-    ora $9A
-    bne Lf8fa_ccrx
-    inc $60              ; Z=1
-Lf8fa_ccrx:
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $9A
+    ora $9C
+    bne Lf8fa_2
+    inc $60
+Lf8fa_2:
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $02
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $00
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $06
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $04
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $22
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $20
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $26
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $24
     lda $3C
     clc
@@ -5807,39 +5767,27 @@ Lf8fa_ccrx:
     lda $3A
     sta $3E
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $3A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     and #$00FF
     sta $42
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $40
     lda $3C
     clc
@@ -5850,7 +5798,7 @@ Lf8fa_ccrx:
 ; --- transpiled from $000FD2 (5 instrs) by tools/transpile.py [bank1] ---
 entry_fd2t:
     rep #$30
-    lda $407FE6          ; fire counter (work-RAM scratch; $7FE0-block convention)
+    lda $407FE6          ; fire counter (work-RAM $7FE0-block convention)
     inc a
     sta $407FE6
     ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
@@ -5862,12 +5810,9 @@ Lfd2_fd2:
     adc #$0000
     tax
     pla
-    sep #$20
     xba
     sta $400000,x
     xba
-    sta $400001,x
-    rep #$20
     lda $20
     clc
     adc #$0002
@@ -5882,51 +5827,37 @@ Lfd2_fd2:
     beq Lffd2_1
     jmp Lfd2_fd2
 Lffd2_1:
-    ; --- CCR at exit (hand-added; dbra-fallthrough gap): last op = move.w d0,(a0)+ ->
-    ;     N=bit15 of d0.w ($00, still live pre-movem), Z=(d0.w==0), V=0, C=0.
     lda $00
     and #$8000
-    sta $70              ; N
-    stz $72              ; V=0
-    stz $6E              ; C=0
-    stz $60              ; Z=0 (assume nonzero)
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
     lda $00
-    bne Lffd2_ccrx
-    inc $60              ; Z=1
-Lffd2_ccrx:
+    bne Lffd2_2
+    inc $60
+Lffd2_2:
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $02
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $00
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $22
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $20
     lda $3C
     clc
@@ -5937,39 +5868,27 @@ Lffd2_ccrx:
     lda $3A
     sta $3E
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $3A
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     and #$00FF
     sta $42
     inx
     inx
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $40
     lda $3C
     clc
@@ -5977,12 +5896,6 @@ Lffd2_ccrx:
     sta $3C
     jml.l ors_pre
 
-; ===== CAMPAIGN 3 (2026-07-01): HUD/score decimal formatter =====================
-; entry_c9a6 <- $00C9A6 number->ASCII decimal (divu#10 digit loop + '_' left-pad). The hottest
-; leaf of the $C8C0-$CAFF HUD cluster. Pure leaf (divu -> esc_udiv). Reached jsr.l + bsr($C90C/
-; $C960) -> BOTH jah2 chains, cross-bank `jml entry_c9a6` ($94). DEFAULT convention. Counter
-; $40:7FE8. REGENERATED from the fixed transpiler (cmpi.l/tst.l now full 32-bit -- see
-; [[transpiler-32bit-flag-bug]]); no longer hand-patched.
 ; --- transpiled from $00C9A6 (28 instrs) by tools/transpile.py [bank1] ---
 entry_c9a6:
     rep #$30
