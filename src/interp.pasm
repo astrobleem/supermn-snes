@@ -41,6 +41,8 @@ VID_FRAME=$E98000
 VID_INIT=$E98004
 VIDTEST=$E98008
 CPU5A22_VIDEO=$E9800B
+BOOT_ARM=$E98900         ; video-bank free space: production escape-gate enable (Option A);
+                         ; jsl'd from the notest boot in place of the no-op VID_INIT (zero-shift)
 
 .bank 0
 .org $8000
@@ -172,7 +174,8 @@ rclr:
                          ; many more instructions/frame than MAME's cycles, so the IRQ must not
                          ; fire mid-frame-work: $7000=28672 is the empirically-tuned budget
                          ; (13299 fires too early -> scheduler corruption -> boot crash @ $30).
-    jsl VID_INIT         ; clear $7E shadow/staging, screen off, TM=0 (production)
+    jsl BOOT_ARM         ; (was jsl VID_INIT; VID_INIT is a SA-1 no-op) arm the escape gates
+                         ; ($071A/$073A/$073C/$0736) then rtl. ZERO bank-$00 shift: jsl->jsl.
     ; NOTE: a prior reset-time bootstrap of ($F00006)=$00F0000A was REMOVED. With the
     ; corrected VBLANK cadence ($8A=$7000), trap#1 ($0466) now runs to completion and
     ; itself sets ($F00006) and fabricates slot0's context at $F015C4 (A5=$00F00000),
@@ -17018,7 +17021,10 @@ jsrabs_hook2:
 jah2_gated:
     lda $50
     beq jah2_bank0       ; bank==0 -> the bank-$00 cmp chain below
-    jmp jah2_b2          ; bank!=0 -> $025110 (jmp: distance-independent as the chain grows)
+    jmp jah2_miss        ; $025110 (the ONLY bank!=0 jah2 escape) DISABLED -> interpret. entry_25110
+                         ; (collision) is the task-#73 divergence source: its native exit leaves a
+                         ; register/CCR != interp, so the coroutine scheduler saves a divergent task
+                         ; context ($F001B6-$205 + $0049). Bisected 2026-07-02 (was: jmp jah2_b2).
 jah2_bank0:
     lda $52
     ; DISPATCH-SCALING: bne-skip + jmp (the dispatcher blocks span >127B; a plain `beq`

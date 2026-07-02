@@ -14,6 +14,34 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > re-architect), which is the USER's to make — no realtime work is queued pending it. The chronological
 > campaign-completion blocks below (pt.5→pt.14) are the sprint record; the mental model / tooling /
 > recipes (§1-8) remain current and correct.
+>
+> **pt.15 (2026-07-02): the "re-architect" fork is now SKETCHED + approved** →
+> `/home/chad/.claude/plans/reflective-twirling-cook.md` (memory: `aot-codegen-sketch.md`). Verdict:
+> native regalloc is the WRONG lever; **contiguous call-tree compilation** is the game (measured 4.85×);
+> static-addressing = bounded polish. Realtime-EVERY-frame is UNLIKELY (SA-1's 1.34× clock margin <
+> the ~3-4× 68K-on-65816 ISA penalty → ~2.7× budget at the codegen floor; avg-frame fits, heavy-combat
+> ~5×). Achievable ceiling = **avg-frame realtime + heavy-combat drops** (arcade-like).
+>
+> **pt.16 (2026-07-02): Phase-0 budget measurement EXECUTED** (lockstep_trap CYCLES=1 B1PC=0818,
+> current HEAD; budget 179K cyc/tick). BIG FINDING: **the escape gates are never enabled in production
+> src** ($071A/$073A/$073C/$0736 harness-only) → the ROM SHIPS pure-interp (~12-68× over budget). Max
+> escapes (ESC=1+CHOKE+SWIN+SEL) → **combat worst-case ~16-17×** (ce4trip64 8.39M→3.05M; span_heavy
+> 12.23M→2.87M), **light frames ~7-8.5×**. Near-bit-exact (ce4trip64 DIFF=48 = the known $AC-pacing
+> artifact). VERDICT (measured, confirms the sketch): realtime-every-frame OUT; avg-frame realtime is
+> the ceiling + in codegen-lever range. **THE FORK (user's call): (A) flip escapes ON in production +
+> validate free-run = a validated ~4× speedup currently switched off (cheap; its free-run validation is
+> also the first $AC-pacing probe); (B) A + multi-session contiguous-compile toward avg-frame realtime;
+> (C) bank.** Rec: A first, regardless. Full table + go/no-go in the plan file's "Phase 0 — EXECUTED"
+> section; raw logs in /tmp/supermn-scratch.
+>
+> **pt.17 (2026-07-02): Option A STARTED — escapes now ENABLED in production boot.** `BOOT_ARM`
+> (src/video.pasm @ `$E9:8900`) arms the 4 gates; the notest boot `jsl BOOT_ARM` **replaces** the
+> SA-1-no-op `jsl VID_INIT` = ZERO bank-$00 shift (an INLINE insert BROKE gameplay — smoke stuck at
+> 68K `$3ABE`; bank-$00 must not shift). Validated: smoke PASS (no regression), BOOT_ARM runtime-arms
+> the gates, escapes-on FREE-RUN stable (swin 47→203 / sel 40→174 linear over 1800f, no crash).
+> Change is UNCOMMITTED. **REMAINING GATE before a clean ship: `$AC`-pacing over sustained free-run is
+> UNvalidated** (only scheduler escapes exercised in attract; render/HUD not free-run-tested; the
+> `--accharge` work is the next step). See memory `production-escape-enable.md` + the plan file.
 
 > ## ✅ Phase-2 Campaign 1 (scheduler SWITCH-IN) — COMPLETE, SHIPPED `2e39b98` (2026-07-01 pt.5)
 > **`entry_swin` is deployed & fully validated** (escbank `.org $FB00` + `swo_tramp` $0796 arm;

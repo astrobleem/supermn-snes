@@ -1411,3 +1411,25 @@ bg_hscroll:
     sta BG1HOFS          ; high byte
     plp
     rts
+
+; ---- BOOT_ARM ($E9:8900): production escape-gate enable (Option A) -----------------
+; The interp's notest/production boot calls `jsl BOOT_ARM` here IN PLACE OF the SA-1
+; no-op `jsl VID_INIT` (a ZERO bank-$00 code-shift retarget, not an insert — inserting
+; bytes in bank $00 shifts the packed gameplay path and breaks it, caught by
+; smoke_gameplay). Arms the validated escape dispatch gates so the shipped ROM runs the
+; native escapes. DBR=0 in the boot context -> the $07xx stores land in bank-$00 IRAM;
+; 16-bit A (boot rep #$30). Test/optest never reach the notest jsl, so they stay ESC=0.
+; VID_INIT ($8004) is itself a SA-1 no-op (rtl), so arm-then-rtl is exactly equivalent.
+.org $8900
+BOOT_ARM:
+    rep #$30             ; force 16-bit A/X — the assembler's mode is 8-bit here (prior sep #$20),
+                         ; which would mis-size the immediates (lda #$A55A -> lda #$A5 + stray $5A).
+                         ; Harmless no-op at runtime (boot is already rep #$30).
+    lda #$0001
+    sta $071A            ; ESC   on  (jah2 jsr/bsr/jsr(An) + xlat jmp-state + coroutine rte)
+    sta $073A            ; CHOKE on  (fetch-chokepoint: ce4/13be render-path rts-reach)
+    lda #$A55A
+    sta $073C            ; SWIN  on  (scheduler switch-IN escape, magic-match gate)
+    lda #$5EEC
+    sta $0736            ; SEL   on  (scheduler SELECT escape, magic-match gate)
+    rtl                  ; VID_INIT was a SA-1 no-op rtl; return to the boot caller
