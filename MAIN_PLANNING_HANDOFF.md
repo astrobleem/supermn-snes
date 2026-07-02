@@ -186,6 +186,27 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > bodies carry no hand-patches; future escapes transpile correct. **Remaining codegen levers:** the
 > `[dp],y` copy prize + broad `--workram` (both bounded); the realtime fork (pt.11) still stands.
 
+> ## ⛔ Campaign 5 state clusters — DEEP-DIVE VERDICT: NOT escapable (2026-07-02 pt.14)
+> Investigated the moderate state clusters exhaustively (reach + STREAMWIN + test-transpile). They are
+> the game's **core object/actor/coroutine system**, and they resist the escape approach:
+> - **`$01C9xx-$01F1xx` object-processor (~177, biggest):** a COROUTINE body resumed via `jsr (a6)`
+>   with a6 = a5-relative resume-PC (`$3506(a5)`=`$01C99E` in-state). `jsr(An)` IS hooked
+>   (op_jsr_an→jsrabs_hook2→jah2), so it's *reachable* — BUT the body is **>300 instructions** (no rts
+>   within 300 of `$01C99E`), does **dynamic `jsr (a4)`** dispatch, and **fails to transpile**
+>   (`Unsupported: EA '(a4...'`). A wholesale escape would be huge + bridge-dominated + need new
+>   transpiler EA support → high-risk, low-value (the cycle thesis's worst class).
+> - **`$00CBxx` (~109):** big linked fn, `$32578`/`$32d16` jump tables, a6-frame locals, `bsr $cb9e`/iter.
+> - **`$023xx-$024xx` (~94):** `trap #$5` coroutine yields. **`$012xx` (~58):** hot PCs are mid-flow in
+>   big fns; only tiny leaf fns (`$12A92` 22 / `$12B6C` 8) transpile clean and they DON'T cover the hot
+>   PCs (~1×/tick, token). `$129C6` (bset-dyn) / `$12C1A` (stray blt) UNIMPLEMENTED.
+>
+> **VERDICT:** no clean, measurable, low-risk escape exists in these clusters. They'd need a major
+> transpiler push (big-body + dynamic-`jsr(An)`-dispatch bridging + new EA modes) for uncertain,
+> bridge-dominated value — NOT worth it under the measured discipline. This is the concrete floor of
+> the escape-coverage approach: the mechanical/scheduler/background/HUD levers (C1-4) are captured;
+> what remains is dynamic-dispatch game-logic. The realtime goal (still ~24-40× off) needs the pt.11
+> fork (codegen — bounded; or re-architecture), NOT more coverage. **Nothing shipped; tree clean.**
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
