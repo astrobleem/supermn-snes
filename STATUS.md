@@ -15,6 +15,12 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 > correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
 > block + memory `fetch-chokepoint-rts-escape`.
 
+> **UPDATE 2026-07-02 (pt.8) — dbra-CCR transpiler gap CLOSED `8600fc6`; escbank2 fully transpiler-gen.**
+> The Campaign-2 dbra-fallthrough CCR hand-fix is now in the transpiler (emit_ccr_from_value + main-loop
+> dbra-to-exit detection). Re-transpiled 8fat/fd2t (hand-fix removed) + ce4t clean. **escbank2 now has 0
+> hand-fixes** — both transpiler CCR gaps (32-bit .l flags + dbra-fallthrough) closed. All GREEN
+> (ESC=0 unshifted; vs-MAME; 20-tick self-diffs 0 LIVE; val_branch32 5460/0). See handoff pt.13.
+
 > **UPDATE 2026-07-02 (pt.7) — Codegen efficiency: 16-bit INLINE_MEM shipped `c4a5e60`.**
 > Inline work-RAM access rewritten 8-bit byte-by-byte → 16-bit `lda $400000,x`+`xba` (LE load+swap =
 > 68K BE word): ~2× cheaper on EVERY inline word/byte access, all escapes uniformly (distinct from the

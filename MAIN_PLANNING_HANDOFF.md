@@ -169,6 +169,23 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > `[dp],y` copy prize for future memcpy escapes; (c) broad `--workram`. All bounded — codegen is polish,
 > not the 24×-closer; the pt.11 realtime fork still stands.
 
+> ## ✅ dbra-CCR gap CLOSED + escbank2 fully transpiler-generated — `8600fc6` (pt.13)
+> The Campaign-2 hand-fix is now in the transpiler. **Gap:** 68K `dbra`/`dbf` PRESERVE the CCR, so a
+> caller reads N/Z of the loop body's last moved value — but the transpiler's `dbra` emits `cmp #$FFFF`
+> (corrupts native flags), move.l's native flags are the pointer-bump's not the value's, and
+> `emit_ccr_native` only fired at Bcc-to-exit edges (a dbra FALLS THROUGH to the epilogue). **Fix:**
+> `emit_ccr_from_value(dp,size)` computes N/Z (V=0,C=0) from the move's result value; the main loop
+> detects a `dbra`/`dbf` whose fall-through ∈ `exit_addrs` and materializes from the loop body's last
+> move (`dbra_exit_ccr_val`: move.l (An)+,(An)+→`$9A`; move Dn,mem→Dn; move #imm→const). Byte-matches
+> the old hand-fix; **inert** for escapes w/o a dbra-to-exit (13bet/29b6t/295at regen byte-identical).
+> **Re-transpiled 8fat/fd2t clean** (dbra-CCR auto + 16-bit INLINE_MEM; counters re-added) + **ce4t**
+> (also has a dbra-to-exit, was benign-GREEN, now materialized). **ESCBANK2 IS NOW 0 HAND-FIXES —
+> fully transpiler-generated.** Validated: ESC=0 unshifted; full-on vs-MAME GREEN mod+heavy;
+> ce4/8fa/fd2 native-vs-interp + full-on-vs-all-off 20-tick self-diffs 0 LIVE; `val_branch32` 5460/0.
+> The two transpiler CCR gaps (32-bit `.l` flags + dbra-fallthrough) are both closed → the escbank
+> bodies carry no hand-patches; future escapes transpile correct. **Remaining codegen levers:** the
+> `[dp],y` copy prize + broad `--workram` (both bounded); the realtime fork (pt.11) still stands.
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
