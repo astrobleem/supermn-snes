@@ -15,6 +15,14 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 > correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
 > block + memory `fetch-chokepoint-rts-escape`.
 
+> **UPDATE 2026-07-01 (pt.4) — Phase-2 Campaign 2 COMPLETE: heavy-tick background loops shipped `5aea367`.**
+> ALLSTREAM profile gate found 62% of the heavy tick's remaining interp = the $0008FA block-copy +
+> the $0FB8 fill's **IRQ-slice mid-loop resume at $0FD2** (a NEW reach class: ISR-exit rte lands at a
+> mid-loop PC — only the fetch-chokepoint catches it). entry_8fat + entry_fd2t shipped via choke_tramp
+> arms (zero-shift). All gates GREEN (0 LIVE ×3 triples; MAME GREEN ×3; ESC=1 unchanged). **Heavy tick
+> 12.3M → 6.35M cyc (−48%, ~70× → ~35× budget); moderate −14%; quiet noise.** Transpiler gap found
+> (dbra-fallthrough CCR; hand-patched, proper fix TODO). See MAIN_PLANNING_HANDOFF.md pt.6 block.
+
 > **UPDATE 2026-07-01 (pt.3) — Phase-2 Campaign 1 COMPLETE: scheduler SWITCH-IN shipped `2e39b98`.**
 > `entry_swin` ($0796→movem-restore→rte, escbank $FB00 + swo_tramp arm) deployed & fully validated:
 > gate-off bit-identical; single-tick vs MAME GREEN ×3 triples; 20-tick SP-aware self-diff 0 LIVE ×3;

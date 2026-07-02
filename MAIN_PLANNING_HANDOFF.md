@@ -22,6 +22,25 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > (b) task-body long tail, (c) codegen efficiency ([[workram-lever-bounded]] bounds it). Use commit
 > counters, not sched_trace windows, for the gate.
 
+> ## ✅ Phase-2 Campaign 2 (heavy-tick background loops) — COMPLETE, SHIPPED `5aea367` (2026-07-01 pt.6)
+> **Gate:** one-tick ALLSTREAM profile (lockstep_trap `GPPROF=1 ALLSTREAM=1 EXACT=…`, everything
+> armed — the dead-$0762/ilog GPPROF replaced by the live $0718 dbg_fetch stream) found **62% of the
+> heavy tick's remaining interp = two loops**: the `$0008FA` block-copy (jsr-reached, never escaped)
+> and the `$0FB8` word-fill loop at **`$0FD2` — a NEW REACH CLASS: the frame IRQ slices long
+> background fills; the ISR-exit rte resumes at a MID-LOOP PC** no jsr/jmp/rte table can know. Only
+> the fetch-chokepoint catches it. Shipped `entry_8fat` + `entry_fd2t` (--table + hand CCR at the
+> dbra-fallthrough exit edges — **transpiler gap found:** `emit_ccr_native` covers Bcc-to-exit only;
+> proper fix TODO) via 2 choke_tramp arms (ate 10 padding nops, 42B intact, zero-shift).
+> **Validated:** all-off arm bit-identical; 20-tick self-diff 0 LIVE ×3 triples; MAME single-tick
+> GREEN ×3 full-on; ESC=1 smoke unchanged. **Measured (full-on vs all-off): heavy 12.3M → 6.35M
+> cyc (−48%, ~70× → ~35× budget; instr 8010→2939), moderate 8.7M → 7.47M (−14%), quiet ≈ noise.**
+> fd2 also collapses FRESH interpreted fills at ESC=0 (chokepoint hits loop-iteration 1).
+> **NEXT (Campaign 3 candidates, from the same profiles):** moderate-tick remainder — the
+> $01C9xx/$01E7xx/$023-24xxx background clusters + the scheduler select block ($0740 region,
+> 121 instr/tick moderate = extend lh_sched through $075C-$0778 into entry_swin); heavy remainder —
+> the $C8C0-$CAFF helper cluster (~300 instr). Re-run the ALLSTREAM gate first; watch for more
+> IRQ-slice resume-class PCs (check mid-loop PCs of any hot dbra loop).
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
