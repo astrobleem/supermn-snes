@@ -29,6 +29,7 @@ ors_pre=$00D16F
 lh_sched=$00F9B2
 op_rte=$00B3B8
 lh_nofire=$00F5B9
+irq_none=$0080CB
 entry_c9f8=$948039
 entry_d5a0=$94849E
 entry_1008=$94855B
@@ -14442,3 +14443,126 @@ swin_lp:
     sta $3C
     ; --- $07E8 rte: pop SR+PC via the REAL op_rte -> ors_rte dispatches the resume ---
     jml.l op_rte         ; (.l: bank-$00 constant, same rule as above)
+
+; ===================== SCHEDULER SELECT ($075C-$0778) =====================
+; lhs_sel — native scheduler task-SELECT + readiness check, the biggest remaining moderate lever
+; (~121 interp-instr/tick = ~10% of the moderate tick; ~11 selects x 11 instr). lh_sched (bank $00)
+; runs the disabled-skip scan and, at lhs_found, `jml $92FD00` here (zero-shift: 5B `lda #$075C;bra`
+; -> 5B `jml;nop`) INSTEAD of handing $075C to the interpreter. This does $075C-$0778 natively and
+; sets $40 to the continuation ($0796 ready -> entry_swin; $077A defer; $074C disabled), producing
+; EXACTLY entry_swin's input reg-file (d0/d1/d2/a3/a4/a5). Gate $0736==$5EEC (magic; stray-write-
+; immune). Gate OFF -> replicate the lhs_found handoff ($40=$075C) + re-fetch: the re-fetched $075C
+; is NOT caught by swo_tramp (no $075C arm) so it decodes normally -> no loop (unlike a swo_tramp
+; arm). d0 is set here (lhs_found jml'd BEFORE lhs_exit's `lda $9C;sta $00`). Reached via the loop_hook
+; `jsr` -> a return is on the 65816 stack -> `pla` it before jml (entry_swin/choke_tramp pattern).
+; State from lh_sched: $9C=found idx, $30/$32=a4(=a5+4), $34/$36=a5. Counter $40:7FEA.
+; Exact 68K ($075C-$0778): move.w d0,(a4) / d1=idx*4 / a3=$4a(a4,d1) / *(a5+$4a)=a3 / d2=(a3) /
+;   d3.w=*(a5+2) / btst d0,d3 beq $74c(disabled) / btst #$1e,d2 bne $796(ready) else $77a(defer).
+.org $FD00
+lhs_sel:
+    rep #$30
+    lda $9C
+    sta $00              ; d0 = found idx (lhs_exit's `lda $9C;sta $00`; needed by both paths)
+    lda $0736
+    cmp #$5EEC
+    beq lsel_go
+    ; --- gate OFF: replicate the lhs_found->lhs_exit handoff, then re-fetch $075C (interp decodes it) ---
+    lda #$075C
+    sta $40
+    stz $42
+    pla                  ; drop the jsr loop_hook return
+    jml.l irq_none       ; re-fetch $075C (swo_tramp has no $075C arm -> decodes normally, no loop)
+lsel_go:
+    lda $407FEA          ; fire counter (work-RAM $7FE0-block convention)
+    inc a
+    sta $407FEA
+    ; --- $075C move.w d0,(a4): BE word write d0.lo16 to work RAM at a4.lo16 ---
+    ldx $30              ; a4 lo16
+    sep #$20
+    lda $01              ; d0 bits15-8
+    sta $400000,x
+    lda $00              ; d0 bits7-0
+    sta $400001,x
+    rep #$20
+    ; --- $075E/$0760: d1.lo16 = idx*4 (asl.w -> hi16 $06 unchanged) ---
+    lda $00
+    asl a
+    asl a
+    sta $04              ; d1 lo16
+    ; --- $0762 lea $4a(a4,d1.w),a3: a3 = a4 + $4a + d1.lo16 (stays in-bank -> hi16 = a4 hi16 + carry) ---
+    lda $30
+    clc
+    adc #$004A
+    clc
+    adc $04
+    sta $2C              ; a3 lo16
+    lda $32
+    adc #$0000
+    sta $2E              ; a3 hi16
+    ; --- $0766 move.l a3,$4a(a5): BE long write a3 to work RAM at (a5.lo16+$4a) ---
+    lda $34
+    clc
+    adc #$004A
+    tax
+    sep #$20
+    lda $2F              ; a3 bits31-24
+    sta $400000,x
+    lda $2E
+    sta $400001,x
+    lda $2D
+    sta $400002,x
+    lda $2C              ; a3 bits7-0
+    sta $400003,x
+    rep #$20
+    ; --- $076A move.l (a3),d2: BE long read from work RAM at a3.lo16 ---
+    ldx $2C
+    sep #$20
+    lda $400000,x        ; bits31-24
+    sta $0B              ; d2 bits31-24
+    lda $400001,x
+    sta $0A
+    lda $400002,x
+    sta $09
+    lda $400003,x
+    sta $08              ; d2 bits7-0
+    rep #$20
+    ; --- $076C move.w $2(a5),d3: BE word read from (a5.lo16+2) -> d3.lo16 (enable mask) ---
+    lda $34
+    clc
+    adc #$0002
+    tax
+    sep #$20
+    lda $400000,x        ; hi byte
+    xba
+    lda $400001,x        ; lo byte
+    rep #$20
+    sta $0C              ; d3 lo16 (hi16 $0E unchanged)
+    ; --- $0770 btst d0,d3 / $0772 beq $074C : test bit idx of the enable mask ---
+    lda #$0001
+    ldx $00              ; idx (0-15; d0.lo16)
+lsel_shl:
+    cpx #$0000
+    beq lsel_shld
+    asl a
+    dex
+    bra lsel_shl
+lsel_shld:
+    and $0C              ; A = (1<<idx) & mask
+    bne lsel_rdy
+    ; disabled (mask bit clear) -> $40=$074C (re-scan). (Never fires: lh_sched only hands enabled idx.)
+    lda #$074C
+    bra lsel_set
+lsel_rdy:
+    ; --- $0774 btst #$1e,d2 / $0778 bne $0796 : bit30 of d2 = READY ---
+    lda $0A              ; d2 bits31-16
+    and #$4000           ; bit30 = bit14 of hi16
+    beq lsel_defer
+    lda #$0796           ; ready -> switch-IN (swo_tramp $0796 arm -> entry_swin, or interp)
+    bra lsel_set
+lsel_defer:
+    lda #$077A           ; not ready -> countdown/defer path (interpreted)
+lsel_set:
+    sta $40
+    stz $42
+    pla                  ; drop the jsr loop_hook return
+    jml.l irq_none       ; re-fetch $40 (no $AC dec, matching the original lhs_found handoff)

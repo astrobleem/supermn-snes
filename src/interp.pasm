@@ -18973,8 +18973,9 @@ lhs_scan:
     bcs lhs_found        ; enabled -> hand to the interpreter
     bra lhs_scan         ; disabled -> skip natively
 lhs_found:
-    lda #$075C
-    bra lhs_exit
+    jml $92FD00          ; -> lhs_sel (escbank): native $075C-$0778 select (gate $0736==$5EEC), else
+    nop                  ;    replicate the $075C handoff. ZERO-SHIFT: 5B (jml+nop) == the old
+                         ;    `lda #$075C; bra lhs_exit`. lhs_done/lhs_exit below are UNCHANGED.
 lhs_done:
     lda #$07EA
 lhs_exit:

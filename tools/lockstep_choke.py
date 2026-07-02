@@ -14,6 +14,7 @@ TD=sys.argv[1] if len(sys.argv)>1 else '/tmp/supermn-scratch/ce4trip64'
 AC=int(os.environ.get('AC','2F60'),16)
 CHOKE=int(os.environ.get('CHOKE','0'))
 SWIN=int(os.environ.get('SWIN','0'))   # scheduler switch-IN escape (entry_swin): 1 -> arm $073C=$A55A
+SEL=int(os.environ.get('SEL','0'))     # scheduler SELECT escape (lhs_sel): 1 -> arm $0736=$5EEC
 ESC=int(os.environ.get('ESC','0'))     # $071A global escape gate (jah2/xlat/coroutine); default 0 = the historical GREEN baseline
 wramA=open(TD+'/wramA.bin','rb').read(); wramB=open(TD+'/wramB.bin','rb').read(); regs=open(TD+'/regsA.bin','rb').read()
 def be32(d,o): return (d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3]
@@ -34,6 +35,7 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     m.load_state(NAT)
     w16(0x073A,0)                 # chokepoint OFF during boot-drive to B0
     w16(0x073C,0)                 # switch-IN escape OFF during boot-drive too
+    w16(0x0736,0)                 # scheduler-SELECT escape OFF during boot-drive too
     m.write_u16(0x407FE0,0,'snesMemory')   # zero ce4-dispatch counter EARLY (catch fires during run-to-B0)
     runf(120)
     w16(0x0700,1); w16(0x0702,0); w16(0x0704,1)
@@ -62,8 +64,10 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     w16(0x407FE2,0,'snesMemory')  # zero swin commit counter
     w16(0x407FE4,0,'snesMemory')  # zero 8fat counter (campaign 2)
     w16(0x407FE6,0,'snesMemory')  # zero fd2t counter (campaign 2)
+    w16(0x407FEA,0,'snesMemory')  # zero lhs_sel counter (campaign 4)
     w16(0x073A,CHOKE)             # arm chokepoint for the measured tick
     w16(0x073C,0xA55A if SWIN else 0)  # arm switch-IN escape (magic-match gate in entry_swin)
+    w16(0x0736,0x5EEC if SEL else 0)   # arm scheduler-SELECT escape (magic-match gate in lhs_sel)
     try: cyc0=m.get_cpu_state('Sa1').get('cycleCount')
     except Exception: cyc0=None
     w16(0x0702,0); w16(0x0704,1)
@@ -74,11 +78,11 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     try: cyc1=m.get_cpu_state('Sa1').get('cycleCount')
     except Exception: cyc1=None
     c_ce4=r16(0x0724); c_13be=r16(0x0730)
-    ctr=m.read_memory('snesMemory',0x407FE2,6)
-    c_swin=ctr[0]|(ctr[1]<<8); c_8fa=ctr[2]|(ctr[3]<<8); c_fd2=ctr[4]|(ctr[5]<<8)
+    ctr=m.read_memory('snesMemory',0x407FE2,10)
+    c_swin=ctr[0]|(ctr[1]<<8); c_8fa=ctr[2]|(ctr[3]<<8); c_fd2=ctr[4]|(ctr[5]<<8); c_sel=ctr[8]|(ctr[9]<<8)
     instr=r16(0x4A)|(r16(0x4C)<<16)
     cyc=(cyc1-cyc0) if (b1 and cyc0 is not None and cyc1 is not None) else -1
-    print("B1 frozen=%s  cycles(B0->B1)=%d  instr=%d  dispatch: ce4=%d 13be=%d swin=%d 8fa=%d fd2=%d"%(b1,cyc,instr,c_ce4,c_13be,c_swin,c_8fa,c_fd2),flush=True)
+    print("B1 frozen=%s  cycles(B0->B1)=%d  instr=%d  dispatch: ce4=%d 13be=%d swin=%d 8fa=%d fd2=%d sel=%d"%(b1,cyc,instr,c_ce4,c_13be,c_swin,c_8fa,c_fd2,c_sel),flush=True)
     out=bytes(m.read_memory('snesMemory',0x400000,WN))
     excl=set(range(0x170A-0x80,0x170A+0x80))
     diff=[i for i in range(WN) if out[i]!=wramB[i] and i not in excl]

@@ -18,7 +18,8 @@ NEEDED = ["inext", "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
           "ors_pre",      # an escbank escape's terminal rts routes here (bank-aware sentinel resume)
           "lh_sched",     # entry_swo (scheduler switch-OUT) tail-jumps into the native $074C scan
           "op_rte",       # entry_swin (scheduler switch-IN) tail: pop SR+PC + ors_rte resume dispatch
-          "lh_nofire"]    # entry_swin gate-off/bounds-fail: loop_hook's clc;rts transparent no-fire
+          "lh_nofire",    # entry_swin gate-off/bounds-fail: loop_hook's clc;rts transparent no-fire
+          "irq_none"]     # lhs_sel (scheduler select) re-fetch tail (matches lhs_found's sec;rts->irq_none)
 
 sym_path = Path("src/interp.sym")
 esc_path = Path("src/escbank.pasm")
