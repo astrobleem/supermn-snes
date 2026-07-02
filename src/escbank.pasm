@@ -43,6 +43,9 @@ entry_c172=$949EAE
 entry_295at=$94A49F
 entry_29b6t=$94A60F
 entry_13bet=$94ABC8
+entry_8fat=$94AF0C
+entry_fd2t=$94B21D
+entry_c9a6=$94B327
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -13764,6 +13767,17 @@ jx_on:
 jx_b0:
     lda $52              ; target low16
     ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<
+    cmp #$C9A6           ; CAMPAIGN 3: $00C9A6 HUD decimal formatter (jsr.l reach) -> entry_c9a6 ($94)
+    bne jx_c9a6
+    ldx $073E            ; c9a6 VALIDATION toggle (normally-on: boot $073E=0 -> dispatch in production;
+    bne jx_c9a6          ;   harness sets $073E=1 -> skip -> interpret = the without-c9a6 A/B baseline)
+    inc $0764
+    plp
+    pla
+    lda $54
+    sta $40
+    jml entry_c9a6          ; <- $00C9A6 HUD formatter (2nd bank $94)
+jx_c9a6:
     cmp #$1008
     bne jx_1008
     inc $0764
@@ -13823,6 +13837,16 @@ jxb_on:
 jxb_b0:
     lda $5C              ; bsr target low16
     ; >>> JAH2_EXT_BSR_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jxb_real <<<
+    cmp #$C9A6           ; CAMPAIGN 3: $00C9A6 HUD formatter (bsr reach from $C90C/$C960) -> entry_c9a6 ($94)
+    bne bjx_c9a6
+    ldx $073E            ; c9a6 VALIDATION toggle (normally-on; $073E=1 -> skip = without-c9a6 baseline)
+    bne bjx_c9a6
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jml entry_c9a6          ; <- $00C9A6 HUD formatter (2nd bank $94, bsr reach)
+bjx_c9a6:
     cmp #$08C2
     bne bjx_8c2
     inc $0764

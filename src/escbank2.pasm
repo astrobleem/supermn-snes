@@ -6296,6 +6296,319 @@ Lffd2_ccrx:
     sta $3C
     jml.l ors_pre
 
+; ===== CAMPAIGN 3 (2026-07-01): HUD/score decimal formatter =====================
+; entry_c9a6 <- $00C9A6 number->ASCII decimal (divu#10 digit loop + '_' left-pad). The hottest
+; leaf of the $C8C0-$CAFF HUD cluster (~130 of its ~300 interp-instr/heavy-tick; its $C9CC divu
+; loop + $C9E4 pad loop are the x130/$C9C0-region PCs). Pure leaf (no calls; divu -> esc_udiv).
+; Reached jsr.l + bsr($C90C/$C960) -> BOTH jah2 chains (jsr: jah2_ext / bsr: jah2_ext_bsr),
+; cross-bank `jml entry_c9a6` ($94, fed by gen_escbank_syms). DEFAULT convention (the jah2/bsr
+; hook sets $40=return + drops the push; the body re-pushes $40 and rts's via ors_pre) -- NOT
+; --table (that's for the return-already-pushed chokepoint/xlat reach). Counter $40:7FE8.
+; --- transpiled from $00C9A6 (28 instrs) by tools/transpile.py [bank1] ---
+entry_c9a6:
+    rep #$30
+    lda $407FE8          ; fire counter (work-RAM $7FE0-block convention; campaign 3)
+    inc a
+    sta $407FE8
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$0008
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $38
+    clc
+    adc #$000C
+    tax
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $9C
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $9A
+    lda $9A
+    sta $00
+    lda $9C
+    sta $02
+    ; --- cmpi.l #$1869F,d0 / ble $c9c4  (HAND-FIX Campaign 3: transpiler emit_signed_cmp does a
+    ;     single 16-bit sbc for ALL sizes -> a 32-bit cmpi only compared the LOW word; with imm
+    ;     high word $0001 it clamped every small value to 99999. Correct full 32-bit signed compare
+    ;     below; N/V/C from the high sbc are 32-bit-valid, Z_full computed via the saved low diff.) ---
+    lda $00
+    sec
+    sbc #$869F           ; low diff; C = no-borrow into the high word
+    sta $96              ; save low diff for the equality (Z_full) test
+    lda $02
+    sbc #$0001           ; high diff; N,V,C valid for the full 32-bit compare; Z = (high==0)
+    bvs Lfc9a6_1         ; V=1: signed-less-than iff N=0
+    bmi Lfc9a6_2         ; V=0,N=1 -> d0 < imm -> ble taken
+    bne Lfc9a6_3         ; V=0,N=0,high!=0 -> d0 > imm -> not taken
+    lda $96
+    bne Lfc9a6_3         ; low!=0 -> d0 > imm -> not taken
+    bra Lfc9a6_2         ; d0 == imm -> ble taken (<=)
+Lfc9a6_1:
+    bpl Lfc9a6_2         ; V=1,N=0 -> d0 < imm -> taken
+    bra Lfc9a6_3         ; V=1,N=1 -> d0 > imm -> not taken
+Lfc9a6_2:
+    jmp Lc9a6_c9c4
+Lfc9a6_3:
+    lda #$869F
+    sta $9A
+    lda #$0001
+    sta $9C
+    lda $9A
+    sta $00
+    lda $9C
+    sta $02
+Lc9a6_c9c4:
+    lda $20
+    clc
+    adc #$0005
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda #$0005
+    sta $1C
+    lda #$0000
+    sta $1E
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+Lc9a6_c9cc:
+    lda $00
+    sta $50
+    lda $02
+    sta $52
+    lda #$000A
+    sta $54
+    jsr esc_udiv
+    lda $52
+    bne dvovc9a6_1
+    lda $50
+    sta $00
+    lda $94
+    sta $02
+dvovc9a6_1:
+    lda $00              ; tst.l d0 / beq $c9e4  (HAND-FIX Campaign 3: same transpiler 32-bit-as-16-bit
+    ora $02              ;   bug as the cmpi.l above -- tst used ea_load_A (.w-only), so the LAST digit
+    bne Lfc9a6_4         ;   (quotient=0, remainder in the HIGH word) read low16=0 -> exited a digit
+    jmp Lc9a6_c9e4       ;   early. `ora $02` makes Z the full 32-bit zero test (beq needs only Z).
+Lfc9a6_4:
+    lda $00
+    tax
+    lda $02
+    sta $00
+    txa
+    sta $02
+    lda $00
+    clc
+    adc #$0030
+    sta $00
+    lda $00
+    pha
+    lda $20
+    sec
+    sbc #$0001
+    sta $20
+    lda $22
+    sbc #$0000
+    sta $22
+    lda $20
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    sta $00
+    lda $00
+    tax
+    lda $02
+    sta $00
+    txa
+    sta $02
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    beq Lfc9a6_5
+    jmp Lc9a6_c9cc
+Lfc9a6_5:
+Lc9a6_c9e4:
+    lda $1C
+    bne Lfc9a6_6
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Lc9a6_c9f0
+Lfc9a6_6:
+    lda #$005F
+    pha
+    lda $20
+    sec
+    sbc #$0001
+    sta $20
+    lda $22
+    sbc #$0000
+    sta $22
+    lda $20
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    jmp Lc9a6_c9e4
+Lc9a6_c9f0:
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $02
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $22
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $3A
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    and #$00FF
+    sta $42
+    inx
+    inx
+    sep #$20
+    lda $400000,x
+    xba
+    lda $400001,x
+    rep #$20
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================
