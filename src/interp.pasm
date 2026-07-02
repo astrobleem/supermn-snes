@@ -19810,15 +19810,23 @@ oror_dir0:
     jsr ea_write
     jmp imm_pc
 
-; swo_tramp — scheduler SWITCH-OUT trampoline (STEP C). lh_gen's `jmp lh_sched_pre` is retargeted
-; here (zero-shift). A = $40 (PC). $0532 = the coroutine yield-trap handler -> dispatch the native
-; switch-out (escbank slot 19 @ $928039); any other PC falls through to lh_sched_pre unchanged.
-; Lives in the free $FFCA-$FFDF gap (zero-run before the vectors), so it adds no bytes to lh_gen.
+; swo_tramp — scheduler SWITCH-OUT + SWITCH-IN trampoline (STEP C). lh_gen's `jmp lh_sched_pre` is
+; retargeted here (zero-shift). A = $40 (PC). $0532 = the coroutine yield-trap handler -> dispatch
+; the native switch-out (escbank slot 19 @ $928039). $0796 = the scheduler's ready-dispatch entry
+; (the $0778 `bne $0796` READY branch, ~19-28x/tick) -> dispatch the native switch-IN (entry_swin,
+; .org-pinned @ $92FB00 — no jmptab slot so nothing shifts; gated INSIDE the escape on $073C==$A55A,
+; so a gate-off run round-trips to a clc;rts no-fire — bit-identical baseline). Any other PC falls
+; through to lh_sched_pre unchanged. Lives in the free $FFCA-$FFDF gap (zero-run before the
+; vectors): 21 of 22 bytes used (3+2+4+3+2+4+3), last byte $FFDE.
 .org $FFCA
 swo_tramp:
     cmp #$0532
-    bne swo_pass
+    bne swo_chk_in
     jml $928039          ; entry_swo (escbank jmptab slot 19) -> does the save, jml lh_sched
+swo_chk_in:
+    cmp #$0796
+    bne swo_pass
+    jml $92FB00          ; entry_swin (escbank .org $FB00) -> restore + jml op_rte (or no-fire)
 swo_pass:
     jmp lh_sched_pre
 

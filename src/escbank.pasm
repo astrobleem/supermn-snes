@@ -27,6 +27,8 @@ jsrabs_hook=$00E200
 bhp_after=$00E454
 ors_pre=$00D16F
 lh_sched=$00F9B2
+op_rte=$00B3B8
+lh_nofire=$00F5B9
 entry_c9f8=$948039
 entry_d5a0=$94849E
 entry_1008=$94855B
@@ -14208,3 +14210,211 @@ ojn_d386:
 ojn_d3b0:
 ojd_x:
     jml.l inext          ; safety (ojmp_hook already matched)
+
+; ===================== SCHEDULER SWITCH-IN ($0796 ready-dispatch -> $07E8 rte) =====================
+; entry_swin — native coroutine SWITCH-IN (context restore), the FREQUENT half of the scheduler
+; (~19-28x/tick vs entry_swo's ~1x; plan: Phase-2 Campaign 1). Reached from bank-$00 swo_tramp
+; (jml $92FB00) when the interp is about to fetch $0796 — the $0778 `bne $0796` READY branch (bit30
+; of the descriptor set -> full context restore). Gated INSIDE on $073C==$A55A (magic-match like
+; $0730's $5A5A: stray IRAM writes can't fake it; OFF -> jml lh_nofire = clc;rts = transparent
+; no-fire, bit-identical baseline for the A/B).
+; VALIDATE-FIRST: everything up to the stack-bounds check runs in SCRATCH ($80-$8B) — $0796's lea is
+; NOT idempotent (a4 += 6+d1), so a bounds-FAIL after committing couldn't delegate. On FAIL (never in
+; practice: "Stack Error" path) we exit with NOTHING committed; the interp re-runs $0796..$07A8 from
+; pristine state and takes the real $07AA error path faithfully. On PASS we commit natively:
+;   $0796 lea $6(a4,d1.w),a4     a4 = a5+4 +6+idx*4 (idx*4<=60: no lo16 carry; hi16 unchanged)
+;   $079A move.l a4,$6(a5)       *(a5+6) = a4 — the switch-OUT's SP-save slot addr (entry_swo/$053A
+;                                reads it back); BE long write. N/Z from move.l: dead (rte pops SR).
+;   $079E movea.l (a4),a7        a7 = task saved SP (BE long read)
+;   $07A0 lea $dc(pc),a0         a0 = $087E — TRANSIENT (movem restores a0; never committed)
+;   $07A4 cmpa.l $4(a0,d1),a7 / $07A8 bcc: bounds = ROM long[$0882+idx*4] ($C1:0882+d1); 68K bcc =
+;                                no-borrow = a7 >= bound (unsigned 32-bit) = PASS. 65816 cmp C matches.
+;   $07D2 bclr #$1b,d2 / $07D6 beq: first-dispatch wake-up. bit27 clear -> straight to movem. Set ->
+;   $07D8 move.l d2,(a3)         write bit27-cleared d2 back to the descriptor (BE long), and
+;   $07DA lea $8e(a5),a4         (transient a4 — consumed by $07DE, then movem restores a4)
+;   $07DE move.l (a4,d1),$1c(a7) patch the frame: *(a7+$1c) = *(a5+$8e+idx*4) (BE->BE byte copy)
+;   $07E4 movem.l (a7)+,d0-a6    15-reg BE restore into DP $00..$38 ascending, Y-countdown terminator
+;                                (the entry_swo crash lesson — never exact-match), a7 += 60 (lo16,
+;                                faithful to op_movem)
+;   $07E8 rte                    -> jml op_rte: pops SR+PC into $7C../$40, a7 += 6, and ors_rte
+;                                routes the task resume-PC (escbank coroutine hits / AOT table /
+;                                inext) EXACTLY as an interpreted rte would.
+; The jsr-loop_hook return is dropped (pla) on the COMMIT path only (op_rte flows to inext at the
+; dispatch stack level — choke_tramp's ct_hit pattern); no-fire paths rts through lh_nofire with it.
+; DP reg file: d0=$00 d1=$04 d2=$08/$0A a3=$2C a4=$30/$32 a5=$34/$36 a7=$3C/$3E. Scratch $50-$53,
+; $54/$56 (loop ptrs), $80-$8B (validate). DBR=0 invariant (abs -> IRAM; entry_swo precedent).
+; .org-pinned at $92:FB00 (entry_swo $FA00+~$F0 ends $FAF0; nothing after -> ~360B free to $FFFF, no
+; jmptab slot -> zero shift anywhere). Branch ranges hand-checked: beq swin_go +4, bcc swin_out -96,
+; beq swin_movem +110, bne swin_lp -60.
+.org $FB00
+entry_swin:
+    rep #$30
+    lda $073C            ; SWIN gate (abs -> IRAM $073C, word $073C/$073D free)
+    cmp #$A55A
+    beq swin_go
+swin_out:
+    jml.l lh_nofire      ; OFF / bounds-fail -> loop_hook no-fire (clc;rts): interp decodes $0796
+                         ; (.l REQUIRED: plain jml on a bank-$00 constant mis-tracks as 3B -> the
+                         ; escape-bank jml.l rule; caught here as a -1 label drift on swin_go)
+swin_go:
+    ; --- VALIDATE (scratch only, nothing committed) --------------------------
+    ; new_a4 = a4 + 6 + d1.w -> $80/$82
+    lda $30
+    clc
+    adc #$0006
+    clc
+    adc $04              ; + d1.w = idx*4 (4..60; positive, no carry out of lo16)
+    sta $80              ; new_a4 lo16
+    lda $32
+    sta $82              ; new_a4 hi16 (unchanged: no lo16 carry)
+    ; task_sp = BE long at work[new_a4] -> $84(lo16)/$86(hi16)
+    ldx $80
+    sep #$20
+    lda $400000,x        ; b31-24
+    sta $87
+    lda $400001,x        ; b23-16
+    sta $86
+    lda $400002,x        ; b15-8
+    sta $85
+    lda $400003,x        ; b7-0
+    sta $84
+    rep #$20
+    ; bound = BE long at ROM $C1:{$0882 + d1} -> $88(lo16)/$8A(hi16)
+    lda $04
+    clc
+    adc #$0882
+    tax
+    sep #$20
+    lda $C10000,x        ; b31-24
+    sta $8B
+    lda $C10001,x
+    sta $8A
+    lda $C10002,x
+    sta $89
+    lda $C10003,x
+    sta $88
+    rep #$20
+    ; unsigned 32-bit compare: C=1 (65816) <=> task_sp >= bound <=> 68K bcc-taken = PASS
+    lda $86
+    cmp $8A
+    bne swin_bd          ; hi16s differ -> that carry decides
+    lda $84
+    cmp $88
+swin_bd:
+    bcc swin_out         ; FAIL (a7 < bound): delegate untouched -> interp runs the error path
+    ; --- COMMIT ---------------------------------------------------------------
+    pla                  ; drop the jsr-loop_hook return (16-bit) -> op_rte exits at inext level
+    lda $407FE2          ; commit counter (work-RAM scratch next to ce4's proven $7FE0; the
+    inc a                ; lockstep/multitick harnesses zero it at injection and report it)
+    sta $407FE2
+    lda $80              ; $0796: a4 = new_a4
+    sta $30
+    lda $82
+    sta $32
+    lda $34              ; $079A: *(a5+6) = a4, BE long
+    clc
+    adc #$0006
+    tax
+    sep #$20
+    lda $83              ; b31-24
+    sta $400000,x
+    lda $82
+    sta $400001,x
+    lda $81
+    sta $400002,x
+    lda $80
+    sta $400003,x
+    rep #$20
+    lda $84              ; $079E: a7 = task_sp
+    sta $3C
+    lda $86
+    sta $3E
+    ; $07D2 bclr #$1b,d2 (long bit 27 = $0A bit 11) / $07D6 beq -> movem
+    lda $0A
+    and #$0800
+    beq swin_movem
+    lda $0A              ; bit27 was set: clear it (transient — movem overwrites d2 — committed
+    and #$F7FF           ; anyway for mid-block diff parity with the interp's bclr)
+    sta $0A
+    ldx $2C              ; $07D8: *(a3) = d2 (bit27-cleared), BE long
+    sep #$20
+    lda $0B              ; b31-24
+    sta $400000,x
+    lda $0A
+    sta $400001,x
+    lda $09
+    sta $400002,x
+    lda $08
+    sta $400003,x
+    rep #$20
+    ; $07DA/$07DE: *(a7+$1c) = *(a5+$8e+d1) — BE->BE 4-byte copy via $50-$53
+    lda $34
+    clc
+    adc #$008E
+    clc
+    adc $04
+    tax
+    sep #$20
+    lda $400000,x
+    sta $50
+    lda $400001,x
+    sta $51
+    lda $400002,x
+    sta $52
+    lda $400003,x
+    sta $53
+    rep #$20
+    lda $3C              ; a7 (= task_sp, just committed)
+    clc
+    adc #$001C
+    tax
+    sep #$20
+    lda $50
+    sta $400000,x
+    lda $51
+    sta $400001,x
+    lda $52
+    sta $400002,x
+    lda $53
+    sta $400003,x
+    rep #$20
+swin_movem:
+    ; --- $07E4 movem.l (a7)+,d0-d7/a0-a6: 15-reg BE restore (entry_swo loop mirrored) ---
+    lda $3C
+    sta $54              ; $54 = work-RAM read ptr
+    stz $56              ; $56 = reg slot (0,4,..,$38)
+    ldy #$000F           ; Y-countdown: 15 regs exactly (the entry_swo terminator lesson)
+swin_lp:
+    ldx $54
+    sep #$20
+    lda $400000,x        ; b31-24
+    sta $51
+    inx
+    lda $400000,x        ; b23-16
+    sta $50
+    inx
+    lda $400000,x        ; b15-8
+    sta $53
+    inx
+    lda $400000,x        ; b7-0
+    sta $52
+    inx
+    rep #$20
+    stx $54              ; read ptr += 4
+    ldx $56
+    lda $50              ; reg hi16 ($51:$50 = b31-24:b23-16)
+    sta $0002,x
+    lda $52              ; reg lo16 ($53:$52 = b15-8:b7-0)
+    sta $0000,x
+    lda $56
+    clc
+    adc #$0004
+    sta $56
+    dey
+    bne swin_lp
+    lda $3C              ; a7 += 60 (lo16, faithful to op_movem)
+    clc
+    adc #$003C
+    sta $3C
+    ; --- $07E8 rte: pop SR+PC via the REAL op_rte -> ors_rte dispatches the resume ---
+    jml.l op_rte         ; (.l: bank-$00 constant, same rule as above)
