@@ -62,11 +62,9 @@ L25110_25122:
     lda $20
     clc
     adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_2
     bmi Lf25110_2
     bra Lf25110_3
@@ -76,11 +74,9 @@ Lf25110_3:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BF
     bne Lf25110_4
@@ -89,11 +85,9 @@ Lf25110_4:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BD
     bne Lf25110_5
@@ -127,11 +121,9 @@ L25110_2514c:
     lda $24
     clc
     adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_9
     bmi Lf25110_9
     bra Lf25110_10
@@ -141,11 +133,9 @@ Lf25110_10:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BF
     bne Lf25110_11
@@ -154,11 +144,9 @@ Lf25110_11:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BD
     bne Lf25110_12
@@ -167,20 +155,16 @@ Lf25110_12:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -198,20 +182,16 @@ Lf25110_15:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -228,20 +208,16 @@ Lf25110_18:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -259,20 +235,16 @@ Lf25110_21:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -289,20 +261,16 @@ Lf25110_24:
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -319,20 +287,16 @@ Lf25110_27:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -349,11 +313,9 @@ Lf25110_30:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -366,11 +328,9 @@ Lf25110_30:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_31
     jmp L25110_251c4
 Lf25110_31:
@@ -388,11 +348,9 @@ L25110_251c4:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_32
     jmp L25110_252a8
 Lf25110_32:
@@ -415,20 +373,16 @@ L25110_251d6:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -446,11 +400,9 @@ Lf25110_35:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -463,11 +415,9 @@ Lf25110_35:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_36
     jmp L25110_251f6
 Lf25110_36:
@@ -485,11 +435,9 @@ L25110_251f6:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_37
     jmp L25110_252a8
 Lf25110_37:
@@ -512,11 +460,9 @@ L25110_25208:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_38
     jmp L25110_25214
 Lf25110_38:
@@ -534,11 +480,9 @@ L25110_25214:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_39
     jmp L25110_252a8
 Lf25110_39:
@@ -556,20 +500,16 @@ L25110_25220:
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -586,20 +526,16 @@ Lf25110_42:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -616,11 +552,9 @@ Lf25110_45:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -633,11 +567,9 @@ Lf25110_45:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_46
     jmp L25110_2524c
 Lf25110_46:
@@ -655,11 +587,9 @@ L25110_2524c:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_47
     jmp L25110_252a8
 Lf25110_47:
@@ -682,20 +612,16 @@ L25110_2525e:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -713,11 +639,9 @@ Lf25110_50:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -730,11 +654,9 @@ Lf25110_50:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_51
     jmp L25110_2527e
 Lf25110_51:
@@ -752,11 +674,9 @@ L25110_2527e:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_52
     jmp L25110_252a8
 Lf25110_52:
@@ -779,11 +699,9 @@ L25110_25290:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_53
     jmp L25110_2529c
 Lf25110_53:
@@ -801,11 +719,9 @@ L25110_2529c:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_54
     jmp L25110_252a8
 Lf25110_54:
@@ -823,11 +739,9 @@ L25110_252a8:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8001
     bne Lf25110_55
@@ -836,11 +750,9 @@ Lf25110_55:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8002
     bne Lf25110_56
@@ -849,11 +761,9 @@ Lf25110_56:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8001
     bne Lf25110_57
@@ -862,11 +772,9 @@ Lf25110_57:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8002
     beq Lf25110_58
@@ -876,11 +784,9 @@ L25110_252d0:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_59
@@ -895,11 +801,9 @@ Lf25110_61:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_62
@@ -915,11 +819,9 @@ L25110_252e4:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_65
@@ -934,11 +836,9 @@ Lf25110_67:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_68
@@ -954,11 +854,9 @@ L25110_252f8:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $24
     clc
@@ -972,11 +870,9 @@ L25110_252fe:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_71
@@ -991,11 +887,9 @@ Lf25110_73:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_74
@@ -1011,11 +905,9 @@ L25110_25312:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $20
     clc
@@ -1069,11 +961,9 @@ L25110_25338:
     lda $20
     clc
     adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_79
     bmi Lf25110_79
     bra Lf25110_80
@@ -1095,11 +985,9 @@ L25110_2534a:
     lda $24
     clc
     adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_81
     bmi Lf25110_81
     bra Lf25110_82
@@ -1109,11 +997,9 @@ Lf25110_82:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BF
     bne Lf25110_83
@@ -1122,11 +1008,9 @@ Lf25110_83:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BF
     bne Lf25110_84
@@ -1135,11 +1019,9 @@ Lf25110_84:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BE
     bne Lf25110_85
@@ -1148,11 +1030,9 @@ Lf25110_85:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_86
@@ -1167,31 +1047,25 @@ Lf25110_88:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     bpl Lf25110_89
     jmp L25110_254a4
 Lf25110_89:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1209,20 +1083,16 @@ Lf25110_92:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1239,20 +1109,16 @@ Lf25110_95:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1270,20 +1136,16 @@ Lf25110_98:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1300,20 +1162,16 @@ Lf25110_101:
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1330,20 +1188,16 @@ Lf25110_104:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -1360,11 +1214,9 @@ Lf25110_107:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1377,11 +1229,9 @@ Lf25110_107:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_108
     jmp L25110_253dc
 Lf25110_108:
@@ -1415,20 +1265,16 @@ L25110_253e6:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -1446,11 +1292,9 @@ Lf25110_111:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -1463,11 +1307,9 @@ Lf25110_111:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_112
     jmp L25110_25406
 Lf25110_112:
@@ -1501,11 +1343,9 @@ L25110_25410:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_113
     jmp L25110_2541c
 Lf25110_113:
@@ -1534,20 +1374,16 @@ L25110_25420:
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1564,20 +1400,16 @@ Lf25110_116:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -1594,11 +1426,9 @@ Lf25110_119:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1611,11 +1441,9 @@ Lf25110_119:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_120
     jmp L25110_2544c
 Lf25110_120:
@@ -1649,20 +1477,16 @@ L25110_25456:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -1680,11 +1504,9 @@ Lf25110_123:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -1697,11 +1519,9 @@ Lf25110_123:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_124
     jmp L25110_25476
 Lf25110_124:
@@ -1735,11 +1555,9 @@ L25110_25480:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_125
     jmp L25110_2548c
 Lf25110_125:
@@ -1768,11 +1586,9 @@ L25110_25490:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $24
     clc
@@ -1785,22 +1601,18 @@ L25110_25490:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_126
     jmp L25110_254a4
 Lf25110_126:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $20
     clc
@@ -1854,11 +1666,9 @@ L25110_254c4:
     lda $20
     clc
     adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_129
     bmi Lf25110_129
     bra Lf25110_130
@@ -1880,11 +1690,9 @@ L25110_254d6:
     lda $24
     clc
     adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_131
     bmi Lf25110_131
     bra Lf25110_132
@@ -1894,20 +1702,16 @@ Lf25110_132:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1925,20 +1729,16 @@ Lf25110_135:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1955,20 +1755,16 @@ Lf25110_138:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -1986,20 +1782,16 @@ Lf25110_141:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2016,20 +1808,16 @@ Lf25110_144:
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2046,20 +1834,16 @@ Lf25110_147:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2076,11 +1860,9 @@ Lf25110_150:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2103,11 +1885,9 @@ Lf25110_150:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_151
     jmp L25110_255ec
 Lf25110_151:
@@ -2130,20 +1910,16 @@ L25110_25542:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2161,11 +1937,9 @@ Lf25110_154:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2188,11 +1962,9 @@ Lf25110_154:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_155
     jmp L25110_255ec
 Lf25110_155:
@@ -2225,11 +1997,9 @@ L25110_2556c:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_156
     jmp L25110_255ec
 Lf25110_156:
@@ -2247,20 +2017,16 @@ L25110_2557c:
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2277,20 +2043,16 @@ Lf25110_159:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2307,11 +2069,9 @@ Lf25110_162:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2334,11 +2094,9 @@ Lf25110_162:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_163
     jmp L25110_255ec
 Lf25110_163:
@@ -2361,20 +2119,16 @@ L25110_255b2:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2392,11 +2146,9 @@ Lf25110_166:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2419,11 +2171,9 @@ Lf25110_166:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_167
     jmp L25110_255ec
 Lf25110_167:
@@ -2456,11 +2206,9 @@ L25110_255dc:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_168
     jmp L25110_255ec
 Lf25110_168:
@@ -2478,11 +2226,9 @@ L25110_255ec:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $24
     clc
@@ -2495,11 +2241,9 @@ L25110_255ec:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $20
     clc
@@ -2553,11 +2297,9 @@ L25110_25618:
     lda $20
     clc
     adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_171
     bmi Lf25110_171
     bra Lf25110_172
@@ -2579,11 +2321,9 @@ L25110_2562a:
     lda $24
     clc
     adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_173
     bmi Lf25110_173
     bra Lf25110_174
@@ -2593,11 +2333,9 @@ Lf25110_174:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8001
     bne Lf25110_175
@@ -2606,11 +2344,9 @@ Lf25110_175:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8002
     bne Lf25110_176
@@ -2619,20 +2355,16 @@ Lf25110_176:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2650,20 +2382,16 @@ Lf25110_179:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2680,20 +2408,16 @@ Lf25110_182:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2711,20 +2435,16 @@ Lf25110_185:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2741,20 +2461,16 @@ Lf25110_188:
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2771,20 +2487,16 @@ Lf25110_191:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2801,11 +2513,9 @@ Lf25110_194:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -2818,11 +2528,9 @@ Lf25110_194:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_195
     jmp L25110_256a0
 Lf25110_195:
@@ -2856,20 +2564,16 @@ L25110_256aa:
     lda $24
     clc
     adc #$0004
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2887,11 +2591,9 @@ Lf25110_198:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -2904,11 +2606,9 @@ Lf25110_198:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_199
     jmp L25110_256ca
 Lf25110_199:
@@ -2942,11 +2642,9 @@ L25110_256d4:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_200
     jmp L25110_256e0
 Lf25110_200:
@@ -2975,20 +2673,16 @@ L25110_256e4:
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3005,20 +2699,16 @@ Lf25110_203:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -3035,11 +2725,9 @@ Lf25110_206:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3052,11 +2740,9 @@ Lf25110_206:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_207
     jmp L25110_25710
 Lf25110_207:
@@ -3090,20 +2776,16 @@ L25110_2571a:
     lda $24
     clc
     adc #$0008
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -3121,11 +2803,9 @@ Lf25110_210:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $04
     sec
@@ -3138,11 +2818,9 @@ Lf25110_210:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_211
     jmp L25110_2573a
 Lf25110_211:
@@ -3176,11 +2854,9 @@ L25110_25744:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_212
     jmp L25110_25750
 Lf25110_212:
@@ -3209,11 +2885,9 @@ L25110_25754:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $24
     clc
@@ -3226,11 +2900,9 @@ L25110_25754:
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $20
     clc
@@ -3291,11 +2963,9 @@ L25110_25780:
     lda $20
     clc
     adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_215
     bmi Lf25110_215
     bra Lf25110_216
@@ -3305,11 +2975,9 @@ Lf25110_216:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     bpl Lf25110_217
     jmp L25110_257f2
 Lf25110_217:
@@ -3323,11 +2991,9 @@ L25110_25796:
     lda $28
     clc
     adc #$0000
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_218
     bmi Lf25110_218
     bra Lf25110_219
@@ -3337,31 +3003,25 @@ Lf25110_219:
     lda $28
     clc
     adc #$000E
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     bpl Lf25110_220
     jmp L25110_257e8
 Lf25110_220:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0004
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3379,20 +3039,16 @@ Lf25110_223:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0002
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3409,20 +3065,16 @@ Lf25110_226:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0008
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3440,20 +3092,16 @@ Lf25110_229:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0006
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3470,11 +3118,9 @@ Lf25110_232:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $28
     clc
@@ -3487,11 +3133,9 @@ Lf25110_232:
     lda $28
     clc
     adc #$000A
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $20
     clc
@@ -3504,11 +3148,9 @@ Lf25110_232:
     lda $20
     clc
     adc #$000C
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $28
     clc
@@ -3604,11 +3246,9 @@ L25110_2582a:
     lda $20
     clc
     adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_236
     bmi Lf25110_236
     bra Lf25110_237
@@ -3670,11 +3310,9 @@ L25110_25868:
     lda $28
     clc
     adc #$0000
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     beq Lf25110_243
     bmi Lf25110_243
     bra Lf25110_244
@@ -3684,11 +3322,9 @@ Lf25110_244:
     lda $28
     clc
     adc #$000A
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BE
     bne Lf25110_245
@@ -3697,11 +3333,9 @@ Lf25110_245:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00BF
     beq Lf25110_246
@@ -3710,11 +3344,9 @@ Lf25110_246:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8030
     bne Lf25110_247
@@ -3723,11 +3355,9 @@ Lf25110_247:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8050
     bne Lf25110_248
@@ -3737,31 +3367,25 @@ L25110_25898:
     lda $28
     clc
     adc #$000E
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     bpl Lf25110_249
     jmp L25110_259b0
 Lf25110_249:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0004
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3779,20 +3403,16 @@ Lf25110_252:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0002
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3809,20 +3429,16 @@ Lf25110_255:
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0008
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3840,20 +3456,16 @@ Lf25110_258:
     lda $20
     clc
     adc #$0008
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $28
     clc
     adc #$0006
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $9E
     lda $00
     sec
@@ -3870,11 +3482,9 @@ Lf25110_261:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $28
     clc
@@ -3887,11 +3497,9 @@ Lf25110_261:
     lda $28
     clc
     adc #$000A
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $20
     clc
@@ -3904,11 +3512,9 @@ Lf25110_261:
     lda $20
     clc
     adc #$000C
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     pha
     lda $28
     clc
@@ -3921,11 +3527,9 @@ Lf25110_261:
     lda $28
     clc
     adc #$000A
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$00A0
     bvs Lf25110_262
@@ -3940,22 +3544,18 @@ Lf25110_264:
     lda $20
     clc
     adc #$000D
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    lda $400000,x
+    and #$00FF
     bne Lf25110_265
     jmp L25110_259ba
 Lf25110_265:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8050
     bne Lf25110_266
@@ -3964,11 +3564,9 @@ Lf25110_266:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8051
     bne Lf25110_267
@@ -3977,11 +3575,9 @@ Lf25110_267:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8053
     bne Lf25110_268
@@ -3990,11 +3586,9 @@ Lf25110_268:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8030
     bne Lf25110_269
@@ -4003,11 +3597,9 @@ Lf25110_269:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8031
     bne Lf25110_270
@@ -4016,11 +3608,9 @@ Lf25110_270:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8033
     bne Lf25110_271
@@ -4029,11 +3619,9 @@ Lf25110_271:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8034
     bne Lf25110_272
@@ -4042,11 +3630,9 @@ Lf25110_272:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8054
     beq Lf25110_273
@@ -4067,29 +3653,23 @@ Lf25110_274:
     lda $20
     clc
     adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $00
     lda $20
     clc
     adc #$0006
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $04
     lda $20
     clc
     adc #$000C
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    lda $400000,x
+    and #$00FF
     sep #$20
     sta $08
     rep #$20
@@ -4104,11 +3684,9 @@ Lf25110_275:
     lda $20
     clc
     adc #$0004
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sta $08
     lda $08
     sec
@@ -4132,11 +3710,9 @@ L25110_25978:
     lda $20
     clc
     adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$0068
     beq Lf25110_276
@@ -4196,11 +3772,9 @@ L25110_25992:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8034
     bne Lf25110_277
@@ -4209,11 +3783,9 @@ Lf25110_277:
     lda $20
     clc
     adc #$000A
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc #$8054
     bne Lf25110_278
