@@ -4,19 +4,23 @@ Last updated: 2026-07-01 (pt.4). **Read this first** in a fresh session, then ac
 current state, the reliable mental model, the strategic reality (read §0 before deciding what to do),
 the tooling, the validated escape recipes, and the prioritized next steps.
 
-> ## ⇒ IMMEDIATE NEXT ACTION (fresh session): execute the approved Phase-2 plan
-> **Read `/home/chad/.claude/plans/yes-please-enter-plan-splendid-brooks.md` in full and begin.** It is
-> a self-contained, APPROVED, cost-confirmed plan for **Phase-2 Campaign 1 — native scheduler
-> SWITCH-IN** (the *measured-hottest* un-escaped persistent cost: ~19–28 full context-restores/tick,
-> ~0.9–1.5M cyc/tick ≈ 5–8× the 179K budget). The plan's **"Execution log"** section carries everything
-> to resume: the decisions (intercept = **Option B, extend `lh_sched`**; cost-confirm **DONE, positive**),
-> the exact 68K switch-IN sequence to replicate, the `entry_swo` template + `op_rte` tail, and the
-> reg-file mapping at the intercept. **Start at plan task #10 (write `entry_swin`).** Validate with the
-> Phase-1 tools: `tools/multitick_choke.py` (SP-aware self-diff — 0 LIVE diffs is the gate),
-> `tools/lockstep_choke.py` (gated same-tick A/B cyc = Verification step 1), `tools/sched_trace.py`.
-> Triples in `/tmp/supermn-scratch/`: `ce4trip64` (moderate), `span_heavy` (heavy), `span_quiet` (quiet).
-> Substantial multi-session hand-assembly campaign (same order as the switch-OUT effort). Do NOT re-pick
-> a target by structure — the plan already did the measured-cost gate (ce58 call-tree was COLD/rejected).
+> ## ✅ Phase-2 Campaign 1 (scheduler SWITCH-IN) — COMPLETE, SHIPPED `2e39b98` (2026-07-01 pt.5)
+> **`entry_swin` is deployed & fully validated** (escbank `.org $FB00` + `swo_tramp` $0796 arm;
+> gate `$073C==$A55A`, counter `$40:7FE2`). All gates GREEN: gate-off arm bit-identical (instr=4666
+> exact); single-tick vs MAME GREEN ×3 triples; 20-tick SP-aware self-diff **0 LIVE diffs** ×3; the
+> bit27 wake-up path closed synthetically (`tools/synth_swin_b27.py`, 0 wram+regfile diffs);
+> composition CHOKE+SWIN GREEN (heavy tick 12.78M → **9.87M cyc**). See the plan file's
+> "CAMPAIGN COMPLETE" section for the full record.
+> **MODEL CORRECTION (inherit this):** the "~19–28 restores/tick" was a **2× sched_trace window
+> artifact** (its $3A92 re-fetch trap never fires → the stream caps at 0x7000 ≈ 2 ticks; the
+> `$070E/$0712/$0714 ×2` markers are the tell). TRUE switch-ins/tick: **11 moderate / 4 heavy /
+> 1 quiet** (commit-counter ground truth; coverage 100%). Measured saving: **~0.5M cyc/tick
+> (~6%) moderate**, less on heavy/quiet — half the plan's estimate, real and shipped. Any future
+> sched_trace-derived per-tick number must be ÷2 (or re-measured with commit counters).
+> **NEXT:** pick Campaign 2 by the same measured-cost gate — candidates per the plan's "Framing":
+> (a) render-burst chokepoint allowlist extension (heavy ticks: ce4+13be already reclaim 24%),
+> (b) task-body long tail, (c) codegen efficiency ([[workram-lever-bounded]] bounds it). Use commit
+> counters, not sched_trace windows, for the gate.
 
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint

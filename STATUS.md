@@ -15,6 +15,15 @@ Last updated: June 29, 2026. Per-area detail lives in the linked docs.
 > correctness fix, not the 24×-closer). See [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) top
 > block + memory `fetch-chokepoint-rts-escape`.
 
+> **UPDATE 2026-07-01 (pt.3) — Phase-2 Campaign 1 COMPLETE: scheduler SWITCH-IN shipped `2e39b98`.**
+> `entry_swin` ($0796→movem-restore→rte, escbank $FB00 + swo_tramp arm) deployed & fully validated:
+> gate-off bit-identical; single-tick vs MAME GREEN ×3 triples; 20-tick SP-aware self-diff 0 LIVE ×3;
+> bit27 wake-up path closed synthetically (`tools/synth_swin_b27.py`); composition CHOKE+SWIN GREEN
+> (heavy 12.78M→9.87M cyc). **Model correction:** the "19–28 restores/tick" below was a 2× sched_trace
+> WINDOW artifact (trap never fires ⇒ ~2-tick stream) — true rate 11/4/1 per tick (mod/heavy/quiet),
+> measured win ~0.5M cyc/tick (~6%) moderate. See the top of
+> [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) + memory `scheduler-switchin-shipped`.
+
 > **UPDATE 2026-07-01 (pt.2) — chokepoint generalized ($13BE, shipped `a013dee`); Phase-2 plan APPROVED.**
 > Reconciled activity-spectrum budget (bit-exact): per-tick cost is scene-dependent 2.7M(quiet)..12.6M
 > (heavy combat) cyc — worst-case ~70× budget. Measured-cost gate picked the first Phase-2 campaign:
