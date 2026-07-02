@@ -62,6 +62,22 @@ the tooling, the validated escape recipes, and the prioritized next steps.
 > clean `--table`/`--bank2` escapes of any arithmetic-heavy fn + Gigandes) — consider it before/【as】
 > Campaign 4.
 
+> ## ✅ Transpiler 32-bit-flag bug FIXED PROPERLY — `97d5049` (2026-07-01 pt.8)
+> The general fix for the Campaign-3 finding. `emit_signed_cmp`/`tst`/`sub.l Dn` did a single 16-bit
+> `sbc`/load for ALL sizes (`ea_load_A` is `.w`-only), so every `.l` `cmp/cmpi/cmpa/tst` compared only
+> the low word. Now: two chained `sbc` (N/V/C 32-bit-valid) + saved low diff; new `_branch32` in
+> `emit_branch` reconstructs the full 32-bit Z and handles every consuming branch
+> (beq/bne/blt/bge/ble/bgt/bcc/bcs/bhi/bls/bmi/bpl for `signed32`; the tst subset for `tst32`).
+> Memory-operand `.l` compares read both words via `load_long_to`; a `.l` cmp branching to a fn-exit
+> epilogue is explicitly Unsupported (32-bit CCR-at-exit not modeled; doesn't occur).
+> **Validated:** `tools/val_branch32.py` (new; executes the ACTUAL emitted asm vs true 68K 32-bit
+> semantics over edge operands) → **5460 cases, 0 failures**; CE4/13BE/C9F8/1008 byte-identical
+> old-vs-new (no 16-bit regression); all 19 known escapes transpile clean; **entry_c9a6 REGENERATED**
+> from the fixed transpiler (hand-fixes removed) → ESC=1 GREEN, ESC=0 baselines unshifted.
+> **Deployed-drift note:** C172 + D718 carry the OLD 16-bit `.l` zero-tests (correct-by-luck on their
+> triples; also older mem-codegen) → they heal on next natural re-transpile (regen isn't a clean swap;
+> needs each escape's gate re-validated). See memory [[transpiler-32bit-flag-bug]].
+
 Goal: ~99% native per-frame coverage so the SA-1 runs Superman at realtime (playable).
 Repo: branch `boot-scheduler-progress`, **committed + pushed at `a013dee`** (Phase-1 chokepoint
 generalization: `entry_13bet` bit-exact, `$1400` dropped, transpiler CCR fix, self-diff tools). Working
