@@ -137,6 +137,24 @@ cluster, unknowns gate the campaign tail; queue trap#5-residue (2.3) + CBxx/$4A9
 after — both are now well-characterized. CP1's $AC free-run soak: run alongside A1; the freerun
 chunk-sensitivity item stays open (injected spin-free ticks remain the steering currency).
 
+## Phase 2.1 A1 — object-processor spec: DONE (2026-07-03), A2 = GO
+
+**Full spec: `docs/OBJPROC_SPEC.md`.** The "un-escapable dynamic coroutine" verdict is SOFT: one
+scheduler task, TWO resume PCs ($01E7C0 render pass, $01D5F0 physics), each yielding at the trap#5
+immediately before its resume PC; the internal jsr(a6) ping-pong is structural (targets $01E7B0 /
+$01C99E via the $350a private stack — $3506(a5) is its top slot, resume-set = {$01C99E} by
+construction); the hot `jsr (a4)` at $01F096 calls **[$3514(a5)] = $0D96 = entry_d96 (ALREADY
+NATIVE)** with a 7-word caller-cleanup frame; all pc-rel jump tables enumerate small; the 16-slot
+spawn table ($31c2) is all-zero on every triple (its cold per-slot jsr(a4) handlers = the bail
+guard). A2 = transpile-first with 2 reusable features (F1 guarded direct-link jsr(An), F2 pc-rel
+table) + CORO_PCS dispatch; **projected −470–530K cyc/tick on gameplay ticks (2.44M → ~1.95M ≈
+10.9×), zero light-tick value.** New instruments: `lockstep_trap.py STREAMDUMP` (chronological
+fetch stream) + `tools/disasm_region.py` (stream-annotated listing).
+
+CP1 $AC soak: 1800 chunked frames free-run STABLE (no freeze, ticks advance) — rate read 69.2×
+= the chunk-sensitivity anomaly again (per-frame-pause reads ~16.7×); stability box CHECKED,
+rate-mode question still open.
+
 ## Phase-1 progress ledger
 
 | item | status | win | commit |

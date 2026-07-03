@@ -116,6 +116,8 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
             for o in range(0,nb,0x1000): raw+=bytes(m.read_memory('snesMemory',0x408000+o,min(0x1000,nb-o)))
             real=dec(raw,nb)
             print(">>> ALLSTREAM: %d fetched PCs ($0718=%d bytes%s)"%(len(real),na," CAPPED" if na>=0x7FF8 else ""),flush=True)
+            sd=os.environ.get('STREAMDUMP')   # write the CHRONOLOGICAL fetch stream (one hex PC/line)
+            if sd: open(sd,'w').write('\n'.join('%06X'%(p&0xFFFFFF) for p in real))
         else:
             real=dec(bytes(m.read_memory('snesMemory',0x40C000,min(nr,0x3FF8))),nr)
         reg=collections.Counter(p&0xFFFFC0 for p in real)
