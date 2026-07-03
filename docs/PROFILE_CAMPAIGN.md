@@ -113,6 +113,22 @@ lh_sched). Ordering inside Phase 2.5 updates accordingly after Phase 1.
 | whole $011750 task-loop iteration | 3 of 12 callees now native | 453,950→380,933 = **~73K/tick** | 308ddb9 |
 | $011752 contiguous tree | UNBLOCKED (stray-Bcc closed); next: remaining callees ($12a92/$12af6/$117b4) then the tree | — | — |
 
+**Phase-1.1 COMPLETE through the callee set (`90dc82e`..`3a1aa3a`):** the $011750 task loop now runs
+9 of its 12 callees native (12e56+12c1a+129c6+12a92+12af6+117b4 via bhp arms; cc44+cc80 via NEW
+jah2_ext_bsr→escbank3 cross-bank arms; 12e56 direct-links 12af6). **Loop iteration 453,950 →
+247,087 cyc = 1.84×, ~207K/tick** (interp instrs 245→115). Transpiler gains along the way: dynamic
+bset/bclr/bchg, branch chains, indexed (An,Dn.w) EA, dead-cmp elimination, **IO-aware RMW under
+--video** (the ea_rmw fast path corrupts $40:lo16 through ROM-valued pointers — game code
+legitimately stores through ROM pointers; interp drops those writes; exit_dump differential caught
+it). PARKED: entry_caf6 (the $00CBxx gateway; built + corruption fixed, residual walk divergence
+tied to bridged-cb9e-interpreted vs native-leaf entry_cb9e — needs the leaf-vs-bridge convention
+analysis). **CONTIGUOUS $011752 BLOB: assessed and PARKED by the drop rule** — remaining
+blob-addressable share = ~6 same-bank bsr dispatches + ~10 glue instrs ≈ 30-40K/tick, while its 5
+bank-$00 calls CANNOT improve without --table variants (leaf-convention bodies always bounce
+through the interp; a blob bridge would REGRESS their current jah2 dispatch). The blob becomes
+worthwhile bundled WITH --table variants for cc10/cc44/cc80/ccd8 (+cb9e convention work) — queue as
+one item, ranked by the profile.
+
 **Stray-Bcc gap CLOSED (`308ddb9`): branch chains** — `producer; Bcc1; Bcc2…` re-consumes the live
 source flags (68K branches preserve CCR; the 'tst'/'signed' lowerings are branch-ops-only on
 fall-through). Guards: labeled Bcc still raises; 32-bit sources excluded. Also NEW: brief indexed
