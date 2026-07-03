@@ -1045,7 +1045,10 @@ def gen_call(e, ins):
     if m and (int(m.group(1), 16) & 0xFFFFFF) in ESCAPED:
         a = int(m.group(1), 16) & 0xFFFFFF
         e.cmt('CALL-BRIDGE %s %s -> entry_%x (NATIVE escape), resume %s' % (ins.mnemonic, t, a, cont))
-        e('lda #%s' % cont); e('sta $40'); e('lda #$00FE'); e('sta $42')
+        # sentinel = the HOST bank so the callee's rts (pops $42:$40) resumes cont IN THE HOST bank:
+        # $00FE -> ors_pre_92 ($92); $00FD -> ors_94chk ($94). Was hardcoded $00FE (bank-$92 only).
+        esc_sent = '$00FD' if BANK2 else '$00FE'
+        e('lda #%s' % cont); e('sta $40'); e('lda #%s' % esc_sent); e('sta $42')
         e('jmp entry_%x' % a)
         e.lbl(cont)
         return 1

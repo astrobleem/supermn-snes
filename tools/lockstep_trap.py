@@ -79,7 +79,9 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     if GPPROF: w16(0x0718,0); w16(0x0762,0)   # enable dbg_fetch (ALL) + ilog (REAL interpreted) streams
     b1=False
     for _ in range(400):
-        w16(0x0710,B1PC); w16(0x0716,0); runf(4)
+        # bank-aware B1 trap: $0716 = the PC bank (dbg_fetch checks BOTH low16 and bank). Pass B1PC as
+        # a full 24-bit PC (e.g. 011778) to trap a bank-!=0 PC; low-16 B1PC (0708/0818) -> bank 0 as before.
+        w16(0x0710,B1PC&0xFFFF); w16(0x0716,(B1PC>>16)&0xFF); runf(4)
         if r16(0x0712): b1=True; break
     if CYC:
         cyc1 = m.get_cpu_state('Sa1').get('cycleCount')
