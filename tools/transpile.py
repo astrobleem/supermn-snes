@@ -46,6 +46,12 @@ BANK2 = False                                   # --bank2: body lives in the 2nd
                                                 # a $00FD sentinel (ors_pre -> ors_94chk -> bank $94).
 ESCAPED = set()                                 # --escapes=hex,..: callee addrs with an ESCBANK escape;
                                                 # gen_call dispatches a bridge-TO-escape (run native) to them
+JT = {}                                         # --jt=BASE:MIN:MAX,..: pc-rel jump tables (self-relative
+                                                # BE16 word offsets at BASE, signed byte-offset domain
+                                                # [MIN,MAX] step 2). Enables the fused 68K idiom
+                                                # `move.w BASE(pc,dI.w),dT ; jmp BASE(pc,dT.w)` ->
+                                                # native switch on dI + BAIL default (gen_jumptable).
+                                                # JT[base] = {off: (word, target24)}
 
 # ---- EA parse: capstone op_str token -> structured operand ----
 def parse_ea(tok, pc=None):
@@ -89,6 +95,7 @@ def _dis1(a):
 def decode(entry):
     # Phase 1: linear decode to the FIRST rts.
     insns, addr, targets = [], entry, set()
+    jt_labels = set()                            # in-window jump-table targets (labels even w/o a Bcc)
     while True:
         ins = _dis1(addr); insns.append(ins); addr = ins.address + ins.size
         base = ins.mnemonic.split('.')[0]
@@ -104,7 +111,18 @@ def decode(entry):
         # gen emits the trap as a tail-jump to itself and the bra as a tail-jump -> interp runs the trap.
         if base == 'trap' and addr not in targets: break
         if base == 'bra' and btgt is not None and btgt < entry and addr not in targets: break
-        if base == 'jmp' and addr not in targets: break  # jmp(An) state-dispatch / jmp abs tail-jump: ends the body
+        if base == 'jmp':
+            mt = re.fullmatch(r'\$([0-9a-f]+)\(pc, d[0-7]\.w\)', ins.op_str.strip())
+            jb = int(mt.group(1), 16) if mt else None
+            if jb in JT:                                 # enumerated pc-rel table: continue at its targets
+                tt = [t for _, t in JT[jb].values() if entry <= t < entry + 0x2000]
+                targets.update(tt); jt_labels.update(tt)
+                if addr not in targets:                  # skip the inline table data to the first target
+                    fwd = sorted(t for t in tt if t >= addr)
+                    if not fwd: break
+                    addr = fwd[0]
+                continue
+            if addr not in targets: break                # jmp(An) state-dispatch / jmp abs tail-jump: ends the body
         if addr - entry > 0x2000: raise Unsupported('no rts within 0x2000 from $%06X' % entry)
     end = addr
     # Phase 2: absorb MULTI-EXIT fragments -- a STRAIGHT-LINE block (data ops only, ending in rts)
@@ -136,6 +154,7 @@ def decode(entry):
                     # add to intra-fn labels.
                     continue
                 labels.add(t)
+    labels |= {t for t in jt_labels if entry <= t < end}   # table targets are entry points too
     return insns, (labels, entry, end)
 
 # ---- emit buffer + fresh local labels ----
@@ -633,6 +652,12 @@ def gen(e, ins, nxt):
         return gen_movem(e, ins, size, None)
     if base in ('jsr', 'bsr'):                       # call operand ('$x.l'/'(an)') isn't a data EA
         return gen_call(e, ins)
+    if base == 'move' and size == 'w' and nxt is not None and split_mn(nxt)[0] == 'jmp':
+        mm = re.fullmatch(r'\$([0-9a-f]+)\(pc, (d[0-7])\.w\), (d[0-7])', ins.op_str.strip())
+        mj = re.fullmatch(r'\$([0-9a-f]+)\(pc, (d[0-7])\.w\)', nxt.op_str.strip())
+        if mm and mj and mm.group(1) == mj.group(1) and mm.group(3) == mj.group(2) \
+           and int(mm.group(1), 16) in JT:
+            return gen_jumptable(e, ins, mm.group(2), mm.group(3), int(mm.group(1), 16))
     ops = operands(ins)
 
     # ---- frame / structural ----
@@ -673,7 +698,12 @@ def gen(e, ins, nxt):
         src, dst = ops
         if size == 'l':                                  # full 32-bit move (ea_load/store are .w-only)
             gen_movel(e, src, dst)
-            if fuses: raise Unsupported('move.l feeding branch')
+            if fuses:                                    # move.l sets N,Z (V=0) -> tst32 off the stored value
+                if dst[0] != 'Dn': raise Unsupported('move.l-to-mem feeding branch')
+                dp = reg_dp(dst[1])
+                e('lda $%02X' % (dp+2))                  # processor N = bit31, Z = (hi==0)
+                e._cmp32_low = '$%02X' % dp              # _branch32 reconstructs full Z from the low word
+                emit_branch(e, nb, branch_target(nxt), 'tst32'); return 2
             return 1
         ea_store_A_from(e, dst, size, lambda e: ea_load_A(e, src, size))
         if fuses:                                        # move sets N,Z (V cleared) -> reload + branch
@@ -1183,6 +1213,31 @@ def gen_movel_run(e, src, dst, k):
     gen_movel(e, src, dst)                            # one long: load (a0)+ -> store (a1)+, bumps both
     e('dec $98'); e('bne %s' % lp)
 
+def gen_jumptable(e, ins, dI, dT, base):
+    """Fused `move.w BASE(pc,dI.w),dT ; jmp BASE(pc,dT.w)` = computed goto through a CONSTANT ROM
+    table of self-relative BE16 offsets, enumerated at transpile time (--jt=BASE:MIN:MAX). Lowering:
+    switch on dI over the enumerated even offsets; per case: dT := table word (faithful — the real
+    68K leaves the offset in dT), then jmp to the in-body label (branch_label emits a tail-jump stub
+    for out-of-body targets, e.g. the yield). Un-enumerated/odd dI -> BAIL: re-enter the interpreter
+    AT the move; it re-executes both instructions with the real table (correct for ANY index, incl.
+    garbage words past the true table end — faithfulness never depends on the enumeration bound).
+    CCR: the move's N/Z are not materialized natively — safe: an in-body target whose first flag-read
+    precedes any flag-set raises 'stray conditional' at ITS site (fail-loud), and the bail path
+    re-runs the move interpreted (real CCR)."""
+    e.cmt('JUMPTABLE $%06X(pc,%s.w) -> %s: %d enumerated cases + interp-bail default'
+          % (base, dI, dT, len(JT[base])))
+    e('lda $%02X' % reg_dp(dI))
+    for off, (word, tgt) in sorted(JT[base].items()):
+        skip = e.fresh()
+        e('cmp #$%04X' % (off & 0xFFFF)); e('bne %s' % skip)
+        e('lda #$%04X' % (word & 0xFFFF)); e('sta $%02X' % reg_dp(dT))   # dT.w := table word
+        e('jmp %s' % branch_label(e, tgt))
+        e.lbl(skip)
+    e('lda #%s' % hx(ins.address & 0xFFFF)); e('sta $40')                # default: bail to interp
+    e('lda #%s' % hx((ins.address >> 16) & 0xFF)); e('sta $42')          # at the move (PC24)
+    e('jmp inext')
+    return 2
+
 def gen_call(e, ins):
     """CALL-BRIDGE (CALL_BRIDGE_DESIGN.md): push a $00FF:cont sentinel return, set PC=callee,
     jmp inext (interpreter runs the callee). The callee's rts pops the sentinel -> op_rts_sentinel
@@ -1192,7 +1247,9 @@ def gen_call(e, ins):
     # $XXXX.l (jsr.l) / $XXXX (bsr, capstone-resolved) / $XXXX(pc) (jsr (d16,PC) -- capstone already
     # resolved the target to absolute $XXXX). All give the absolute callee address in group(1).
     m = (re.fullmatch(r'\$([0-9a-f]+)\.l', t) or re.fullmatch(r'\$([0-9a-f]+)', t)
-         or re.fullmatch(r'\$([0-9a-f]+)\(pc\)', t))
+         or re.fullmatch(r'\$([0-9a-f]+)\(pc\)', t) or re.fullmatch(r'\$([0-9a-f]+)\.w', t))
+    if m and t.endswith('.w') and int(m.group(1), 16) & 0x8000:
+        raise Unsupported('jsr abs.w with sign bit (%s)' % t)   # would sign-extend to $FFxxxx; fail loud
     # BRIDGE-TO-ESCAPE: callee has an escbank escape -> run it NATIVELY (no interpret) and resume the
     # parent. Set $40=cont/$42=$00FE (sentinel), jmp entry_C: entry_C's prologue pushes $00FE:cont, its
     # body runs native, its terminal rts pops $00FE:cont -> ors_pre -> resume here ($92:cont). The
@@ -1445,6 +1502,7 @@ def main():
     # entered by the $07E4/op_rte resume hook (reg file already restored, a7 already past the trap
     # frame), NOT by a jsr -> NO re-simulate-push prologue. Decode ends at the yield `bra` (target <
     # entry = back to the trap #5); that tail-jump runs the trap interpreted -> the normal yield.
+    BAILU = '--bail' in sys.argv                          # Unsupported non-CCR-reader ops -> interp-bail edges
     table = '--table' in sys.argv                         # AOT-TABLE/rts dispatch (aot-dispatch-table):
     # entered via xlat_dispatch (jmp(a0)/rts at a materialized boundary) with PC=fn-entry and the
     # caller's REAL return already on the 68K stack -> like default, decode to the terminal rts and
@@ -1452,6 +1510,16 @@ def main():
     for a in sys.argv:                                   # --escapes=hex,hex,..: callees with escbank escapes
         if a.startswith('--escapes='):
             ESCAPED = {int(x, 16) & 0xFFFFFF for x in a.split('=', 1)[1].split(',') if x}
+    for a in sys.argv:                                   # --jt=BASE:MIN:MAX,..: enumerate pc-rel jump tables
+        if a.startswith('--jt='):
+            for spec in a.split('=', 1)[1].split(','):
+                if not spec: continue
+                b, mn, mx = spec.split(':')
+                b = int(b, 16) & 0xFFFFFF
+                JT[b] = {}
+                for off in range(int(mn), int(mx) + 1, 2):
+                    w = s16((ROM[IMG + b + off] << 8) | ROM[IMG + b + off + 1])
+                    JT[b][off] = (w, (b + w) & 0xFFFFFF)
     entry = int(args[0], 16)
     insns, (labels, fn_lo, fn_hi) = decode(entry)
     name = 'entry_%x' % entry
@@ -1484,7 +1552,7 @@ def main():
     else:
         e.cmt('re-simulate the jsr return-push the hook skipped (frame must match the real 68K)')
         e('lda $40'); e('sta $54'); e('lda $42'); e('sta $56'); e('jsr push32')
-    unimpl = {}
+    unimpl = {}; bails = []
     # TASK #73 frame-pacing (--accharge): charge $AC by this escape's DYNAMIC 68K-instr count so the
     # vblank-IRQ boundary fires at the same 68K-work point as MAME (the main loop only decrements $AC by
     # 1 per escape-step). Charge PER BASIC BLOCK at the block START -> loop bodies charge per iteration
@@ -1529,6 +1597,21 @@ def main():
                 v = dbra_exit_ccr_val(insns[i0-1] if i0 > 0 else None)
                 if v is not None: emit_ccr_from_value(e, v)
         except Unsupported as ex:
+            b0 = ins.mnemonic.split('.')[0]
+            # --bail (Phase-1.2 generic bail-to-interp): an Unsupported op becomes a CORRECT slow
+            # edge — set PC = this instruction, jmp inext; the interpreter executes it (and whatever
+            # follows) faithfully. Regs/memory are reg-file-faithful at instruction boundaries; the
+            # 68K CCR is NOT materialized, so only ops that don't READ CCR/X may bail (they'll SET
+            # their own flags interpreted). CCR/X-readers (Bcc/addx/roxd/...) keep the hard fail.
+            ccr_readers = BCC | {'addx', 'subx', 'negx', 'roxl', 'roxr', 'abcd', 'sbcd', 'nbcd',
+                                 'scc', 'dbcc', 'rtr', 'trapv', 'chk'}
+            if BAILU and b0 not in ccr_readers:
+                e.cmt('BAIL to interp @ $%06X: %s %s   (%s)' % (ins.address, ins.mnemonic, ins.op_str, ex))
+                e('lda #%s' % hx(ins.address & 0xFFFF)); e('sta $40')
+                e('lda #%s' % hx((ins.address >> 16) & 0xFF)); e('sta $42')
+                e('jmp inext')
+                bails.append('$%06X %s %s' % (ins.address, ins.mnemonic, ins.op_str))
+                i += 1; new_block = True; continue
             e.cmt('!! UNIMPLEMENTED: %-9s %s   (%s)' % (ins.mnemonic, ins.op_str, ex))
             unimpl['%s %s' % (ins.mnemonic, ins.op_str.split(',')[0] if ins.op_str else '')] = str(ex)
             i += 1
@@ -1539,6 +1622,9 @@ def main():
     lines = e.lines if noinline else inline_mem_ops(e.lines)
     out = bank1_transform(lines) if bank1 else lines
     print('\n'.join(out))
+    if bails:
+        sys.stderr.write('\n=== %d BAIL edges (correct, interp-slow) ===\n' % len(bails))
+        for b in bails: sys.stderr.write('  %s\n' % b)
     if unimpl:
         sys.stderr.write('\n=== %d UNIMPLEMENTED ===\n' % len(unimpl))
         for k, v in sorted(unimpl.items()): sys.stderr.write('  %-28s %s\n' % (k, v))
