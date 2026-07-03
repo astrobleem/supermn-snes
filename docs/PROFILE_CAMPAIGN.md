@@ -210,9 +210,19 @@ in A2 too). exit_dump now takes the full 24-bit trap PC (pass 1E7BE not E7BE —
 and grew lockstep_trap's POKEROM arm. Gate tools now resolve build/interp.sfc repo-relatively and
 honor NAT=<path> (worktree-parallel runs without clobbering /tmp/b0_native.mss).
 
-**A3 residual:** bsr $1f1fe render-record builder (t50 anim-op −5 path only, ~23 instr) — static
-bridge-to-escape + `--escapes=1F1FE` visit-1 regen still queued; then 2.3 trap#5 shells / 2.2
-CBxx+$4A9E per the CP1 re-rank.
+**A3 residual SHIPPED (same session): entry_1f1fe** — visit-1 regen'd `--escapes=D96,1F1FE`
+(regen determinism first verified: byte-identical to deployed modulo the 5 FD→FB sentinel sites;
+the C172/D718 drift lesson). `--escapes=1F1FE` rewrites TWO sites: the bsr → static bridge
+($40:=native resume label, $42:=$00FB sentinel, `jmp entry_1f1fe`; the STANDARD-convention body
+re-simulates that as the pushed return → its rts pop routes ors_pre→ors_98chk native resume), and
+the jsr(a4) guard chain gains an ==$01F1FE arm → **entry_1f1fet** (--table variant; never fires at
+that site — mechanical ESCAPED-set arm; both variants must exist same-bank). Label-collision
+gotcha: both variants in ONE file need `s/1f1fe/1f1fet/g` on the t-variant (labels embed the pfx;
+d96/d96t never collided only because they live in different banks). t50 instr 433→409 (−24 = the
+builder fired); t25/ce4 unchanged; escbank4 → $F5B3. Same full gate battery GREEN incl. t50
+yield-state identity (same 3-byte below-SP sentinel residue class, tick-end washed).
+
+**Then:** 2.3 trap#5 shells / 2.2 CBxx+$4A9E per the CP1 re-rank.
 
 **NEW (audit find, follow-up): tools/audit_banks.py flags a PRE-EXISTING escbank overlap** — the
 $8000 block's bodies have grown to $F29F, PAST the pinned .org $F000/$F400 dispatcher blocks, which
