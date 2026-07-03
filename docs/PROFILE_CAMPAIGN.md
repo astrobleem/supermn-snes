@@ -113,6 +113,17 @@ lh_sched). Ordering inside Phase 2.5 updates accordingly after Phase 1.
 | whole $011750 task-loop iteration | 3 of 12 callees now native | 453,950→380,933 = **~73K/tick** | 308ddb9 |
 | $011752 contiguous tree | UNBLOCKED (stray-Bcc closed); next: remaining callees ($12a92/$12af6/$117b4) then the tree | — | — |
 
+**Phase 1.4 SHIPPED (`c0628dc`): the $023xxx trap#5 cluster — the biggest single item (~27% of
+remaining interp) — is native.** It resolved into 7 ordinary jsr.l/bsr-reached functions called
+BETWEEN yields (no coroutine machinery needed). Cost three transpiler features (clr+Bcc
+constant-flag fusion, dynamic lsl.l/lsr.l, indexed long load) and the **FOURTH escape bank**
+(escbank4 $98:8000, $00FB sentinel — the 9.5KB family needs same-bank internal --escapes links) +
+jb2_ext (the jah2_b2 bank-$02 jsr.l extension, dead-space hosted). **trip2500 tick total:
+3,021,161 → 2,439,234 cyc = −582K vs the Phase-0 baseline (16.9× → 13.6×; interp 1069 → 680).**
+OPEN ITEM (measurement): freerun_rate.py reads 16.7× when pausing per-frame but ~60-67× with
+chunked run_frames — a Nexen harness sensitivity, NOT attract variance (deterministic start);
+the injected spin-free tick totals remain the steering currency until resolved.
+
 **caf6 UNPARKED — root cause was a GENERAL transpiler bug, not cb9e (`f877b4f`):** `lea (d16,An)`
 with a NEGATIVE disp emitted `adc #$0000` for the hi word instead of the `$FFFF` sign extension →
 the low-word carry pushed a1 into bank $F1 → rdw_ea routed to IO → a1=0 (found via the exit_dump
