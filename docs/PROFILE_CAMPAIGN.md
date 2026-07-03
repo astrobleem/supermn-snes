@@ -107,14 +107,18 @@ lh_sched). Ordering inside Phase 2.5 updates accordingly after Phase 1.
 | item | status | win | commit |
 |---|---|---|---|
 | escbank3 in gen_xlat_table BANK_OF_SYM | DONE | infra | e1f49ff |
-| entry_12e56 | **REVERTED** (stray-Bcc gap: 4 skipped instrs, latent-wrong deep path) | — | cbbd0e1 |
+| entry_12e56 | **RE-SHIPPED** (branch-chain + indexed-EA features; 0 skipped) | (in loop total) | 308ddb9 |
 | entry_129c6 | **SHIPPED** (dyn-bset transpiler fix; bit-exact both triples) | 3.2× span, ~43K/tick | cbbd0e1 |
-| entry_12c1a | **REVERTED** (stray-Bcc gap) | — | cbbd0e1 |
-| $011752 contiguous tree | BLOCKED on the stray-Bcc transpiler gap | — | — |
+| entry_12c1a | **RE-SHIPPED** (branch-chain feature; 0 skipped) | (in loop total) | 308ddb9 |
+| whole $011750 task-loop iteration | 3 of 12 callees now native | 453,950→380,933 = **~73K/tick** | 308ddb9 |
+| $011752 contiguous tree | UNBLOCKED (stray-Bcc closed); next: remaining callees ($12a92/$12af6/$117b4) then the tree | — | — |
 
-**NEXT TRANSPILER ITEM (gates most of the remaining $011/$012 chain): the flags-across-gap model** —
-`bgt/blt` whose flag producer is separated from the branch by flag-neutral instructions ("stray
-conditional"); 4 of 6 skip markers in this cluster. Also: indexed EA `(a0,d2.w)` loads (1 marker).
+**Stray-Bcc gap CLOSED (`308ddb9`): branch chains** — `producer; Bcc1; Bcc2…` re-consumes the live
+source flags (68K branches preserve CCR; the 'tst'/'signed' lowerings are branch-ops-only on
+fall-through). Guards: labeled Bcc still raises; 32-bit sources excluded. Also NEW: brief indexed
+`(An,Dn.w)` loads. Both inert where unused (9-escape regen byte-identical; val_branch32 5460/0).
+Residual risk (standard class): the chain sites sit on deep paths our triples exercise only
+partially — default gates + the free-run soak at CP1 are the ongoing net.
 transpile.py now HARD-FAILS on UNIMPLEMENTED (exit 2; --allow-unimpl to inspect) — the 12e56 lesson:
 a body with skipped instructions can validate GREEN on its shallow path and corrupt on deep paths.
 More instrument notes: never $0710-trap an escape's RETURN address (that fetch bypasses dbg_fetch —
