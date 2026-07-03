@@ -29,7 +29,14 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     def runf(n,c=300):
         d=0
         while d<n: x=min(c,n-d); m.run_frames(x); d+=x
-    m.load_state(NAT); runf(120)
+    m.load_state(NAT)
+    if os.environ.get('POKEOP'):
+        # disable one bhp_bank_ext escape arm: cmp #$XXXX -> #$FFFF in BOTH bank-$00 ROM copies
+        _op=int(os.environ['POKEOP'],16)
+        _b=bytes(m.read_memory('snesPrgRom',0xD1F2,0x60)); _i=_b.find(bytes([0xC9,_op&0xFF,_op>>8]))
+        assert _i>=0, 'POKEOP %04X not found'%_op
+        m.write_memory('snesPrgRom',0xD1F2+_i+1,'ffff'); m.write_memory('snesPrgRom',0xD1F2+_i+1-0x8000,'ffff')
+        print('>>> POKEOP: bhp arm %04X disabled'%_op,flush=True); runf(120)
     # CRITICAL: NAT is saved FROZEN at jh_spin via $0700/$0702/$0704 -> set $0704=1 to RELEASE it,
     # else the interp never runs (instr=0) and no trap fires.
     w16(0x0700,0); w16(0x071A,0); w16(0x0712,0); w16(0x0716,0); w16(0x0710,0x0708); w16(0x0704,1)

@@ -3857,12 +3857,11 @@ Lf25110_281:
     sta $3C
     jml.l ors_pre
 
-; --- entry_12e56 — Phase-1.1 coverage: the $011750 task-loop's first callee (bsr $12e56, 64 instrs,
-; 1x/tick gameplay). Pinned .org $A000 so interp.pasm's bhp_bank_ext arm can hardcode .
-; CALL-BRIDGE sentinel sed'd $00FD -> $00FC (ors_pre_97 resumes bank $97).
-    .org $A000
-; --- transpiled from $012E56 (64 instrs) by tools/transpile.py [bank1] ---
-entry_12e56:
+; --- entry_129c6 — Phase-1.1 task-loop callee (bsr $129c6, 46 instrs, bhp_bank_ext arm;
+; $00FC sentinels; regenerated after the dynamic-bset transpiler fix) ---
+    .org $A800
+; --- transpiled from $0129C6 (46 instrs) by tools/transpile.py [bank1] ---
+entry_129c6:
     rep #$30
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
@@ -3872,285 +3871,38 @@ entry_12e56:
     jsl.l push32_l
     lda $38
     clc
-    adc #$FFD8
+    adc #$FFDC
     tax
     lda $400000,x
-    xba
-    sta $22
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $20
-    lda $20
-    clc
-    adc #$000E
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $1C
-    lda $1C
-    bne Lf12e56_1
-    jmp L12e56_12f1e
-Lf12e56_1:
-    ; !! UNIMPLEMENTED: bgt.b     $12eb0   (stray conditional bgt (flags not from preceding op))
-    lda #$0000
-    pha
-    lda $20
-    clc
-    adc #$000E
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-    lda $1C
-    sec
-    sbc #$809D
-    bne Lf12e56_2
-    jmp L12e56_12e70
-Lf12e56_2:
-    jmp L12e56_12eb0
-L12e56_12e70:
-    lda #$0002
-    sta $04
-    jmp L12e56_12e7a
-    lda #$0004
-    sta $04
-L12e56_12e7a:
-    lda $20
-    clc
-    adc #$000C
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
-    sep #$20
-    sta $00
-    rep #$20
-    lda $20
-    clc
-    adc #$000D
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
-    sep #$20
-    sta $08
-    rep #$20
-    lda $00
     and #$00FF
-    eor #$0080
-    sec
-    sbc #$0080
-    sta $00
-    lda $08
-    and #$00FF
-    eor #$0080
-    sec
-    sbc #$0080
-    sta $08
-    lda $00
-    cmp #$8000
-    ror a
-    cmp #$8000
-    ror a
-    cmp #$8000
-    ror a
-    cmp #$8000
-    ror a
-    sta $00
-    lda $08
-    asl a
-    asl a
-    sta $08
-    lda $08
-    and #$FFC0
-    sta $08
-    lda $08
-    clc
-    adc $00
-    sta $08
-    lda #$36B2
-    sta $20
-    lda #$0000
-    sta $22
-    ; !! UNIMPLEMENTED: move.b    (a0, d2.w), d0   (EA '(a0')
+    and #$0008
+    beq Lf129c6_1
+    jmp L129c6_129d8
+Lf129c6_1:
     lda $38
     clc
-    adc #$FFCC
+    adc #$FF8E
     tax
     lda $400000,x
     xba
-    sta $22
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $20
-    lda $00
-    pha
-    lda $20
-    clc
-    adc #$000C
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    lda $04
-    pha
-    lda $20
-    clc
-    adc #$000D
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    lda #$8000
-    pha
-    lda $20
-    clc
-    adc #$000E
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-    lda #$0000
-    sta $1C
-    sta $1E
-    jmp L12e56_12f1e
-L12e56_12eb0:
-    lda #$0000
-    pha
-    lda $20
-    clc
-    adc #$000E
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-    lda $1C
-    sec
-    sbc #$009E
-    bvs Lf12e56_3
-    bpl Lf12e56_4
-    bra Lf12e56_5
-Lf12e56_3:
-    bmi Lf12e56_4
-    bra Lf12e56_5
-Lf12e56_4:
-    jmp L12e56_12ec0
-Lf12e56_5:
+    bne Lf129c6_2
+    jmp L129c6_129e4
+Lf129c6_2:
     lda $38
     clc
-    adc #$FF90
+    adc #$FF8E
     tax
     lda $400000,x
     xba
-    clc
-    adc #$0001
+    sec
+    sbc #$0001
     xba
     sta $400000,x
     xba
-    php
-    sep #$20
-    pla
-    rep #$30
-    and #$00FF
-    sta $50
-    and #$0002
-    sta $60
-    lda $50
-    and #$0080
-    sta $70
-    stz $72
-    stz $6E
-    jmp L12e56_12f22
-L12e56_12ec0:
-    lda $20
-    clc
-    adc #$000C
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
-    sep #$20
-    sta $00
-    rep #$20
-    lda $00
-    bne Lf12e56_6
-    jmp L12e56_12ef0
-Lf12e56_6:
-    ; !! UNIMPLEMENTED: bgt.b     $12eca   (stray conditional bgt (flags not from preceding op))
-    lda $00
-    eor #$FFFF
-    inc a
-    sta $00
-L12e56_12eca:
-    lda $20
-    clc
-    adc #$000D
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
-    sep #$20
-    sta $04
-    rep #$20
-    lda $04
-    bne Lf12e56_7
-    jmp L12e56_12ed8
-Lf12e56_7:
-    ; !! UNIMPLEMENTED: bgt.b     $12ed4   (stray conditional bgt (flags not from preceding op))
-    lda $04
-    eor #$FFFF
-    inc a
-    sta $04
-L12e56_12ed4:
-    lda $04
-    sec
-    sbc $00
-    beq Lf12e56_9
-    bvs Lf12e56_8
-    bmi Lf12e56_9
-    bra Lf12e56_10
-Lf12e56_8:
-    bpl Lf12e56_9
-    bra Lf12e56_10
-Lf12e56_9:
-    jmp L12e56_12ef0
-Lf12e56_10:
-L12e56_12ed8:
-    lda #$0000
-    sta $04
-    lda $20
-    clc
-    adc #$000C
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
-    sep #$20
-    sta $00
-    rep #$20
-    lda $00
-    bpl Lf12e56_11
-    jmp L12e56_12ee8
-Lf12e56_11:
+L129c6_129d8:
     lda $38
     clc
-    adc #$FFC1
+    adc #$FFDC
     sta $54
     lda $3A
     adc #$FFFF
@@ -4160,170 +3912,460 @@ Lf12e56_11:
     sta $80
     lda $38
     clc
-    adc #$FFC1
+    adc #$FFDC
     sta $54
     lda $3A
     adc #$FFFF
     sta $52
     jsl.l writebyte_l
-    jmp L12e56_12f06
-L12e56_12ee8:
-    lda $38
+    lda $30
     clc
-    adc #$FFC1
+    adc #$0000
     sta $54
-    lda $3A
-    adc #$FFFF
-    sta $52
-    jsl.l readbyte_l
-    and #$FFF7
-    sta $80
-    lda $38
-    clc
-    adc #$FFC1
-    sta $54
-    lda $3A
-    adc #$FFFF
-    sta $52
-    jsl.l writebyte_l
-    jmp L12e56_12f06
-L12e56_12ef0:
-    lda #$0000
-    sta $00
-    lda $20
-    clc
-    adc #$000D
-    sta $54
-    lda $22
+    lda $32
     adc #$0000
     sta $52
     jsl.l readbyte_l
-    sep #$20
-    sta $04
-    rep #$20
-    lda $04
-    bpl Lf12e56_12
-    jmp L12e56_12f00
-Lf12e56_12:
+    and #$FFFB
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+L129c6_129e4:
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0010
+    beq Lf129c6_3
+    jmp L129c6_129fa
+Lf129c6_3:
     lda $38
     clc
-    adc #$FFC1
+    adc #$FF8A
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0010
+    bne Lf129c6_4
+    jmp L129c6_129fa
+Lf129c6_4:
+    lda #$16D2
+    sta $9A
+    lda #$0001
+    sta $9C
+    lda $9C
+    pha
+    lda $3C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $3C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L129c6_129fa:
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $38
+    clc
+    adc #$FF8A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0000
     sta $54
-    lda $3A
-    adc #$FFFF
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$0001
+    bne Lf129c6_5
+    jmp L129c6_12a30
+Lf129c6_5:
+    lda #$0072
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.l -> ojmp_hook (callee --table escape, else interpret), resume br129c6_1
+    lda #br129c6_1
+    sta $54
+    lda #$00FC
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br129c6_1:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $38
+    clc
+    adc #$FFB4
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0001
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
     sta $52
     jsl.l readbyte_l
     and #$FFFE
     sta $80
-    lda $38
+    lda $30
     clc
-    adc #$FFC1
+    adc #$0000
     sta $54
-    lda $3A
-    adc #$FFFF
+    lda $32
+    adc #$0000
     sta $52
     jsl.l writebyte_l
-    jmp L12e56_12f06
-L12e56_12f00:
     lda $38
     clc
-    adc #$FFC1
+    adc #$FFB4
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    ; CALL-BRIDGE jsr $c6bc.l -> ojmp_hook (callee --table escape, else interpret), resume br129c6_2
+    lda #br129c6_2
+    sta $54
+    lda #$00FC
+    sta $56
+    jsl.l push32_l
+    lda #$C6BC
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br129c6_2:
+L129c6_12a30:
+    lda $38
+    clc
+    adc #$FFAC
+    tax
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda $28
+    clc
+    adc #$0006
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$0004
+    bne Lf129c6_6
+    jmp L129c6_12a44
+Lf129c6_6:
+    lda $00
+    ora #$0002
+    sta $00
+L129c6_12a44:
+    lda $00
+    pha
+    lda $38
+    clc
+    adc #$FF92
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$2F56
+    sta $28
+    lda #$0001
+    sta $2A
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $28
+    clc
+    adc $9A
+    sta $28
+    lda $2A
+    adc $9C
+    sta $2A
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFA8
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FF92
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    lsr a
+    sta $00
+    lda $00
+    and #$0007
+    tax
+    lda #$0001
+Lf129c6_7:
+    cpx #$0000
+    beq Lf129c6_8
+    asl a
+    dex
+    bra Lf129c6_7
+Lf129c6_8:
+    sta $8E
+    lda $34
+    clc
+    adc #$2A49
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    ora $8E
+    sta $80
+    lda $34
+    clc
+    adc #$2A49
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$0004
+    beq Lf129c6_9
+    jmp L129c6_12a7e
+Lf129c6_9:
+    lda $38
+    clc
+    adc #$FFDC
     sta $54
     lda $3A
     adc #$FFFF
     sta $52
     jsl.l readbyte_l
-    and #$FFFD
+    and #$FFFB
     sta $80
     lda $38
     clc
-    adc #$FFC1
+    adc #$FFDC
     sta $54
     lda $3A
     adc #$FFFF
     sta $52
     jsl.l writebyte_l
-L12e56_12f06:
-    lda $00
-    and #$00FF
-    eor #$0080
-    sec
-    sbc #$0080
-    sta $00
-    lda $04
-    and #$00FF
-    eor #$0080
-    sec
-    sbc #$0080
-    sta $04
-    lda $38
-    clc
-    adc #$FFE2
-    tax
-    lda $400000,x
-    xba
-    clc
-    adc $00
-    xba
-    sta $400000,x
-    xba
-    lda $38
-    clc
-    adc #$FFA0
-    tax
-    lda $400000,x
-    xba
-    clc
-    adc $00
-    xba
-    sta $400000,x
-    xba
     lda $38
     clc
     adc #$FFDE
     tax
     lda $400000,x
     xba
-    clc
-    adc $04
-    xba
-    sta $400000,x
-    xba
-    lda $38
-    clc
-    adc #$FFA4
-    tax
-    lda $400000,x
-    xba
-    clc
-    adc $04
-    xba
-    sta $400000,x
-    xba
-    ; CALL-BRIDGE bsr.w $12af6 -> ojmp_hook (callee --table escape, else interpret), resume br12e56_1
-    lda #br12e56_1
-    sta $54
-    lda #$00FC
-    sta $56
-    jsl.l push32_l
-    lda #$2AF6
-    sta $40
-    lda #$0001
-    sta $42
-    jml.l ojmp_hook
-br12e56_1:
-L12e56_12f1e:
-    lda #$0000
     pha
-    lda $38
+    lda $30
     clc
-    adc #$FF90
+    adc #$0002
     tax
     pla
     xba
     sta $400000,x
     xba
-L12e56_12f22:
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $30
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFDC
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+L129c6_12a7e:
+    lda $30
+    clc
+    adc #$0002
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFDC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
     ldx $3C
     lda $400000,x
     xba

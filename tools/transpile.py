@@ -832,9 +832,31 @@ def gen(e, ins, nxt):
         return 1
     if base in ('bset', 'bclr', 'bchg'):                 # bit set/clear/change <bit>,<ea> (in place)
         bitop, dst = ops
-        if bitop[0] != 'imm': raise Unsupported('%s dynamic bit operand' % base)
         if fuses: raise Unsupported('%s feeding branch (Z = original bit, not modeled)' % base)
         op = {'bset': 'ora', 'bclr': 'and', 'bchg': 'eor'}[base]
+        if bitop[0] == 'Dn' and dst[0] in ('abs', '(An)', '(d16,An)'):
+            # DYNAMIC bit number (Dn mod 8) on a memory byte: build the mask at runtime (shift
+            # loop; mask -> $8E scratch, $80 is writebyte's value slot), then the same IO-aware
+            # readbyte/modify/writebyte RMW as the static path below. ($012A58 bset.b d0,$2a49(a5).)
+            bdp = reg_dp(bitop[1])
+            def setup_addr_dyn(e):
+                if dst[0] == 'abs':
+                    e('lda #%s' % hx(dst[1] & 0xFFFF)); e('sta $54')
+                    e('lda #%s' % hx((dst[1] >> 16) & 0xFFFF)); e('sta $52')
+                else:
+                    an = dst[-1]; disp = dst[1] if dst[0] == '(d16,An)' else 0
+                    ea_setup_romaware(e, an, disp)
+            lp, dn = e.fresh(), e.fresh()
+            e('lda $%02X' % bdp); e('and #$0007'); e('tax'); e('lda #$0001')
+            e.lbl(lp); e('cpx #$0000'); e('beq %s' % dn); e('asl a'); e('dex'); e('bra %s' % lp)
+            e.lbl(dn)
+            if base == 'bclr': e('eor #$FFFF')           # and-with-complement clears the bit
+            e('sta $8E')
+            setup_addr_dyn(e); e('jsr readbyte')
+            e('%s $8E' % op); e('sta $80')
+            setup_addr_dyn(e); e('jsr writebyte')
+            return 1
+        if bitop[0] != 'imm': raise Unsupported('%s dynamic bit operand %s dst %s' % (base, bitop[0], dst[0]))
         if dst[0] == 'Dn':                               # 32-bit register bit (mod 32)
             nbit = bitop[1] & 31; dp = reg_dp(dst[1])
             w = dp if nbit < 16 else dp + 2; m = (1 << nbit) >> (0 if nbit < 16 else 16)
@@ -1384,6 +1406,12 @@ def main():
     if unimpl:
         sys.stderr.write('\n=== %d UNIMPLEMENTED ===\n' % len(unimpl))
         for k, v in sorted(unimpl.items()): sys.stderr.write('  %-28s %s\n' % (k, v))
+        if '--allow-unimpl' not in sys.argv:
+            # A body with silently-SKIPPED instructions is semantically WRONG if deployed (the
+            # entry_129c6 bset-dyn lesson: it validated GREEN-looking output but corrupted state).
+            # Exit hard so deploy pipelines can't ship it; pass --allow-unimpl to inspect anyway.
+            sys.stderr.write('!! body has skipped instructions -- NOT deployable (use --allow-unimpl to force output)\n')
+            sys.exit(2)
     else:
         sys.stderr.write('\n=== all %d instrs transpiled ===\n' % len(insns))
 
