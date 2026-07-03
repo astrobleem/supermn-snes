@@ -27,6 +27,12 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     def r16(a): b=m.read_memory('Sa1Memory',a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)
     def wh(a,hx,mt='Sa1Memory'): m.write_memory(mt,a,hx)
+    if os.environ.get('POKE92'):
+        _op=int(os.environ['POKE92'],16)
+        _b=bytes(m.read_memory('snesPrgRom',0x297000,0x1000)); _i=_b.find(bytes([0xC9,_op&0xFF,_op>>8]))
+        assert _i>=0, 'POKE92 %04X not found'%_op
+        m.write_memory('snesPrgRom',0x297000+_i+1,'ffff')
+        print('>>> POKE92: jah2 arm %04X disabled'%_op,flush=True)
     def runf(n,c=300):
         d=0
         while d<n: x=min(c,n-d); m.run_frames(x); d+=x

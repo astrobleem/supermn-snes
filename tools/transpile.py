@@ -241,6 +241,21 @@ def ea_rmw(e, ea, size, modify):
         # ops do; add.l/not.l to memory would need inter-word carry / two words and are not handled).
         if size == 'l': raise Unsupported('.l RMW to memory (caller must split into two words)')
         an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0; dp = reg_dp(an)
+        if VIDEO and not is_workram(an):
+            # IO-aware RMW (interp-faithful) for a runtime-loaded pointer: the read must see ROM/IO
+            # (readbyte/rdw_ea) and the write must route like the interp (writeword: ROM writes
+            # DROP, video banks -> the $41 shadow). The work-RAM-direct fast path below silently
+            # corrupts $40:lo16 when An holds a ROM address (the entry_caf6 add.w d6,$a(a1) lesson:
+            # the game legitimately stores through ROM pointers; on real hardware it's a no-op).
+            ea_setup_romaware(e, an, disp)
+            e('jsr readbyte' if size == 'b' else 'jsr rdw_ea')
+            modify(e)
+            if size == 'b': e('sep #$20'); e('sta $80'); e('rep #$20')
+            else: e('sta $80')
+            ea_setup_romaware(e, an, disp)
+            e('jsr writebyte' if size == 'b' else 'jsr writeword')
+            if kind == '(An)+': bump_an(e, an, step)
+            return
         e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')   # X = work-RAM offset
         e('jsr %s' % rd); modify(e); e('jsr %s' % wr)                        # X preserved across both
         if kind == '(An)+': bump_an(e, an, step)
@@ -584,6 +599,27 @@ def emit_signed_cmp(e, dest_ea, src_ea, size, store_dp=None):
 
 def ea_load_A_to_tmp(e, ea, size):
     ea_load_A(e, ea, size); e('sta $%02X' % TMP)
+
+_CCR_NEUTRAL = {'movea', 'adda', 'suba', 'lea', 'pea', 'exg', 'nop', 'link', 'unlk', 'movem'}
+_SCC = {'st', 'sf', 'shi', 'sls', 'scc', 'scs', 'sne', 'seq', 'svc', 'svs', 'spl', 'smi',
+        'sge', 'slt', 'sgt', 'sle'}
+def _flags_dead_after(e):
+    """True iff the current instruction's CCR result is provably unobservable: walking forward,
+    a flag PRODUCER (or a call, which clobbers the CCR in the callee) is reached before any
+    conditional consumer (Bcc/DBcc/Scc), label (another path could join), or control flow/exit."""
+    insns = getattr(e, '_insns', None); i = getattr(e, '_i', None)
+    labels = getattr(e, '_labels', ())
+    if insns is None or i is None: return False
+    for j in range(i + 1, len(insns)):
+        nx = insns[j]
+        if nx.address in labels: return False            # join point: conservative
+        b = split_mn(nx)[0]
+        if b in BCC or b in _SCC or b.startswith('db'): return False   # consumer
+        if b in ('bra', 'jmp', 'rts', 'rte', 'rtr', 'trap'): return False  # control flow: conservative
+        if b in ('jsr', 'bsr'): return True              # callee clobbers the CCR -> dead
+        if b in _CCR_NEUTRAL: continue                   # CCR untouched -> keep walking
+        return True                                      # any other instr sets the CCR -> dead
+    return False
 
 def gen(e, ins, nxt):
     """emit one instruction; returns #instrs consumed (2 if it fuses the following branch)."""
@@ -950,9 +986,16 @@ def gen(e, ins, nxt):
         raise Unsupported('btst not feeding beq/bne')
     if base in ('cmp', 'cmpi', 'cmpa'):
         src, dst = ops
+        if not fuses:
+            # DEAD-CMP elimination (proof-based): if the forward walk reaches a flag PRODUCER (or a
+            # CCR-clobbering call) before any conditional consumer / label / control flow, no one can
+            # observe this compare's flags -> it is vestigial; skip it. ($00CB28 cmp.w -$2(a6),d7.)
+            if _flags_dead_after(e):
+                e.cmt('dead %s %s (flags unconsumed before the next producer)' % (base, ins.op_str))
+                return 1
+            raise Unsupported('%s not feeding a branch' % base)
         emit_signed_cmp(e, dst, src, size)
-        if fuses: emit_branch(e, nb, branch_target(nxt), 'signed32' if size == 'l' else 'signed'); return 2
-        raise Unsupported('%s not feeding a branch' % base)
+        emit_branch(e, nb, branch_target(nxt), 'signed32' if size == 'l' else 'signed'); return 2
 
     if base == 'trap':
         # coroutine yield: tail-jump to the trap itself so the interpreter executes it ($0532 saves
@@ -1430,6 +1473,7 @@ def main():
             s, d = operands(ins); gen_movel_run(e, s, d, rk); i += rk; continue
         nxt = insns[i+1] if i+1 < len(insns) else None
         e._at_label = ins.address in labels          # a labeled Bcc must NOT chain (multi-path flags)
+        e._insns = insns; e._i = i; e._labels = labels   # forward context for _flags_dead_after
         i0 = i
         try:
             i += gen(e, ins, nxt)

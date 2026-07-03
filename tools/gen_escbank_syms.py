@@ -53,6 +53,18 @@ if esc2_sym.exists():
             # $2A0000 = SA-1 $94:8000. Force bank $94 so `jml entry_X` targets the real bank.
             lines.append("%s=$94%04X" % (m.group(3), int(m.group(2), 16)))
             n2 += 1
+# Same for escbank3 ($97:8000, file $2B8000): its entry_X bodies are jml-able from $92 dispatch
+# arms (jah2_ext/jah2_ext_bsr). Skip names already exported from escbank2 (duplicates would
+# redefine). Imported consts in the .sym (bank-$00 echoes) are excluded by requiring the label to
+# also appear as a code label in escbank3.pasm.
+esc3_sym = Path("src/escbank3.sym"); esc3_src = Path("src/escbank3.pasm")
+if esc3_sym.exists() and esc3_src.exists():
+    have = set(re.findall(r"^(entry_[0-9a-z_]+):", esc3_src.read_text(), re.M))
+    seen = set(l.split("=")[0] for l in lines if "=" in l)
+    for line in esc3_sym.read_text(encoding="utf-8-sig").splitlines():
+        m = re.match(r"\s*([0-9A-Fa-f]{2}):([0-9A-Fa-f]{4})\s+(entry_[0-9a-z_]+)", line)
+        if m and m.group(3) in have and m.group(3) not in seen:
+            lines.append("%s=$97%04X" % (m.group(3), int(m.group(2), 16)))
 lines.append("; <<< ESCBANK_SYMS <<<")
 block = "\n".join(lines)
 

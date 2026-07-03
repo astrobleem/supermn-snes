@@ -47,6 +47,16 @@ entry_13bet=$94A953
 entry_8fat=$94ABE7
 entry_fd2t=$94AE58
 entry_c9a6=$94AF1A
+entry_25110=$978000
+entry_12e56=$97A000
+entry_129c6=$97A800
+entry_12c1a=$97B000
+entry_12a92=$97B800
+entry_12af6=$97C000
+entry_117b4=$97C800
+entry_cc44=$97D000
+entry_cc80=$97D400
+entry_caf6=$97D800
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -13992,6 +14002,30 @@ bjx_15b4:
     pla
     jmp entry_158e          ; <- $00158E sprite-dma-copy
 bjx_158e:
+    cmp #$CC44
+    bne bjx_cc44
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jml entry_cc44          ; <- $00CC44 task-loop callee (escbank3 $97)
+bjx_cc44:
+    cmp #$CC80
+    bne bjx_cc80
+    inc $0764
+    lda $54
+    sta $40
+    pla
+    jml entry_cc80          ; <- $00CC80 task-loop callee (escbank3 $97)
+bjx_cc80:
+    cmp #$FFF6           ; PARKED: the $CAF6 arm is disabled (operand $CAF6 -> $FFF6). entry_caf6
+    bne bjx_caf6         ; (--video, $97D800) still shows a walk divergence: its bridged `bsr $cb9e`
+    inc $0764            ; runs cb9e INTERPRETED while the interp arm dispatches the native leaf
+    lda $54              ; entry_cb9e -> d4/object-field delta ($F03576, "=258" vs "=205"). Needs the
+    sta $40              ; cb9e leaf-vs-bridge convention analysis. Re-arm: $FFF6 -> $CAF6.
+    pla
+    jml entry_caf6
+bjx_caf6:
 jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40

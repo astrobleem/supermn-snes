@@ -15,19 +15,19 @@ if [ -f src/escbank2.pasm ]; then
   python3 tools/gen_escbank2_syms.py
   dotnet "$POPPY" -t snes -I . -o src/escbank2.bin -s src/escbank2.sym src/escbank2.pasm
 fi
+# THIRD escape bank ($97:8000, file $2B8000) — hosts entry_25110 (collision), whose 8KB body
+# overflowed its bank-$00 inline gap. References only bank-$00 targets (like escbank2). Assembled BEFORE escbank
+# so gen_escbank_syms harvests a FRESH escbank3.sym (escbank jah2 arms jml into $97).
+if [ -f src/escbank3.pasm ]; then
+  python3 tools/gen_escbank3_syms.py
+  dotnet "$POPPY" -t snes -I . -o src/escbank3.bin -s src/escbank3.sym src/escbank3.pasm
+fi
 # Escape bank (native escapes too big for bank-$00 gaps; runs at SA-1 $92:8000, file $290000).
 # Refresh its bank-$00 symbol constants from interp.sym (+ escbank2 entry_X) first (addresses shift
 # when interp.pasm changes), then assemble. Skipped if src/escbank.pasm is absent.
 if [ -f src/escbank.pasm ]; then
   python3 tools/gen_escbank_syms.py
   dotnet "$POPPY" -t snes -I . -o src/escbank.bin -s src/escbank.sym src/escbank.pasm
-fi
-# THIRD escape bank ($97:8000, file $2B8000) — hosts entry_25110 (collision), whose 8KB body
-# overflowed its bank-$00 inline gap. References only bank-$00 targets (like escbank2). Skipped if
-# src/escbank3.pasm is absent.
-if [ -f src/escbank3.pasm ]; then
-  python3 tools/gen_escbank3_syms.py
-  dotnet "$POPPY" -t snes -I . -o src/escbank3.bin -s src/escbank3.sym src/escbank3.pasm
 fi
 # AOT address-translation table (68K PC -> native escape entry); needs both escbank .sym files.
 if [ -f src/escbank.sym ]; then

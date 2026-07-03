@@ -33,10 +33,17 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
     if os.environ.get('POKEOP'):
         # disable one bhp_bank_ext escape arm: cmp #$XXXX -> #$FFFF in BOTH bank-$00 ROM copies
         _op=int(os.environ['POKEOP'],16)
-        _b=bytes(m.read_memory('snesPrgRom',0xD1F2,0x60)); _i=_b.find(bytes([0xC9,_op&0xFF,_op>>8]))
+        _b=bytes(m.read_memory('snesPrgRom',0xD1F2,0x80)); _i=_b.find(bytes([0xC9,_op&0xFF,_op>>8]))
         assert _i>=0, 'POKEOP %04X not found'%_op
         m.write_memory('snesPrgRom',0xD1F2+_i+1,'ffff'); m.write_memory('snesPrgRom',0xD1F2+_i+1-0x8000,'ffff')
-        print('>>> POKEOP: bhp arm %04X disabled'%_op,flush=True); runf(120)
+        print('>>> POKEOP: bhp arm %04X disabled'%_op,flush=True)
+    if os.environ.get('POKE92'):
+        # disable one jah2_ext/jah2_ext_bsr arm in the $92 escbank (file $290000, single copy)
+        _op=int(os.environ['POKE92'],16)
+        _b=bytes(m.read_memory('snesPrgRom',0x297000,0x1000)); _i=_b.find(bytes([0xC9,_op&0xFF,_op>>8]))
+        assert _i>=0, 'POKE92 %04X not found'%_op
+        m.write_memory('snesPrgRom',0x297000+_i+1,'ffff')
+        print('>>> POKE92: jah2 arm %04X disabled'%_op,flush=True); runf(120)
     # CRITICAL: NAT is saved FROZEN at jh_spin via $0700/$0702/$0704 -> set $0704=1 to RELEASE it,
     # else the interp never runs (instr=0) and no trap fires.
     w16(0x0700,0); w16(0x071A,0); w16(0x0712,0); w16(0x0716,0); w16(0x0710,0x0708); w16(0x0704,1)
