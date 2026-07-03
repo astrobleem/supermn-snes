@@ -57,6 +57,7 @@ entry_117b4=$97C800
 entry_cc44=$97D000
 entry_cc80=$97D400
 entry_caf6=$97D800
+entry_cb9e=$97E800
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
@@ -14018,7 +14019,7 @@ bjx_cc44:
     pla
     jml entry_cc80          ; <- $00CC80 task-loop callee (escbank3 $97)
 bjx_cc80:
-    cmp #$FFF6           ; PARKED: the $CAF6 arm is disabled (operand $CAF6 -> $FFF6). entry_caf6
+    cmp #$CAF6           ; RE-ARMED for the cb9e convention analysis. entry_caf6
     bne bjx_caf6         ; (--video, $97D800) still shows a walk divergence: its bridged `bsr $cb9e`
     inc $0764            ; runs cb9e INTERPRETED while the interp arm dispatches the native leaf
     lda $54              ; entry_cb9e -> d4/object-field delta ($F03576, "=258" vs "=205"). Needs the

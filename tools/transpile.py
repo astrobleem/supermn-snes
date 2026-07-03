@@ -695,7 +695,10 @@ def gen(e, ins, nxt):
         if src[0] == '(d16,An)':
             s = reg_dp(src[2])
             e('lda $%02X' % s); e('clc'); e('adc %s' % imm16(src[1])); e('sta $%02X' % dp)
-            e('lda $%02X' % (s+2)); e('adc #$0000'); e('sta $%02X' % (dp+2))
+            e('lda $%02X' % (s+2)); e('adc %s' % hi_ext(src[1])); e('sta $%02X' % (dp+2))
+            # ^ hi_ext, NOT #$0000: a NEGATIVE disp needs the $FFFF sign extension in the hi word
+            # (lea -$38(a6),a1 with a6.lo>=$38 carried into hi16 -> a1 bank off by one -> rdw_ea
+            # routed the load to IO and returned 0 = the entry_caf6 null-a1 divergence).
         elif src[0] == 'abs':
             e('lda #%s' % hx(src[1] & 0xFFFF)); e('sta $%02X' % dp)
             e('lda #%s' % hx((src[1] >> 16) & 0xFFFF)); e('sta $%02X' % (dp+2))

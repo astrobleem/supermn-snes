@@ -4382,11 +4382,8 @@ L129c6_12a7e:
     sta $3C
     jml.l ors_pre
 
-; --- entry_12e56 — Phase-1.1, REGENERATED --escapes=12af6: the internal bsr $12af6 is now a
-; DIRECT native link (jmp entry_12af6, $00FC sentinel resume) ---
+; --- entry_12e56 — REGEN (neg-disp lea hi_ext fix; --escapes=12af6 direct link) ---
     .org $A000
-
-=== all 64 instrs transpiled ===
 ; --- transpiled from $012E56 (64 instrs) by tools/transpile.py [bank1] ---
 entry_12e56:
     rep #$30
@@ -4890,8 +4887,7 @@ L12e56_12f22:
     sta $3C
     jml.l ors_pre
 
-; --- entry_12c1a — Phase-1.1 task-loop callee, REGENERATED after the branch-chain +
-; indexed-EA transpiler features (0 skipped instrs; $00FC sentinels) ---
+; --- entry_12c1a — REGEN (neg-disp lea hi_ext fix) ---
     .org $B000
 ; --- transpiled from $012C1A (80 instrs) by tools/transpile.py [bank1] ---
 entry_12c1a:
@@ -5108,7 +5104,7 @@ L12c1a_12ca4:
     adc #$FFCC
     sta $20
     lda $3A
-    adc #$0000
+    adc #$FFFF
     sta $22
 L12c1a_12cac:
     lda $20
@@ -5394,7 +5390,7 @@ L12c1a_12d3c:
     adc #$FFCC
     sta $20
     lda $3A
-    adc #$0000
+    adc #$FFFF
     sta $22
 L12c1a_12d44:
     lda $20
@@ -6605,10 +6601,9 @@ Lcc80_ccd6:
     sta $3C
     jml.l ors_pre
 
-; --- entry_caf6 — Phase-1.1 task-loop bank-$00 callee ($00CBxx cluster entry; jah2_ext_bsr arm).
-; REGENERATED --video (IO-aware stores + the NEW IO-aware RMW): its store loop writes through
-; frame-table pointers that can hold ROM addresses — the interp DROPS those writes; the inline
-; $40-direct path corrupted $40:lo16 (the DIFF=16 lesson). ---
+; --- entry_caf6 — $00CBxx cluster entry (--video + neg-lea fix + --escapes=cb9e: its two
+; bsr $cb9e calls are DIRECT native links to the same-convention entry_cb9e below — bridging them
+; demoted cb9e to interpreted and cost ~89K/tick). jah2_ext_bsr arm. ---
     .org $D800
 ; --- transpiled from $00CAF6 (50 instrs) by tools/transpile.py [bank1] ---
 entry_caf6:
@@ -6856,7 +6851,7 @@ Lcaf6_cb46:
     adc #$FFC8
     sta $24
     lda $3A
-    adc #$0000
+    adc #$FFFF
     sta $26
     lda $00
     sta $9A
@@ -6979,17 +6974,12 @@ Lcaf6_cb46:
     adc #$0000
     sta $52
     jsl.l writeword_l
-    ; CALL-BRIDGE bsr.w $cb9e -> ojmp_hook (callee --table escape, else interpret), resume brcaf6_1
+    ; CALL-BRIDGE bsr.w $cb9e -> entry_cb9e (NATIVE escape), resume brcaf6_1
     lda #brcaf6_1
-    sta $54
-    lda #$00FC
-    sta $56
-    jsl.l push32_l
-    lda #$CB9E
     sta $40
-    lda #$0000
+    lda #$00FC
     sta $42
-    jml.l ojmp_hook
+    jmp entry_cb9e
 brcaf6_1:
     lda $20
     clc
@@ -7091,7 +7081,7 @@ Lcaf6_cb82:
     adc #$FFC8
     sta $24
     lda $3A
-    adc #$0000
+    adc #$FFFF
     sta $26
     lda $00
     sta $9A
@@ -7128,17 +7118,12 @@ Lcaf6_cb82:
     sta $24
     lda $9E
     sta $26
-    ; CALL-BRIDGE bsr.w $cb9e -> ojmp_hook (callee --table escape, else interpret), resume brcaf6_2
+    ; CALL-BRIDGE bsr.w $cb9e -> entry_cb9e (NATIVE escape), resume brcaf6_2
     lda #brcaf6_2
-    sta $54
-    lda #$00FC
-    sta $56
-    jsl.l push32_l
-    lda #$CB9E
     sta $40
-    lda #$0000
+    lda #$00FC
     sta $42
-    jml.l ojmp_hook
+    jmp entry_cb9e
 brcaf6_2:
     lda $20
     clc
@@ -7155,6 +7140,307 @@ brcaf6_2:
     jmp Lcaf6_cb82
 Lfcaf6_10:
 Lcaf6_cb9c:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_cb9e — same-convention (re-sim-push, $00FC-sentinel rts) native cb9e for the direct
+; links above; the OLD bank-$00 leaf entry_cb9e still serves the interp's bhp chain. --video
+; (writes the $41 video shadow). ---
+    .org $E800
+; --- transpiled from $00CB9E (31 instrs) by tools/transpile.py [bank1] ---
+entry_cb9e:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lfcb9e_1
+    bmi Lfcb9e_1
+    bra Lfcb9e_2
+Lfcb9e_1:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Lcb9e_cc0e
+Lfcb9e_2:
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $00
+    clc
+    adc $9E
+    sta $00
+    lda $00
+    sta $80
+    lda $24
+    clc
+    adc #$0006
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $00
+    clc
+    adc $9E
+    sta $00
+    lda $00
+    sta $80
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $04
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $08
+    rep #$20
+    lda $38
+    clc
+    adc #$FFDC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0080
+    bne Lfcb9e_3
+    jmp Lcb9e_cbe2
+Lfcb9e_3:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $04
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    eor #$FFFF
+    inc a
+    sta $00
+    lda $04
+    eor #$FFFF
+    inc a
+    sta $04
+    lda $08
+    eor #$FFFF
+    inc a
+    sta $08
+    lda $08
+    clc
+    adc #$0080
+    sta $08
+Lcb9e_cbe2:
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $0C
+    clc
+    adc $00
+    sta $0C
+    lda $0C
+    sta $80
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $0C
+    clc
+    adc $04
+    sta $0C
+    lda $0C
+    sta $80
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $08
+    sep #$20
+    sta $80
+    rep #$20
+    lda $24
+    clc
+    adc #$000C
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FFAC
+    tax
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda #$0001
+    sta $80
+    lda $28
+    clc
+    adc #$0000
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $80
+    lda $28
+    clc
+    adc #$0004
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $80
+    lda $28
+    clc
+    adc #$0002
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+Lcb9e_cc0e:
     ldx $3C
     lda $400000,x
     xba
