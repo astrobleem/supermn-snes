@@ -761,7 +761,16 @@ def gen(e, ins, nxt):
                 e('jsr wrw40'); e('inx'); e('inx'); e('jsr wrw40')
             else: raise Unsupported('clr.l %r' % (dst,))
             return 1
-        ea_store_A_from(e, dst, size, lambda e: e('lda #$0000')); return 1
+        ea_store_A_from(e, dst, size, lambda e: e('lda #$0000'))
+        if fuses:
+            # clr's CCR is CONSTANT (Z=1, N=0, V=C=0) -> the fused branch is statically decided:
+            # beq/bpl/bcc/bge/ble = always taken; bne/bmi/bcs/blt/bgt = never ($0238C2 clr.b;beq).
+            if nb in ('beq', 'bpl', 'bcc', 'bge', 'ble'):
+                emit_branch(e, 'bra', branch_target(nxt), None); return 2
+            if nb in ('bne', 'bmi', 'bcs', 'blt', 'bgt'):
+                return 2                                 # never taken: fall through
+            raise Unsupported('clr feeding %s' % nb)
+        return 1
     if base == 'moveq':                                  # Dn = sign-extend8(imm) (32-bit), NZ V=C=0
         n = ops[0][1] & 0xFF; dp = reg_dp(ops[1][1])
         lo = (0xFF00 | n) if n & 0x80 else n
@@ -778,7 +787,19 @@ def gen(e, ins, nxt):
                 e('cmp #$8000'); e('ror a')
             else:
                 e({'lsl': 'asl a', 'asl': 'asl a', 'lsr': 'lsr a'}[base])
-        if cnt[0] == 'Dn':                               # DYNAMIC count: shift Dn.w (Dm.b & $3F) times via a loop
+        if cnt[0] == 'Dn':                               # DYNAMIC count: shift (Dm & $3F) times via a loop
+            if size == 'l' and base in ('lsl', 'lsr'):   # 32-bit pair shift (lo=dp, hi=dp+2)
+                dp = reg_dp(dst[1]); dm = reg_dp(cnt[1]); loop = e.fresh(); done = e.fresh()
+                e('lda $%02X' % dm); e('and #$003F'); e('tax')
+                e.lbl(loop); e('cpx #$0000'); e('beq %s' % done)
+                if base == 'lsl':                        # lo<<1 -> carry -> hi
+                    e('asl $%02X' % dp); e('rol $%02X' % (dp+2))
+                else:                                    # hi>>1 -> carry -> lo
+                    e('lsr $%02X' % (dp+2)); e('ror $%02X' % dp)
+                e('dex'); e('bra %s' % loop)
+                e.lbl(done)
+                if fuses: raise Unsupported('dynamic shift feeding branch — add if needed')
+                return 1
             if size != 'w': raise Unsupported('dynamic %s.%s — only .w' % (base, size))
             dp = reg_dp(dst[1]); dm = reg_dp(cnt[1]); loop = e.fresh(); done = e.fresh()
             e('lda $%02X' % dm); e('and #$003F'); e('tax')   # X = count (low 6 bits, 0-63)
@@ -1079,6 +1100,25 @@ def load_long_to(e, src, dp):
             # NB: re-setup the address; rdw_ea leaves $54 = addr+1 (it inc's between byte reads),
             # so the old `inc $54 / inc $54` read addr+3 (off by one). Recompute = robust.
         if src[0] == '(An)+': bump_an(e, an, 4)
+        return
+    if src[0] == '(d8,An,Dn)':
+        # brief indexed long load: addr = An + sext16(Dn.w) (+disp) -> two ROM-aware word reads.
+        # Address built in $8C(lo)/$8E(hi-ext) exactly like ea_load_A's indexed path; result staged
+        # via TMP so dp may alias An/Dn ($02335E move.l (a0,d0.w),d0).
+        disp, an, dn = src[1], src[2], src[3]
+        if disp: raise Unsupported('(d8,An,Dn) long load with nonzero disp')
+        adp, ddp = reg_dp(an), reg_dp(dn)
+        neg, pos = e.fresh(), e.fresh()
+        e('lda $%02X' % ddp); e('sta $8C')
+        e('and #$8000'); e('bne %s' % neg); e('lda #$0000'); e('bra %s' % pos)
+        e.lbl(neg); e('lda #$FFFF'); e.lbl(pos); e('sta $8E')
+        e('lda $%02X' % adp); e('clc'); e('adc $8C'); e('sta $54'); e('sta $8C')
+        e('lda $%02X' % (adp+2)); e('adc $8E'); e('sta $52'); e('sta $8E')   # $8C/$8E = the EA (survives helpers)
+        e('jsr rdw_ea'); e('sta $%02X' % TMP)                                # hi16
+        e('lda $8C'); e('clc'); e('adc #$0002'); e('sta $54')
+        e('lda $8E'); e('adc #$0000'); e('sta $52')
+        e('jsr rdw_ea'); e('sta $%02X' % dp)                                 # lo16
+        e('lda $%02X' % TMP); e('sta $%02X' % (dp+2))
         return
     if src[0] in ('Dn', 'An'):
         s = reg_dp(src[1]); e('lda $%02X' % s); e('sta $%02X' % dp)

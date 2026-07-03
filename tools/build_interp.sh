@@ -22,6 +22,12 @@ if [ -f src/escbank3.pasm ]; then
   python3 tools/gen_escbank3_syms.py
   dotnet "$POPPY" -t snes -I . -o src/escbank3.bin -s src/escbank3.sym src/escbank3.pasm
 fi
+# FOURTH escape bank ($98:8000, file $2C0000) — the $023xxx trap#5-cluster family. Like escbank3:
+# bank-$00 refs only; assembled BEFORE escbank.
+if [ -f src/escbank4.pasm ]; then
+  python3 tools/gen_escbank4_syms.py
+  dotnet "$POPPY" -t snes -I . -o src/escbank4.bin -s src/escbank4.sym src/escbank4.pasm
+fi
 # Escape bank (native escapes too big for bank-$00 gaps; runs at SA-1 $92:8000, file $290000).
 # Refresh its bank-$00 symbol constants from interp.sym (+ escbank2 entry_X) first (addresses shift
 # when interp.pasm changes), then assemble. Skipped if src/escbank.pasm is absent.

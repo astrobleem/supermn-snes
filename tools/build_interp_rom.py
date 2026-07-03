@@ -62,6 +62,10 @@ if _osp.exists("src/xlat_table.bin"):
 # and was silently clobbered by the following .org routines. Relocated to this fresh 32KB bank (the
 # SA-1 MMC maps file $200000-$2FFFFF -> $80-$9F uniformly, so file $2B8000 = $97:8000, executable
 # like $92/$94). Bank $00's dead inline entry_25110 @ $D1ED is redirected here via `jml $978000`.
+if _osp.exists("src/escbank4.bin"):
+    ESC4 = Path("src/escbank4.bin").read_bytes()
+    assert len(ESC4) <= 0x8000, ("escbank4 %d bytes overflows the $2C0000..$2C8000 bank" % len(ESC4))
+    ROM[0x2C0000:0x2C0000+len(ESC4)] = ESC4          # @ SA-1 $98:8000 (file $2C0000)
 if _osp.exists("src/escbank3.bin"):
     ESC3 = Path("src/escbank3.bin").read_bytes()
     assert len(ESC3) <= 0x8000, ("escbank3 %d bytes overflows the $2B8000..$2C0000 bank" % len(ESC3))

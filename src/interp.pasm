@@ -11269,6 +11269,50 @@ bbe_t7:
     jml $97C800          ; entry_117b4
 bbe_miss:
     jmp bhp_push
+; jb2_ext — jah2_b2's zero-shift extension (bank!=0 jsr.l escapes beyond $25110), dead-space host.
+; Reached from jah2_b2_miss with the php still pushed (jsrabs_hook2's); HIT: plp/pla/set PC=return/
+; jml the escbank4 body (fixed .orgs). The $023xxx trap#5-cluster roots (jsr.l from $0242A6/$0242B2/
+; $024BD4, between the coroutine yields).
+jb2_ext:
+    lda $50
+    cmp #$0002
+    bne jb2_miss
+    lda $52
+    cmp #$3342
+    bne jb2_t2
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $988000          ; entry_23342
+jb2_t2:
+    cmp #$35E0
+    bne jb2_t3
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $989200          ; entry_235e0
+jb2_t3:
+    cmp #$3864
+    bne jb2_miss
+    plp
+    pla
+    lda $54
+    sta $40
+    jml $989800          ; entry_23864
+jb2_miss:
+    jmp jah2_miss
+; ors_98chk / ors_pre_98 — bank-$98 (escbank4) CALL-BRIDGE sentinel resume ($00FB), chained from
+; ors_97chk's zero-shift tail swap. Mirrors ors_pre_97.
+ors_98chk:
+    cmp #$00FB
+    beq ors_pre_98
+    jmp op_rts_sentinel
+ors_pre_98:
+    lda #$0098
+    sta $42
+    jml [$0040]
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
     sta $54
@@ -17369,7 +17413,8 @@ jah2_b2:
     cmp #$5110
     beq jah2_e25110
 jah2_b2_miss:
-    jmp jah2_miss
+    jmp jb2_ext          ; (was: jmp jah2_miss, 3B->3B zero-shift) bank!=0 jsr.l extension chain
+                         ; in the dead entry_25110 space: the $023xxx trap#5-cluster roots -> escbank4
 jah2_e25110:
     plp
     pla
@@ -18735,7 +18780,7 @@ gv_nohi:
 ors_97chk:
     cmp #$00FC
     beq ors_pre_97
-    jmp op_rts_sentinel
+    jmp ors_98chk        ; (was: jmp op_rts_sentinel, 3B->3B zero-shift) check the escbank4 sentinel
 ors_pre_97:
     lda #$0097
     sta $42
