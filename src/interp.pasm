@@ -11211,15 +11211,31 @@ bhp_bank_ext:
     jml $94E000          ; hle_12b6c (escbank2, fixed .org)
 bbe_t2:
     cmp #$29C6           ; $0129C6 (task-loop callee; Phase-1.1 coverage)
-    bne bbe_miss
+    bne bbe_t3
     lda $54
-    sta $40              ; 68K PC = bsr return; entry_129c6 re-sim-pushes it (bsr-hook convention)
+    sta $40              ; 68K PC = bsr return; the bodies re-sim-push it (bsr-hook convention)
     lda #$0001
     sta $42
     pla
     jml $97A800          ; entry_129c6 (escbank3, fixed .org)
-    ; ($012E56 + $012C1A REVERTED: their bodies carry stray-Bcc/indexed-EA transpiler gaps ->
-    ; silently-skipped instructions on deep paths. Re-add once the flags-across-gap model lands.)
+bbe_t3:
+    cmp #$2E56           ; $012E56 (re-shipped: branch-chain + indexed-EA transpiler features)
+    bne bbe_t4
+    lda $54
+    sta $40
+    lda #$0001
+    sta $42
+    pla
+    jml $97A000          ; entry_12e56
+bbe_t4:
+    cmp #$2C1A           ; $012C1A (re-shipped: branch-chain feature)
+    bne bbe_miss
+    lda $54
+    sta $40
+    lda #$0001
+    sta $42
+    pla
+    jml $97B000          ; entry_12c1a
 bbe_b0:
     jmp bhp_b0chain
 bbe_miss:

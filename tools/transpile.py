@@ -70,6 +70,10 @@ def parse_ea(tok, pc=None):
     if m: return ('abs', int(m.group(1), 16))
     m = re.fullmatch(r'\$([0-9a-f]+)', t)
     if m: return ('abs', int(m.group(1), 16))
+    m = re.fullmatch(r'(?:(-?)\$([0-9a-f]+))?\(a([0-7]), d([0-7])\.w\)', t)   # d8(An, Dn.w) brief indexed
+    if m:
+        disp = 0 if m.group(2) is None else int(m.group(2), 16) * (-1 if m.group(1) else 1)
+        return ('(d8,An,Dn)', disp, 'a'+m.group(3), 'd'+m.group(4))
     raise Unsupported('EA %r' % tok)
 
 def s16(v): return v - 0x10000 if v & 0x8000 else v
@@ -196,6 +200,21 @@ def ea_load_A(e, ea, size):
     if kind == 'abs':
         e('lda #%s' % hx(ea[1] & 0xFFFF)); e('sta $54')
         e('lda #%s' % hx((ea[1] >> 16) & 0xFFFF)); e('sta $52')
+        e('jsr readbyte' if size == 'b' else 'jsr rdw_ea'); return
+    if kind == '(d8,An,Dn)':
+        # brief indexed: addr = An + disp8 + sext16(Dn.w). Index sext -> $8C/$8E, then a 32-bit
+        # add with An (+disp folded into the low add; |disp| <= $7F so the sext-hi of disp is 0/-1
+        # handled via the hi adc constant). ROM-aware read ($012E94 move.b (a0,d2.w),d0: a0 = a
+        # bank-$00 ROM table from lea $36b2.w).
+        disp, an, dn = ea[1], ea[2], ea[3]
+        if disp: raise Unsupported('(d8,An,Dn) with nonzero disp (two-stage hi-carry chain not emitted)')
+        adp, ddp = reg_dp(an), reg_dp(dn)
+        neg, pos = e.fresh(), e.fresh()
+        e('lda $%02X' % ddp); e('sta $8C')
+        e('and #$8000'); e('bne %s' % neg); e('lda #$0000'); e('bra %s' % pos)
+        e.lbl(neg); e('lda #$FFFF'); e.lbl(pos); e('sta $8E')
+        e('lda $%02X' % adp); e('clc'); e('adc $8C'); e('sta $54')
+        e('lda $%02X' % (adp+2)); e('adc $8E'); e('sta $52')
         e('jsr readbyte' if size == 'b' else 'jsr rdw_ea'); return
     raise Unsupported('load EA %r' % (ea,))
 
@@ -431,7 +450,15 @@ def _branch32(e, base, jmp, fsrc, low):
 
 def emit_branch(e, base, tgt, fsrc):
     """fsrc: 'signed'/'signed32' (N,V,Z,C from sec;sbc) | 'tst'/'tst32' (N,Z; V=0). The *32 variants
-    come from a FULL 32-bit cmp/tst -> _branch32 (Z reconstructed). end: falls through if not taken."""
+    come from a FULL 32-bit cmp/tst -> _branch32 (Z reconstructed). end: falls through if not taken.
+    Records e._live_fsrc for BRANCH CHAINS (producer + Bcc + Bcc...): the 'tst'/'signed' lowerings
+    below emit ONLY branch ops on the fall-through path (65816 branches preserve flags), so a
+    directly-following Bcc may re-consume the same source. 32-bit sources excluded (_branch32
+    reconstructs Z with lda/ora = clobbers)."""
+    _emit_branch_inner(e, base, tgt, fsrc)
+    e._live_fsrc = fsrc if fsrc in ('tst', 'signed') else None
+
+def _emit_branch_inner(e, base, tgt, fsrc):
     L = branch_label(e, tgt)
     def jmp():
         if tgt in getattr(e, 'exit_addrs', ()):    # branch to the epilogue/rts: sync CCR for the caller
@@ -495,7 +522,17 @@ def split_mn(ins):
     return p[0], (p[1] if len(p) > 1 else None)
 
 def operands(ins):
-    return [parse_ea(x) for x in ins.op_str.split(',')] if ins.op_str else []
+    # paren-aware comma split: indexed EAs like `(a0, d2.w)` carry a comma INSIDE one operand
+    if not ins.op_str: return []
+    toks, depth, cur = [], 0, ''
+    for ch in ins.op_str:
+        if ch == ',' and depth == 0: toks.append(cur); cur = ''
+        else:
+            if ch == '(': depth += 1
+            elif ch == ')': depth -= 1
+            cur += ch
+    toks.append(cur)
+    return [parse_ea(x) for x in toks]
 
 CMP32_LO = 0x8A     # scratch: low-word diff of a 32-bit compare (emit_branch 'signed32'/'tst32'
                     # reads it to reconstruct the FULL 32-bit Z; dead across the fused cmp->branch).
@@ -553,6 +590,9 @@ def gen(e, ins, nxt):
     base, size = split_mn(ins)
     nb = split_mn(nxt)[0] if nxt is not None else None
     fuses = nb in BCC
+    # branch-chain bookkeeping: the flag source recorded by the PREVIOUS instruction's fused branch
+    # is live only if THIS instruction directly follows it; any other emission invalidates it.
+    live = getattr(e, '_live_fsrc', None); e._live_fsrc = None
     if base == 'movem':                              # reglist token isn't a normal EA
         return gen_movem(e, ins, size, None)
     if base in ('jsr', 'bsr'):                       # call operand ('$x.l'/'(an)') isn't a data EA
@@ -949,6 +989,13 @@ def gen(e, ins, nxt):
         e('lda $%02X' % dp); e('dec a'); e('sta $%02X' % dp); e('cmp #$FFFF')
         s = e.fresh(); e('beq %s' % s); e('jmp ' + branch_label(e, tgt)); e.lbl(s); return 1
     if base in BCC:
+        # BRANCH CHAIN: `<producer>; Bcc1; Bcc2 ...` — the 68K CCR is untouched by branches, and our
+        # 'tst'/'signed' lowerings preserve the 65816 source flags on the fall-through path, so a Bcc
+        # that DIRECTLY follows a fused branch re-consumes the same flags. Guard: this Bcc must not be
+        # a branch target itself (another path would arrive with different flags -> keep the raise).
+        if live is not None and not getattr(e, '_at_label', False):
+            emit_branch(e, base, branch_target(ins), live)   # re-records _live_fsrc for a 3rd link
+            return 1
         raise Unsupported('stray conditional %s (flags not from preceding op)' % base)
 
     raise Unsupported('opcode %s' % ins.mnemonic)
@@ -1379,8 +1426,10 @@ def main():
         if new_block: emit_charge(i); new_block = False
         rk = movel_run_len(insns, i, labels)         # collapse a memcpy run into a loop (vs unroll)
         if rk >= RUN_MIN:
+            e._live_fsrc = None                      # run bypasses gen() -> invalidate the chain source
             s, d = operands(ins); gen_movel_run(e, s, d, rk); i += rk; continue
         nxt = insns[i+1] if i+1 < len(insns) else None
+        e._at_label = ins.address in labels          # a labeled Bcc must NOT chain (multi-path flags)
         i0 = i
         try:
             i += gen(e, ins, nxt)
