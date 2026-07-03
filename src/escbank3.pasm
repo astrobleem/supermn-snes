@@ -4382,8 +4382,8 @@ L129c6_12a7e:
     sta $3C
     jml.l ors_pre
 
-; --- entry_12e56 — Phase-1.1 task-loop callee, REGENERATED after the branch-chain +
-; indexed-EA transpiler features (0 skipped instrs; $00FC sentinels) ---
+; --- entry_12e56 — Phase-1.1, REGENERATED --escapes=12af6: the internal bsr $12af6 is now a
+; DIRECT native link (jmp entry_12af6, $00FC sentinel resume) ---
     .org $A000
 
 === all 64 instrs transpiled ===
@@ -4855,17 +4855,12 @@ L12e56_12f06:
     xba
     sta $400000,x
     xba
-    ; CALL-BRIDGE bsr.w $12af6 -> ojmp_hook (callee --table escape, else interpret), resume br12e56_1
+    ; CALL-BRIDGE bsr.w $12af6 -> entry_12af6 (NATIVE escape), resume br12e56_1
     lda #br12e56_1
-    sta $54
-    lda #$00FC
-    sta $56
-    jsl.l push32_l
-    lda #$2AF6
     sta $40
-    lda #$0001
+    lda #$00FC
     sta $42
-    jml.l ojmp_hook
+    jmp entry_12af6
 br12e56_1:
 L12e56_12f1e:
     lda #$0000
@@ -5446,6 +5441,739 @@ L12c1a_12d44:
     beq Lf12c1a_18
     jmp L12c1a_12d44
 Lf12c1a_18:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_12a92 — Phase-1.1 task-loop callee (bsr-reached, bhp_bank_ext arm) ---
+    .org $B800
+; --- transpiled from $012A92 (22 instrs) by tools/transpile.py [bank1] ---
+entry_12a92:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $38
+    clc
+    adc #$FFBD
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C4E
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    bne Lf12a92_1
+    jmp L12a92_12aaa
+Lf12a92_1:
+    lda $34
+    clc
+    adc #$1C4F
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L12a92_12aaa:
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $38
+    clc
+    adc #$FFFC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFC0
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $38
+    clc
+    adc #$FFFA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFBE
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $38
+    clc
+    adc #$FFF8
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFA8
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $38
+    clc
+    adc #$FFAA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFE8
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0002
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFF4
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFF6
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFF2
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $1C
+    rep #$20
+    lda $1C
+    and #$000F
+    sta $1C
+    lda $1C
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $1C
+    lda $1C
+    clc
+    adc $1C
+    sta $1C
+    lda #$2F5E
+    sta $20
+    lda #$0001
+    sta $22
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFBE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFC0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_12af6 — Phase-1.1 task-loop callee (bsr-reached, bhp_bank_ext arm) ---
+    .org $C000
+; --- transpiled from $012AF6 (30 instrs) by tools/transpile.py [bank1] ---
+entry_12af6:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$FFC0
+    tax
+    lda $400000,x
+    xba
+    sta $08
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    sec
+    sbc #$0030
+    bvs Lf12af6_1
+    bpl Lf12af6_2
+    bra Lf12af6_3
+Lf12af6_1:
+    bmi Lf12af6_2
+    bra Lf12af6_3
+Lf12af6_2:
+    jmp L12af6_12b18
+Lf12af6_3:
+    lda #$0030
+    sta $00
+    lda $08
+    and #$FFFE
+    sta $08
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FFDC
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda $38
+    clc
+    adc #$FFDC
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+L12af6_12b18:
+    lda #$00A0
+    sta $1C
+    lda $00
+    sec
+    sbc $1C
+    beq Lf12af6_5
+    bvs Lf12af6_4
+    bmi Lf12af6_5
+    bra Lf12af6_6
+Lf12af6_4:
+    bpl Lf12af6_5
+    bra Lf12af6_6
+Lf12af6_5:
+    jmp L12af6_12b26
+Lf12af6_6:
+    lda $1C
+    sta $00
+    lda $08
+    and #$FFFD
+    sta $08
+L12af6_12b26:
+    lda $00
+    pha
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    sec
+    sbc #$0030
+    bvs Lf12af6_7
+    bpl Lf12af6_8
+    bra Lf12af6_9
+Lf12af6_7:
+    bmi Lf12af6_8
+    bra Lf12af6_9
+Lf12af6_8:
+    jmp L12af6_12b48
+Lf12af6_9:
+    lda #$0030
+    sta $00
+    lda $08
+    and #$FFFB
+    sta $08
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FFDC
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda $38
+    clc
+    adc #$FFDC
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+L12af6_12b48:
+    lda $00
+    sec
+    sbc #$0150
+    beq Lf12af6_11
+    bvs Lf12af6_10
+    bmi Lf12af6_11
+    bra Lf12af6_12
+Lf12af6_10:
+    bpl Lf12af6_11
+    bra Lf12af6_12
+Lf12af6_11:
+    jmp L12af6_12b62
+Lf12af6_12:
+    lda #$0150
+    sta $00
+    lda $08
+    and #$FFF7
+    sta $08
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $38
+    clc
+    adc #$FFDC
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda $38
+    clc
+    adc #$FFDC
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+L12af6_12b62:
+    lda $08
+    pha
+    lda $38
+    clc
+    adc #$FFC0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $00
+    pha
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_117b4 — Phase-1.1 task-loop callee (bsr-reached, bhp_bank_ext arm) ---
+    .org $C800
+; --- transpiled from $0117B4 (18 instrs) by tools/transpile.py [bank1] ---
+entry_117b4:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$FFC0
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $1C
+    beq Lf117b4_1
+    jmp L117b4_117d0
+Lf117b4_1:
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0003
+    beq Lf117b4_2
+    jmp L117b4_117d0
+Lf117b4_2:
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$00A0
+    beq Lf117b4_3
+    jmp L117b4_117d0
+Lf117b4_3:
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L117b4_117f2
+L117b4_117d0:
+    lda $1C
+    asl a
+    sta $1C
+    lda #$17F4
+    sta $20
+    lda #$0001
+    sta $22
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$00A0
+    beq Lf117b4_4
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    jmp L117b4_117f2
+Lf117b4_4:
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0003
+    beq Lf117b4_5
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    jmp L117b4_117f2
+Lf117b4_5:
+    lda #$00F0
+    pha
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L117b4_117f2:
     ldx $3C
     lda $400000,x
     xba

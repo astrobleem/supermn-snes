@@ -11197,9 +11197,13 @@ entry_25110:
 bhp_bank_ext:
     rep #$30             ; (runtime no-op; fixes Poppy's mode tracking in this dead region)
     lda $5E
-    beq bbe_b0           ; bank-$00 target -> original inline chain
+    bne bbe_ck           ; (near-jump trampolines: the arm chain outgrew 8-bit branch range)
+    jmp bhp_b0chain      ; bank-$00 target -> original inline chain
+bbe_ck:
     cmp #$0001
-    bne bbe_miss
+    beq bbe_b1
+    jmp bhp_push         ; bank != $01 -> normal push
+bbe_b1:
     lda $5C
     cmp #$2B6C           ; $012B6C (the HLE'd dispatcher tree)
     bne bbe_t2
@@ -11229,15 +11233,40 @@ bbe_t3:
     jml $97A000          ; entry_12e56
 bbe_t4:
     cmp #$2C1A           ; $012C1A (re-shipped: branch-chain feature)
-    bne bbe_miss
+    bne bbe_t5
     lda $54
     sta $40
     lda #$0001
     sta $42
     pla
     jml $97B000          ; entry_12c1a
-bbe_b0:
-    jmp bhp_b0chain
+bbe_t5:
+    cmp #$2A92           ; $012A92 (task-loop callee)
+    bne bbe_t6
+    lda $54
+    sta $40
+    lda #$0001
+    sta $42
+    pla
+    jml $97B800          ; entry_12a92
+bbe_t6:
+    cmp #$2AF6           ; $012AF6 (task-loop callee; also direct-linked from entry_12e56)
+    bne bbe_t7
+    lda $54
+    sta $40
+    lda #$0001
+    sta $42
+    pla
+    jml $97C000          ; entry_12af6
+bbe_t7:
+    cmp #$17B4           ; $0117B4 (task-loop local helper)
+    bne bbe_miss
+    lda $54
+    sta $40
+    lda #$0001
+    sta $42
+    pla
+    jml $97C800          ; entry_117b4
 bbe_miss:
     jmp bhp_push
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
