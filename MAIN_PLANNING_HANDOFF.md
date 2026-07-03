@@ -1,8 +1,116 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-02 (pt.14). **Read this first** in a fresh session, then act. It captures the
-current state, the reliable mental model, the strategic reality (read §0 before deciding what to do),
-the tooling, the validated escape recipes, and the prioritized next steps.
+Last updated: 2026-07-02 (pt.15). **Read the ⭐ CURRENT TASK section immediately below, then act.** The
+strategic-direction decision the old §0 was waiting on HAS BEEN MADE by the user: run the HLE spike
+described below. Everything from `## 0. STRATEGIC REALITY` onward is now REFERENCE/CONTEXT (dispatch
+model, tooling, recipes, methodology, task ledger) — read it for depth, but the spike below is the job.
+
+---
+
+# ⭐ CURRENT TASK (start here): HLE SPIKE — does hand-written native beat the faithful ceiling?
+
+**Read these memory files first (they are the substance; this section is the checklist):**
+`contiguous-compile-prototype.md` (the proven bank-$01 dispatch + the measurement gotchas + the
+measured baselines), `contiguous-compile-profile.md` (why these targets; the hot-region map),
+`aot-codegen-sketch.md` (the ~2.7× ISA-penalty floor), `production-escape-enable.md` (the escape-bank
+pattern + the "banks full was WRONG, escbank2 has ~18KB free" correction), `gigandes-target.md`
+(the reusable-toolchain goal this must not break).
+
+## Why (the strategic frame)
+Every 68K-FAITHFUL approach (interpreter + per-function escapes + contiguous-compile) is at its ceiling:
+the SA-1's clock margin over the 68K (~1.34×) is smaller than the 68K-on-65816 ISA penalty (~3-4×), so
+the theoretical floor is ~2.7× the 60fps budget → **flawless 60fps is UNREACHABLE faithfully.** We are
+at "avg-frame realtime + combat frame-drops." **HLE — hand-writing a hot routine as native SNES logic
+(same RESULT, not the same instructions) — is the ONLY lever that drops the ISA penalty and can break
+that floor.** This spike SIZES it before any campaign: does a hand-written native routine beat the
+interpreter (which, via `loop_hook`, is effectively already a hand-tuned native loop) on a hot
+loop-heavy routine — and how much effort per routine? It ALSO validates the reusable pattern (below).
+
+## Hypothesis + success criteria + deliverable
+- HYPOTHESIS: a hand-written native routine (tight loops, direct BE work-RAM, SA-1 HW where useful, no
+  68K faithfulness) beats the interp's `loop_hook`-assisted cost on a hot loop.
+- SUCCESS: HLE body cost **< the interp baseline** for the same routine, BIT-EXACT. A large margin ⇒
+  HLE worth a campaign; roughly equal ⇒ `loop_hook` is already near-optimal ⇒ HLE not worth it for
+  loops (a real, negative answer — then ship playable-with-drops; the faithful ceiling stands).
+- DELIVER: the HLE body + its measured cost vs the baselines + a GO/NO-GO verdict + a per-routine effort
+  estimate (hours to understand+write+validate) to size a full HLE campaign.
+
+## Target (reuse THIS session's proven infrastructure)
+- **PRIMARY: the `$012B6C → {$012B84, $012C04}` call-tree** — the exact loop-heavy case where
+  faithful-native LOST this session (transpiled 26-37K cyc vs interp 11.3K). HLE it as ONE hand-written
+  native routine. ~51 real 68K instrs across 3 small fns → tractable. `$012B84` is the loop-heavy leaf
+  (the reason faithful lost); `$012B6C` a small dispatcher; `$012C04` a tiny leaf. The bank-$01
+  dispatch + escbank2 hosting + `hle_cost.py` measurement are ALL PROVEN this session for this exact
+  target — you are swapping the transpiled body for a hand-written one.
+- ALTERNATIVE if `$12b84`'s semantics don't reimplement cleanly in a session: the `$025110` collision
+  O(n²) inner loop — DEEPLY understood this session (object table @ `a5+$3a74`; outer loop over objects
+  `d7=$1E`; inner pair scan; type checks vs `$bf`/`$bd`; x-coord `cmp.w $4(a1),d0/bgt`; result in
+  `d5/d6/d7` = `FFFF`=none). Hotter (~12.6%) but 545 instrs — HLE only its inner loop.
+
+## Baselines (measured this session; ce4trip64 combat, production gates on)
+- **interp `$012B6C` tree = 11,300 cyc / invocation** (loop_hook-assisted). ← **THE NUMBER TO BEAT.**
+- transpiled faithful native = 37,049 cyc (--bank2) / 26,125 cyc (--workram) — both LOST.
+- straight-line `$012A92` native = 893 cyc (calibration: what native does with NO loop → ~40× cheaper).
+- whole active-compute tick ≈ 3.14M cyc (~21× the 179K-cyc/frame 60fps budget). B1PC=0818 span.
+
+## Step-by-step
+1. **UNDERSTAND the semantics (the crux, do this properly).** Disassemble `$012B6C/$012B84/$012C04`
+   (capstone m68k; 68K PC → ROM file offset `0x10000+(pc&0x3FFFFF)`). Capture its real execution + I/O
+   with this session's method: the interp PC-stream (`dbg_fetch` $40:8000, enabled by `$0718=0`; see how
+   `contiguous-compile-prototype`/lockstep_trap `GPPROF ALLSTREAM` did it) and MAME as ground truth.
+   Write a SEMANTIC SPEC: which regs/work-RAM it READS, what the loop COMPUTES, which regs/work-RAM it
+   WRITES. If it's too tangled to reimplement confidently, switch to the `$025110` inner-loop alternative.
+2. **RE-ESTABLISH the dispatch** (it was reverted after the negative contiguous-compile result). Recipe in
+   `contiguous-compile-prototype.md`: zero-shift swap `lda $5E/bne bhp_push`→`jmp bhp_bank_ext`+`nop` in
+   `bsr_hookpush` (interp.pasm); host `bhp_bank_ext` in the DEAD inline-`entry_25110` space ($D1F2+, past
+   its `jml $978000` redirect); match `$5E:$5C == $0001:$2B6C`; set `$40=$54` (PC=return $01177C),
+   `$42=$0001`; `pla`; `jml $94<hle_entry>`. Host the HLE body in escbank2 (`$94`, ~18KB free; splice
+   before the `ESCBANK2_BODIES_END` marker; get its addr from `escbank2.sym`; hardcode it in the `jml`).
+3. **HAND-WRITE the HLE body** (native 65816/SA-1). Produce the SAME outputs bit-exact, NOT the same
+   instructions. Entry state (from the dispatch): `$40`=return($01177C), `$42`=$0001, 68K stack ptr at
+   `$3C`, reg-file DP model (D0-D7@$00-$1C, A0-A7@$20-$3C, a5=state base@$34). Work RAM is `$40:xxxx`
+   BIG-ENDIAN (`lda $400000,x; xba` = BE word). Return via the 68K-rts idiom → `jml.l ors_pre` (see any
+   transpiled `--bank2` body's tail). Use tight native loops, SA-1 HW (mul/div `$2250+`, DMA) where it
+   helps. It needs a re-sim-push prologue ONLY if the interp expects the return re-pushed — check against
+   a transpiled body's prologue.
+4. **VALIDATE bit-exact.** `python3 tools/lockstep_trap.py /tmp/supermn-scratch/ce4trip64 2F60 1` env
+   `B1PC=0818 CHOKE=1 SWIN=1 SEL=1 FULLDIFF=1 HOOKTEST=<hle_entry_sa1_linear>` → require **GREEN** AND
+   `matchedEventsEmitted≥1` (it fired natively). Zero-added-divergence: the FULLDIFF set must be identical
+   to the ESC=1 baseline WITHOUT the HLE (i.e. the tree interpreted).
+5. **MEASURE.** `python3 tools/hle_cost.py /tmp/supermn-scratch/ce4trip64 <hle_entry_24bit> <hle_exit_24bit>`
+   → the spin-free native body cost. `<hle_exit_24bit>` = the body's terminal `jml.l ors_pre` addr.
+6. **VERDICT.** HLE_cost vs 11,300: `<<` ⇒ GO (report the ratio + estimate the tick fraction a full HLE
+   campaign could reclaim toward the 3.14M→179K goal + the per-routine effort). `≈`/`>` ⇒ NO-GO for
+   loops (loop_hook already near-optimal) ⇒ ship playable-with-drops; HLE only helps straight-line, which
+   is a small share. Bank the verdict + numbers in memory + STATUS.md.
+
+## Measurement gotchas (LEARNED this session — do not relearn)
+- Native cost: **`tools/hle_cost.py`** (exec-hooks + `run_until`, spin-FREE). The `$0710` fetch-trap
+  BUSY-SPINS to end-of-frame (~179K cyc pollution) → useless for sub-tick spans. The whole-tick
+  poke-diff is NONDETERMINISTIC (~60K/tick B0-staging jitter) → only valid for effects `>> 60K`.
+- The interp baseline (11,300) is NOT re-measurable by exec-hook (shared `iloop`, no distinct SA-1 addr)
+  — it's this session's measured number; trust it (or re-derive via the whole-tick poke-diff ONLY if the
+  effect is large).
+- `lockstep_trap.py` now has a **bank-aware B1 trap** (pass a 24-bit `B1PC` to trap a bank-≠0 PC;
+  committed `aa0ad11`). `tools/exit_dump.py` isolates an escape's direct output (committed `6713ed3`).
+
+## Reusable-pattern check (must confirm — this is why HLE is OK for the Gigandes plan)
+HLE = a hand-written escape BODY in the EXISTING escape framework (same dispatch hooks, same bit-exact
+vs-MAME validation). The framework (interpreter + dispatch + validation) is game-AGNOSTIC — Gigandes
+reuses all of it; only the reimplemented BODY is per-game. During the spike, CONFIRM the pattern is clean
+(a hand-written body drops into an escape slot with zero special machinery beyond what a transpiled body
+needs). If confirmed, HLE is a per-game escape hatch that does NOT fork the toolchain. If it needs
+special machinery, note what — that's a cost against the multi-game thesis.
+
+## Guardrails
+- It's a SIZING spike: ONE target, ONE number, ONE verdict. Don't sink >1 session or chase full-routine
+  HLE — validate the pattern + the payoff, then stop and report.
+- Bank-$00 must NOT shift (packed; 8-bit branch wrap). Zero-shift edits only (see methodology §7 below).
+- Git: branch `boot-scheduler-progress`, HEAD `aa0ad11`, pushed. This session added `tools/hle_cost.py`
+  (the measurement tool) — commit any spike work as its own commits; don't touch the shipped 5 commits.
+
+---
+
 
 > ## ⇒ STATE (2026-07-02): the Phase-2 escape/codegen sprint is BANKED. DO NOT auto-start a campaign.
 > The escape-coverage thread is COMPLETE and validated — see `STATUS.md`'s "BANKED" block for the
