@@ -11189,6 +11189,30 @@ df_gap_redir:
 entry_25110:
     jml $978000          ; -> escbank3 entry_25110 ($97:8000 = file $2B8000)
     nop
+; bhp_bank_ext — bank-aware bsr-escape extension (HLE SPIKE), hosted in this DEAD space (shifts only
+; dead code; everything live >= $E000 is .org-pinned). Replaces bsr_hookpush's `lda $5E / bne bhp_push`
+; (a zero-shift 4B->4B swap): bank-$00 targets re-enter the original chain at bhp_b0chain; the bank-$01
+; target $012B6C dispatches the hand-written HLE body in escbank2 ($94:E000). Reached only when the
+; $071A escape gate is on. Disable poke: cmp #$2B6C -> #$FFFF.
+bhp_bank_ext:
+    rep #$30             ; (runtime no-op; fixes Poppy's mode tracking in this dead region)
+    lda $5E
+    beq bbe_b0           ; bank-$00 target -> original inline chain
+    cmp #$0001
+    bne bbe_miss
+    lda $5C
+    cmp #$2B6C           ; $012B6C (the HLE'd dispatcher tree)
+    bne bbe_miss
+    lda $54
+    sta $40              ; 68K PC = bsr return ($01177C); NO return pushed (HLE simulates it)
+    lda #$0001
+    sta $42
+    pla                  ; drop RET1 -> 65816 S back at the iloop dispatch level
+    jml $94E000          ; hle_12b6c (escbank2, fixed .org)
+bbe_b0:
+    jmp bhp_b0chain
+bbe_miss:
+    jmp bhp_push
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
     sta $54
@@ -15850,8 +15874,9 @@ bhp_tb:
     ; $0412 one, sending its `bne` to the next block's label and ending the chain at bhp_push.
     lda $071A            ; hook enable (0 = off)
     beq bhp_push
-    lda $5E              ; both escape targets are bank 0
-    bne bhp_push
+    jmp bhp_bank_ext     ; (was: lda $5E / bne bhp_push, 4B->4B zero-shift) bank-aware ext:
+    nop                  ; catches the bank-$01 HLE target, else re-runs the bank-0 check
+bhp_b0chain:
     ; -- $000412 -> entry412 --
     lda $5C
     cmp #$0412
