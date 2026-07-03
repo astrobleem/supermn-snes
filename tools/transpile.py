@@ -1272,6 +1272,25 @@ def gen_call(e, ins):
         ea = parse_ea(t)
         if ea[0] != '(An)': raise Unsupported('call form %r' % t)
         dp = reg_dp(ea[1])
+        if ESCAPED:
+            # F1 GUARDED DIRECT-LINK (objproc A2): jsr (An) where An's RUNTIME value matches an
+            # --escapes target -> run a SAME-BANK --table-convention variant (entry_Xt) natively.
+            # jsr semantics = the return must be ON THE STACK (the --table class's contract), so
+            # PUSH the $00Fx:cont sentinel as the 4-byte return (the hle_12b6c-v2 validated idiom);
+            # the callee's faithful rts pops it -> ors_pre chain -> resume cont in the HOST bank.
+            # (NOT the set-$40/$42 bridge-to-escape shape — that relies on a STANDARD-convention
+            # callee re-simulating the push; a --table callee doesn't, and a standard-convention
+            # OLD body like the $92 entry_d96 exits via popped-PC jml inext, which would fetch the
+            # sentinel as a 68K address. The A2 deploy hang taught this.) Miss -> generic bridge.
+            esc_sent = '$00FD' if BANK2 else '$00FE'
+            for a in sorted(ESCAPED):
+                nxtl = e.fresh()
+                e.cmt('GUARDED DIRECT-LINK %s %s: An==$%06X -> entry_%xt native (pushed-sentinel return), resume %s' % (ins.mnemonic, t, a, a, cont))
+                e('lda $%02X' % dp); e('cmp #%s' % hx(a & 0xFFFF)); e('bne %s' % nxtl)
+                e('lda $%02X' % (dp+2)); e('cmp #%s' % hx((a >> 16) & 0xFF)); e('bne %s' % nxtl)
+                e('lda #%s' % cont); e('sta $54'); e('lda #%s' % esc_sent); e('sta $56'); e('jsr push32')
+                e('jmp entry_%xt' % a)
+                e.lbl(nxtl)
         if BANK2:
             # ibridge is a $92 label (unreachable from $94) and its ib_miss resumes in bank $92. INLINE
             # the interpret-bridge: push the $00FD sentinel:cont, set PC=An, jml inext. The callee's rts

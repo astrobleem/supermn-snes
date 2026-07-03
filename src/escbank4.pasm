@@ -3885,3 +3885,7878 @@ Lf23b52_2:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; --- objproc RENDER visit (coroutine resume $01E7C0, docs/OBJPROC_SPEC.md) — Phase-2.1 A2 main body.
+; xlat bank-$01 dispatch like entry_1d5f0. --jt=1EE6C:-16:0 (anim-op DOWNWARD table, ops 0..-8) +
+; 1F0B6:0:6 (mode table); --escapes=D96 (F1: jsr(a4) -> entry_d96t same-bank, PUSHED-sentinel
+; return); --bail (8 cold edges: 2 divs, 4 muls, 2 dyn-bclr). Sentinels sed $00FD->$00FB.
+    .org $AE00
+; --- transpiled from $01E7C0 (751 instrs) by tools/transpile.py [bank1] ---
+entry_1e7c0:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$3518
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $34
+    clc
+    adc #$351E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFE0
+    sta $24
+    lda $3A
+    adc #$FFFF
+    sta $26
+    lda #$0007
+    sta $14
+    lda #$0000
+    sta $16
+L1e7c0_1e7cc:
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $24
+    clc
+    adc #$0004
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda $1E
+    bne Lf1e7c0_1
+    lda $1C
+    bne Lf1e7c0_1
+    jmp L1e7c0_1f192
+Lf1e7c0_1:
+    lda $1C
+    sta $20
+    lda $1E
+    sta $22
+    lda $34
+    clc
+    adc #$3522
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $14
+    and #$0007
+    tax
+    pla
+Lf1e7c0_2:
+    cpx #$0000
+    beq Lf1e7c0_3
+    lsr a
+    dex
+    bra Lf1e7c0_2
+Lf1e7c0_3:
+    and #$0001
+    bne Lf1e7c0_4
+    jmp L1e7c0_1e832
+Lf1e7c0_4:
+    lda $34
+    clc
+    adc #$2932
+    tax
+    lda $400000,x
+    xba
+    beq Lf1e7c0_5
+    jmp L1e7c0_1e7f4
+Lf1e7c0_5:
+    lda $34
+    clc
+    adc #$2A37
+    tax
+    lda $400000,x
+    and #$00FF
+    bne Lf1e7c0_6
+    jmp L1e7c0_1e7ec
+Lf1e7c0_6:
+    lda #$0003
+    pha
+    lda $34
+    clc
+    adc #$2A36
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L1e7c0_1e7ec:
+    lda $34
+    clc
+    adc #$2930
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0004
+    bne Lf1e7c0_7
+    jmp L1e7c0_1e832
+Lf1e7c0_7:
+L1e7c0_1e7f4:
+    lda $20
+    clc
+    adc #$0003
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $1C
+    rep #$20
+    lda $1C
+    beq Lf1e7c0_8
+    bmi Lf1e7c0_8
+    bra Lf1e7c0_9
+Lf1e7c0_8:
+    jmp L1e7c0_1e832
+Lf1e7c0_9:
+    lda $1C
+    sec
+    sbc #$0005
+    beq Lf1e7c0_12
+    bvs Lf1e7c0_10
+    bpl Lf1e7c0_11
+    bra Lf1e7c0_12
+Lf1e7c0_10:
+    bmi Lf1e7c0_11
+    bra Lf1e7c0_12
+Lf1e7c0_11:
+    jmp L1e7c0_1e832
+Lf1e7c0_12:
+    lda $20
+    clc
+    adc #$006E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0001
+    php
+    pha
+    lda $20
+    clc
+    adc #$006E
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    plp
+    beq Lf1e7c0_15
+    bvs Lf1e7c0_13
+    bpl Lf1e7c0_14
+    bra Lf1e7c0_15
+Lf1e7c0_13:
+    bmi Lf1e7c0_14
+    bra Lf1e7c0_15
+Lf1e7c0_14:
+    jmp L1e7c0_1e832
+Lf1e7c0_15:
+    lda $20
+    clc
+    adc #$0003
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $1C
+    rep #$20
+    lda $1C
+    asl a
+    asl a
+    sep #$20
+    sta $1C
+    rep #$20
+    lda $1C
+    pha
+    lda $20
+    clc
+    adc #$006E
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C8A
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3510
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3512
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8E
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3514
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3516
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$006C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $20
+    clc
+    adc #$0018
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    beq Lf1e7c0_16
+    jmp L1e7c0_1e82e
+Lf1e7c0_16:
+    lda #$8000
+    pha
+    lda $20
+    clc
+    adc #$0018
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1e832
+L1e7c0_1e82e:
+    lda $1C
+    pha
+    lda $20
+    clc
+    adc #$0018
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1e832:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bne Lf1e7c0_17
+    jmp L1e7c0_1e862
+Lf1e7c0_17:
+    lda $20
+    clc
+    adc #$0004
+    tax
+    lda $400000,x
+    and #$00FF
+    sec
+    sbc #$0001
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0026
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0028
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9A
+    sta $04
+    lda $9C
+    sta $06
+    lda $20
+    clc
+    adc #$002A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$002C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9A
+    sta $08
+    lda $9C
+    sta $0A
+    lda $20
+    clc
+    adc #$0003
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_18
+    bmi Lf1e7c0_18
+    bra Lf1e7c0_19
+Lf1e7c0_18:
+    jmp L1e7c0_1e85a
+Lf1e7c0_19:
+    lda $20
+    clc
+    adc #$001E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0020
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $04
+    sec
+    sbc $9A
+    sta $04
+    lda $06
+    sbc $9C
+    sta $06
+    lda $04
+    sta $9A
+    lda $06
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0026
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0028
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0022
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0024
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $08
+    sec
+    sbc $9A
+    sta $08
+    lda $0A
+    sbc $9C
+    sta $0A
+    lda $08
+    sta $9A
+    lda $0A
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$002A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$002C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1e85a:
+    lda $20
+    clc
+    adc #$0030
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $04
+    php
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$002E
+    tax
+    lda $400000,x
+    xba
+    plp
+    adc $06
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0034
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $08
+    php
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0032
+    tax
+    lda $400000,x
+    xba
+    plp
+    adc $0A
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1e862:
+    lda $20
+    clc
+    adc #$0066
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bne Lf1e7c0_20
+    jmp L1e7c0_1e884
+Lf1e7c0_20:
+    lda $20
+    clc
+    adc #$003C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $20
+    clc
+    adc #$0036
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0066
+    tax
+    lda $400000,x
+    and #$00FF
+    sec
+    sbc #$0001
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0038
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $04
+    lda $20
+    clc
+    adc #$003A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $08
+    lda $20
+    clc
+    adc #$0062
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $04
+    clc
+    adc $9E
+    sta $04
+    lda $20
+    clc
+    adc #$0064
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $08
+    clc
+    adc $9E
+    sta $08
+    jmp L1e7c0_1e8a6
+L1e7c0_1e884:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bne Lf1e7c0_21
+    jmp L1e7c0_1e89e
+Lf1e7c0_21:
+    lda $20
+    clc
+    adc #$003C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $20
+    clc
+    adc #$0036
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0038
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $04
+    lda $20
+    clc
+    adc #$003A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $08
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000A
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp L1e7c0_1e8a6
+L1e7c0_1e89e:
+    lda $20
+    clc
+    adc #$002E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $04
+    lda $20
+    clc
+    adc #$0032
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $08
+L1e7c0_1e8a6:
+    lda $34
+    clc
+    adc #$2A32
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $04
+    sec
+    sbc $1C
+    sta $04
+    lda $34
+    clc
+    adc #$2932
+    tax
+    lda $400000,x
+    xba
+    bne Lf1e7c0_22
+    jmp L1e7c0_1e8b4
+Lf1e7c0_22:
+    lda #$0002
+    sta $1C
+    lda #$0000
+    sta $1E
+L1e7c0_1e8b4:
+    lda $20
+    clc
+    adc #$005E
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFE
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $04
+    sec
+    sbc #$000C
+    bvs Lf1e7c0_23
+    bmi Lf1e7c0_24
+    bra Lf1e7c0_25
+Lf1e7c0_23:
+    bpl Lf1e7c0_24
+    bra Lf1e7c0_25
+Lf1e7c0_24:
+    jmp L1e7c0_1e8ca
+Lf1e7c0_25:
+    lda $04
+    sec
+    sbc #$0174
+    beq Lf1e7c0_27
+    bvs Lf1e7c0_26
+    bmi Lf1e7c0_27
+    bra Lf1e7c0_28
+Lf1e7c0_26:
+    bpl Lf1e7c0_27
+    bra Lf1e7c0_28
+Lf1e7c0_27:
+    jmp L1e7c0_1e91e
+Lf1e7c0_28:
+L1e7c0_1e8ca:
+    lda $04
+    sec
+    sbc #$0270
+    bvs Lf1e7c0_29
+    bpl Lf1e7c0_30
+    bra Lf1e7c0_31
+Lf1e7c0_29:
+    bmi Lf1e7c0_30
+    bra Lf1e7c0_31
+Lf1e7c0_30:
+    jmp L1e7c0_1e8d6
+Lf1e7c0_31:
+    lda $04
+    sec
+    sbc #$FF10
+    beq Lf1e7c0_34
+    bvs Lf1e7c0_32
+    bpl Lf1e7c0_33
+    bra Lf1e7c0_34
+Lf1e7c0_32:
+    bmi Lf1e7c0_33
+    bra Lf1e7c0_34
+Lf1e7c0_33:
+    jmp L1e7c0_1e918
+Lf1e7c0_34:
+L1e7c0_1e8d6:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$001A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $34
+    clc
+    adc #$351C
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_35:
+    cpx #$0000
+    beq Lf1e7c0_36
+    asl a
+    dex
+    bra Lf1e7c0_35
+Lf1e7c0_36:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$350A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$350A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_37:
+    cpx #$0000
+    beq Lf1e7c0_38
+    asl a
+    dex
+    bra Lf1e7c0_37
+Lf1e7c0_38:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$350B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$350B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_39:
+    cpx #$0000
+    beq Lf1e7c0_40
+    asl a
+    dex
+    bra Lf1e7c0_39
+Lf1e7c0_40:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$3522
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$3522
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_41:
+    cpx #$0000
+    beq Lf1e7c0_42
+    asl a
+    dex
+    bra Lf1e7c0_41
+Lf1e7c0_42:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$3523
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$3523
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $20
+    clc
+    adc #$0046
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0048
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$004A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$004C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$004E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0050
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$FFFC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8A
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3510
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3512
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8E
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3514
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3516
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1f192
+L1e7c0_1e918:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    ora #$0001
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+L1e7c0_1e91e:
+    lda $08
+    sec
+    sbc #$0000
+    bvs Lf1e7c0_43
+    bpl Lf1e7c0_44
+    bra Lf1e7c0_45
+Lf1e7c0_43:
+    bmi Lf1e7c0_44
+    bra Lf1e7c0_45
+Lf1e7c0_44:
+    jmp L1e7c0_1e932
+Lf1e7c0_45:
+    lda $08
+    sec
+    sbc #$FF80
+    beq Lf1e7c0_47
+    bvs Lf1e7c0_46
+    bmi Lf1e7c0_47
+    bra Lf1e7c0_48
+Lf1e7c0_46:
+    bpl Lf1e7c0_47
+    bra Lf1e7c0_48
+Lf1e7c0_47:
+    jmp L1e7c0_1e8d6
+Lf1e7c0_48:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    ora #$0001
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    jmp L1e7c0_1e94a
+L1e7c0_1e932:
+    lda $08
+    sec
+    sbc #$0020
+    beq Lf1e7c0_50
+    bvs Lf1e7c0_49
+    bmi Lf1e7c0_50
+    bra Lf1e7c0_51
+Lf1e7c0_49:
+    bpl Lf1e7c0_50
+    bra Lf1e7c0_51
+Lf1e7c0_50:
+    jmp L1e7c0_1e94a
+Lf1e7c0_51:
+    lda $04
+    sec
+    sbc #$0038
+    beq Lf1e7c0_53
+    bvs Lf1e7c0_52
+    bmi Lf1e7c0_53
+    bra Lf1e7c0_54
+Lf1e7c0_52:
+    bpl Lf1e7c0_53
+    bra Lf1e7c0_54
+Lf1e7c0_53:
+    jmp L1e7c0_1e94a
+Lf1e7c0_54:
+    lda $04
+    sec
+    sbc #$0148
+    bvs Lf1e7c0_55
+    bpl Lf1e7c0_56
+    bra Lf1e7c0_57
+Lf1e7c0_55:
+    bmi Lf1e7c0_56
+    bra Lf1e7c0_57
+Lf1e7c0_56:
+    jmp L1e7c0_1e94a
+Lf1e7c0_57:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFE
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+L1e7c0_1e94a:
+    lda $20
+    clc
+    adc #$0046
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0048
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $28
+    lda $9E
+    sta $2A
+    lda $20
+    clc
+    adc #$004A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$004C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda $28
+    clc
+    adc #$000E
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    bpl Lf1e7c0_58
+    jmp L1e7c0_1e96a
+Lf1e7c0_58:
+    lda $1C
+    sec
+    sbc #$0081
+    bne Lf1e7c0_59
+    jmp L1e7c0_1e964
+Lf1e7c0_59:
+    lda $1C
+    sec
+    sbc #$0082
+    beq Lf1e7c0_60
+    jmp L1e7c0_1e980
+Lf1e7c0_60:
+L1e7c0_1e964:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_61
+    jmp L1e7c0_1e980
+Lf1e7c0_61:
+L1e7c0_1e96a:
+    lda $28
+    clc
+    adc #$000C
+    sta $30
+    lda $2A
+    adc #$0000
+    sta $32
+    lda #$0000
+    pha
+    lda $28
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$000E
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bmi Lf1e7c0_62
+    jmp L1e7c0_1e97e
+Lf1e7c0_62:
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1e97e:
+    jmp L1e7c0_1e9a4
+L1e7c0_1e980:
+    lda $2C
+    clc
+    adc #$000E
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    bpl Lf1e7c0_63
+    jmp L1e7c0_1e99c
+Lf1e7c0_63:
+    lda $1C
+    sec
+    sbc #$0081
+    bne Lf1e7c0_64
+    jmp L1e7c0_1e994
+Lf1e7c0_64:
+    lda $1C
+    sec
+    sbc #$0082
+    beq Lf1e7c0_65
+    jmp L1e7c0_1ebae
+Lf1e7c0_65:
+L1e7c0_1e994:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_66
+    jmp L1e7c0_1ebae
+Lf1e7c0_66:
+L1e7c0_1e99c:
+    lda $2C
+    clc
+    adc #$000C
+    sta $30
+    lda $2E
+    adc #$0000
+    sta $32
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1e9a4:
+    lda $20
+    clc
+    adc #$0006
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    bne Lf1e7c0_67
+    jmp L1e7c0_1ebb2
+Lf1e7c0_67:
+    lda $1C
+    pha
+    lda $20
+    clc
+    adc #$0006
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $1C
+    sec
+    sbc #$009D
+    bne Lf1e7c0_68
+    jmp L1e7c0_1ebb2
+Lf1e7c0_68:
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$009E
+    beq Lf1e7c0_69
+    jmp L1e7c0_1e9da
+Lf1e7c0_69:
+    lda $20
+    clc
+    adc #$0007
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_70
+    jmp L1e7c0_1e9cc
+Lf1e7c0_70:
+    lda #$002B
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1e9d0
+L1e7c0_1e9cc:
+    lda #$004B
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1e9d0:
+    ; CALL-BRIDGE jsr $2d8a.w -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_1
+    lda #br1e7c0_1
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_1:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    jmp L1e7c0_1eba8
+L1e7c0_1e9da:
+    lda $1C
+    sec
+    sbc #$0024
+    bne Lf1e7c0_71
+    jmp L1e7c0_1e9e6
+Lf1e7c0_71:
+    lda $1C
+    sec
+    sbc #$0044
+    beq Lf1e7c0_72
+    jmp L1e7c0_1e9ea
+Lf1e7c0_72:
+L1e7c0_1e9e6:
+    lda #$0001
+    sta $0C
+    lda #$0000
+    sta $0E
+    jmp L1e7c0_1ea20
+L1e7c0_1e9ea:
+    lda $1C
+    sec
+    sbc #$0001
+    beq Lf1e7c0_73
+    jmp L1e7c0_1e9f4
+Lf1e7c0_73:
+    lda #$0002
+    sta $0C
+    lda #$0000
+    sta $0E
+    jmp L1e7c0_1e9fc
+L1e7c0_1e9f4:
+    lda $1C
+    sec
+    sbc #$0002
+    beq Lf1e7c0_74
+    jmp L1e7c0_1ea0a
+Lf1e7c0_74:
+    lda #$0004
+    sta $0C
+    lda #$0000
+    sta $0E
+L1e7c0_1e9fc:
+    lda $34
+    clc
+    adc #$358A
+    tax
+    lda $400000,x
+    xba
+    beq Lf1e7c0_75
+    jmp L1e7c0_1ea06
+Lf1e7c0_75:
+    lda #$0020
+    sta $1C
+    lda #$0000
+    sta $1E
+    jmp L1e7c0_1ea08
+L1e7c0_1ea06:
+    lda #$0040
+    sta $1C
+    lda #$0000
+    sta $1E
+L1e7c0_1ea08:
+    jmp L1e7c0_1ea20
+L1e7c0_1ea0a:
+    lda $1C
+    sec
+    sbc #$0081
+    beq Lf1e7c0_76
+    jmp L1e7c0_1ea16
+Lf1e7c0_76:
+    lda #$0002
+    sta $0C
+    lda #$0000
+    sta $0E
+    lda #$0020
+    sta $1C
+    lda #$0000
+    sta $1E
+    jmp L1e7c0_1ea20
+L1e7c0_1ea16:
+    lda $1C
+    sec
+    sbc #$0082
+    beq Lf1e7c0_77
+    jmp L1e7c0_1ea3e
+Lf1e7c0_77:
+    lda #$0002
+    sta $0C
+    lda #$0000
+    sta $0E
+    lda #$0040
+    sta $1C
+    lda #$0000
+    sta $1E
+L1e7c0_1ea20:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $18
+    rep #$20
+    lda $18
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $18
+    lda $30
+    clc
+    adc #$0001
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $10
+    rep #$20
+    lda $10
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $10
+    lda $18
+    cmp #$8000
+    ror a
+    cmp #$8000
+    ror a
+    cmp #$8000
+    ror a
+    cmp #$8000
+    ror a
+    sta $18
+    lda $10
+    asl a
+    asl a
+    sta $10
+    lda $10
+    and #$FFC0
+    sta $10
+    lda $10
+    clc
+    adc $18
+    sta $10
+    lda #$36B2
+    sta $30
+    lda #$0000
+    sta $32
+    lda $10
+    sta $8C
+    and #$8000
+    bne Lf1e7c0_78
+    lda #$0000
+    bra Lf1e7c0_79
+Lf1e7c0_78:
+    lda #$FFFF
+Lf1e7c0_79:
+    sta $8E
+    lda $30
+    clc
+    adc $8C
+    sta $54
+    lda $32
+    adc $8E
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $18
+    rep #$20
+    jmp L1e7c0_1ea48
+L1e7c0_1ea3e:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $18
+    rep #$20
+    lda $30
+    clc
+    adc #$0001
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $0C
+    bne Lf1e7c0_80
+    jmp L1e7c0_1ebb2
+Lf1e7c0_80:
+L1e7c0_1ea48:
+    lda $20
+    clc
+    adc #$0003
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc $0C
+    php
+    pha
+    lda $20
+    clc
+    adc #$0003
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    plp
+    beq Lf1e7c0_82
+    bvs Lf1e7c0_81
+    bmi Lf1e7c0_82
+    bra Lf1e7c0_83
+Lf1e7c0_81:
+    bpl Lf1e7c0_82
+    bra Lf1e7c0_83
+Lf1e7c0_82:
+    jmp L1e7c0_1ea98
+Lf1e7c0_83:
+    lda $0C
+    sec
+    sbc #$0001
+    beq Lf1e7c0_84
+    jmp L1e7c0_1ea60
+Lf1e7c0_84:
+    lda #$002B
+    sta $10
+    lda $20
+    clc
+    adc #$0052
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0054
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0010
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0012
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ea6a
+L1e7c0_1ea60:
+    lda #$002C
+    sta $10
+    lda $20
+    clc
+    adc #$0056
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0058
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0010
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0012
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ea6a:
+    lda $1C
+    sec
+    sbc #$0020
+    bcs Lf1e7c0_85
+    jmp L1e7c0_1ea96
+Lf1e7c0_85:
+    lda $1C
+    sec
+    sbc #$005F
+    bcc Lf1e7c0_86
+    beq Lf1e7c0_86
+    jmp L1e7c0_1ea96
+Lf1e7c0_86:
+    lda $1C
+    sec
+    sbc #$0040
+    bcs Lf1e7c0_87
+    jmp L1e7c0_1ea8a
+Lf1e7c0_87:
+    lda #$0082
+    pha
+    lda $28
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0082
+    pha
+    lda $2C
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ea96
+L1e7c0_1ea8a:
+    lda #$0081
+    pha
+    lda $28
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0081
+    pha
+    lda $2C
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ea96:
+    jmp L1e7c0_1eae0
+L1e7c0_1ea98:
+    lda #$002C
+    sta $10
+    lda $20
+    clc
+    adc #$0003
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sta $9E
+    lda $0C
+    clc
+    adc $9E
+    sta $0C
+    lda $20
+    clc
+    adc #$005A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$005C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0010
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0012
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$3522
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $14
+    and #$0007
+    tax
+    pla
+Lf1e7c0_88:
+    cpx #$0000
+    beq Lf1e7c0_89
+    lsr a
+    dex
+    bra Lf1e7c0_88
+Lf1e7c0_89:
+    and #$0001
+    bne Lf1e7c0_90
+    jmp L1e7c0_1eab2
+Lf1e7c0_90:
+    lda $20
+    clc
+    adc #$006C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $20
+    clc
+    adc #$0018
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1eab2:
+    lda $1C
+    sec
+    sbc #$0020
+    bcs Lf1e7c0_91
+    jmp L1e7c0_1eae0
+Lf1e7c0_91:
+    lda $1C
+    sec
+    sbc #$005F
+    bcc Lf1e7c0_92
+    beq Lf1e7c0_92
+    jmp L1e7c0_1eae0
+Lf1e7c0_92:
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsl.l push32_l
+    lda $24
+    sta $54
+    lda $26
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $1C
+    sta $54
+    lda $1E
+    sta $56
+    jsl.l push32_l
+    lda $18
+    sta $54
+    lda $1A
+    sta $56
+    jsl.l push32_l
+    lda $14
+    sta $54
+    lda $16
+    sta $56
+    jsl.l push32_l
+    lda $10
+    sta $54
+    lda $12
+    sta $56
+    jsl.l push32_l
+    lda $0C
+    sta $54
+    lda $0E
+    sta $56
+    jsl.l push32_l
+    lda $08
+    sta $54
+    lda $0A
+    sta $56
+    jsl.l push32_l
+    lda $04
+    sta $54
+    lda $06
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda $20
+    clc
+    adc #$0060
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $1C
+    sec
+    sbc #$0040
+    bcs Lf1e7c0_93
+    jmp L1e7c0_1ead2
+Lf1e7c0_93:
+    lda #$0001
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ead6
+L1e7c0_1ead2:
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ead6:
+    ; CALL-BRIDGE jsr $5c5e.w -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_2
+    lda #br1e7c0_2
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$5C5E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_2:
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $06
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $04
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $08
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $0C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $12
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $10
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $16
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $14
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $18
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $1C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+L1e7c0_1eae0:
+    lda $0C
+    and #$00FF
+    sta $0C
+    lda #$000A
+    sta $52
+    lda $0C
+    sta $50
+    jsl.l usmul_l
+    lda $94
+    sta $0C
+    lda $96
+    sta $0E
+    lda $0C
+    pha
+    lda $20
+    clc
+    adc #$0005
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $0C
+    clc
+    adc $0C
+    sta $0C
+    lda $20
+    clc
+    adc #$0007
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bne Lf1e7c0_94
+    jmp L1e7c0_1eaf8
+Lf1e7c0_94:
+    lda $10
+    clc
+    adc #$0020
+    sta $10
+L1e7c0_1eaf8:
+    lda $10
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.w -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_3
+    lda #br1e7c0_3
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_3:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $20
+    clc
+    adc #$0003
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_95
+    bmi Lf1e7c0_95
+    jmp L1e7c0_1eb10
+Lf1e7c0_95:
+    lda $20
+    clc
+    adc #$0003
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sta $9E
+    lda $0C
+    sec
+    sbc $9E
+    sta $0C
+    lda #$0003
+    sta $52
+    lda $0C
+    sta $50
+    jsl.l usmul_l
+    lda $94
+    sta $0C
+    lda $96
+    sta $0E
+    jmp L1e7c0_1eb50
+L1e7c0_1eb10:
+    lda $0C
+    sec
+    sbc #$0014
+    beq Lf1e7c0_96
+    jmp L1e7c0_1eb50
+Lf1e7c0_96:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bne Lf1e7c0_97
+    jmp L1e7c0_1eb36
+Lf1e7c0_97:
+    lda $20
+    clc
+    adc #$0067
+    tax
+    lda $400000,x
+    and #$00FF
+    clc
+    adc #$0001
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0067
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0001
+    bcs Lf1e7c0_98
+    jmp L1e7c0_1eb34
+Lf1e7c0_98:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0067
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0056
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0058
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0010
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0012
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1eb50
+L1e7c0_1eb34:
+    jmp L1e7c0_1eb3a
+L1e7c0_1eb36:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0067
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L1e7c0_1eb3a:
+    lda $0C
+    pha
+    lda $20
+    clc
+    adc #$0004
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0026
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0028
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$002A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$002C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$001E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0020
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0022
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0024
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1eb9e
+L1e7c0_1eb50:
+    lda $0C
+    pha
+    lda $20
+    clc
+    adc #$0004
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $18
+    sep #$20
+    sta $10
+    rep #$20
+    lda $10
+    sec
+    sbc #$0040
+    sta $10
+    lda $18
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $18
+    lda $18
+    asl a
+    asl a
+    sta $18
+    lda $18
+    bmi Lf1e7c0_99
+    jmp L1e7c0_1eb62
+Lf1e7c0_99:
+    lda $18
+    eor #$FFFF
+    inc a
+    sta $18
+L1e7c0_1eb62:
+    lda $10
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $10
+    lda $10
+    asl a
+    asl a
+    sta $10
+    lda $10
+    bmi Lf1e7c0_100
+    jmp L1e7c0_1eb6a
+Lf1e7c0_100:
+    lda $10
+    eor #$FFFF
+    inc a
+    sta $10
+L1e7c0_1eb6a:
+    lda #$308E
+    sta $30
+    lda #$0000
+    sta $32
+    lda $10
+    sta $8C
+    and #$8000
+    bne Lf1e7c0_101
+    lda #$0000
+    bra Lf1e7c0_102
+Lf1e7c0_101:
+    lda #$FFFF
+Lf1e7c0_102:
+    sta $8E
+    lda $30
+    clc
+    adc $8C
+    sta $54
+    sta $8C
+    lda $32
+    adc $8E
+    sta $52
+    sta $8E
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $8C
+    clc
+    adc #$0002
+    sta $54
+    lda $8E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9A
+    sta $10
+    lda $9C
+    sta $12
+    lda $18
+    sta $8C
+    and #$8000
+    bne Lf1e7c0_103
+    lda #$0000
+    bra Lf1e7c0_104
+Lf1e7c0_103:
+    lda #$FFFF
+Lf1e7c0_104:
+    sta $8E
+    lda $30
+    clc
+    adc $8C
+    sta $54
+    sta $8C
+    lda $32
+    adc $8E
+    sta $52
+    sta $8E
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $8C
+    clc
+    adc #$0002
+    sta $54
+    lda $8E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9A
+    sta $18
+    lda $9C
+    sta $1A
+    lda $18
+    clc
+    adc $18
+    sta $18
+    lda $18
+    sta $9A
+    lda $1A
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda $18
+    clc
+    adc $18
+    sta $18
+    lda $18
+    clc
+    adc $1C
+    sta $18
+    lda $10
+    clc
+    adc $10
+    sta $10
+    lda $10
+    sta $9A
+    lda $12
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda $10
+    clc
+    adc $10
+    sta $10
+    lda $10
+    clc
+    adc $1C
+    sta $10
+    lda $18
+    sta $9A
+    lda $1A
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0026
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0028
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $10
+    sta $9A
+    lda $12
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$002A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$002C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; BAIL to interp @ $01EB8E: divs.w d3, d6   (opcode divs.w)
+    lda #$EB8E
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $18
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1A
+    lda $18
+    sta $9A
+    lda $1A
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$001E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0020
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; BAIL to interp @ $01EB96: divs.w d3, d4   (opcode divs.w)
+    lda #$EB96
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $10
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $12
+    lda $10
+    sta $9A
+    lda $12
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0022
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0024
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1eb9e:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1eba8:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0066
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp L1e7c0_1ebb2
+L1e7c0_1ebae:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0006
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L1e7c0_1ebb2:
+    lda $28
+    clc
+    adc #$000E
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $18
+    lda $18
+    beq Lf1e7c0_105
+    bmi Lf1e7c0_105
+    bra Lf1e7c0_106
+Lf1e7c0_105:
+    jmp L1e7c0_1ec9a
+Lf1e7c0_106:
+    lda $18
+    sec
+    sbc #$0060
+    bcs Lf1e7c0_107
+    jmp L1e7c0_1ebc8
+Lf1e7c0_107:
+    lda $18
+    sec
+    sbc #$00A0
+    bcs Lf1e7c0_108
+    jmp L1e7c0_1ec96
+Lf1e7c0_108:
+L1e7c0_1ebc8:
+    lda $18
+    sec
+    sbc #$005F
+    bcc Lf1e7c0_109
+    beq Lf1e7c0_109
+    jmp L1e7c0_1ec3a
+Lf1e7c0_109:
+    lda $20
+    clc
+    adc #$000D
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bmi Lf1e7c0_110
+    jmp L1e7c0_1ec96
+Lf1e7c0_110:
+    lda $20
+    clc
+    adc #$0066
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_111
+    jmp L1e7c0_1ec3a
+Lf1e7c0_111:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_112
+    jmp L1e7c0_1ec3a
+Lf1e7c0_112:
+    lda $20
+    clc
+    adc #$000B
+    tax
+    lda $400000,x
+    and #$00FF
+    clc
+    adc #$0001
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$000B
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0019
+    bcs Lf1e7c0_113
+    jmp L1e7c0_1ec3a
+Lf1e7c0_113:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000B
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$000F
+    pha
+    lda $20
+    clc
+    adc #$0066
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0064
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $18
+    sec
+    sbc #$0040
+    bcc Lf1e7c0_114
+    jmp L1e7c0_1ec26
+Lf1e7c0_114:
+    lda $34
+    clc
+    adc #$2A50
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs Lf1e7c0_115
+    bmi Lf1e7c0_116
+    bra Lf1e7c0_117
+Lf1e7c0_115:
+    bpl Lf1e7c0_116
+    bra Lf1e7c0_117
+Lf1e7c0_116:
+    jmp L1e7c0_1ec1c
+Lf1e7c0_117:
+    lda #$0002
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ec3a
+L1e7c0_1ec1c:
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ec3a
+L1e7c0_1ec26:
+    lda $34
+    clc
+    adc #$2A5C
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs Lf1e7c0_118
+    bpl Lf1e7c0_119
+    bra Lf1e7c0_120
+Lf1e7c0_118:
+    bmi Lf1e7c0_119
+    bra Lf1e7c0_120
+Lf1e7c0_119:
+    jmp L1e7c0_1ec34
+Lf1e7c0_120:
+    lda #$0002
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ec3a
+L1e7c0_1ec34:
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ec3a:
+    lda $28
+    clc
+    adc #$000C
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    bne Lf1e7c0_121
+    jmp L1e7c0_1ec96
+Lf1e7c0_121:
+    lda $18
+    pha
+    lda $20
+    clc
+    adc #$000A
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $28
+    clc
+    adc #$000C
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $18
+    rep #$20
+    lda $18
+    bne Lf1e7c0_122
+    jmp L1e7c0_1ec92
+Lf1e7c0_122:
+    lda $18
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $0C
+    bmi Lf1e7c0_123
+    jmp L1e7c0_1ec50
+Lf1e7c0_123:
+    lda $0C
+    eor #$FFFF
+    inc a
+    sta $0C
+L1e7c0_1ec50:
+    lda $1C
+    sep #$20
+    sta $10
+    rep #$20
+    lda $10
+    bne Lf1e7c0_124
+    jmp L1e7c0_1ec5c
+Lf1e7c0_124:
+    bmi Lf1e7c0_125
+    jmp L1e7c0_1ec58
+Lf1e7c0_125:
+    lda $10
+    eor #$FFFF
+    inc a
+    sta $10
+L1e7c0_1ec58:
+    lda $0C
+    sec
+    sbc $10
+    bvs Lf1e7c0_126
+    bpl Lf1e7c0_127
+    bra Lf1e7c0_128
+Lf1e7c0_126:
+    bmi Lf1e7c0_127
+    bra Lf1e7c0_128
+Lf1e7c0_127:
+    jmp L1e7c0_1ec92
+Lf1e7c0_128:
+L1e7c0_1ec5c:
+    lda $18
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $18
+    lda $04
+    clc
+    adc $18
+    sta $04
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$00A0
+    bcs Lf1e7c0_129
+    jmp L1e7c0_1ec90
+Lf1e7c0_129:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$00C0
+    bcs Lf1e7c0_130
+    jmp L1e7c0_1ec78
+Lf1e7c0_130:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$00E0
+    bcs Lf1e7c0_131
+    jmp L1e7c0_1ec90
+Lf1e7c0_131:
+L1e7c0_1ec78:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_132
+    jmp L1e7c0_1ec90
+Lf1e7c0_132:
+    lda #$000C
+    pha
+    lda $20
+    clc
+    adc #$0066
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0064
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ec90:
+    jmp L1e7c0_1ec96
+L1e7c0_1ec92:
+    lda $1C
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $1C
+    lda $08
+    clc
+    adc $1C
+    sta $08
+L1e7c0_1ec96:
+    lda #$0000
+    pha
+    lda $28
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ec9a:
+    lda $2C
+    clc
+    adc #$000E
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $18
+    lda $18
+    beq Lf1e7c0_133
+    bmi Lf1e7c0_133
+    bra Lf1e7c0_134
+Lf1e7c0_133:
+    jmp L1e7c0_1ed82
+Lf1e7c0_134:
+    lda $18
+    sec
+    sbc #$0060
+    bcs Lf1e7c0_135
+    jmp L1e7c0_1ecb0
+Lf1e7c0_135:
+    lda $18
+    sec
+    sbc #$00A0
+    bcs Lf1e7c0_136
+    jmp L1e7c0_1ed7e
+Lf1e7c0_136:
+L1e7c0_1ecb0:
+    lda $18
+    sec
+    sbc #$005F
+    bcc Lf1e7c0_137
+    beq Lf1e7c0_137
+    jmp L1e7c0_1ed22
+Lf1e7c0_137:
+    lda $20
+    clc
+    adc #$000D
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bmi Lf1e7c0_138
+    jmp L1e7c0_1ed7e
+Lf1e7c0_138:
+    lda $20
+    clc
+    adc #$0066
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_139
+    jmp L1e7c0_1ed22
+Lf1e7c0_139:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_140
+    jmp L1e7c0_1ed22
+Lf1e7c0_140:
+    lda $20
+    clc
+    adc #$000B
+    tax
+    lda $400000,x
+    and #$00FF
+    clc
+    adc #$0001
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$000B
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0019
+    bcs Lf1e7c0_141
+    jmp L1e7c0_1ed22
+Lf1e7c0_141:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000B
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$000F
+    pha
+    lda $20
+    clc
+    adc #$0066
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0064
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $18
+    sec
+    sbc #$0040
+    bcc Lf1e7c0_142
+    jmp L1e7c0_1ed0e
+Lf1e7c0_142:
+    lda $34
+    clc
+    adc #$2A50
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs Lf1e7c0_143
+    bmi Lf1e7c0_144
+    bra Lf1e7c0_145
+Lf1e7c0_143:
+    bpl Lf1e7c0_144
+    bra Lf1e7c0_145
+Lf1e7c0_144:
+    jmp L1e7c0_1ed04
+Lf1e7c0_145:
+    lda #$0002
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ed22
+L1e7c0_1ed04:
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ed22
+L1e7c0_1ed0e:
+    lda $34
+    clc
+    adc #$2A5C
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs Lf1e7c0_146
+    bpl Lf1e7c0_147
+    bra Lf1e7c0_148
+Lf1e7c0_146:
+    bmi Lf1e7c0_147
+    bra Lf1e7c0_148
+Lf1e7c0_147:
+    jmp L1e7c0_1ed1c
+Lf1e7c0_148:
+    lda #$0002
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ed22
+L1e7c0_1ed1c:
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ed22:
+    lda $2C
+    clc
+    adc #$000C
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    bne Lf1e7c0_149
+    jmp L1e7c0_1ed7e
+Lf1e7c0_149:
+    lda $18
+    pha
+    lda $20
+    clc
+    adc #$000A
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $2C
+    clc
+    adc #$000C
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $18
+    rep #$20
+    lda $18
+    bne Lf1e7c0_150
+    jmp L1e7c0_1ed7a
+Lf1e7c0_150:
+    lda $18
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $0C
+    bmi Lf1e7c0_151
+    jmp L1e7c0_1ed38
+Lf1e7c0_151:
+    lda $0C
+    eor #$FFFF
+    inc a
+    sta $0C
+L1e7c0_1ed38:
+    lda $1C
+    sep #$20
+    sta $10
+    rep #$20
+    lda $10
+    bne Lf1e7c0_152
+    jmp L1e7c0_1ed44
+Lf1e7c0_152:
+    bmi Lf1e7c0_153
+    jmp L1e7c0_1ed40
+Lf1e7c0_153:
+    lda $10
+    eor #$FFFF
+    inc a
+    sta $10
+L1e7c0_1ed40:
+    lda $0C
+    sec
+    sbc $10
+    bvs Lf1e7c0_154
+    bpl Lf1e7c0_155
+    bra Lf1e7c0_156
+Lf1e7c0_154:
+    bmi Lf1e7c0_155
+    bra Lf1e7c0_156
+Lf1e7c0_155:
+    jmp L1e7c0_1ed7a
+Lf1e7c0_156:
+L1e7c0_1ed44:
+    lda $18
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $18
+    lda $04
+    clc
+    adc $18
+    sta $04
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$00A0
+    bcs Lf1e7c0_157
+    jmp L1e7c0_1ed78
+Lf1e7c0_157:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$00C0
+    bcs Lf1e7c0_158
+    jmp L1e7c0_1ed60
+Lf1e7c0_158:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$00E0
+    bcs Lf1e7c0_159
+    jmp L1e7c0_1ed78
+Lf1e7c0_159:
+L1e7c0_1ed60:
+    lda $20
+    clc
+    adc #$0004
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_160
+    jmp L1e7c0_1ed78
+Lf1e7c0_160:
+    lda #$000C
+    pha
+    lda $20
+    clc
+    adc #$0066
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0062
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$FFFE
+    pha
+    lda $20
+    clc
+    adc #$0064
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ed78:
+    jmp L1e7c0_1ed7e
+L1e7c0_1ed7a:
+    lda $1C
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $1C
+    lda $08
+    clc
+    adc $1C
+    sta $08
+L1e7c0_1ed7e:
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ed82:
+    lda $08
+    sta $1C
+    lda $1C
+    sec
+    sbc #$00A0
+    sta $1C
+    beq Lf1e7c0_162
+    bvs Lf1e7c0_161
+    bmi Lf1e7c0_162
+    bra Lf1e7c0_163
+Lf1e7c0_161:
+    bpl Lf1e7c0_162
+    bra Lf1e7c0_163
+Lf1e7c0_162:
+    jmp L1e7c0_1ed8c
+Lf1e7c0_163:
+    lda $08
+    sec
+    sbc $1C
+    sta $08
+L1e7c0_1ed8c:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$002E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    pha
+    lda $20
+    clc
+    adc #$0032
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    sta $1C
+    lda $20
+    clc
+    adc #$003A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $20
+    clc
+    adc #$004E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0050
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $30
+    lda $9E
+    sta $32
+    lda $28
+    clc
+    adc #$0006
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $28
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0006
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0006
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bmi Lf1e7c0_164
+    jmp L1e7c0_1edc4
+Lf1e7c0_164:
+    lda $20
+    clc
+    adc #$003C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bmi Lf1e7c0_165
+    jmp L1e7c0_1edec
+Lf1e7c0_165:
+    jmp L1e7c0_1edca
+L1e7c0_1edc4:
+    lda $20
+    clc
+    adc #$003C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bpl Lf1e7c0_166
+    jmp L1e7c0_1edec
+Lf1e7c0_166:
+L1e7c0_1edca:
+    lda $04
+    sta $1C
+    lda $20
+    clc
+    adc #$0038
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $28
+    clc
+    adc #$0002
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $28
+    clc
+    adc #$0004
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0004
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0002
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0004
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    sta $00
+    jmp L1e7c0_1ee3a
+L1e7c0_1edec:
+    lda $20
+    clc
+    adc #$001C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    sta $1C
+    lda $20
+    clc
+    adc #$0042
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $20
+    clc
+    adc #$0042
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    sta $18
+    lda $20
+    clc
+    adc #$0038
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $18
+    clc
+    adc $9E
+    sta $18
+    lda $18
+    sta $1C
+    lda $28
+    clc
+    adc #$0002
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $18
+    sta $10
+    lda $28
+    clc
+    adc #$0004
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $10
+    sec
+    sbc $9E
+    sta $10
+    lda $1C
+    pha
+    lda $28
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $10
+    pha
+    lda $28
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $18
+    sta $1C
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $18
+    sta $10
+    lda $2C
+    clc
+    adc #$0004
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $10
+    sec
+    sbc $9E
+    sta $10
+    lda $1C
+    pha
+    lda $2C
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $10
+    pha
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $18
+    sta $1C
+    lda $30
+    clc
+    adc #$0002
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $30
+    clc
+    adc #$0004
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $18
+    sec
+    sbc $9E
+    sta $18
+    lda $1C
+    pha
+    lda $30
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $18
+    pha
+    lda $30
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1ee3a:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0001
+    php
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    plp
+    beq Lf1e7c0_169
+    bvs Lf1e7c0_167
+    bpl Lf1e7c0_168
+    bra Lf1e7c0_169
+Lf1e7c0_167:
+    bmi Lf1e7c0_168
+    bra Lf1e7c0_169
+Lf1e7c0_168:
+    jmp L1e7c0_1efec
+Lf1e7c0_169:
+    lda $20
+    clc
+    adc #$0010
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0012
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $30
+    lda $9E
+    sta $32
+L1e7c0_1ee46:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lf1e7c0_170
+    bmi Lf1e7c0_170
+    jmp L1e7c0_1efaa
+Lf1e7c0_170:
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    clc
+    adc $1C
+    sta $1C
+    ; JUMPTABLE $01EE6C(pc,d7.w) -> d7: 9 enumerated cases + interp-bail default
+    lda $1C
+    cmp #$FFF0
+    bne Lf1e7c0_171
+    lda #$0120
+    sta $1C
+    jmp L1e7c0_1ef8c
+Lf1e7c0_171:
+    cmp #$FFF2
+    bne Lf1e7c0_172
+    lda #$0114
+    sta $1C
+    jmp L1e7c0_1ef80
+Lf1e7c0_172:
+    cmp #$FFF4
+    bne Lf1e7c0_173
+    lda #$0104
+    sta $1C
+    jmp L1e7c0_1ef70
+Lf1e7c0_173:
+    cmp #$FFF6
+    bne Lf1e7c0_174
+    lda #$00D2
+    sta $1C
+    jmp L1e7c0_1ef3e
+Lf1e7c0_174:
+    cmp #$FFF8
+    bne Lf1e7c0_175
+    lda #$00E2
+    sta $1C
+    jmp L1e7c0_1ef4e
+Lf1e7c0_175:
+    cmp #$FFFA
+    bne Lf1e7c0_176
+    lda #$008E
+    sta $1C
+    jmp L1e7c0_1eefa
+Lf1e7c0_176:
+    cmp #$FFFC
+    bne Lf1e7c0_177
+    lda #$004A
+    sta $1C
+    jmp L1e7c0_1eeb6
+Lf1e7c0_177:
+    cmp #$FFFE
+    bne Lf1e7c0_178
+    lda #$0006
+    sta $1C
+    jmp L1e7c0_1ee72
+Lf1e7c0_178:
+    cmp #$0000
+    bne Lf1e7c0_179
+    lda #$0002
+    sta $1C
+    jmp L1e7c0_1ee6e
+Lf1e7c0_179:
+    lda #$EE54
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+L1e7c0_1ee6e:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $30
+    clc
+    adc #$0002
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $30
+    lda $9E
+    sta $32
+    jmp L1e7c0_1ee46
+L1e7c0_1ee72:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lf1e7c0_180
+    jmp L1e7c0_1ee46
+Lf1e7c0_180:
+    lda $20
+    clc
+    adc #$001A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $34
+    clc
+    adc #$351C
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $1C
+    xba
+    sta $400000,x
+    xba
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_181:
+    cpx #$0000
+    beq Lf1e7c0_182
+    asl a
+    dex
+    bra Lf1e7c0_181
+Lf1e7c0_182:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$350A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$350A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_183:
+    cpx #$0000
+    beq Lf1e7c0_184
+    asl a
+    dex
+    bra Lf1e7c0_183
+Lf1e7c0_184:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$350B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$350B
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_185:
+    cpx #$0000
+    beq Lf1e7c0_186
+    asl a
+    dex
+    bra Lf1e7c0_185
+Lf1e7c0_186:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$3522
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$3522
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $14
+    and #$0007
+    tax
+    lda #$0001
+Lf1e7c0_187:
+    cpx #$0000
+    beq Lf1e7c0_188
+    asl a
+    dex
+    bra Lf1e7c0_187
+Lf1e7c0_188:
+    eor #$FFFF
+    sta $8E
+    lda $34
+    clc
+    adc #$3523
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and $8E
+    sta $80
+    lda $34
+    clc
+    adc #$3523
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $20
+    clc
+    adc #$0046
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0048
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$004A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$004C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$004E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0050
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$FFFC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $24
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8A
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3510
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3512
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8E
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3514
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3516
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1f192
+L1e7c0_1eeb6:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    bne Lf1e7c0_189
+    jmp L1e7c0_1eeda
+Lf1e7c0_189:
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    bne Lf1e7c0_190
+    jmp L1e7c0_1eeda
+Lf1e7c0_190:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $18
+    rep #$20
+    lda $18
+    bne Lf1e7c0_191
+    jmp L1e7c0_1eeda
+Lf1e7c0_191:
+    lda $18
+    sec
+    sbc #$0020
+    bcs Lf1e7c0_192
+    jmp L1e7c0_1eed2
+Lf1e7c0_192:
+    lda $18
+    sec
+    sbc #$005F
+    bcc Lf1e7c0_193
+    beq Lf1e7c0_193
+    bra Lf1e7c0_194
+Lf1e7c0_193:
+    jmp L1e7c0_1eeda
+Lf1e7c0_194:
+L1e7c0_1eed2:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1efec
+L1e7c0_1eeda:
+    lda $1C
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0046
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0048
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    ; CALL-BRIDGE bsr.w $1f1c0 -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_4
+    lda #br1e7c0_4
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$F1C0
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_4:
+    lda $20
+    clc
+    adc #$004A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$004C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$FFFF
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ee46
+L1e7c0_1eefa:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    bne Lf1e7c0_195
+    jmp L1e7c0_1ef1e
+Lf1e7c0_195:
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    bne Lf1e7c0_196
+    jmp L1e7c0_1ef1e
+Lf1e7c0_196:
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $18
+    rep #$20
+    lda $18
+    bne Lf1e7c0_197
+    jmp L1e7c0_1ef1e
+Lf1e7c0_197:
+    lda $18
+    sec
+    sbc #$0020
+    bcs Lf1e7c0_198
+    jmp L1e7c0_1ef16
+Lf1e7c0_198:
+    lda $18
+    sec
+    sbc #$005F
+    bcc Lf1e7c0_199
+    beq Lf1e7c0_199
+    bra Lf1e7c0_200
+Lf1e7c0_199:
+    jmp L1e7c0_1ef1e
+Lf1e7c0_200:
+L1e7c0_1ef16:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1efec
+L1e7c0_1ef1e:
+    lda $1C
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0046
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0048
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    ; CALL-BRIDGE bsr.w $1f1c0 -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_5
+    lda #br1e7c0_5
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$F1C0
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_5:
+    lda $20
+    clc
+    adc #$004A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$004C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    ; CALL-BRIDGE bsr.w $1f1c0 -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_6
+    lda #br1e7c0_6
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$F1C0
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_6:
+    jmp L1e7c0_1ee46
+L1e7c0_1ef3e:
+    lda $20
+    clc
+    adc #$004E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0050
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    ; CALL-BRIDGE bsr.w $1f1fe -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_7
+    lda #br1e7c0_7
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$F1FE
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_7:
+    jmp L1e7c0_1ee46
+L1e7c0_1ef4e:
+    lda #$00FF
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0046
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0048
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$FFFF
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$004A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$004C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$FFFF
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ee46
+L1e7c0_1ef70:
+    lda $20
+    clc
+    adc #$004E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0050
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$FFFF
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ee46
+L1e7c0_1ef80:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    pha
+    lda $20
+    clc
+    adc #$0068
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    pha
+    lda $20
+    clc
+    adc #$006A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1ee46
+L1e7c0_1ef8c:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    sec
+    sbc #$003A
+    bcc Lf1e7c0_201
+    jmp L1e7c0_1ef9e
+Lf1e7c0_201:
+    lda $20
+    clc
+    adc #$0007
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bne Lf1e7c0_202
+    jmp L1e7c0_1ef9e
+Lf1e7c0_202:
+    lda $1C
+    clc
+    adc #$0020
+    sta $1C
+L1e7c0_1ef9e:
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.w -> ojmp_hook (callee --table escape, else interpret), resume br1e7c0_8
+    lda #br1e7c0_8
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_8:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    jmp L1e7c0_1ee46
+L1e7c0_1efaa:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $30
+    clc
+    adc #$0002
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $30
+    clc
+    adc #$0004
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $9A
+    sta $10
+    lda $9C
+    sta $12
+    lda $10
+    sta $9A
+    lda $12
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0014
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0016
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    sta $9A
+    lda $32
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0010
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0012
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$001A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $18
+    lda $18
+    sta $1C
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $10
+    sta $9A
+    lda $12
+    sta $9C
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $9C
+    pha
+    lda $3C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $3C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1efc0:
+    lda $04
+    sta $1C
+    lda $20
+    clc
+    adc #$0042
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    sta $1C
+    lda $20
+    clc
+    adc #$0044
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0018
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$351E
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bmi Lf1e7c0_203
+    jmp L1e7c0_1efe4
+Lf1e7c0_203:
+    lda $34
+    clc
+    adc #$1C8A
+    tax
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    jmp L1e7c0_1efe8
+L1e7c0_1efe4:
+    lda $34
+    clc
+    adc #$1C8E
+    tax
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+L1e7c0_1efe8:
+    jmp L1e7c0_1f096
+L1e7c0_1efec:
+    lda $20
+    clc
+    adc #$001A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $18
+    lda $00
+    beq Lf1e7c0_204
+    jmp L1e7c0_1f024
+Lf1e7c0_204:
+    lda #$0000
+    sta $1C
+    sta $1E
+    lda $20
+    clc
+    adc #$0005
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $1C
+    rep #$20
+    lda $1C
+    bne Lf1e7c0_205
+    jmp L1e7c0_1f064
+Lf1e7c0_205:
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    lda $1E
+    sbc #$0000
+    sta $1E
+    lda $1C
+    pha
+    lda $20
+    clc
+    adc #$0005
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0005
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    beq Lf1e7c0_206
+    jmp L1e7c0_1f018
+Lf1e7c0_206:
+    lda $20
+    clc
+    adc #$0046
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0048
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0060
+    pha
+    lda $2C
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$004A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$004C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda #$0060
+    pha
+    lda $2C
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1f018:
+    lda $1C
+    sta $50
+    lda $1E
+    sta $52
+    lda #$000A
+    sta $54
+    jsr esc_udiv
+    lda $52
+    bne dvov1e7c0_9
+    lda $50
+    sta $1C
+    lda $94
+    sta $1E
+dvov1e7c0_9:
+    lda $1C
+    tax
+    lda $1E
+    sta $1C
+    txa
+    sta $1E
+    lda $1C
+    sec
+    sbc #$0005
+    bcc Lf1e7c0_207
+    jmp L1e7c0_1f030
+Lf1e7c0_207:
+L1e7c0_1f024:
+    lda $18
+    sta $1C
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0014
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0016
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $9C
+    pha
+    lda $3C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $3C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L1e7c0_1efc0
+L1e7c0_1f030:
+    lda $18
+    sta $1C
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0014
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0016
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $9C
+    pha
+    lda $3C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $3C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    sta $1C
+    lda $20
+    clc
+    adc #$0042
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    sta $1C
+    lda $20
+    clc
+    adc #$0044
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$8800
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$351E
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bmi Lf1e7c0_208
+    jmp L1e7c0_1f05e
+Lf1e7c0_208:
+    lda $34
+    clc
+    adc #$1C8A
+    tax
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    jmp L1e7c0_1f062
+L1e7c0_1f05e:
+    lda $34
+    clc
+    adc #$1C8E
+    tax
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+L1e7c0_1f062:
+    jmp L1e7c0_1f096
+L1e7c0_1f064:
+    lda $18
+    sta $1C
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0014
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0016
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $9C
+    pha
+    lda $3C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $3C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    sta $1C
+    lda $20
+    clc
+    adc #$0042
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    sta $1C
+    lda $20
+    clc
+    adc #$0044
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0018
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$351E
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0036
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    bmi Lf1e7c0_209
+    jmp L1e7c0_1f092
+Lf1e7c0_209:
+    lda $34
+    clc
+    adc #$3510
+    tax
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    jmp L1e7c0_1f096
+L1e7c0_1f092:
+    lda $34
+    clc
+    adc #$3514
+    tax
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+L1e7c0_1f096:
+    ; GUARDED DIRECT-LINK jsr (a4): An==$000D96 -> entry_d96t native (pushed-sentinel return), resume br1e7c0_10
+    lda $30
+    cmp #$0D96
+    bne Lf1e7c0_210
+    lda $32
+    cmp #$0000
+    bne Lf1e7c0_210
+    lda #br1e7c0_10
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    jmp entry_d96t
+Lf1e7c0_210:
+    ; INDIRECT-BRIDGE jsr (a4) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume br1e7c0_10
+    lda #br1e7c0_10
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda $30
+    sta $40
+    lda $32
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_10:
+    lda #$000E
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    lda $18
+    clc
+    adc $18
+    sta $18
+    lda $34
+    clc
+    adc #$351E
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $18
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFD
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda $34
+    clc
+    adc #$2A4A
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $1C
+    clc
+    adc $1C
+    sta $1C
+    ; JUMPTABLE $01F0B6(pc,d7.w) -> d7: 4 enumerated cases + interp-bail default
+    lda $1C
+    cmp #$0000
+    bne Lf1e7c0_211
+    lda #$00B0
+    sta $1C
+    jmp L1e7c0_1f166
+Lf1e7c0_211:
+    cmp #$0002
+    bne Lf1e7c0_212
+    lda #$0008
+    sta $1C
+    jmp L1e7c0_1f0be
+Lf1e7c0_212:
+    cmp #$0004
+    bne Lf1e7c0_213
+    lda #$001E
+    sta $1C
+    jmp L1e7c0_1f0d4
+Lf1e7c0_213:
+    cmp #$0006
+    bne Lf1e7c0_214
+    lda #$0034
+    sta $1C
+    jmp L1e7c0_1f0ea
+Lf1e7c0_214:
+    lda #$F0AE
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+L1e7c0_1f0be:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0007
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A50
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $34
+    clc
+    adc #$2A4E
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $08
+    sec
+    sbc $9E
+    sta $08
+    lda $34
+    clc
+    adc #$2A4C
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    jmp L1e7c0_1f170
+L1e7c0_1f0d4:
+    lda #$0001
+    pha
+    lda $20
+    clc
+    adc #$0007
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2A5C
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $34
+    clc
+    adc #$2A5A
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $08
+    sec
+    sbc $9E
+    sta $08
+    lda $34
+    clc
+    adc #$2A58
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    jmp L1e7c0_1f170
+L1e7c0_1f0ea:
+    lda $34
+    clc
+    adc #$350A
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $0C
+    rep #$20
+    ; BAIL to interp @ $01F0EE: bclr.b d5, d3   (bclr dynamic bit operand Dn dst Dn)
+    lda #$F0EE
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $34
+    clc
+    adc #$350B
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $10
+    rep #$20
+    ; BAIL to interp @ $01F0F4: bclr.b d5, d4   (bclr dynamic bit operand Dn dst Dn)
+    lda #$F0F4
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $0C
+    beq Lf1e7c0_215
+    jmp L1e7c0_1f100
+Lf1e7c0_215:
+    lda $10
+    beq Lf1e7c0_216
+    jmp L1e7c0_1f0be
+Lf1e7c0_216:
+    jmp L1e7c0_1f104
+L1e7c0_1f100:
+    lda $10
+    bne Lf1e7c0_217
+    jmp L1e7c0_1f0d4
+Lf1e7c0_217:
+L1e7c0_1f104:
+    lda $34
+    clc
+    adc #$2A4C
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $34
+    clc
+    adc #$2A58
+    tax
+    lda $400000,x
+    xba
+    sta $10
+    lda $0C
+    and #$0008
+    beq Lf1e7c0_218
+    jmp L1e7c0_1f11a
+Lf1e7c0_218:
+    lda $10
+    and #$0008
+    beq Lf1e7c0_219
+    jmp L1e7c0_1f0be
+Lf1e7c0_219:
+    jmp L1e7c0_1f120
+L1e7c0_1f11a:
+    lda $10
+    and #$0008
+    bne Lf1e7c0_220
+    jmp L1e7c0_1f0d4
+Lf1e7c0_220:
+L1e7c0_1f120:
+    lda $04
+    sta $0C
+    lda $08
+    sta $10
+    lda $34
+    clc
+    adc #$2A50
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    lda $34
+    clc
+    adc #$2A4E
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $08
+    sec
+    sbc $9E
+    sta $08
+    lda $04
+    sta $00
+    ; BAIL to interp @ $01F12E: muls.w d0, d0   (opcode muls.w)
+    lda #$F12E
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $08
+    sta $1C
+    ; BAIL to interp @ $01F132: muls.w d7, d7   (opcode muls.w)
+    lda #$F132
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $00
+    clc
+    adc $1C
+    sta $00
+    lda $34
+    clc
+    adc #$2A5C
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $0C
+    sec
+    sbc $9E
+    sta $0C
+    lda $34
+    clc
+    adc #$2A5A
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $10
+    sec
+    sbc $9E
+    sta $10
+    lda $0C
+    sta $18
+    ; BAIL to interp @ $01F140: muls.w d6, d6   (opcode muls.w)
+    lda #$F140
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $10
+    sta $1C
+    ; BAIL to interp @ $01F144: muls.w d7, d7   (opcode muls.w)
+    lda #$F144
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+    lda $18
+    clc
+    adc $1C
+    sta $18
+    lda $34
+    clc
+    adc #$2A4C
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0007
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $00
+    sec
+    sbc $18
+    sta $8A
+    lda $02
+    sbc $1A
+    bvs Lf1e7c0_221
+    bmi Lf1e7c0_222
+    bne Lf1e7c0_223
+    lda $8A
+    bne Lf1e7c0_223
+    bra Lf1e7c0_222
+Lf1e7c0_221:
+    bpl Lf1e7c0_222
+    bra Lf1e7c0_223
+Lf1e7c0_222:
+    jmp L1e7c0_1f164
+Lf1e7c0_223:
+    lda $34
+    clc
+    adc #$2A58
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda #$0001
+    pha
+    lda $20
+    clc
+    adc #$0007
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $0C
+    sta $9A
+    lda $0E
+    sta $9C
+    lda $9A
+    sta $04
+    lda $9C
+    sta $06
+    lda $10
+    sta $9A
+    lda $12
+    sta $9C
+    lda $9A
+    sta $08
+    lda $9C
+    sta $0A
+L1e7c0_1f164:
+    jmp L1e7c0_1f170
+L1e7c0_1f166:
+    lda $04
+    sec
+    sbc #$00C0
+    sta $04
+    lda $08
+    sec
+    sbc #$0078
+    sta $08
+    jmp L1e7c0_1f178
+L1e7c0_1f170:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    and #$0008
+    bne Lf1e7c0_224
+    jmp L1e7c0_1f180
+Lf1e7c0_224:
+L1e7c0_1f178:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    ora #$0002
+    sta $80
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    jmp L1e7c0_1f18a
+L1e7c0_1f180:
+    lda $1C
+    sec
+    sbc #$0005
+    beq Lf1e7c0_225
+    jmp L1e7c0_1f18a
+Lf1e7c0_225:
+    lda $08
+    sec
+    sbc #$0010
+    sta $08
+L1e7c0_1f18a:
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$003E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    pha
+    lda $20
+    clc
+    adc #$0040
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L1e7c0_1f192:
+    lda $14
+    dec a
+    sta $14
+    cmp #$FFFF
+    beq Lf1e7c0_226
+    jmp L1e7c0_1e7cc
+Lf1e7c0_226:
+    lda $34
+    clc
+    adc #$351C
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $1C
+    beq Lf1e7c0_227
+    bmi Lf1e7c0_227
+    bra Lf1e7c0_228
+Lf1e7c0_227:
+    jmp L1e7c0_1f1ac
+Lf1e7c0_228:
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+    lda $1C
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$351E
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C9A
+    tax
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    ; GUARDED DIRECT-LINK jsr (a4): An==$000D96 -> entry_d96t native (pushed-sentinel return), resume br1e7c0_11
+    lda $30
+    cmp #$0D96
+    bne Lf1e7c0_229
+    lda $32
+    cmp #$0000
+    bne Lf1e7c0_229
+    lda #br1e7c0_11
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    jmp entry_d96t
+Lf1e7c0_229:
+    ; INDIRECT-BRIDGE jsr (a4) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume br1e7c0_11
+    lda #br1e7c0_11
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda $30
+    sta $40
+    lda $32
+    sta $42
+    jml.l ojmp_hook
+br1e7c0_11:
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+L1e7c0_1f1ac:
+    lda $34
+    clc
+    adc #$1C92
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3510
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3512
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8E
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$3514
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$3516
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$351C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$E780
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+
+; esc_udiv — bank-$98 LOCAL copy of the escbank2 unsigned 32/16 divider (transpiled DIVU.w emits a
+; same-bank `jsr esc_udiv`; jsr cannot cross banks). in: $50/$52 = dividend lo/hi (shifts up as the
+; quotient forms in $50), $54 = divisor; out: $50=quotient, $94=remainder. Verbatim from escbank2.
+esc_udiv:
+    rep #$30
+    stz $94
+    ldy #$0020
+esud_l:
+    asl $50
+    rol $52
+    rol $94
+    bcs esud_sub
+    lda $94
+    cmp $54
+    bcc esud_no
+esud_sub:
+    lda $94
+    sec
+    sbc $54
+    sta $94
+    inc $50
+esud_no:
+    dey
+    bne esud_l
+    rts
+
+; --- entry_d96t: SAME-BANK --table-convention variant of the $000D96 renderer for the F1 guarded
+; direct-link from entry_1e7c0 (jsr (a4)): the $92 entry_d96 is an OLD-convention body (extra
+; prologue pushes + popped-PC jml inext exit) that CANNOT take a bridge-to-escape sentinel.
+; Regen: transpile.py 000D96 --bank2 --table | sed FD->FB + entry_d96->entry_d96t.
+; --- transpiled from $000D96 (60 instrs) by tools/transpile.py [bank1] ---
+entry_d96t:
+    rep #$30
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsl.l push32_l
+    lda $24
+    sta $54
+    lda $26
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $18
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $14
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $10
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $0C
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $08
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $00
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $34
+    clc
+    adc #$1CF6
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $34
+    clc
+    adc #$20F2
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda $34
+    clc
+    adc #$24EE
+    sta $28
+    lda $36
+    adc #$0000
+    sta $2A
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $30
+    clc
+    adc $9A
+    sta $30
+    lda $32
+    adc $9C
+    sta $32
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $2C
+    clc
+    adc $9A
+    sta $2C
+    lda $2E
+    adc $9C
+    sta $2E
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $28
+    clc
+    adc $9A
+    sta $28
+    lda $2A
+    adc $9C
+    sta $2A
+    lda $38
+    clc
+    adc #$0010
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $20
+    clc
+    adc #$0004
+    sta $24
+    lda $22
+    adc #$0000
+    sta $26
+    lda $38
+    clc
+    adc #$0014
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda #$00EA
+    sta $04
+    lda $38
+    clc
+    adc #$000C
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+Ld96_dd0:
+    lda #$00FA
+    sta $14
+    lda $04
+    sec
+    sbc $14
+    bvs Lfd96_1
+    bpl Lfd96_2
+    bra Lfd96_3
+Lfd96_1:
+    bmi Lfd96_2
+    bra Lfd96_3
+Lfd96_2:
+    jmp Ld96_de0
+Lfd96_3:
+    lda $04
+    sec
+    sbc #$FFFA
+    beq Lfd96_5
+    bvs Lfd96_4
+    bmi Lfd96_5
+    bra Lfd96_6
+Lfd96_4:
+    bpl Lfd96_5
+    bra Lfd96_6
+Lfd96_5:
+    jmp Ld96_de0
+Lfd96_6:
+    lda $04
+    sta $14
+Ld96_de0:
+    lda $14
+    sta $18
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $08
+    lda $38
+    clc
+    adc #$000E
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $0C
+    clc
+    adc #$0000
+    sta $0C
+    lda $08
+    sta $10
+    lda $10
+    asl a
+    asl a
+    asl a
+    asl a
+    sta $10
+    lda $0C
+    clc
+    adc $10
+    sta $0C
+Ld96_df4:
+    lda $18
+    sta $14
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $24
+    clc
+    adc #$0002
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    pla
+    sta $10
+    lda $10
+    bne Lfd96_7
+    jmp Ld96_e24
+Lfd96_7:
+    lda $0C
+    sec
+    sbc #$FFF0
+    beq Lfd96_9
+    bvs Lfd96_8
+    bmi Lfd96_9
+    bra Lfd96_10
+Lfd96_8:
+    bpl Lfd96_9
+    bra Lfd96_10
+Lfd96_9:
+    jmp Ld96_e06
+Lfd96_10:
+    lda $0C
+    sec
+    sbc #$0180
+    bvs Lfd96_11
+    bmi Lfd96_12
+    bra Lfd96_13
+Lfd96_11:
+    bpl Lfd96_12
+    bra Lfd96_13
+Lfd96_12:
+    jmp Ld96_e0a
+Lfd96_13:
+Ld96_e06:
+    lda #$00FA
+    sta $14
+Ld96_e0a:
+    lda $1C
+    bpl Lfd96_14
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Ld96_e42
+Lfd96_14:
+    lda $10
+    clc
+    adc #$A000
+    sta $10
+    lda $10
+    pha
+    lda $28
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $28
+    clc
+    adc #$0002
+    sta $28
+    lda $2A
+    adc #$0000
+    sta $2A
+    lda $14
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $0C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    and #$01FF
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$000A
+    tax
+    lda $400000,x
+    xba
+    sta $10
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    ora $10
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $1C
+    sec
+    sbc #$0001
+    sta $1C
+Ld96_e24:
+    lda $0C
+    sec
+    sbc #$0010
+    sta $0C
+    lda $08
+    dec a
+    sta $08
+    cmp #$FFFF
+    beq Lfd96_15
+    jmp Ld96_df4
+Lfd96_15:
+    lda $04
+    sec
+    sbc #$0010
+    sta $04
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lfd96_16
+    jmp Ld96_dd0
+Lfd96_16:
+    lda $1C
+    bpl Lfd96_17
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Ld96_e42
+Lfd96_17:
+    lda #$00FA
+    sta $00
+Ld96_e3c:
+    lda $00
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lfd96_18
+    jmp Ld96_e3c
+Lfd96_18:
+    lda $00
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $00
+    bne Lfd96_19
+    inc $60
+Lfd96_19:
+Ld96_e42:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0C
+    lda $0C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0E
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $10
+    lda $10
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $12
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $14
+    lda $14
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $16
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $18
+    lda $18
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
