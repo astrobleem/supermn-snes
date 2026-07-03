@@ -102,6 +102,41 @@ lh_sched). Ordering inside Phase 2.5 updates accordingly after Phase 1.
   tick_timeline totals are partial; big-gap ATTRIBUTION is still valid.
 - exec-hook addresses must be instruction STARTS (mid-instruction addrs never match).
 
+## CP1 checkpoint (2026-07-03) — end-of-Phase-1 re-profile + re-rank
+
+Tick totals (hle_span tick, same instrument, reproduces the Phase-1.4 numbers):
+
+| state | Phase-0 | CP1 | interp instrs | note |
+|---|---|---|---|---|
+| trip2500 (avg) | 3,021,161 = 16.9× | **2,439,033 = 13.6×** | 1069 → 680 | −582K, Phase 1.1+1.4 |
+| ce4trip64 (combat) | 2,987,802 = 16.7× | **2,499,110 = 14.0×** | 1043 → 716 | −489K |
+| trip1000 (light) | 1,507,984 = 8.4× | **1,506,299 = 8.4×** | 263 → 263 | **UNMOVED** |
+| span_quiet (idle) | 1,327,882 = 7.4× | **1,324,536 = 7.4×** | 116 → 116 | unmoved |
+
+**Load-bearing CP1 finding: Phase 1's wins were 100% gameplay-class.** The light tick's 263 interp
+instrs contain ZERO object-proc/trap#5/task-loop PCs. Light-tick interp (~534K of 1.51M) =
+$00CBxx–CExx (55) + $00C1xx–C9xx (47) + scheduler $04–07xx (31) + $008xx (6) + tail 124 — the tail
+is dominated by the **$0046xx–$4Cxx family ≈ 43 instrs = the deferred-hard `$4A9E` callee** (called
+from the $00C844 dbra loop) + $00D2–D6xx ≈ 24.
+
+trip2500 remaining 680: **object-proc $01C0xx–$1F1xx = 279 (41%)** (spine $01C980 ×42, $01E780 ×39,
+$01CD00 ×32, $01E7C0 ×22, $01F180 ×18) / trap#5 residue $023–24xx = 105 (coroutine SHELLS: yield
+loops, jsr.l dispatch tax ×1 each, a4-advance scan loops — segment-transpilable between yields) /
+$00CBxx–CExx = 62 (incl. dynamic `jsr (a0)` via $1c9a(a5)-table gateways) / sched 38 / $011–12xx 25
+/ $00C1–C9xx 12 / tail ~153 (again $004Bxx–4Cxx ≈ 24+).
+
+**Re-rank (score = avg+light saving per session; both classes bind the ≤358K insurance exit):**
+1. **$00CBxx + $00C1–C9xx + $4A9E family** — ~130K avg + ~294K light, ~2 sessions ≈ **212K/s**;
+   the ONLY interp cluster that moves the light tick; hardest class (dyn jsr(a0) + link-frame $4A9E).
+2. **trap#5 shell segments** — ~185K avg, 0 light, ~1 session (known CORO_PCS machinery) ≈ **185K/s**.
+3. **object-proc $01Cxxx** — ~491K avg, 0 light, ~3 sessions (spec→v1→widen) ≈ **164K/s**; biggest
+   single prize + biggest unknown.
+
+Decision: proceed per plan with **Phase 2.1 A1 (object-proc spec-only, timeboxed)** — largest single
+cluster, unknowns gate the campaign tail; queue trap#5-residue (2.3) + CBxx/$4A9E (2.2) immediately
+after — both are now well-characterized. CP1's $AC free-run soak: run alongside A1; the freerun
+chunk-sensitivity item stays open (injected spin-free ticks remain the steering currency).
+
 ## Phase-1 progress ledger
 
 | item | status | win | commit |
