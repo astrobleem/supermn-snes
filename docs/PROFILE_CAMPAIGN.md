@@ -113,6 +113,19 @@ lh_sched). Ordering inside Phase 2.5 updates accordingly after Phase 1.
 | whole $011750 task-loop iteration | 3 of 12 callees now native | 453,950→380,933 = **~73K/tick** | 308ddb9 |
 | $011752 contiguous tree | UNBLOCKED (stray-Bcc closed); next: remaining callees ($12a92/$12af6/$117b4) then the tree | — | — |
 
+**caf6 UNPARKED — root cause was a GENERAL transpiler bug, not cb9e (`f877b4f`):** `lea (d16,An)`
+with a NEGATIVE disp emitted `adc #$0000` for the hi word instead of the `$FFFF` sign extension →
+the low-word carry pushed a1 into bank $F1 → rdw_ea routed to IO → a1=0 (found via the exit_dump
+INPUT-state differential at cb9e entry: all regs equal except a1). The inertness audit caught the
+same latent bug in the deployed entry_12c1a + entry_12e56 → all three regenerated. **The real
+convention finding:** leaf-convention natives (entry_cb9e class: jmp-inext exit) are UNREACHABLE
+from escape-body bridges — bridging demoted cb9e to interpreted and cost +89K/tick. The pattern
+that works: a SAME-convention body in the escape bank direct-linked via `--escapes` (entry_cb9e in
+$97 @ $E800, --video), while the old leaf keeps serving the interp chain. **Task loop final:
+453,950 → 132,506 cyc = 3.43×, ~321K/tick, interp instrs 245 → 36.** This also DELIVERS most of
+the contiguous-tree value (the caf6+cb9e chain is a 2-level contiguous native subtree); the
+residual blob share is now ~36 instrs ≈ 65K — still below the drop-rule bar as a standalone item.
+
 **Phase-1.1 COMPLETE through the callee set (`90dc82e`..`3a1aa3a`):** the $011750 task loop now runs
 9 of its 12 callees native (12e56+12c1a+129c6+12a92+12af6+117b4 via bhp arms; cc44+cc80 via NEW
 jah2_ext_bsr→escbank3 cross-bank arms; 12e56 direct-links 12af6). **Loop iteration 453,950 →
