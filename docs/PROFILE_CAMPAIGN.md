@@ -102,6 +102,24 @@ lh_sched). Ordering inside Phase 2.5 updates accordingly after Phase 1.
   tick_timeline totals are partial; big-gap ATTRIBUTION is still valid.
 - exec-hook addresses must be instruction STARTS (mid-instruction addrs never match).
 
+## Phase-1 progress ledger
+
+| item | status | win | commit |
+|---|---|---|---|
+| escbank3 in gen_xlat_table BANK_OF_SYM | DONE | infra | e1f49ff |
+| entry_12e56 | **REVERTED** (stray-Bcc gap: 4 skipped instrs, latent-wrong deep path) | — | cbbd0e1 |
+| entry_129c6 | **SHIPPED** (dyn-bset transpiler fix; bit-exact both triples) | 3.2× span, ~43K/tick | cbbd0e1 |
+| entry_12c1a | **REVERTED** (stray-Bcc gap) | — | cbbd0e1 |
+| $011752 contiguous tree | BLOCKED on the stray-Bcc transpiler gap | — | — |
+
+**NEXT TRANSPILER ITEM (gates most of the remaining $011/$012 chain): the flags-across-gap model** —
+`bgt/blt` whose flag producer is separated from the branch by flag-neutral instructions ("stray
+conditional"); 4 of 6 skip markers in this cluster. Also: indexed EA `(a0,d2.w)` loads (1 marker).
+transpile.py now HARD-FAILS on UNIMPLEMENTED (exit 2; --allow-unimpl to inspect) — the 12e56 lesson:
+a body with skipped instructions can validate GREEN on its shallow path and corrupt on deep paths.
+More instrument notes: never $0710-trap an escape's RETURN address (that fetch bypasses dbg_fetch —
+trap the NEXT instruction); lockstep_trap POKEOP=<hex16> disables one bhp arm for A/B bisection.
+
 ## CP0 projection (per the decision rule) — and the verdict
 
 Model: coverage converts ~85% of interp instrs at ~30× (spike-measured); Phase-3 hand-rewrite =
