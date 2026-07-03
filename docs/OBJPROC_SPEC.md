@@ -180,6 +180,20 @@ the 8-list) exercise no new code (loop is generic) but DO change per-tick cost/$
 must be FIRST in side A's scan (cheap: 16 byte-tests are part of the body anyway; bail on first
 non-zero).
 
+## A2 DEPLOYED (2026-07-03, commits 296cb90 + 2a6b97f) — corrections from the build
+
+- Both bodies shipped: entry_1d5f0 ($97:EC00) + entry_1e7c0 ($98:AE00). trip2500 13.6× → **11.9×**.
+- **F1 correction (the one design error in §7):** the jsr(a4) direct-link must PUSH the
+  $00Fx:cont sentinel as the jsr's 4-byte return and jump to a SAME-BANK **--table-convention
+  variant (entry_d96t)** — not set-$40/$42 + the $92 entry_d96 (old convention: extra prologue
+  pushes + popped-PC `jml inext` exit → fetches the sentinel as a 68K PC → hang).
+- Physics tables are 13 entries each (offsets 0..24); table-1 entries ≥26 are garbage/next-code
+  (odd targets). Anim-op table enumerates ops 0..−8, ALL LOCAL targets ($01EE6E..$01EF8C) — the
+  §3 "$02xxxx spawn ops" reading was the garbage POSITIVE direction; no $02xxxx bail targets exist.
+- Visit-1's native extent = $01E7C0..$01F1BC (the backward `bra $1e780` ends the body): the latch
+  pass + ping-pong + side-A scan (~125 instr/tick) stay interpreted between the visits = the A3
+  widen target. 8 cold bail edges (2 divs, 4 muls, 2 dyn-bclr) + bsr $1f1fe bridges.
+
 ## Regen commands (mechanical)
 
 ```

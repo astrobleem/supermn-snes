@@ -155,6 +155,43 @@ CP1 $AC soak: 1800 chunked frames free-run STABLE (no freeze, ticks advance) —
 = the chunk-sensitivity anomaly again (per-frame-pause reads ~16.7×); stability box CHECKED,
 rate-mode question still open.
 
+## Phase 2.1 A2 — objproc coroutine bodies SHIPPED (2026-07-03): trip2500 13.6× → **11.9×**
+
+Both visits native, dispatched via **bank-$01 xlat pages** (512-page layout, index=(bank<<8)|(PC>>8);
+zero bank-$00 changes — ors_rte_x→ojmp_hook→xlat_dispatch was already the route):
+
+| body | commit | win (cyc/tick) |
+|---|---|---|
+| entry_1d5f0 physics @ $97:EC00 (pilot) | 296cb90 | ce4 −93K, t25 −16.5K |
+| entry_1e7c0 render @ $98:AE00 (+entry_d96t, esc_udiv copy) | 2a6b97f | t25 −286K, ce4 −287K |
+| **total** | | **t25 2.439M→2.136M (11.9×, 680→518 instr); ce4 2.499M→2.119M (11.8×)** |
+
+Transpiler features (071b69b, all inert where unused; ce4t/29b6t regen byte-identical): **F2**
+`--jt=BASE:MIN:MAX` pc-rel jump tables (fused move.w+jmp → switch on the index + interp-bail
+default — un-enumerated/garbage indices stay faithful); **F3** jsr abs.w; **F4** move.l→Bcc (tst32);
+**F5** `--bail` = the Phase-1.2 generic bail-to-interp (CCR/X-reader ops excluded; 8 cold edges in
+the render body: 2 divs, 4 muls, 2 dyn-bclr). **F1** guarded direct-link for jsr (An) — the hot
+$01F096 jsr(a4)→[$3514]=$0D96 stays native via a **pushed-$00FB:cont-sentinel return + same-bank
+--table variant (entry_d96t)**. F1 LESSON (cost one debug round): jsr(An) callees take the TABLE
+convention (return on stack); the set-$40/$42 bridge shape fits only STANDARD-convention re-simulating
+callees — the old $92 entry_d96 exits via popped-PC `jml inext`, which fetches a sentinel as a 68K PC.
+
+Gates (each body): FULLDIFF GREEN ×3 triples + **A/B diff-set-identical** (POKEROM-zeroed xlat entry
+arm) + ESC0 GREEN + smoke OK + light tick untouched (1.507M/263 — objproc is gameplay-class only).
+
+**A3 widen queue (residual objproc interp ≈ ~125 instr/tick):** the latch pass + jsr(a6) ping-pong +
+side-A 16-slot scan ($01E780..$01E7BE + $01C986..$01CD60, interpreted between the two native visits)
+— needs either a 2nd entry at $01E780+mid-entries or extending the visit-1 body across the backward
+`bra $1e780`; plus the bsr $1f1fe render-record builder (t50 anim path, bridges to interp).
+
+**NEW (audit find, follow-up): tools/audit_banks.py flags a PRE-EXISTING escbank overlap** — the
+$8000 block's bodies have grown to $F29F, PAST the pinned .org $F000/$F400 dispatcher blocks, which
+stomp $F000–$F57A of whatever body straddles there (the d386/d3b0 family — almost certainly the real
+root cause of their "co-dispatch divergence" xlat exclusion). Latent (excluded bodies never dispatch);
+fix = relocate those bodies (escbank has no free tail — move to escbank3/4) then re-test d386/d3b0
+through the table. Run `python3 tools/audit_banks.py` after every build until it's wired into
+build_interp.sh (blocked on this fix — the audit currently exits 1 on the pre-existing violation).
+
 ## Phase-1 progress ledger
 
 | item | status | win | commit |
