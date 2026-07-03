@@ -1,13 +1,41 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-02 (pt.15). **Read the ⭐ CURRENT TASK section immediately below, then act.** The
-strategic-direction decision the old §0 was waiting on HAS BEEN MADE by the user: run the HLE spike
-described below. Everything from `## 0. STRATEGIC REALITY` onward is now REFERENCE/CONTEXT (dispatch
-model, tooling, recipes, methodology, task ledger) — read it for depth, but the spike below is the job.
+Last updated: 2026-07-02 (pt.18). **The ⭐ HLE SPIKE below is DONE — GO verdict, shipped `0aac3c6`
+(see the ✅ pt.18 block inside that section for the results + corrections). The next move is the
+user's: pick the campaign shape the spike's numbers dictate (see the verdict).** Everything from
+`## 0. STRATEGIC REALITY` onward is REFERENCE/CONTEXT (dispatch model, tooling, recipes, methodology,
+task ledger).
 
 ---
 
 # ⭐ CURRENT TASK (start here): HLE SPIKE — does hand-written native beat the faithful ceiling?
+
+> ## ✅ pt.18 (2026-07-02): SPIKE EXECUTED — VERDICT: GO. SHIPPED `0aac3c6` (enabled in production).
+> **Answer to the hypothesis: YES, decisively — and the premise needed correcting.**
+> - **Built:** `hle_12b6c` (escbank2 `.org $E000` = `$94:E000`) — hand-written native tree
+>   (dispatcher + $12B84/$12C04 marshalling, faithful stack residue, CCR/X materialization, direct
+>   `jml.l entry_ce4` when a1==$0CE4, interp bails for the rare blink-counter sub-path). Dispatched
+>   by `bhp_bank_ext` (zero-shift 4B swap in `bsr_hookpush`, hosted in the dead entry_25110 space).
+> - **Bit-exact:** ESC=full FULLDIFF = the identical 4-byte baseline set; ESC=0 GREEN; smoke OK.
+> - **Measured** (spin-free same-run spans `$011778→$01177C`, `tools/hle_span.py` — NEW, because the
+>   step-5/6 method here was UNSOUND: the CYCLES=1 B1PC read is spin-polluted + cross-run absolutes
+>   don't compare): **interp 82,019 cyc → HLE 34,746 = 2.36×** end-to-end; marshalling body 1,572 vs
+>   ~49K interpreted ≈ **30×**. Variants: v1 jsr-handoff 37,845; sentinel-through-ce4t 41,457
+>   (REJECTED → exposed **hand-native entry_ce4 24.5K vs transpiled entry_ce4t 39.7K = 1.62×**).
+> - **CORRECTIONS (rewrite your priors):** the 11,300 baseline this section cites was a measurement
+>   artifact — the TRUE interp baseline is 82K, so the pt.15 "contiguous-compile LOST / loop_hook
+>   collapses loops to ~free" story is INVERTED (transpiled 26-37K actually BEAT interp; Option B is
+>   back on the table). And `$012B84` has NO loop — it is straight-line marshalling; the loops are in
+>   its `jsr(a1)` callee `$0CE4` (already native). End-to-end tree wins are CALLEE-BOUND.
+> - **Campaign sizing (GO):** dominant lever = make the remaining ~1040 interp instrs/tick native
+>   (~2K cyc each ≈ 2.1M of the 3.8M combat tick): transpile where possible, **HLE where transpile
+>   fails** (the state-cluster floor is exactly HLE's niche); secondary = hand-rewrite the hottest
+>   native bodies (1.6×). Effort: this 51-instr tree ≈ half a session; est. 2-4h per
+>   marshalling-class routine, 1-2 sessions per loop-heavy body.
+> - **Reusable-pattern check: CONFIRMED** — the hand body used the standard escape slot + gates +
+>   validation, zero new machinery (Gigandes-safe; the toolchain does not fork).
+> - Memory: `hle-spike-verdict` (+ the superseded-banner in `contiguous-compile-prototype`).
+
 
 **Read these memory files first (they are the substance; this section is the checklist):**
 `contiguous-compile-prototype.md` (the proven bank-$01 dispatch + the measurement gotchas + the

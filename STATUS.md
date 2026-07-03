@@ -2,6 +2,25 @@
 
 Last updated: July 2, 2026. Per-area detail lives in the linked docs.
 
+> ## ✅ HLE SPIKE — GO verdict, SHIPPED `0aac3c6` (2026-07-02)
+> Hand-wrote the `$012B6C→{$012B84,$012C04}` tree as native 65816 (`hle_12b6c`, escbank2 `$94:E000`;
+> dispatched by the new bank-aware `bhp_bank_ext` bsr catch, zero-shift). **Bit-exact** (ESC=full
+> FULLDIFF identical 4-byte set, ESC=0 GREEN, smoke OK) and ships ENABLED (rides `$071A`).
+> **Measured** (ce4trip64, production gates, spin-free `tools/hle_span.py`): interp **82,019 cyc** →
+> HLE **34,746 = 2.36×** end-to-end; the replaced marshalling alone 1,572 vs ~49K ≈ **30×**.
+> **Load-bearing corrections:** the prior 11,300 "interp baseline" was a spin-pollution artifact →
+> the pt.15 "contiguous-compile LOSES to interp / loop_hook collapses loops to ~free" conclusion is
+> **INVERTED** (the transpiled tree actually beat interp 2.2-3.2×; Option B is back on the table);
+> `$012B84` has NO loop (straight-line marshalling — the loops are in its `jsr(a1)` callee `$0CE4`);
+> hand-native beats the transpiled body **1.62×** on the same function (entry_ce4 24.5K vs ce4t 39.7K).
+> **Campaign shape (GO):** (1) make the remaining ~1040 interp instrs/tick native (~2K cyc each,
+> ~2.1M of the 3.8M combat tick) — transpile where possible, HLE where transpile fails (the
+> state-cluster floor); (2) hand-rewrite the hottest native bodies (1.6×). Effort: ~half a session
+> for this 51-instr 3-fn tree; est. 2-4h per marshalling-class routine, 1-2 sessions per loop-heavy
+> body. Pattern confirmed toolchain-clean (standard escape slot + validation → Gigandes-safe).
+> Details: memory `hle-spike-verdict`; measurement tool `tools/hle_span.py` (df_spin exec-hook,
+> same-run deltas only; HLE-off arm must poke BOTH bank-$00 ROM copies).
+
 > ## ✅ BANKED — Phase-2 escape/codegen sprint complete (2026-07-02, branch `boot-scheduler-progress`)
 > The escape-coverage + transpiler-correctness work of this sprint is committed, pushed, and validated
 > bit-exact. **Banking here** — the mechanical/scheduler/background/HUD levers are captured, the
