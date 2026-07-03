@@ -194,6 +194,56 @@ non-zero).
   pass + ping-pong + side-A scan (~125 instr/tick) stay interpreted between the visits = the A3
   widen target. 8 cold bail edges (2 divs, 4 muls, 2 dyn-bclr) + bsr $1f1fe bridges.
 
+## A3 WIDEN — the concrete plan (next session, ~half session + gates)
+
+**Target: the interpreted middle between the two native visits, ~125 instr/tick ≈ ~220K cyc on
+gameplay ticks.** Execution order per tick: native entry_1e7c0 runs $01E7C0..$01F1BC, then its
+tail-jump stub bails at the backward `bra $1e780` → the interp runs: latch pass $01E780–$01E7A0
+(~35 instr incl. the 8-slot loop) → ping-pong setup $01E7A4–$01E7AE (5) → side A $01C99E: a1
+restore + 16-slot scan (~70: 16×(move.b/beq/adda/dbra)) + $34c2 test + top reset $01C986–$01C99C
+(7) → side B tail $01E7B0–$01E7BC (4) → yield $01E7BE (native resumes next switch-in).
+
+**Recommended shape — ONE hand-written continuation body (the hle_12b6c pattern), NOT more
+transpile plumbing:** the ping-pong is structural (§1), so a native `objproc_mid` in escbank4 can
+run the whole middle straight-line with guards, skipping the actual jsr(a6) round-trip while
+WRITING the same $34c6/$3506/$34ca side effects (they're part of the memory contract):
+1. Retarget entry_1e7c0's `Ltj1e7c0_1e780` stub (currently: set PC=$01E780, jml inext) →
+   `jmp objproc_mid` (same bank $98, zero-shift: the stub shrinks, pad with nops or just re-emit).
+2. objproc_mid (faithful, a5=$F00000 base): latch pass over the 8-ptr list at [a6−$20] (a6 from
+   the reg file $38 — the body runs mid-task, regs live); guards: [$3506]==$01C99E and
+   [[$34c6-to-be]−4] structural check unnecessary if we WRITE them ourselves exactly as the real
+   dance does (push a6 → $34c6:=a7 → push $01C99E into $3506 via the private-stack write → etc.);
+   16-slot scan over $31c2(a5) — **first non-zero status byte → BAIL** (set PC=$01C9B2-path PC,
+   jml inext — the cold per-object handlers must interpret); $34c2(a5)≠0 → BAIL likewise;
+   restore a7/sr/a6 per side-B tail; exit: set PC=$01E7BE, jml inext (the yield).
+3. Gates: the standard battery + one NEW check — the $34c6/$3506/$350a bytes in the FULLDIFF
+   (they're written by the real dance; the hand body must leave identical values).
+Fallback if the hand body drags: transpile-only sub-step — a `--coroutine` entry_1e780 body
+(decode $01E780.. ends at the jsr(a6) → INDIRECT-BRIDGE interprets side A) captures the ~35-instr
+latch pass only; side A stays interpreted. Less win (~60K), zero new ideas.
+
+**Also queued in A3:** `bsr $1f1fe` (render-record builder, t50 anim path): STATIC bridge-to-escape
+works with a fresh STANDARD-convention entry_1f1fe (escbank4) + `--escapes=1F1FE` on the visit-1
+regen (the static path sets $40/$42 — correct for standard-convention callees; the F1
+pushed-sentinel form is only for jsr(An)→--table). ~23 instrs, only fires on anim-op −5 ticks.
+
+**Then (after A3, per the CP1 re-rank):** 2.3 trap#5 shells (~105 instr avg-gameplay, CORO_PCS
+machinery now proven for bank-$02 too — check ors_rte's existing b2 arm + xlat bank support only
+covers banks 0/1: shells at $023-24xxx need EITHER the cmp-chain arm (bank-$00 bytes, tight) OR
+extending the page table to bank $02 — one more bit in the index, table grows 512→768 pages) and
+2.2 CBxx/$4A9E (~207K light+avg — THE light-tick lever; F1/F5 apply: the $00CD2E-class
+`jsr (a0)` via $1c9a(a5) gateways = guarded direct-link candidates once their callees have --table
+variants; $4A9E link-frame body = F5-bail-heavy transpile or hle_span-first spec).
+
+## Environment prerequisites (next session)
+
+- Triples + NAT state: `/tmp/supermn-scratch/` + `/tmp/b0_native.mss` — if wiped (reboot),
+  restore per `/home/chad/supermn-state/RESTORE.txt` (full backup taken 2026-07-03).
+- Sanity check after restore: `python3 tools/hle_span.py /tmp/supermn-scratch/trip2500 tick`
+  → expect ~2,136K cyc / 518 instr (the post-A2 baseline).
+- `python3 tools/audit_banks.py` after every build (expected: 3 banks OK + the KNOWN pre-existing
+  escbank $8000/$F000 overlap — see PROFILE_CAMPAIGN.md; don't ship escbank body moves without it).
+
 ## Regen commands (mechanical)
 
 ```

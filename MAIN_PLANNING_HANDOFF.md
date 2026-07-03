@@ -1,10 +1,18 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-02 (pt.18). **The ⭐ HLE SPIKE below is DONE — GO verdict, shipped `0aac3c6`
-(see the ✅ pt.18 block inside that section for the results + corrections). The next move is the
-user's: pick the campaign shape the spike's numbers dictate (see the verdict).** Everything from
-`## 0. STRATEGIC REALITY` onward is REFERENCE/CONTEXT (dispatch model, tooling, recipes, methodology,
-task ledger).
+Last updated: 2026-07-03 (pt.19). **CURRENT TASK: Phase-2.1 A3 (objproc widen) — start at
+`docs/OBJPROC_SPEC.md` §"A3 WIDEN" (a concrete, ready-to-execute plan) + the CP1/A2 sections of
+`docs/PROFILE_CAMPAIGN.md`.** State: CP1 done (`be8d3db`, light tick UNMOVED 8.4× — light interp
+is CBxx/$4A9E/sched, NOT the clusters fixed so far); A1 objproc spec done (`4787ff1`); **A2 SHIPPED
+(`296cb90`+`2a6b97f`): both objproc coroutine visits native via NEW bank-$01 xlat pages — trip2500
+13.6×→11.9× (2.136M cyc/tick, 518 interp instr), ce4 11.8×; transpiler F1–F5 landed (`071b69b`).**
+After A3: 2.3 trap#5 shells, then 2.2 CBxx/$4A9E (the ONLY light-tick lever). Memory:
+`objproc-a2-shipped` has the F1 pushed-sentinel lesson + the audit_banks.py findings (incl. the
+PRE-EXISTING escbank $F000 overlap = the d386/d3b0-divergence suspect). Triples/NAT backup:
+`/home/chad/supermn-state/RESTORE.txt` if /tmp was wiped.
+
+Everything below this banner is the pt.18-and-earlier record (HLE spike: DONE/GO, shipped
+`0aac3c6`) + REFERENCE/CONTEXT (dispatch model, tooling, recipes, methodology, task ledger).
 
 ---
 
