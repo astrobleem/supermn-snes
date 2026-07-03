@@ -11007,11 +11007,21 @@ L1e7c0_1f1ac:
     xba
     sta $400000,x
     xba
-    lda #$E780
-    sta $40
-    lda #$0001
-    sta $42
-    jml.l inext
+    ; A3 WIDEN: the backward `bra $1e780` no longer bails to the interp — it enters the
+    ; hand-written native middle (objproc_mid, end of this file). Padded with nops to the
+    ; original 14-byte stub (lda/sta/lda/sta/jml.l) so nothing after this point shifts.
+    jmp objproc_mid
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 ; esc_udiv — bank-$98 LOCAL copy of the escbank2 unsigned 32/16 divider (transpiled DIVU.w emits a
 ; same-bank `jsr esc_udiv`; jsr cannot cross banks). in: $50/$52 = dividend lo/hi (shifts up as the
@@ -11760,3 +11770,318 @@ Ld96_e42:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; ============================================================================
+; objproc_mid — Phase 2.1 A3 WIDEN (docs/OBJPROC_SPEC.md "A3 WIDEN"): HAND-WRITTEN
+; native continuation of the render visit's interpreted middle (~125 instr/tick):
+;   latch pass $01E780-$01E7A0 (8-slot ptr list at a6-$20: w($36)->$3c, w($2e)->$38,
+;   w($32)->$3a per live object; d7 = last long read = list[7]) ->
+;   ping-pong $01E7A4-$01E7AE (push [a7-4]:=a6.l; $34c6(a5):=a7-4; the jsr (a6)
+;   pushes [a7-8]:=$0001E7B0 and lands at [$3506]=$01C99E, GUARDED) ->
+;   side A $01C99E (a1:=[$34ca] movem restore; d3.w:=w($34c4); 16-slot status scan
+;   over $31c2(a5), $30 bytes/slot; then w($34c2) test) ->
+;   top reset $01C986-$01C99C (movem re-save of a1 + private-stack re-push of
+;   $01C99E into $3506 are VALUE-IDENTICAL -> skipped; ints-off transient) ->
+;   side B tail $01E7B0-$01E7BC (a7:=[$34c6] then (a7)+ pop restores a6/a7 to
+;   entry values -> reg file untouched; andi #$f4ff/ori #$400 SR -> mask:=4) ->
+;   YIELD: PC:=$01E7BE, jml inext (the trap #5 itself stays interpreted).
+; ENTERED only from entry_1e7c0's retargeted backward-bra stub: reg file live =
+; 68K state at $01E780, 16-bit M/X. CCR at the yield: Z=1 N=V=C=0 (from
+; move.w $34c2,d7 == 0), X untouched (no X-setter on the path).
+; GUARDS (all BEFORE any memory write; miss -> restart interp at $01E780,
+; idempotent): a6/a7 hi16==$00F0, a6 lo16>=$20, [$3506]==$0001C99E. The mid-latch
+; object-ptr guard (hi16==$00F0) and the stack-underflow bcc bail AFTER earlier
+; latch copies are still restart-safe: the copies are pure obj->obj moves the
+; interp re-executes identically.
+; BAILS (cold, faithful mid-flow state materialized -- see spec derivation):
+;   slot status byte != 0 -> PC=$01C9B0 (a0=slot, d4.b=status, d5=15-i, d3/a1 set,
+;     a6=$0001C99E, a7=A7-8, CCR from the move.b; the beq/bgt + per-slot handlers
+;     interpret). NOTE: no current triple lights the $31c2 table (all-zero on every
+;     capture) — this edge is faithful-by-construction, unexercised by the gates.
+;   w($34c2) != 0 -> PC=$01CD44 (d7.w=the word, CCR from the move.w; the $1c9a
+;     jsr (a4) cold path interprets).
+objproc_mid:
+    rep #$30
+    ; ---- guards (no writes) ----
+    lda $3A              ; a6 hi16
+    cmp #$00F0
+    bne omid_b780a
+    lda $3E              ; a7 hi16
+    cmp #$00F0
+    bne omid_b780a
+    lda $38              ; a6 lo16 (list at a6-$20 must not underflow the bank)
+    cmp #$0020
+    bcc omid_b780a
+    lda $34
+    clc
+    adc #$3506
+    tax
+    lda $400000,x        ; [$3506] hi16 (BE word via xba)
+    xba
+    cmp #$0001
+    bne omid_b780a
+    inx
+    inx
+    lda $400000,x        ; [$3506] lo16
+    xba
+    cmp #$C99E
+    bne omid_b780a
+    bra omid_latchset
+omid_b780a:              ; guard miss: zero writes done -> interp restarts at $01E780
+    lda #$E780
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+omid_latchset:
+    ; ---- latch pass ----
+    lda $38
+    sec
+    sbc #$0020
+    sta $80              ; running list ptr lo16 (a1 walk)
+    lda #$0008
+    sta $86              ; slot countdown
+omid_latch:
+    ldx $80
+    lda $400000,x
+    xba
+    sta $84              ; obj ptr hi16
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $82              ; obj ptr lo16
+    ora $84
+    beq omid_lnext       ; null slot: no copies (move.l still loaded d7 - covered below)
+    lda $84
+    cmp #$00F0
+    bne omid_b780b       ; non-work-RAM object ptr: restart faithful (copies so far idempotent)
+    lda $82
+    clc
+    adc #$0036
+    tax
+    lda $400000,x        ; w($36(obj))
+    sta $88
+    lda $82
+    clc
+    adc #$003C
+    tax
+    lda $88
+    sta $400000,x        ; -> $3c(obj)   (LE word read+write = byte-exact copy)
+    lda $82
+    clc
+    adc #$002E
+    tax
+    lda $400000,x        ; w($2e(obj))
+    sta $88
+    lda $82
+    clc
+    adc #$0038
+    tax
+    lda $88
+    sta $400000,x        ; -> $38(obj)
+    lda $82
+    clc
+    adc #$0032
+    tax
+    lda $400000,x        ; w($32(obj))
+    sta $88
+    lda $82
+    clc
+    adc #$003A
+    tax
+    lda $88
+    sta $400000,x        ; -> $3a(obj)
+omid_lnext:
+    lda $80
+    clc
+    adc #$0004
+    sta $80
+    dec $86
+    bne omid_latch
+    bra omid_d7
+omid_b780b:              ; mid-latch/stack guard: restart at $01E780 (all writes so far idempotent)
+    lda #$E780
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+omid_d7:
+    ; d7 := list[7] (the loop's last move.l (a1)+,d7 -- null entries included)
+    lda $38
+    sec
+    sbc #$0004
+    tax
+    lda $400000,x
+    xba
+    sta $1E              ; d7 hi16
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $1C              ; d7 lo16
+    ; ---- ping-pong pushes: [a7-8]:=$0001E7B0 (jsr ret), [a7-4]:=a6.l, $34c6:=a7-4 ----
+    lda $3C
+    sec
+    sbc #$0008
+    bcc omid_b780b       ; stack-lo underflow (never in practice)
+    sta $88              ; a7-8 lo16 (the in-scan a7 value, used by the bails)
+    tax
+    lda #$0100
+    sta $400000,x        ; [a7-8] BE bytes 00 01
+    inx
+    inx
+    lda #$B0E7
+    sta $400000,x        ;          BE bytes E7 B0  (= $0001E7B0)
+    inx
+    inx
+    lda $3A
+    xba
+    sta $400000,x        ; [a7-4] = a6 hi16 (BE)
+    inx
+    inx
+    lda $38
+    xba
+    sta $400000,x        ;          a6 lo16
+    lda $34
+    clc
+    adc #$34C6
+    tax
+    lda $3E
+    xba
+    sta $400000,x        ; $34c6 := (a7-4) hi16 (BE)
+    inx
+    inx
+    lda $88
+    clc
+    adc #$0004
+    xba
+    sta $400000,x        ;          (a7-4) lo16
+    ; ---- side A entry: a1 := [$34ca] (movem restore), d3.w := w($34c4) ----
+    lda $34
+    clc
+    adc #$34CA
+    tax
+    lda $400000,x
+    xba
+    sta $26              ; a1 hi16
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24              ; a1 lo16
+    lda $34
+    clc
+    adc #$34C4
+    tax
+    lda $400000,x
+    xba
+    sta $0C              ; d3.w (hi word untouched, as move.w)
+    ; ---- 16-slot status scan over $31c2(a5), stride $30 ----
+    lda $34
+    clc
+    adc #$31C2
+    sta $80              ; scan ptr lo16 (a0 walk)
+    lda #$0010
+    sta $86
+omid_scan:
+    ldx $80
+    sep #$20
+    lda $400000,x        ; slot status byte
+    bne omid_slotbail
+    rep #$20
+    lda $80
+    clc
+    adc #$0030
+    sta $80
+    dec $86
+    bne omid_scan
+    bra omid_c2test
+omid_slotbail:           ; A(8) = status byte != 0 -> interp takes the slot at $01C9B0
+    sta $10              ; d4.b := status (low byte only, as move.b)
+    and #$80
+    sta $8A              ; N source bit (byte scratch)
+    rep #$20
+    lda $8A
+    and #$00FF
+    sta $70              ; N = bit7(status)  (truthy flag words)
+    stz $60              ; Z = 0
+    stz $72              ; V = 0
+    stz $6E              ; C = 0   (X untouched; CCR = the move.b's)
+    lda $86
+    dec a
+    sta $14              ; d5.w := 15-i (dbra countdown at slot i)
+    stz $16              ; (moveq #$f cleared d5 hi)
+    lda $80
+    sta $20              ; a0 := this slot
+    lda $36
+    sta $22
+    lda #$C99E
+    sta $38              ; a6 := $0001C99E (the $01E7AA movea loaded it)
+    lda #$0001
+    sta $3A
+    lda $88
+    sta $3C              ; a7 := A7-8 (inside the ping-pong frame)
+    lda #$C9B0
+    sta $40              ; resume at the beq (flags above make beq/bgt faithful)
+    lda #$0001
+    sta $42
+    jml.l inext
+omid_c2test:
+    ; scan ptr walked 16*$30 -> $80 = a5lo+$34c2: read the side-A work counter
+    ldx $80
+    lda $400000,x
+    xba
+    sta $1C              ; d7.w := w($34c2)  (d7 hi16 stays = list[7] hi)
+    and #$FFFF           ; 16-bit N/Z (xba only set 8-bit flags)
+    bne omid_c2bail
+    ; ---- YIELD: rest of the dance is value-identical -> regs/flags only ----
+    sep #$20
+    stz $10              ; d4.b := 0 (last status byte read)
+    rep #$20
+    lda #$FFFF
+    sta $14              ; d5 := $0000FFFF (dbra fell through)
+    stz $16
+    lda $80
+    sta $20              ; a0 := a5+$34c2 (post-scan)
+    lda $36
+    sta $22
+    lda #$0001
+    sta $60              ; Z=1 (move.w $34c2,d7 == 0)
+    stz $70              ; N=0
+    stz $72              ; V=0
+    stz $6E              ; C=0 (X untouched)
+    lda #$0004
+    sta $7C              ; SR mask := 4 (andi #$f4ff + ori #$400 net)
+    lda #$E7BE
+    sta $40              ; the yield trap #5 interprets
+    lda #$0001
+    sta $42
+    jml.l inext
+omid_c2bail:             ; w($34c2) != 0 (A = the word, already in d7.w) -> interp at $01CD44
+    and #$8000
+    sta $70              ; N = bit15
+    stz $60              ; Z = 0
+    stz $72              ; V = 0
+    stz $6E              ; C = 0
+    sep #$20
+    stz $10              ; d4.b := 0 (16 zero slots scanned)
+    rep #$20
+    lda #$FFFF
+    sta $14              ; d5 := $0000FFFF
+    stz $16
+    lda $80
+    sta $20              ; a0 := a5+$34c2
+    lda $36
+    sta $22
+    lda #$C99E
+    sta $38              ; a6 := $0001C99E
+    lda #$0001
+    sta $3A
+    lda $88
+    sta $3C              ; a7 := A7-8
+    lda #$CD44
+    sta $40              ; resume at the beq (cold $1c9a jsr path interprets)
+    lda #$0001
+    sta $42
+    jml.l inext

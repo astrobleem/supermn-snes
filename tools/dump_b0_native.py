@@ -21,7 +21,7 @@ from mesen_mcp import McpSession
 NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'
 cpu=json.load(open('/tmp/b0_cpu.json')); iram=open('/tmp/b0_iram.bin','rb').read(); bwram=open('/tmp/b0_bwram.bin','rb').read()
 NAT=sys.argv[1] if len(sys.argv)>1 else '/tmp/b0_native.mss'
-with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=7487,boot_wait=6.0,socket_timeout=300.0) as m:
+with McpSession(rom=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','build','interp.sfc'),mesen=NEXEN,port=7487,boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a,mt='Sa1Memory'): b=m.read_memory(mt,a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)
     def wh(a,hx,mt='Sa1Memory'): m.write_memory(mt,a,hx)

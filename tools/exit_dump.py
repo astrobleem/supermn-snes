@@ -19,14 +19,21 @@ D=[be32(regs,i*4) for i in range(8)]; A=[be32(regs,(8+i)*4) for i in range(7)]
 SP=be32(regs,15*4); USP=be32(regs,16*4); SR=be32(regs,17*4)&0xFFFF
 Z=(SR>>2)&1;C=SR&1;N=(SR>>3)&1;V=(SR>>1)&1;X=(SR>>4)&1
 def le32(v): return '%02x%02x%02x%02x'%(v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF)
-NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT='/tmp/b0_native.mss'
+NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT=os.environ.get('NAT','/tmp/b0_native.mss')
 WN=len(wramA); RN=['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6','a7']
 PORT=int(os.environ.get('PORT','7526'))
 print("triple %s AC=%04X ESC=%d TRAP=$%04X OCC=%d OUT=%s"%(TD,AC,ESC,TRAP,OCC,OUT),flush=True)
-with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=PORT,boot_wait=6.0,socket_timeout=300.0) as m:
+with McpSession(rom=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','build','interp.sfc'),mesen=NEXEN,port=PORT,boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a): b=m.read_memory('Sa1Memory',a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)
     def wh(a,hx,mt='Sa1Memory'): m.write_memory(mt,a,hx)
+    if os.environ.get('POKEROM'):
+        # generic ROM patch(es): "fileoff:hexbytes[,...]" — e.g. zero an xlat sub-table entry to
+        # disable one table-dispatched escape for an A/B arm (same as lockstep_trap.py POKEROM).
+        for _spec in os.environ['POKEROM'].split(','):
+            _off,_hx=_spec.split(':')
+            m.write_memory('snesPrgRom',int(_off,16),_hx)
+            print('>>> POKEROM: file $%06X <- %s'%(int(_off,16),_hx),flush=True)
     if os.environ.get('POKE92'):
         _op=int(os.environ['POKE92'],16)
         _b=bytes(m.read_memory('snesPrgRom',0x297000,0x1000)); _i=_b.find(bytes([0xC9,_op&0xFF,_op>>8]))

@@ -184,6 +184,36 @@ side-A 16-slot scan ($01E780..$01E7BE + $01C986..$01CD60, interpreted between th
 — needs either a 2nd entry at $01E780+mid-entries or extending the visit-1 body across the backward
 `bra $1e780`; plus the bsr $1f1fe render-record builder (t50 anim path, bridges to interp).
 
+## Phase 2.1 A3 — objproc middle native (objproc_mid, 2026-07-03): trip2500 11.9× → **11.1×**
+
+**objproc_mid** (escbank4 $98:EAD7, HAND-WRITTEN — the hle_12b6c pattern, not more transpile
+plumbing): entry_1e7c0's backward-`bra $1e780` exit stub retargeted `jmp objproc_mid` (nop-padded
+to the original 14 bytes = ZERO shift, byte-diff-verified), running the whole interpreted middle
+straight-line: latch pass (8-slot) → ping-pong pushes ([a7-4]=a6, $34c6:=a7-4, [a7-8]=$0001E7B0)
+→ side-A a1/d3 restore + 16-slot $31c2 status scan + w($34c2) test → yield (PC=$01E7BE, mask:=4,
+Z=1 CCR; the trap #5 itself stays interpreted). The structural jsr(a6) round-trip is SKIPPED —
+[$3506]==$0001C99E is GUARDED up front and the movem/private-stack re-pushes are value-identical.
+Guards (all pre-write, restart-at-$01E780 idempotent): a6/a7 hi==$00F0, a6lo≥$20, the $3506
+continuation. Bails: first non-zero status byte → $01C9B0 (a0/d4/d5/a6=$01C99E/a7-8 + move.b CCR
+materialized); w($34c2)≠0 → $01CD44. NOTE: no triple lights the $31c2 table — the slot-bail edge
+is faithful-by-construction, unexercised by the gates (same for $34c2≠0).
+
+**Win: t25 2.136M→1.983M (−151K, 11.1×, interp 518→403); ce4 2.119M→1.971M (−148K, 11.0×);
+light 1.508M/263 untouched.** Per-instr rate ~1.31K (scan/latch are cheap beq/dbra ops — below
+the 1.76K average; the plan's 220K estimate overshot for that reason).
+
+Gates: FULLDIFF GREEN ×3 (diff sets byte-identical to pre-A3 baseline) + A/B set-identical
+(POKEROM 2B2A40:000000 = the $01E7C0 xlat entry) + ESC0 GREEN + smoke OK + **yield-state identity**:
+exit_dump at $01E7BE — all-64KB WRAM + full reg file/CCR byte-identical to the shipped A2 build
+(the only int-arm delta is the PRE-EXISTING 3-byte below-SP F1-sentinel residue at $F00BD1, present
+in A2 too). exit_dump now takes the full 24-bit trap PC (pass 1E7BE not E7BE — $0716 bank compare)
+and grew lockstep_trap's POKEROM arm. Gate tools now resolve build/interp.sfc repo-relatively and
+honor NAT=<path> (worktree-parallel runs without clobbering /tmp/b0_native.mss).
+
+**A3 residual:** bsr $1f1fe render-record builder (t50 anim-op −5 path only, ~23 instr) — static
+bridge-to-escape + `--escapes=1F1FE` visit-1 regen still queued; then 2.3 trap#5 shells / 2.2
+CBxx+$4A9E per the CP1 re-rank.
+
 **NEW (audit find, follow-up): tools/audit_banks.py flags a PRE-EXISTING escbank overlap** — the
 $8000 block's bodies have grown to $F29F, PAST the pinned .org $F000/$F400 dispatcher blocks, which
 stomp $F000–$F57A of whatever body straddles there (the d386/d3b0 family — almost certainly the real

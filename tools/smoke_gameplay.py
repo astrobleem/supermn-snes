@@ -6,7 +6,7 @@
 import sys, os, subprocess
 sys.path.insert(0,'tools'); sys.path.insert(0,'/home/chad/Mesen2/python')
 os.environ['DOTNET_ROOT']='/home/chad/.dotnet10'; os.environ['PATH']='/home/chad/.dotnet10:'+os.environ.get('PATH','')
-NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT='/tmp/b0_native.mss'
+NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT=os.environ.get('NAT','/tmp/b0_native.mss')
 # 1) re-capture the NAT on the current build (build-specific). A broken build may fail to freeze.
 r=subprocess.run([sys.executable,'tools/dump_b0_native.py',NAT],capture_output=True,text=True,timeout=300)
 if 'wrote' not in r.stdout:
@@ -14,7 +14,7 @@ if 'wrote' not in r.stdout:
     sys.exit(1)
 import mesen_mcp.session as _sess; _sess.validate_mesen_build=lambda *a,**k: None
 from mesen_mcp import McpSession
-with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=7521,boot_wait=6.0,socket_timeout=300.0) as m:
+with McpSession(rom=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','build','interp.sfc'),mesen=NEXEN,port=7521,boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a): b=m.read_memory('Sa1Memory',a,2); return b[0]|(b[1]<<8)
     def w16(a,v): m.write_u16(a,v,'Sa1Memory')
     def runf(n,c=300):
