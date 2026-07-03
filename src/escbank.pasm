@@ -58,6 +58,7 @@ entry_cc44=$97D000
 entry_cc80=$97D400
 entry_caf6=$97D800
 entry_cb9e=$97E800
+entry_1d5f0=$97EC00
 ; <<< ESCBANK_SYMS <<<
 
     .org $8000
