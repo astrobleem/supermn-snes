@@ -3856,3 +3856,486 @@ Lf25110_281:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; --- entry_12e56 — Phase-1.1 coverage: the $011750 task-loop's first callee (bsr $12e56, 64 instrs,
+; 1x/tick gameplay). Pinned .org $A000 so interp.pasm's bhp_bank_ext arm can hardcode .
+; CALL-BRIDGE sentinel sed'd $00FD -> $00FC (ors_pre_97 resumes bank $97).
+    .org $A000
+; --- transpiled from $012E56 (64 instrs) by tools/transpile.py [bank1] ---
+entry_12e56:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$FFD8
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $20
+    clc
+    adc #$000E
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $1C
+    lda $1C
+    bne Lf12e56_1
+    jmp L12e56_12f1e
+Lf12e56_1:
+    ; !! UNIMPLEMENTED: bgt.b     $12eb0   (stray conditional bgt (flags not from preceding op))
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $1C
+    sec
+    sbc #$809D
+    bne Lf12e56_2
+    jmp L12e56_12e70
+Lf12e56_2:
+    jmp L12e56_12eb0
+L12e56_12e70:
+    lda #$0002
+    sta $04
+    jmp L12e56_12e7a
+    lda #$0004
+    sta $04
+L12e56_12e7a:
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $20
+    clc
+    adc #$000D
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $08
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $08
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $08
+    lda $00
+    cmp #$8000
+    ror a
+    cmp #$8000
+    ror a
+    cmp #$8000
+    ror a
+    cmp #$8000
+    ror a
+    sta $00
+    lda $08
+    asl a
+    asl a
+    sta $08
+    lda $08
+    and #$FFC0
+    sta $08
+    lda $08
+    clc
+    adc $00
+    sta $08
+    lda #$36B2
+    sta $20
+    lda #$0000
+    sta $22
+    ; !! UNIMPLEMENTED: move.b    (a0, d2.w), d0   (EA '(a0')
+    lda $38
+    clc
+    adc #$FFCC
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$000D
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$8000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    sta $1C
+    sta $1E
+    jmp L12e56_12f1e
+L12e56_12eb0:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $1C
+    sec
+    sbc #$009E
+    bvs Lf12e56_3
+    bpl Lf12e56_4
+    bra Lf12e56_5
+Lf12e56_3:
+    bmi Lf12e56_4
+    bra Lf12e56_5
+Lf12e56_4:
+    jmp L12e56_12ec0
+Lf12e56_5:
+    lda $38
+    clc
+    adc #$FF90
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0001
+    xba
+    sta $400000,x
+    xba
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L12e56_12f22
+L12e56_12ec0:
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    bne Lf12e56_6
+    jmp L12e56_12ef0
+Lf12e56_6:
+    ; !! UNIMPLEMENTED: bgt.b     $12eca   (stray conditional bgt (flags not from preceding op))
+    lda $00
+    eor #$FFFF
+    inc a
+    sta $00
+L12e56_12eca:
+    lda $20
+    clc
+    adc #$000D
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $04
+    rep #$20
+    lda $04
+    bne Lf12e56_7
+    jmp L12e56_12ed8
+Lf12e56_7:
+    ; !! UNIMPLEMENTED: bgt.b     $12ed4   (stray conditional bgt (flags not from preceding op))
+    lda $04
+    eor #$FFFF
+    inc a
+    sta $04
+L12e56_12ed4:
+    lda $04
+    sec
+    sbc $00
+    beq Lf12e56_9
+    bvs Lf12e56_8
+    bmi Lf12e56_9
+    bra Lf12e56_10
+Lf12e56_8:
+    bpl Lf12e56_9
+    bra Lf12e56_10
+Lf12e56_9:
+    jmp L12e56_12ef0
+Lf12e56_10:
+L12e56_12ed8:
+    lda #$0000
+    sta $04
+    lda $20
+    clc
+    adc #$000C
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    bpl Lf12e56_11
+    jmp L12e56_12ee8
+Lf12e56_11:
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFB
+    sta $80
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    jmp L12e56_12f06
+L12e56_12ee8:
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    and #$FFF7
+    sta $80
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    jmp L12e56_12f06
+L12e56_12ef0:
+    lda #$0000
+    sta $00
+    lda $20
+    clc
+    adc #$000D
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $04
+    rep #$20
+    lda $04
+    bpl Lf12e56_12
+    jmp L12e56_12f00
+Lf12e56_12:
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFE
+    sta $80
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+    jmp L12e56_12f06
+L12e56_12f00:
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    and #$FFFD
+    sta $80
+    lda $38
+    clc
+    adc #$FFC1
+    sta $54
+    lda $3A
+    adc #$FFFF
+    sta $52
+    jsl.l writebyte_l
+L12e56_12f06:
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $04
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $04
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $00
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFA0
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $00
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $04
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFA4
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc $04
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE bsr.w $12af6 -> ojmp_hook (callee --table escape, else interpret), resume br12e56_1
+    lda #br12e56_1
+    sta $54
+    lda #$00FC
+    sta $56
+    jsl.l push32_l
+    lda #$2AF6
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l ojmp_hook
+br12e56_1:
+L12e56_12f1e:
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FF90
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L12e56_12f22:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre

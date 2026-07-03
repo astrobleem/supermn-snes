@@ -27,7 +27,7 @@ import mesen_mcp.session as _sess; _sess.validate_mesen_build=lambda *a,**k: Non
 from mesen_mcp import McpSession
 TD=sys.argv[1]; TICK=(sys.argv[2].lower()=='tick')
 PC1=0 if TICK else int(sys.argv[2],16); PC2=0x0818 if TICK else int(sys.argv[3],16)
-POKE=(not TICK) and len(sys.argv)>4 and sys.argv[4]=='1'
+POKE=0 if (TICK or len(sys.argv)<5) else (0x2B6C if sys.argv[4]=='1' else int(sys.argv[4],16))  # bhp_bank_ext cmp operand to kill
 ESC0=os.environ.get('ESC0')=='1'
 DF_SPIN=0x00E2CF; DFG_RFF=0x00D1D9     # src/interp.sym df_spin / dfg_rff (re-check after interp rebuild)
 wramA=open(TD+'/wramA.bin','rb').read(); regs=open(TD+'/regsA.bin','rb').read()
@@ -49,9 +49,9 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         while d<n: x=min(c,n-d); m.run_frames(x); d+=x
     m.load_state(NAT); runf(120)
     if POKE:
-        blob=bytes(m.read_memory('snesPrgRom',0xD1F2,0x30))
-        i=blob.find(bytes([0xC9,0x6C,0x2B]))
-        assert i>=0, "cmp #$2B6C not found in bhp_bank_ext -- rebuilt? re-check $D1F2"
+        blob=bytes(m.read_memory('snesPrgRom',0xD1F2,0x60))
+        i=blob.find(bytes([0xC9,POKE&0xFF,POKE>>8]))
+        assert i>=0, 'cmp operand %04X not found in bhp_bank_ext'%POKE
         wh(0xD1F2+i+1,'ffff','snesPrgRom')           # 5A22 copy (file $8000-$FFFF)
         wh(0xD1F2+i+1-0x8000,'ffff','snesPrgRom')    # SA-1 LoROM-mirror copy (file $0-$7FFF) = the fetched one
         chk=bytes(m.read_memory('Sa1Memory',0xD1F2+i,3)); print("poked bhp_bank_ext cmp (Sa1 sees) -> %s"%chk.hex(),flush=True)

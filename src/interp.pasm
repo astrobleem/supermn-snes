@@ -11202,13 +11202,22 @@ bhp_bank_ext:
     bne bbe_miss
     lda $5C
     cmp #$2B6C           ; $012B6C (the HLE'd dispatcher tree)
-    bne bbe_miss
+    bne bbe_t2
     lda $54
     sta $40              ; 68K PC = bsr return ($01177C); NO return pushed (HLE simulates it)
     lda #$0001
     sta $42
     pla                  ; drop RET1 -> 65816 S back at the iloop dispatch level
     jml $94E000          ; hle_12b6c (escbank2, fixed .org)
+bbe_t2:
+    cmp #$2E56           ; $012E56 (task-loop callee; Phase-1.1 coverage)
+    bne bbe_miss
+    lda $54
+    sta $40              ; 68K PC = bsr return; entry_12e56 re-sim-pushes it (bsr-hook convention)
+    lda #$0001
+    sta $42
+    pla
+    jml $97A000          ; entry_12e56 (escbank3, fixed .org)
 bbe_b0:
     jmp bhp_b0chain
 bbe_miss:

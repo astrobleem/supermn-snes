@@ -53,7 +53,7 @@ TABLE_PCS = {0xCE4, 0x295A, 0x29B6, 0x13BE,
 CORO_PCS = {0xC172}
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS | CORO_PCS
-BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94}  # assembled @ .org $8000
+BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94, "src/escbank3.sym": 0x97}  # @ .org $8000
 
 def load_native_addrs():
     """entry_X -> 24-bit native address (bank forced per source bank)."""
