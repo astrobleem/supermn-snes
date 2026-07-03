@@ -62,6 +62,46 @@ scheduler + render + some waits. Measured anchors: entry_ce4 first-fire 2.6K/cal
 `body_residency.py` sweep (swin, sel, ce4, 13be, 26a0, 8c2, 2bc2/2bda-class) on trip2500 + quiet →
 split the residual into {bodies, waits, IRQ/render} and re-run the projection below.**
 
+## R4b — residency sweep (2026-07-02, body_residency.py, trip2500 unless noted)
+
+| component | fires/tick | cyc/tick | % of 3.02M | class |
+|---|---|---|---|---|
+| entry_swin | 7.3 | 55K | 2.7% | scheduler |
+| lhs_sel | 6.7 | 56K | 2.7% | scheduler |
+| lh_sched collapsed scan | ~14/540K window (partial) | ~64K measured, ~360K/tick extrapolated (UNCERTAIN) | 2-12% | scheduler/collapsed |
+| entry_c172 (+295a/29b6) | 0.7 | 31K | 1.5% | render/coroutine |
+| entry_25110 (call-site span) | ~1 | 28K | 0.9% | collision |
+| entry_ce4 | 1.3 | 22K | 1.1% | render |
+| entry_d96 | 0.7 | 20K | 1.0% | render |
+| hle_12b6c (incl. its ce4 call) | 0.7 | 18K | 0.9% | render shell |
+| header callees (8c2/26a0/2bxx/3c36) | ~5 | ~53K | 1.8% | frame-sync/input |
+| d0xx family + fb8 + rng412 | ~8 | ~21K | 0.7% | misc |
+| 13be/cc10/1008/8fa/fd2/c9a6 | 0 | 0 | — | (don't fire in trip-class) |
+| **measured native total** | | **~330-630K** | **11-21%** | |
+| interp (rate-based, incl. dispatch) | 1069 instrs | ~1.89M | 63% | |
+| **unattributed remainder** | | **~0.5-0.8M** | **16-26%** | dispatch-tax / IRQ / bus / collapsed |
+
+Waits confirmed context-dependent: on span_quiet, entry_8c2 = 109-218K/fire (frame-sync wait),
+entry_26a0 = 12-24K; on busy ticks the same bodies cost ~13K (waits absorb idle, vanish at realtime).
+
+**Phase-2.5.0 GATE ANSWER: renderers do NOT dominate the native residual** (known render bodies
+~90-120K/tick ≈ 3-4%). The native residual is scheduler machinery + collapsed loops + waits +
+dispatch overhead. Consequence for the semantic program (re-surfaced to the user per the gate):
+the render pipeline remains the right FIRST semantic pilot (narrowest contract, best oracle), but
+the big semantic-cycle prizes are (a) the interpreted game-logic clusters (already Phase-1/2 faithful
+targets first), and (b) the SCHEDULER/tick machinery as a semantic rewrite (native task scheduler
+honoring the task-context contract — well understood from Campaigns 1-4; ~170-470K/tick with
+lh_sched). Ordering inside Phase 2.5 updates accordingly after Phase 1.
+
+### Instrument notes (hard-won this session)
+- **Nexen run_until stops on ANY registered hook** (McpTools.cs checks the GLOBAL match counter,
+  ignores the handle) → keep exactly ONE exec-hook registered at a time (body_residency.py does
+  add/remove alternation). hle_span/hle_cost are safe only by temporal ordering of their hooks.
+- body_residency.py normalizes by the game's tick counter ($40:1C56) — no fragile end-trap.
+- lh_off misses loop_hook-collapsed instructions (31 stops vs 116 $4A-instrs on quiet) →
+  tick_timeline totals are partial; big-gap ATTRIBUTION is still valid.
+- exec-hook addresses must be instruction STARTS (mid-instruction addrs never match).
+
 ## CP0 projection (per the decision rule) — and the verdict
 
 Model: coverage converts ~85% of interp instrs at ~30× (spike-measured); Phase-3 hand-rewrite =
