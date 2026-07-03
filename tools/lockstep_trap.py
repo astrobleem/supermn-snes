@@ -37,6 +37,14 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=
         assert _i>=0, 'POKEOP %04X not found'%_op
         m.write_memory('snesPrgRom',0xD1F2+_i+1,'ffff'); m.write_memory('snesPrgRom',0xD1F2+_i+1-0x8000,'ffff')
         print('>>> POKEOP: bhp arm %04X disabled'%_op,flush=True)
+    if os.environ.get('POKEROM'):
+        # generic ROM patch(es): "fileoff:hexbytes[,fileoff:hexbytes...]" (single copy; for bank-$00
+        # use POKEOP-style two-copy logic instead). e.g. zero an xlat sub-table entry to disable one
+        # table-dispatched escape for an A/B arm.
+        for _spec in os.environ['POKEROM'].split(','):
+            _off,_hx=_spec.split(':')
+            m.write_memory('snesPrgRom',int(_off,16),_hx)
+            print('>>> POKEROM: file $%06X <- %s'%(int(_off,16),_hx),flush=True)
     if os.environ.get('POKE92'):
         # disable one jah2_ext/jah2_ext_bsr arm in the $92 escbank (file $290000, single copy)
         _op=int(os.environ['POKE92'],16)

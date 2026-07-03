@@ -6588,7 +6588,8 @@ hle_pC_go:
 ; gate check. Looks the PC up in the 2-level page table at $96:8000 (file $2B0000, built by
 ; tools/gen_xlat_table.py). HIT -> jml [native entry]; MISS -> jml inext (interpret as today).
 ; This replaces ojmp_hook's hardcoded cmp-chain AND escbank's ojmp_disp re-scan with one lookup.
-; Bank-$00 PCs only for now (the table's jmp-state convention class); $42!=0 -> miss.
+; Banks $00 AND $01 (512-page layout, index = (bank<<8)|(PC>>8)); $42>=2 -> miss. Bank-$01 pages
+; carry the objproc coroutine resume PCs (docs/OBJPROC_SPEC.md); reached via ors_rte_x->ojmp_hook.
 ; ============================================================================
 .org $F900
 xlat_dispatch:
@@ -6601,13 +6602,17 @@ xlat_dispatch:
     rep #$30
     phx                      ; preserve X (interp decode state) for the miss path
     lda $42
-    bne xd_miss              ; non-bank-0 target -> not in this table
+    cmp #$0002
+    bcs xd_miss              ; bank >= 2 -> not in this table (banks 0 AND 1 supported, 512 pages)
+    xba                      ; A = bank<<8 ($0000 / $0100)
+    sta $96                  ; page-index bank bit (escape-transient scratch, dead on miss)
     lda $40                  ; PC lo16
-    xba                      ; low byte now = PC>>8 (page index)
+    xba                      ; low byte now = PC>>8
     and #$00FF
+    ora $96                  ; | bank<<8 -> 9-bit page index (gen_xlat_table 512-page layout)
     asl a                    ; *2 (2-byte page pointers)
     tax
-    lda $968000,x            ; page[PC>>8] = sub-table byte-offset (0 = no escapes in page)
+    lda $968000,x            ; page[(bank<<8)|(PC>>8)] = sub-table byte-offset (0 = none in page)
     beq xd_miss
     sta $96                  ; save sub-table offset (was $4C = step-counter hi)
     lda $40
