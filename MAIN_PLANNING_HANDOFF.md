@@ -1,18 +1,59 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-03 (pt.19). **CURRENT TASK: Phase-2.1 A3 (objproc widen) — start at
-`docs/OBJPROC_SPEC.md` §"A3 WIDEN" (a concrete, ready-to-execute plan) + the CP1/A2 sections of
-`docs/PROFILE_CAMPAIGN.md`.** State: CP1 done (`be8d3db`, light tick UNMOVED 8.4× — light interp
-is CBxx/$4A9E/sched, NOT the clusters fixed so far); A1 objproc spec done (`4787ff1`); **A2 SHIPPED
-(`296cb90`+`2a6b97f`): both objproc coroutine visits native via NEW bank-$01 xlat pages — trip2500
-13.6×→11.9× (2.136M cyc/tick, 518 interp instr), ce4 11.8×; transpiler F1–F5 landed (`071b69b`).**
-After A3: 2.3 trap#5 shells, then 2.2 CBxx/$4A9E (the ONLY light-tick lever). Memory:
-`objproc-a2-shipped` has the F1 pushed-sentinel lesson + the audit_banks.py findings (incl. the
-PRE-EXISTING escbank $F000 overlap = the d386/d3b0-divergence suspect). Triples/NAT backup:
-`/home/chad/supermn-state/RESTORE.txt` if /tmp was wiped.
+Last updated: 2026-07-04 (pt.20). **THE STRATEGIC FORK IS SETTLED (user, 2026-07-04): 30fps
+retarget (budget 358K/tick, tick = 2 display frames) + the TAD/YM2610 sound port; realtime-60
+abandoned (ISA-floor verdict). Don't re-litigate.**
 
-Everything below this banner is the pt.18-and-earlier record (HLE spike: DONE/GO, shipped
-`0aac3c6`) + REFERENCE/CONTEXT (dispatch model, tooling, recipes, methodology, task ledger).
+**CURRENT TASK (pt.21): relocate the 5A22 RENDER path to WRAM — the biggest single-session
+lever on the table.** The pt.20 contention probe proved 5A22↔SA-1 bus contention = **28.8% of
+every tick** (411K light / 578K combat — the bulk of the old "unattributed 1.08M"); the WRAM
+*supervisor-loop* fix shipped (PR #12) and bought light **1.426M→1.137M (−20%, 3.18× of
+budget)**, but combat is UNCHANGED (~2.0M = 5.6×) because its 5A22 renders ~100% of the wall
+window (per-tick VID_FRAME) and the render code itself fetches from ROM at full duty. Plan:
+assemble the render routines a SECOND time org'd for WRAM (`$7E:D000-$EFFF` is free — staging
+tops at $CFFF, the supervisor blob sits at $F000-F016; video.bin is only ~2.4KB so it FITS),
+copy at vid_init, point vf_tick at the WRAM copy (keep the ROM copy for boot/state-resume
+compat). THE LATCH RULE (hardware-true + Nexen-modeled, `SnesMemoryManager::_memTypeBusA`):
+5A22 code only stops taxing the SA-1 if it EXECUTES from WRAM — wai/stp/idle with a
+ROM-fetched last access fake-conflicts forever. Expected: combat ~2.0M→~1.45M (4.0×), light
+1.14M→~1.02M (2.84×). Validate: tools/contention_probe.py + tools/contention_combat.py (the
+park deltas should collapse toward 0) + smoke_gameplay + a REQ-bump render check
+(tools/validate_wl_fix.py pattern). Start at memory `contention-probe-wram-supervisor` +
+docs/PROFILE_CAMPAIGN.md §"5A22-contention probe". Residual caveat: the render's $41 BW-RAM
+shadow reads still conflict (2→4 cyc) — only the code-fetch share is recoverable.
+THEN (pt.22+, re-rank by measurement): the 30fps pacing change ($AC/frame-sync = one
+GAME_TICK per 2 display frames + freerun validation — also makes per-tick renders REAL in
+free-run), scheduler semantic rewrite (sel+swin 244K), contiguous-compile (interp ~335K).
+Also flagged for the pacing phase: today a render spans MULTIPLE display frames; at 30fps it
+must fit ~2 (delta-render / cache-hit work may be needed). Sound track runs in parallel
+sessions (21/21 tracks converted; needs the musical pass + TAD engine integration — see
+memory `strategic-fork-30fps-sound`).
+
+**pt.19→pt.20 record (all on branch `worktree-a3-objproc-mid`, PRs #1-#12):** A3 objproc widen
+(`495ccf9`+`184a52b`, 11.9×→11.1×, PR #1); trap#5 shells (`2c0b33e`, →10.2×, PR #2); CP1 2.2
+light-tick campaign complete (PRs #3-#10: trip2500 **9.28×**, light 7.44×, quiet 7.27×,
+`52f8337`); CP0 STOP-rule fired → user fork decision (30fps + sound); sound kickoff
+(`ee5cefd`, PR #11); 30fps decomposition (waits already self-priced; combat 4.6× binding,
+`abc31b0`/`af893ce`); ISR rounds (`da3da95`/`cbab0ff`: injected windows exclude the 68K ISR
+but it fires only 1×/tick — the blind spot is SMALL, free-run 1.34M/tick CONFIRMS the
+steering currency); **pt.20: contention probe + WRAM supervisor loop (`8933076`, PR #12)**.
+Steering doc: docs/PROFILE_CAMPAIGN.md (bottom sections, newest last). Triples/NAT backup:
+`/home/chad/supermn-state/RESTORE.txt` if /tmp was wiped; /tmp/b0_native.mss is re-captured
+per build by smoke_gameplay.
+
+Everything below this banner is the pt.19-and-earlier record + REFERENCE/CONTEXT (dispatch
+model, tooling, recipes, methodology, task ledger).
+
+---
+
+> ## pt.19 banner (2026-07-03, superseded): Phase-2.1 A3 (objproc widen) — start at
+> `docs/OBJPROC_SPEC.md` §"A3 WIDEN" + the CP1/A2 sections of `docs/PROFILE_CAMPAIGN.md`.
+> State then: CP1 done (`be8d3db`, light tick UNMOVED 8.4× — light interp is CBxx/$4A9E/sched);
+> A1 objproc spec done (`4787ff1`); A2 SHIPPED (`296cb90`+`2a6b97f`): both objproc coroutine
+> visits native via NEW bank-$01 xlat pages — trip2500 13.6×→11.9×, ce4 11.8×; transpiler F1–F5
+> landed (`071b69b`). Memory `objproc-a2-shipped` has the F1 pushed-sentinel lesson + the
+> audit_banks.py findings (incl. the PRE-EXISTING escbank $F000 overlap = the d386/d3b0
+> divergence suspect).
 
 ---
 

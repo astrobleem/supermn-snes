@@ -1,7 +1,21 @@
 # Roadmap — where we are and where we're heading
 
-Last updated: June 29, 2026. Companion to [STATUS.md](STATUS.md) (current state)
+Last updated: July 4, 2026. Companion to [STATUS.md](STATUS.md) (current state)
 and [METHODOLOGY.md](METHODOLOGY.md) (the reusable recipe).
+
+> **UPDATE 2026-07-04 — THE DESTINATION CHANGED: 30fps retarget + sound (user decision; CP0
+> STOP-rule fired — realtime-60 is below the ISA floor and is abandoned).** The roadmap's goal
+> line is now: **smooth 30Hz game logic on a 60Hz display (budget 358K cyc/tick) with the
+> arcade YM2610 soundtrack ported to TAD/SPC700.** Current gap (2026-07-04, after PR #12):
+> light 1.137M/tick = **3.18×**, combat ~2.0M = **5.6×** (the binding class). The remaining
+> named levers, in rank order: (1) **render-path-to-WRAM relocation** (~578K on combat — the
+> pt.21 task; the contention probe proved 5A22 bus contention was the bulk of the old
+> "unattributed" residual), (2) the **30fps pacing change** itself ($AC/frame-sync → one
+> GAME_TICK per 2 display frames + freerun validation), (3) **scheduler semantic rewrite**
+> (sel+swin, 244K), (4) **contiguous-compile** of the remaining ~335K interp. Sound runs in
+> parallel (21/21 tracks converted to TAD, PR #11; musical pass + engine integration remain).
+> [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) (pt.20 banner) is authoritative for the
+> current task; docs/PROFILE_CAMPAIGN.md is the measurement ledger.
 
 > **UPDATE 2026-06-30 — [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) is authoritative for the
 > latest plan.** Correction to the "Done + validated" claim below: the **rts convention class does

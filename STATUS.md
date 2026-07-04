@@ -1,6 +1,30 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: July 2, 2026. Per-area detail lives in the linked docs.
+Last updated: July 4, 2026. Per-area detail lives in the linked docs.
+**Start any new session at [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) (pt.20 banner).**
+
+> ## ⭐ DIRECTION SET (user decision 2026-07-04): 30fps retarget + SOUND — realtime-60 abandoned
+> The CP0 STOP-rule fired (optimistic projections still 2.2-3.1× over the 60fps budget = at the
+> ISA floor), and the fork is settled: **logic at 30Hz / display at 60Hz (budget 358K cyc/tick,
+> tick = 2 display frames) + the TAD/YM2610 sound port in parallel.** Coverage state at the
+> decision: trip2500 9.28×, light 7.44×, quiet 7.27× (PRs #1-#10). Sound kickoff shipped
+> (PR #11): 21/21 arcade VGM tracks converted to TAD MML projects, compile-checked, SPC render
+> proven; remaining = the musical pass + engine integration (TAD driver, SPC700 upload,
+> sound-command mailbox → TAD triggers). Steering: docs/PROFILE_CAMPAIGN.md.
+
+> ## ✅ 5A22-CONTENTION PROBE + WRAM SUPERVISOR — SHIPPED `8933076` (2026-07-04, PR #12)
+> The combat tick's "unattributed 1.08M" is mostly **5A22↔SA-1 bus contention**: the video
+> supervisor busy-polled from ROM at 100% duty, taxing the SA-1 +1-2 cyc per ROM/IRAM access and
+> doubling BW-RAM (Nexen `Sa1Cpu::ProcessCpuCycle`, hardware-shaped). Parking the 5A22 measured
+> **411K/tick light (28.8%) / 578K combat (28.7%)**. Fix shipped: the supervisor loop now
+> EXECUTES FROM WRAM ($7E:F000 blob; throttled IRAM poll; `jsl $E98004` → per-tick joy+render;
+> zero-shift + old-save-state-resume-safe). **Light free-run 1.426M → 1.137M cyc/tick (−20%,
+> 3.18× of the 30fps budget).** Combat unchanged (~2.0M): its 5A22 renders ~100% of the wall
+> window, so the tax there is RENDER-code ROM fetches → **next lever: relocate the render inner
+> loops to WRAM too** ($7E:D000 has room; video.bin is ~2.4KB). THE LATCH RULE for all future
+> 5A22 idle work: `_memTypeBusA` latches — wai/stp fetched from ROM fake-conflicts forever; idle
+> code must EXECUTE from WRAM. Tools: contention_probe.py / contention_combat.py /
+> validate_wl_fix.py; memory `contention-probe-wram-supervisor`.
 
 > ## ✅ HLE SPIKE — GO verdict, SHIPPED `0aac3c6` (2026-07-02)
 > Hand-wrote the `$012B6C→{$012B84,$012C04}` tree as native 65816 (`hle_12b6c`, escbank2 `$94:E000`;
