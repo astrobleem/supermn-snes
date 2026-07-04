@@ -138,6 +138,25 @@ def decode(entry):
             frag.append(f)
         if frag is None: break
         insns.extend(frag); end = a
+    # Phase 2b (--fnfrag): absorb FAR straight-line rts fragments — a branch target BEYOND `end`
+    # (unrelated cold code between) that is itself a simple data-ops-only exit fragment (the $46DE
+    # gap: link/tst/bne $47ec over a cold middle whose early rts bounds the linear sweep; $47EC..rts
+    # is the real hot exit). Same guards as Phase 2 (<= $40, no control flow). `end` extends past
+    # the fragment, so intermediate UNDECODED code is inside the label window — any decoded branch
+    # into it would reference a missing label and fail the assembly LOUDLY (safe). Gated: default
+    # decode is byte-stable for all deployed regens.
+    if FNFRAG:
+        done = {i.address for i in insns}
+        for t in sorted(targets):
+            if t in done or t < end: continue
+            frag, a = [], t
+            while True:
+                f = _dis1(a); a += f.size; fb = f.mnemonic.split('.')[0]
+                if f.mnemonic == 'rts': frag.append(f); break
+                if fb in CTRLFLOW or a - t > 0x40: frag = None; break
+                frag.append(f)
+            if frag:
+                insns.extend(frag); done.update(i.address for i in frag); end = max(end, a)
     labels = set()
     for ins in insns:
         base = ins.mnemonic.split('.')[0]
@@ -185,6 +204,7 @@ def is_frame(an): return an in ('a6', 'a7')
 # already assume work-RAM-or-video, and RMW already assumes work RAM (writable). Validate bit-exact.
 WORKRAM = set()                                  # --workram=<csv>: extra provably-work-RAM An regs
 XFLAG = False                                  # --xflag: emit X ($A2) at X-setters
+FNFRAG = False                                 # --fnfrag: absorb FAR straight-line rts fragments
 def is_workram(an): return an in ('a5', 'a6', 'a7') or an in WORKRAM
 
 def hi_ext(disp): return '#$FFFF' if disp < 0 else '#$0000'   # sign-extend a 16-bit disp into hi16
@@ -1547,12 +1567,13 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED, BANK2, WORKRAM, XFLAG
+    global VIDEO, ESCAPED, BANK2, WORKRAM, XFLAG, FNFRAG
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     BANK2 = '--bank2' in sys.argv
     bank1 = '--bank1' in sys.argv or BANK2            # bank2 reuses all of bank1's jsl.l/jml.l transforms
     VIDEO = '--video' in sys.argv
     XFLAG = '--xflag' in sys.argv
+    FNFRAG = '--fnfrag' in sys.argv
     for a in sys.argv:                                # --workram=a0,a1: extra provably-work-RAM An regs (EA fast path)
         if a.startswith('--workram='): WORKRAM |= {r.strip() for r in a.split('=',1)[1].split(',') if r.strip()}
     coroutine = '--coroutine' in sys.argv                 # task-BODY escape (see main-loop-coroutine-arch):

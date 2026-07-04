@@ -320,6 +320,31 @@ $011750 yield dump (regs/CCR identical; 3-byte below-SP sentinel residue = accep
 **Campaign line: trip2500 11.9× → 9.5×, ce4 11.8× → 9.4×, light 8.4× → 7.7×.** Next: $46DE
 decoder range gap, $3B48 choke class, sched plumbing, CC10/CCD8-class other reaches.
 
+## $46DE — SHIPPED (2026-07-04): F7 --fnfrag + the bridged-callee xlat catch; light 7.7× → **7.6×**
+
+Two findings closed it:
+- **F7 `--fnfrag`** (transpiler, gated/inert, deployed-regen byte-identical): Phase-2b decode —
+  absorb FAR straight-line rts fragments (a branch target beyond the first linear rts, cold code
+  between; same ≤$40/no-control-flow guards as the contiguous Phase 2). Fixes the $46DE 5-instr
+  truncation (the hot exit $47EC..rts lives past the cold middle's early rts). Undecoded
+  in-window code stays safe: a branch into it references a missing label → LOUD assembly failure.
+- **The resume was never an rte**: $46DE is a CALL-BRIDGED callee of the OLD $92 entry_4542 body
+  (the $455E cors_disp task) — the bridge pushed the $00FE sentinel and `jml.l inext`'d, so no
+  dispatch hook ever saw the callee PC. Fix = the size-neutral bridge swap `jml.l inext` →
+  `jml.l ojmp_hook` at that ONE site: xlat[$0046DE] → entry_46de native; its faithful rts pops
+  the $00FE sentinel → ors_pre_92 resumes the $92 body. Gate-off/miss → inext (identical).
+  RULE: a "resume PC" in the stream after $0796 can be a NATIVE body's interp HANDOFF, not an
+  rte — HOOKTEST caught the 0-fire immediately (the slice-2 discipline paying off).
+
+**Win: light 1.374M→1.356M (−18K, 7.58×, instr 183→172); t25 1.699M→1.676M (−23K, 9.37×, the
+4542 bridge fires on gameplay too); ce4 1.666M (9.31×); t50 1.674M.** Gates: FULLDIFF ×4
+(known position-sets) + A/B (POKEROM 2B179A; disabled arm = the 189-instr baseline) + ESC0 +
+smoke + HOOKTEST fire-verify.
+
+**Campaign line: trip2500 11.9× → 9.4×, ce4 11.8× → 9.3×, light 8.4× → 7.6×.** Next: $3B48
+prologue (choke class), sched plumbing, CC10/CCD8-class stale-reach audit (old $92 bodies whose
+jah2 arms miss bsr reaches — the cc10/ccd8 find suggests more).
+
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 
 The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick

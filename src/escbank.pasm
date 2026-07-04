@@ -12497,7 +12497,10 @@ entry_4542:
     bne Lf4542_1
     jmp L4542_4556
 Lf4542_1:
-    ; CALL-BRIDGE jsr $46de(pc) -> interpret callee, resume br4542_1
+    ; CALL-BRIDGE jsr $46de(pc) -> ojmp_hook (SIZE-NEUTRAL swap of jml.l inext, 2026-07-04): the
+    ; xlat now holds $0046DE (entry_46de, escbank5 --fnfrag body) -> the callee runs NATIVE; its
+    ; faithful rts pops this $00FE sentinel -> ors_pre_92 resumes br4542_1. Gate-off/miss -> inext
+    ; (interpret, exactly as before).
     lda #br4542_1
     sta $54
     lda #$00FE
@@ -12507,7 +12510,7 @@ Lf4542_1:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l ojmp_hook
 br4542_1:
     lda $1C
     bne Lf4542_2

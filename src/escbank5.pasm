@@ -7046,3 +7046,139 @@ br1177c_7:
     lda #$0001
     sta $42
     jml.l inext
+
+; --- entry_46de: CP1 2.2 — light-tick task resume $0046DE (mid-function, rte-reached; CORO
+; bank-$00 page). FIRST --fnfrag body: the hot exit $0047EC..rts is a FAR fragment past the
+; cold middle's early rts (the old 5-instr decode truncation). Its rts pops $00000CE4 ->
+; op_rts_norm -> xlat -> entry_ce4t: the downstream stays native. ---
+; --- transpiled from $0046DE (13 instrs) by tools/transpile.py [bank1] ---
+entry_46de:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $3C
+    clc
+    adc #$FFFA
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$2A4A
+    tax
+    lda $400000,x
+    xba
+    beq Lf46de_1
+    jmp L46de_47ec
+Lf46de_1:
+    lda #$FFFF
+    sta $9A
+    lda #$FFFF
+    sta $9C
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $9C
+    pha
+    lda $3C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $3C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$46F0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+L46de_47ec:
+    lda #$0000
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    pha
+    lda $38
+    clc
+    adc #$FFFA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFFA
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $1C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1E
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
