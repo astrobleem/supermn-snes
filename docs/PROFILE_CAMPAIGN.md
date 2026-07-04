@@ -581,3 +581,34 @@ quiet/light ≈ 3-3.3×, combat ≈ 4.6× (the binding class).** The residual is
 dispatch + render/IRQ machinery, NOT waits — the pre-measurement 1.4-3× estimate was optimistic.
 NEXT (first task, next session): the full per-body sweep on ce4trip64 (swin/sel/ce4/d96/25110/
 objproc/shell bodies) to rank the contiguous-compile + semantic-HLE targets against the 4.6×.
+
+## Combat-tick decomposition (body_residency sweep, ce4trip64, 2026-07-04)
+
+| component | cyc/tick | % of tick | note |
+|---|---|---|---|
+| **xlat_dispatch span total** | **243K** | **12.1%** | 39 fires/tick; the ENTRY->inext span INCLUDES the dispatched body -> this = the xlat-dispatched-native TOTAL (shells/objproc/fragments/coro), ~6.2K avg per dispatch |
+| lhs_sel | 125K | 6.3% | |
+| entry_swin | 119K | 5.9% | |
+| entry_1e7c0 (objproc render) | 42K | 2.1% | |
+| entry_c172 | 33K | 1.6% | |
+| waits (8c2+26a0) | 26K | 2.1% | negligible on combat |
+| hle_12b6c | 21K | 1.4% | |
+| entry_25110 | 15K | 0.8% | |
+| entry_1d5f0 | 3K | 0.2% | |
+| measured native total | ~580K | ~29% | |
+| interp (197 x ~1.7K) | ~335K | ~17% | |
+| **UNATTRIBUTED** | **~1.08M** | **~54%** | THE 30fps object — see below |
+
+Measurement caveats: entry_24bc2/2429c/d96/d96t read 0 fires — their exits never pass the
+inext anchor inside the span (ors_pre/native chains); they're inside the xlat_dispatch total
+instead. Windows ~2.0M/tick (B0->B1 anchors) vs hle_span's 1.68M — use the % column.
+
+**THE PIVOTAL HYPOTHESIS for 30fps: the 1.08M unattributed is dominated by PER-FRAME machinery**
+(the interpreted 68K vblank ISR + render/PPU-shadow + IRQ dispatch), which runs ONCE PER DISPLAY
+FRAME — ~10-12x/tick at today's sub-realtime speed but only 2x/tick at the 30fps target. If so,
+it SELF-PRICES like the waits did (a convergent series: every tick-speedup cuts frames-per-tick
+cuts ISR share), and the true 30fps gap is much smaller than the raw 4.6x. NEXT MEASUREMENT
+(first task, next session): count vblank-ISR fires/tick + residency of the interpreted ISR body
+on ce4trip64, and re-project the gap with the per-frame share scaled to 2 frames/tick. If the
+hypothesis holds, the remaining REAL work = the jah2-native bodies (sel+swin = 244K -> the
+scheduler semantic-rewrite finally pays) + interp 335K (contiguous-compile).
