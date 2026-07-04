@@ -399,6 +399,33 @@ smoke + HOOKTEST 3/3.
 **Campaign line: trip2500 11.9× → 9.31×, ce4 11.8× → 9.3×, light 8.4× → 7.52×, quiet 7.4× →
 7.35×.** Next: sched plumbing (the last 2.2 residual).
 
+## Sched plumbing — SHIPPED (2026-07-04): the last 2.2 residual; a GENERAL btst bug caught
+
+Two bodies close the scheduler glue: **entry_75c** (the FIRST task-SELECT after GAME_TICK,
+$075C..$0794 — straight-line-reached so lhs_sel never sees it) + **entry_77a** (the DEFER path
+entered from the trap#5 handler, $0532→$077A). Both choke ct_ext arms. Two transpiler features:
+**F8 `--stopat=HEX`** (hard decode bound + hand-appended seam stub — the defer path FALLS INTO
+the $0796 switch-in seam, which entry_swin owns; decode otherwise plows into the switch-in
+machinery and stalls in data) and an ungated **rte decode-break** (rte never falls through;
+deployed regens unaffected).
+
+**GENERAL TRANSPILER BUG (the sixth FULLDIFF catch): `btst #n,Dn` with n≥8** — capstone prints
+`btst.b` even for REGISTER destinations, and trusting the suffix applied the memory-form mod-8
+rule to the LOW BYTE: `btst #$1d,d2` (the defer countdown gate, bit 29) tested bit 5 → the
+countdown write was skipped ($F00055 $4A-vs-$49). Fixed (register dst = mod 32, hi/lo word
+select); deployed-body audit CLEAN (capstone sweep over every `transpiled from` range: the only
+btst #≥8,Dn sites in deployed code were these two new bodies).
+
+**Win: quiet 1.316M→1.301M (102 instr, 7.27×); light 1.346M→1.332M (158, 7.44×); t25 1.661M
+(197, 9.28×).** Gates: FULLDIFF ×4 known sets + A/B (arm-disable ×2 = the 171-instr baseline)
++ ESC0 + smoke + the disabled-arm bisect that isolated entry_77a during the debug.
+
+**Campaign line: trip2500 11.9× → 9.28×, light 8.4× → 7.44×, quiet 7.4× → 7.27×. The 2.2
+residual list is EMPTY** — remaining sched interp = trap/rte/glue singletons (~12/tick, at the
+dispatch-mechanism floor). Next altitude: the CP0 strategic fork (contiguous-compile toward
+avg-frame realtime / 30fps retarget / semantic-HLE — user decision) + hygiene (entry_cd1a
+removal, escbank $F000 overlap).
+
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 
 The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick

@@ -63,6 +63,7 @@ CORO_PCS = {0xC172, 0x01D5F0, 0x01E7C0,
 
 JMP_STATE_PCS |= {0x01177C}   # $011752 spine second half: reached by the hle_12b6c rts POP (op_rts_norm -> xlat)
 JMP_STATE_PCS |= {0x3B48, 0x3B58, 0x3B70}   # $3B48 GAME_TICK prologue fragments (3B48 = choke ct_ext arm; 3B58/3B70 = header-callee rts pops)
+JMP_STATE_PCS |= {0x075C, 0x077A}   # sched plumbing: first task-SELECT + the trap-handler DEFER entry (choke ct_ext arms)
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS | CORO_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94, "src/escbank3.sym": 0x97, "src/escbank4.sym": 0x98, "src/escbank5.sym": 0x99}

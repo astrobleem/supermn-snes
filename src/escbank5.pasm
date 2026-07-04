@@ -8127,3 +8127,305 @@ L3b70_3b7e:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; --- entry_075c: CP1 2.2 — the FIRST task-SELECT after GAME_TICK ($075C..$0794; straight-
+; line-reached so lhs_sel never sees it; choke ct_ext arm). --stopat=796 seam stub. The
+; btst #>=8,Dn mod-32 transpiler fix (see gen) was CAUGHT here ($F00055 defer countdown). ---
+; --- transpiled from $00075C (22 instrs) by tools/transpile.py [bank1] ---
+entry_75c:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $00
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $00
+    sta $04
+    lda $04
+    asl a
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $04
+    ; BAIL to interp @ $000762: lea.l $4a(a4, d1.w), a3   (lea src ('(d8,An,Dn)', 74, 'a4', 'd1'))
+    lda #$0762
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+    lda $2C
+    sta $9A
+    lda $2E
+    sta $9C
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$004A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$004C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9A
+    sta $08
+    lda $9C
+    sta $0A
+    lda $34
+    clc
+    adc #$0002
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $00
+    and #$001F
+    cmp #$0010
+    bcc Lf75c_1
+    sec
+    sbc #$0010
+    tax
+    lda $0E
+    bra Lf75c_2
+Lf75c_1:
+    tax
+    lda $0C
+Lf75c_2:
+Lf75c_3:
+    cpx #$0000
+    beq Lf75c_4
+    lsr a
+    dex
+    bra Lf75c_3
+Lf75c_4:
+    and #$0001
+    bne Lf75c_5
+    jmp Ltj75c_74c
+Lf75c_5:
+    lda $0A
+    and #$4000
+    beq Lf75c_6
+    jmp Ltj75c_796
+Lf75c_6:
+    lda $0A
+    and #$2000
+    bne Lf75c_7
+    jmp Ltj75c_74c
+Lf75c_7:
+    lda $08
+    sec
+    sbc #$0001
+    sta $08
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    lda $08
+    sta $9A
+    lda $0A
+    sta $9C
+    lda $9C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    beq Lf75c_8
+    jmp Ltj75c_74c
+Lf75c_8:
+    lda $08
+    tax
+    lda $0A
+    sta $08
+    txa
+    sta $0A
+    lda $08
+    and #$4FFF
+    sta $08
+    lda $08
+    ora #$4000
+    sta $08
+    lda $08
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    tax
+    lda $0A
+    sta $08
+    txa
+    sta $0A
+    ; --stopat FALL-THROUGH edge -> the $0796 switch-in seam (entry_swin owns it; without this
+    ; stub the fall-through runs into the Ltj stubs)
+    lda #$0796
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltj75c_74c:
+    lda #$074C
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltj75c_796:
+    lda #$0796
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- entry_077a: CP1 2.2 — the DEFER path entered from the trap#5 handler ($0532 -> $077A;
+; bypasses $075C). Same --stopat=796 seam stub. ---
+; --- transpiled from $00077A (11 instrs) by tools/transpile.py [bank1] ---
+entry_77a:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $0A
+    and #$2000
+    bne Lf77a_1
+    jmp Ltj77a_74c
+Lf77a_1:
+    lda $08
+    sec
+    sbc #$0001
+    sta $08
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    lda $08
+    sta $9A
+    lda $0A
+    sta $9C
+    lda $9C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    beq Lf77a_2
+    jmp Ltj77a_74c
+Lf77a_2:
+    lda $08
+    tax
+    lda $0A
+    sta $08
+    txa
+    sta $0A
+    lda $08
+    and #$4FFF
+    sta $08
+    lda $08
+    ora #$4000
+    sta $08
+    lda $08
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    tax
+    lda $0A
+    sta $08
+    txa
+    sta $0A
+    ; --stopat FALL-THROUGH edge -> the $0796 switch-in seam (entry_swin owns it; without this
+    ; stub the fall-through runs into the Ltj stubs)
+    lda #$0796
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltj77a_74c:
+    lda #$074C
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext

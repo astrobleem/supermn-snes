@@ -97,6 +97,9 @@ def decode(entry):
     insns, addr, targets = [], entry, set()
     jt_labels = set()                            # in-window jump-table targets (labels even w/o a Bcc)
     while True:
+        if STOPAT is not None and addr == STOPAT: break   # hard bound (e.g. the sched $0796 switch-in
+                                                          # seam: the defer path FALLS THROUGH into it;
+                                                          # caller post-appends a PC=STOPAT inext stub)
         ins = _dis1(addr); insns.append(ins); addr = ins.address + ins.size
         base = ins.mnemonic.split('.')[0]
         btgt = None
@@ -106,6 +109,7 @@ def decode(entry):
                 btgt = int(m.group(1), 16)
                 if entry <= btgt < entry + 0x2000: targets.add(btgt)
         if ins.mnemonic == 'rts': break
+        if ins.mnemonic == 'rte' and addr not in targets: break   # rte never falls through (sched $0796 lesson)
         # a coroutine yield is `trap #5` (inline, e.g. $4542's at $455C) OR an unconditional `bra` BACK
         # to a trap #5 (target < entry, e.g. $C2F8's bra $c2f6). Both end the body (multi-exit guard).
         # gen emits the trap as a tail-jump to itself and the bra as a tail-jump -> interp runs the trap.
@@ -205,6 +209,7 @@ def is_frame(an): return an in ('a6', 'a7')
 WORKRAM = set()                                  # --workram=<csv>: extra provably-work-RAM An regs
 XFLAG = False                                  # --xflag: emit X ($A2) at X-setters
 FNFRAG = False                                 # --fnfrag: absorb FAR straight-line rts fragments
+STOPAT = None                                  # --stopat=HEX: hard decode bound (fall-through edge -> post-appended stub)
 def is_workram(an): return an in ('a5', 'a6', 'a7') or an in WORKRAM
 
 def hi_ext(disp): return '#$FFFF' if disp < 0 else '#$0000'   # sign-extend a 16-bit disp into hi16
@@ -1037,8 +1042,19 @@ def gen(e, ins, nxt):
     if base == 'btst':                                   # btst <bit>,<ea> : Z = !(bit of ea)
         bitop, dst = ops
         if bitop[0] == 'imm':                            # static bit number -> single mask
-            nbit = bitop[1] & (7 if size == 'b' else 31)
-            ea_load_A(e, dst, size or 'b'); e('and #$%04X' % (1 << nbit))
+            if dst[0] == 'Dn':                           # REGISTER dst: ALWAYS mod 32 (68K rule).
+                # capstone prints `btst.b #n, dN` even for register dst — trusting its size suffix
+                # applied the memory-form mod-8 rule and tested the LOW BYTE: bit 29 became bit 5
+                # (the sched $077A defer-countdown $F00055 catch, 2026-07-04).
+                nbit = bitop[1] & 31
+                ddp = reg_dp(dst[1])
+                if nbit >= 16:
+                    e('lda $%02X' % (ddp + 2)); e('and #$%04X' % (1 << (nbit - 16)))
+                else:
+                    e('lda $%02X' % ddp); e('and #$%04X' % (1 << nbit))
+            else:                                        # memory dst: byte, mod 8
+                nbit = bitop[1] & 7
+                ea_load_A(e, dst, 'b'); e('and #$%04X' % (1 << nbit))
         elif bitop[0] == 'Dn':                           # dynamic bit number in a data reg
             # btst Dn,Dm = long (bit mod 32); btst Dn,<mem> = byte (bit mod 8). Extract that bit
             # of the dst into A bit0 (so `and #$0001` leaves Z = bit-clear, as btst requires), via a
@@ -1567,13 +1583,15 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED, BANK2, WORKRAM, XFLAG, FNFRAG
+    global VIDEO, ESCAPED, BANK2, WORKRAM, XFLAG, FNFRAG, STOPAT
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     BANK2 = '--bank2' in sys.argv
     bank1 = '--bank1' in sys.argv or BANK2            # bank2 reuses all of bank1's jsl.l/jml.l transforms
     VIDEO = '--video' in sys.argv
     XFLAG = '--xflag' in sys.argv
     FNFRAG = '--fnfrag' in sys.argv
+    for a in sys.argv:
+        if a.startswith('--stopat='): STOPAT = int(a.split('=',1)[1], 16)
     for a in sys.argv:                                # --workram=a0,a1: extra provably-work-RAM An regs (EA fast path)
         if a.startswith('--workram='): WORKRAM |= {r.strip() for r in a.split('=',1)[1].split(',') if r.strip()}
     coroutine = '--coroutine' in sys.argv                 # task-BODY escape (see main-loop-coroutine-arch):

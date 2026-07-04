@@ -11339,6 +11339,10 @@ ct_ext:
     beq ctx_hit
     cmp #$3B48           ; GAME_TICK prologue fragment 1 (entry_3b48; $3B58/$3B70 are pop-reached)
     beq ctx_hit
+    cmp #$075C           ; the first task-SELECT after GAME_TICK (entry_75c; straight-line reach)
+    beq ctx_hit
+    cmp #$077A           ; the trap-handler DEFER entry (entry_77a; $0532 -> $077A reach)
+    beq ctx_hit
     rts
 ctx_hit:
     pla
