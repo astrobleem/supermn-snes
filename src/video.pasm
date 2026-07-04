@@ -40,9 +40,18 @@ VFT_VEC=$E98004          ; fixed wrapper slot: per-tick joy+render vector (jsl'd
 ; entry wrappers (interp: jsl $E90000 vid_frame, jsl $E90004 vid_init, jml $E90008 vidtest)
     inc $3300            ; $8000 VID_FRAME: the SA-1's interp calls this each game-frame
     rtl                  ;   boundary -> signals FRAME_REQ++ in shared IRAM ($00:3000).
-    jmp vf_tick          ; $8004 VF_TICK: per-tick joy+render for the WRAM poll loop (this
-    nop                  ;   was the VID_INIT no-op rtl slot, unreferenced since BOOT_ARM
-                         ;   took its jsl; see wl_setup). pad keeps VIDTEST at $8008.
+    jml $7F8918          ; $8004 VF_TICK: jml to the $7F WRAM copy of vf_tick (render-to-WRAM,
+                         ;   pt.21). The whole per-tick joy+render path now fetches from bank
+                         ;   $7F (rc_copy mirrors $E9:8000-$8FFF -> $7F:8000 at supervisor boot),
+                         ;   so its code fetch no longer conflicts with the SA-1's Bus-A type
+                         ;   (WRAM never matches — the LATCH RULE). jml long = 4B = old jmp+nop
+                         ;   (zero-shift; VIDTEST stays $8008). wl_blob still jsl's VFT_VEC
+                         ;   ($E98004); this jml lands in $7F and the $7F vf_tick rtl's back.
+                         ;   LITERAL $7F8918 (== $7F0000|vf_tick), NOT the symbol expr: a
+                         ;   forward-ref inside `vf_tick|$7F0000` mis-sizes in Poppy's first
+                         ;   pass and de-syncs every downstream label by -1 (verified: the
+                         ;   wrapper then jmp'd $8821, one byte into cpu5a22_video's rts). vf_tick
+                         ;   is .org-pinned at $8918 (like VFT_VEC/BOOT_ARM), so the literal is safe.
     jmp vidtest_init     ; $8008 VIDTEST
     jmp cpu5a22_video    ; $800B CPU5A22_VIDEO: 5A22 supervisor (cpu5a22_boot jml's here)
 
@@ -1306,7 +1315,9 @@ bhc_l:
 ; instruction boundaries (or inside joy5a22, which must therefore stay at its old
 ; address) — every old boundary lands on a pad that routes to wl_setup.
 cpu5a22_video:
-    jsr vid_init         ; clear derived $7E + raw shadow $41, TM=0, screen off
+    jsr rc_copy          ; pt.21: mirror the render code $E9:8000-$8FFF -> $7F:8000, THEN
+                         ;   fall into vid_init (rc_copy tail-calls it). Same-size retarget of
+                         ;   the old `jsr vid_init` (zero-shift: cv_loop/joy5a22 unmoved).
     rep #$30
     stz $3302            ; FRAME_ACK = 0 (IRAM; 5A22 IRAM writes enabled via SIWP)
     ; NOTE: stz has no long (24-bit) addressing mode, so "stz $410000" would assemble
@@ -1496,5 +1507,33 @@ wl_dly:
     cmp $3302            ; FRAME_ACK
     beq wl_poll          ; no new tick -> keep idling in WRAM
     sta $3302            ; ack this tick
-    jsl VFT_VEC          ; $E98004 -> vf_tick: joy + render in ROM, once per tick
+    jsl VFT_VEC          ; $E98004 -> vf_tick (now $7F WRAM copy): joy + render, once per tick
     bra wl_poll          ; back to the throttle
+
+; ---- rc_copy — pt.21: mirror the render code into WRAM bank $7F ------------------------
+; The 5A22's per-tick render (vf_tick -> joy5a22 + vid_frame -> vid_bg/vid_obj/decode_tile +
+; helpers, $E9:8000-$8FFF) fetches from ROM at ~100% duty during combat, taxing the SA-1
+; ~578K cyc/tick (Nexen prices +1-2 cyc on every ROM/IRAM Bus-A type-match; render is
+; code-fetch-bound). Fix: copy the whole render bank window to WRAM $7F:8000 (SAME 16-bit
+; offset) and run it there. The render code is bank-relocatable -- jsr/bra are K-relative,
+; and every data access is bank-explicit long ($7E staging / $41,$40 shadow) or DBR-relative
+; ($21xx PPU); it contains no jml/jsl/phk/bank-$E9 ref -- so a verbatim same-offset copy runs
+; bit-identical with K=$7F, and WRAM fetches never match an SA-1 Bus-A type (the _memTypeBusA
+; LATCH rule -> zero contention on the code-fetch share). The $8004 wrapper jml's the $7F copy
+; of vf_tick; wl_blob's jsl VFT_VEC still lands at $E9:8004 and the $7F vf_tick rtl's back.
+; Runs ONCE at supervisor boot, 5A22-side (the SA-1 has no WRAM write path -> not BOOT_ARM).
+; Long-indexed loop (no MVN -> no operand-order/DBR hazard; DBR untouched). Tail-calls vid_init.
+rc_copy:
+    php
+    rep #$30
+    ldx #$0000
+rc_l:
+    lda $E98000,x        ; long,X src: render bank ROM ($E9:8000-$8FFE; +X never crosses bank)
+    sta $7F8000,x        ; long,X dst: WRAM mirror ($7F:8000-$8FFE)
+    inx
+    inx
+    cpx #$1000           ; 4KB window (code tops out ~$8944; the tail is harmless padding)
+    bne rc_l
+    plp
+    jsr vid_init         ; exactly the action cpu5a22_video's `jsr` originally performed
+    rts
