@@ -5991,3 +5991,311 @@ Lcd1a_cd82:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; --- entry_c846: CP1 2.2 — the GAMEPLAY-tick per-slot yield loop (the c78e twin, resume
+; $00C846 fires EVERY gameplay tick): movem/push + jsr $4a9e.l (static-linked entry_4a9e
+; same-bank) + slot-exit guards; dbra-taken -> Ltj $00C844 = the interpreted trap#5 yield.
+; 1 guarded t-variant arm(s) stripped (INDIRECT fall-through faithful). ---
+; --- transpiled from $00C846 (21 instrs) by tools/transpile.py [bank1] ---
+entry_c846:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $18
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $14
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $08
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $4a9e.l -> entry_4a9e (NATIVE escape), resume brc846_1
+    lda #brc846_1
+    sta $40
+    lda #$00FA
+    sta $42
+    jmp entry_4a9e
+brc846_1:
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $14
+    lda $14
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $16
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $18
+    lda $18
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $1C
+    beq Lfc846_1
+    jmp Ltjc846_c8ba
+Lfc846_1:
+    lda $34
+    clc
+    adc #$2A4B
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $04
+    and #$0007
+    tax
+    pla
+Lfc846_2:
+    cpx #$0000
+    beq Lfc846_3
+    lsr a
+    dex
+    bra Lfc846_2
+Lfc846_3:
+    and #$0001
+    beq Lfc846_4
+    jmp Ltjc846_c8da
+Lfc846_4:
+    lda $08
+    dec a
+    sta $08
+    cmp #$FFFF
+    beq Lfc846_5
+    jmp Ltjc846_c844
+Lfc846_5:
+    lda #$0007
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$4E56
+    sta $54
+    lda #$0000
+    sta $56
+    jsl.l push32_l
+    lda $14
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$00E0
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $18
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8A
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+Lfc846_6:
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brc846_2
+    lda #brc846_2
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brc846_2:
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda #$0009
+    sta $08
+    lda #$C890
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc846_c844:
+    lda #$C844
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc846_c8ba:
+    lda #$C8BA
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc846_c8da:
+    lda #$C8DA
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext

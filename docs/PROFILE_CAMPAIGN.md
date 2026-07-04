@@ -275,6 +275,25 @@ branch-reached = choke-allowlist class), sched plumbing (~37i), and the GAMEPLAY
 resumes ($C170/$C846/$7828/$11752/$17586 = CORO additions for the avg tick — likely the real
 next lever, cycle-verify first).
 
+## Phase 2.1 item 2.2 slice 3 — entry_c846 (2026-07-03): trip2500 10.2× → **9.8×** (sub-10×)
+
+The gameplay-tick resume census (STREAMDUMP t25, loop-shape screened per the slice-2 rule):
+$011752 = 37i straight-line BUT its body carries 13 call-bridges to jah2-convention native
+callees → bridging DEMOTES them to interpreted (the cb9e +89K lesson) — that's the PARKED
+"contiguous tree + --table variants" item, skipped. $7828/9i, $17586/4i, $C170/1i = drop-rule.
+**$C846 = the win**: the c78e TWIN — a per-slot yield loop (trap#5 at $00C844 EVERY iteration →
+the resume fires every gameplay tick): movem/push spine + `jsr $4a9e.l` (static-linked to the
+slice-1 entry_4a9e, same-bank) + slot-exit guards; dbra-taken → Ltj $C844 = the interpreted
+trap. HOOKTEST-verified firing (1/tick) BEFORE gating. Zero X-setters in the spine (4a9e's 22
+are --xflag-handled). **t25 1.833M→1.747M (−86K, 9.76×, interp 294→249); ce4 1.732M (9.67×);
+t50 1.739M; light/quiet untouched.** Gates: FULLDIFF ×4 identical-set + A/B (POKEROM 2B1ED2,
+disabled arm restores the 300-instr lockstep baseline) + ESC0 + smoke + $C844 yield dump
+(regs/CCR identical; 3-byte below-SP sentinel residue = the accepted class).
+
+**Campaign line after this session: trip2500 11.9× → 9.8×, ce4 11.8× → 9.7×, light 8.4× → 7.7×.**
+Next: the $011752 contiguous-tree item (needs --table variants for its jah2 callees), $46DE
+decoder range gap, $3B48 choke class, sched plumbing.
+
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 
 The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick
