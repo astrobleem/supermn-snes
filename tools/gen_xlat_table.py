@@ -55,7 +55,8 @@ TABLE_PCS = {0xCE4, 0x295A, 0x29B6, 0x13BE,
 # with ZERO bank-$00 changes (xlat_dispatch accepts $42 in {0,1}). $01D5F0 = objproc physics visit,
 # $01E7C0 = objproc render visit (docs/OBJPROC_SPEC.md).
 CORO_PCS = {0xC172, 0x01D5F0, 0x01E7C0,
-            0x024BC2, 0x02429C}   # trap#5 SHELL resume PCs (escbank5; bank-$02 pages)
+            0x024BC2, 0x02429C,   # trap#5 SHELL resume PCs (escbank5; bank-$02 pages)
+            0xC604, 0xC78E, 0xCD1A}   # CP1 2.2 light-tick task resumes (escbank5)
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS | CORO_PCS
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94, "src/escbank3.sym": 0x97, "src/escbank4.sym": 0x98, "src/escbank5.sym": 0x99}

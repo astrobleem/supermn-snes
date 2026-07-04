@@ -4082,3 +4082,1912 @@ Ltj24d98_24e0e:
     lda #$0002
     sta $42
     jml.l inext
+
+; --- entry_c604: CP1 2.2 — the $C58A game-mode yield loop (light-tick task; resume $00C604,
+; yield trap#5 $00C602; mode-transition branches -> bank-$01 Ltj bails, faithful) ---
+; --- transpiled from $00C604 (30 instrs) by tools/transpile.py [bank1] ---
+; (RESUME PC $00C604 = `bra.b $c58a`; the body is the $00C58A game-mode yield loop it lands in —
+;  regen: transpile.py 00C58A --coroutine --bail --bank2 --xflag + this header/name fixup)
+entry_c604:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFA0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FF8E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FF98
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda #$3206
+    sta $2C
+    lda #$0001
+    sta $2E
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    bne Lfc58a_1
+    jmp Lc58a_c5ac
+Lfc58a_1:
+    lda #$3206
+    sta $2C
+    lda #$0001
+    sta $2E
+Lc58a_c5ac:
+    lda $00
+    sec
+    sbc #$0006
+    bne Lfc58a_2
+    jmp Ltjc58a_1252a
+Lfc58a_2:
+    lda $00
+    sec
+    sbc #$0008
+    bne Lfc58a_3
+    jmp Ltjc58a_1252a
+Lfc58a_3:
+    lda #$2318
+    sta $2C
+    lda #$0003
+    sta $2E
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    bne Lfc58a_4
+    jmp Lc58a_c5ce
+Lfc58a_4:
+    lda #$2318
+    sta $2C
+    lda #$0003
+    sta $2E
+Lc58a_c5ce:
+    lda $00
+    sec
+    sbc #$0012
+    bne Lfc58a_5
+    jmp Ltjc58a_11420
+Lfc58a_5:
+    lda $00
+    sec
+    sbc #$0003
+    bne Lfc58a_6
+    jmp Ltjc58a_11420
+Lfc58a_6:
+    lda $00
+    sec
+    sbc #$0004
+    bne Lfc58a_7
+    jmp Ltjc58a_11576
+Lfc58a_7:
+    lda $00
+    sec
+    sbc #$0005
+    bne Lfc58a_8
+    jmp Ltjc58a_11420
+Lfc58a_8:
+    lda $00
+    sec
+    sbc #$0007
+    beq Lfc58a_9
+    jmp Lc58a_c602
+Lfc58a_9:
+    lda $34
+    clc
+    adc #$2930
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0001
+    bne Lfc58a_10
+    jmp Ltjc58a_11420
+Lfc58a_10:
+    lda #$1576
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Lc58a_c602:
+    lda #$C602
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc58a_11420:
+    lda #$1420
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltjc58a_11576:
+    lda #$1576
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltjc58a_1252a:
+    lda #$252A
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+
+; --- entry_c78e: CP1 2.2 — light-tick task resume $00C78E: movem/push + jsr $4a9e.l
+; (static-linked entry_4a9e same-bank) + tail incl. the hot jsr (a0) via $1c8a(a5)
+; (INDIRECT-BRIDGE -> xlat -> entry_ce4t native) -> yield trap#5 $00C7DA. 1 guarded
+; t-variant arm(s) stripped. ---
+; --- transpiled from $00C78E (21 instrs) by tools/transpile.py [bank1] ---
+entry_c78e:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $18
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $14
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $08
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $4a9e.l -> entry_4a9e (NATIVE escape), resume brc78e_1
+    lda #brc78e_1
+    sta $40
+    lda #$00FA
+    sta $42
+    jmp entry_4a9e
+brc78e_1:
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $14
+    lda $14
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $16
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $18
+    lda $18
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $1C
+    beq Lfc78e_1
+    jmp Ltjc78e_c8ba
+Lfc78e_1:
+    lda $34
+    clc
+    adc #$2A4B
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $04
+    and #$0007
+    tax
+    pla
+Lfc78e_2:
+    cpx #$0000
+    beq Lfc78e_3
+    lsr a
+    dex
+    bra Lfc78e_2
+Lfc78e_3:
+    and #$0001
+    beq Lfc78e_4
+    jmp Ltjc78e_c8da
+Lfc78e_4:
+    lda $08
+    dec a
+    sta $08
+    cmp #$FFFF
+    beq Lfc78e_5
+    jmp Ltjc78e_c78c
+Lfc78e_5:
+    lda #$0007
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$4E56
+    sta $54
+    lda #$0000
+    sta $56
+    jsl.l push32_l
+    lda $14
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$00E0
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $18
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C8A
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+Lfc78e_6:
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brc78e_2
+    lda #brc78e_2
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brc78e_2:
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda #$0009
+    sta $08
+    lda #$C7DA
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc78e_c78c:
+    lda #$C78C
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc78e_c8ba:
+    lda #$C8BA
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc78e_c8da:
+    lda #$C8DA
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- entry_4a9e: the $004A9E link-frame body (CP1 "hard target" — transpiles clean with
+; --bail; --xflag REQUIRED: 22 X-setter sites (lsl/lsr/neg/subq) and the caller's trap#5
+; SR-save exposes stale X — the trap5-shells $F00D01 lesson, now transpiler-handled) ---
+; --- transpiled from $004A9E (141 instrs) by tools/transpile.py [bank1] ---
+entry_4a9e:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $3C
+    clc
+    adc #$FFFC
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$3EE2
+    tax
+    lda $400000,x
+    xba
+    bne Lf4a9e_1
+    jmp L4a9e_4b84
+Lf4a9e_1:
+    lda $34
+    clc
+    adc #$1C76
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_2
+    jmp L4a9e_4abe
+Lf4a9e_2:
+    lda $34
+    clc
+    adc #$1C62
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_3
+    jmp L4a9e_4abe
+Lf4a9e_3:
+    jmp L4a9e_4b84
+L4a9e_4abe:
+    lda #$0001
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    bpl Lf4a9e_4
+    jmp L4a9e_4ad2
+Lf4a9e_4:
+    lda $04
+    and #$003F
+    tax
+    lda $00
+Lf4a9e_5:
+    cpx #$0000
+    beq Lf4a9e_6
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_5
+Lf4a9e_6:
+    sta $00
+    jmp L4a9e_4ad6
+L4a9e_4ad2:
+    lda $04
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf4a9e_7
+    lda #$0001
+    bra Lf4a9e_8
+Lf4a9e_7:
+    lda #$0000
+Lf4a9e_8:
+    sta $A2
+    pla
+    plp
+    sta $04
+    lda $04
+    and #$003F
+    tax
+    lda $00
+Lf4a9e_9:
+    cpx #$0000
+    beq Lf4a9e_10
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_9
+Lf4a9e_10:
+    sta $00
+L4a9e_4ad6:
+    lda $34
+    clc
+    adc #$2936
+    tax
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    and $00
+    sta $08
+    lda $08
+    bne Lf4a9e_11
+    jmp L4a9e_4b84
+Lf4a9e_11:
+    lda $34
+    clc
+    adc #$2A4A
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_12
+    jmp L4a9e_4b06
+Lf4a9e_12:
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_13
+    jmp L4a9e_4afa
+Lf4a9e_13:
+    lda $34
+    clc
+    adc #$1C52
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $0C
+    eor #$00FF
+    sta $0C
+    lda $0C
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp L4a9e_4b04
+L4a9e_4afa:
+    lda $34
+    clc
+    adc #$1C53
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $10
+    rep #$20
+    lda $10
+    eor #$00FF
+    sta $10
+    lda $10
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L4a9e_4b04:
+    jmp L4a9e_4b0a
+L4a9e_4b06:
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L4a9e_4b0a:
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_14
+    jmp L4a9e_4b1a
+Lf4a9e_14:
+    lda $34
+    clc
+    adc #$1C4E
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $14
+    rep #$20
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    lda $400000,x
+    and #$00FF
+    ora $14
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp L4a9e_4b22
+L4a9e_4b1a:
+    lda $34
+    clc
+    adc #$1C4F
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $18
+    rep #$20
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    lda $400000,x
+    and #$00FF
+    ora $18
+    sep #$20
+    sta $400000,x
+    rep #$20
+L4a9e_4b22:
+    lda #$0000
+    sta $04
+    sta $06
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $04
+    rep #$20
+    lda $04
+    and #$0080
+    sta $04
+    lda $04
+    beq Lf4a9e_15
+    jmp L4a9e_4b84
+Lf4a9e_15:
+    lda $34
+    clc
+    adc #$1C76
+    tax
+    lda $400000,x
+    xba
+    bne Lf4a9e_16
+    jmp L4a9e_4b3c
+Lf4a9e_16:
+    lda $34
+    clc
+    adc #$1C76
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    pla
+    plp
+    xba
+    sta $400000,x
+    xba
+    jmp L4a9e_4b4a
+L4a9e_4b3c:
+    lda $34
+    clc
+    adc #$1C62
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    pla
+    plp
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C64
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    lda $00
+    pha
+    lda $34
+    clc
+    adc #$1C76
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L4a9e_4b4a:
+    lda #$0001
+    sep #$20
+    sta $08
+    rep #$20
+    lda $08
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $08
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $0C
+    bpl Lf4a9e_17
+    jmp L4a9e_4b5a
+Lf4a9e_17:
+    lda $0C
+    and #$003F
+    tax
+    lda $08
+Lf4a9e_18:
+    cpx #$0000
+    beq Lf4a9e_19
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_18
+Lf4a9e_19:
+    sta $08
+    jmp L4a9e_4b5e
+L4a9e_4b5a:
+    lda $0C
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf4a9e_20
+    lda #$0001
+    bra Lf4a9e_21
+Lf4a9e_20:
+    lda #$0000
+Lf4a9e_21:
+    sta $A2
+    pla
+    plp
+    sta $0C
+    lda $0C
+    and #$003F
+    tax
+    lda $08
+Lf4a9e_22:
+    cpx #$0000
+    beq Lf4a9e_23
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_22
+Lf4a9e_23:
+    sta $08
+L4a9e_4b5e:
+    lda $34
+    clc
+    adc #$2A4A
+    tax
+    lda $400000,x
+    xba
+    ora $08
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    sep #$20
+    sta $10
+    rep #$20
+    lda $10
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $10
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $14
+    lda $14
+    bpl Lf4a9e_24
+    jmp L4a9e_4b72
+Lf4a9e_24:
+    lda $14
+    and #$003F
+    tax
+    lda $10
+Lf4a9e_25:
+    cpx #$0000
+    beq Lf4a9e_26
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_25
+Lf4a9e_26:
+    sta $10
+    jmp L4a9e_4b76
+L4a9e_4b72:
+    lda $14
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf4a9e_27
+    lda #$0001
+    bra Lf4a9e_28
+Lf4a9e_27:
+    lda #$0000
+Lf4a9e_28:
+    sta $A2
+    pla
+    plp
+    sta $14
+    lda $14
+    and #$003F
+    tax
+    lda $10
+Lf4a9e_29:
+    cpx #$0000
+    beq Lf4a9e_30
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_29
+Lf4a9e_30:
+    sta $10
+L4a9e_4b76:
+    lda $34
+    clc
+    adc #$2936
+    tax
+    lda $400000,x
+    xba
+    ora $10
+    xba
+    sta $400000,x
+    xba
+    lda #$FFFF
+    pha
+    lda $38
+    clc
+    adc #$FFFC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L4a9e_4c44
+L4a9e_4b84:
+    lda $34
+    clc
+    adc #$1C62
+    tax
+    lda $400000,x
+    xba
+    bne Lf4a9e_31
+    jmp L4a9e_4c3a
+Lf4a9e_31:
+    lda #$0001
+    sep #$20
+    sta $18
+    rep #$20
+    lda $18
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $18
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    bpl Lf4a9e_32
+    jmp L4a9e_4ba0
+Lf4a9e_32:
+    lda $04
+    and #$003F
+    tax
+    lda $18
+Lf4a9e_33:
+    cpx #$0000
+    beq Lf4a9e_34
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_33
+Lf4a9e_34:
+    sta $18
+    jmp L4a9e_4ba4
+L4a9e_4ba0:
+    lda $04
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf4a9e_35
+    lda #$0001
+    bra Lf4a9e_36
+Lf4a9e_35:
+    lda #$0000
+Lf4a9e_36:
+    sta $A2
+    pla
+    plp
+    sta $04
+    lda $04
+    and #$003F
+    tax
+    lda $18
+Lf4a9e_37:
+    cpx #$0000
+    beq Lf4a9e_38
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_37
+Lf4a9e_38:
+    sta $18
+L4a9e_4ba4:
+    lda $34
+    clc
+    adc #$2A4A
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    and $18
+    sta $00
+    lda $00
+    beq Lf4a9e_39
+    jmp L4a9e_4c3a
+Lf4a9e_39:
+    lda $34
+    clc
+    adc #$2A4A
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_40
+    jmp L4a9e_4bd4
+Lf4a9e_40:
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_41
+    jmp L4a9e_4bc8
+Lf4a9e_41:
+    lda $34
+    clc
+    adc #$1C52
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $0C
+    eor #$00FF
+    sta $0C
+    lda $0C
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp L4a9e_4bd2
+L4a9e_4bc8:
+    lda $34
+    clc
+    adc #$1C53
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $08
+    rep #$20
+    lda $08
+    eor #$00FF
+    sta $08
+    lda $08
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L4a9e_4bd2:
+    jmp L4a9e_4bd8
+L4a9e_4bd4:
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L4a9e_4bd8:
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    beq Lf4a9e_42
+    jmp L4a9e_4be8
+Lf4a9e_42:
+    lda $34
+    clc
+    adc #$1C4E
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $14
+    rep #$20
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    lda $400000,x
+    and #$00FF
+    ora $14
+    sep #$20
+    sta $400000,x
+    rep #$20
+    jmp L4a9e_4bf0
+L4a9e_4be8:
+    lda $34
+    clc
+    adc #$1C4F
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $10
+    rep #$20
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    lda $400000,x
+    and #$00FF
+    ora $10
+    sep #$20
+    sta $400000,x
+    rep #$20
+L4a9e_4bf0:
+    lda #$0000
+    sta $04
+    sta $06
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $04
+    rep #$20
+    lda $04
+    and #$0080
+    sta $04
+    lda $04
+    beq Lf4a9e_43
+    jmp L4a9e_4c3a
+Lf4a9e_43:
+    lda $34
+    clc
+    adc #$1C62
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    pla
+    plp
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    sep #$20
+    sta $18
+    rep #$20
+    lda $18
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $18
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    bpl Lf4a9e_44
+    jmp L4a9e_4c12
+Lf4a9e_44:
+    lda $00
+    and #$003F
+    tax
+    lda $18
+Lf4a9e_45:
+    cpx #$0000
+    beq Lf4a9e_46
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_45
+Lf4a9e_46:
+    sta $18
+    jmp L4a9e_4c16
+L4a9e_4c12:
+    lda $00
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf4a9e_47
+    lda #$0001
+    bra Lf4a9e_48
+Lf4a9e_47:
+    lda #$0000
+Lf4a9e_48:
+    sta $A2
+    pla
+    plp
+    sta $00
+    lda $00
+    and #$003F
+    tax
+    lda $18
+Lf4a9e_49:
+    cpx #$0000
+    beq Lf4a9e_50
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_49
+Lf4a9e_50:
+    sta $18
+L4a9e_4c16:
+    lda $34
+    clc
+    adc #$2A4A
+    tax
+    lda $400000,x
+    xba
+    ora $18
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    sep #$20
+    sta $0C
+    rep #$20
+    lda $0C
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $0C
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    bpl Lf4a9e_51
+    jmp L4a9e_4c2a
+Lf4a9e_51:
+    lda $08
+    and #$003F
+    tax
+    lda $0C
+Lf4a9e_52:
+    cpx #$0000
+    beq Lf4a9e_53
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_52
+Lf4a9e_53:
+    sta $0C
+    jmp L4a9e_4c2e
+L4a9e_4c2a:
+    lda $08
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf4a9e_54
+    lda #$0001
+    bra Lf4a9e_55
+Lf4a9e_54:
+    lda #$0000
+Lf4a9e_55:
+    sta $A2
+    pla
+    plp
+    sta $08
+    lda $08
+    and #$003F
+    tax
+    lda $0C
+Lf4a9e_56:
+    cpx #$0000
+    beq Lf4a9e_57
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    dex
+    bra Lf4a9e_56
+Lf4a9e_57:
+    sta $0C
+L4a9e_4c2e:
+    lda $34
+    clc
+    adc #$2936
+    tax
+    lda $400000,x
+    xba
+    ora $0C
+    xba
+    sta $400000,x
+    xba
+    lda #$FFFF
+    pha
+    lda $38
+    clc
+    adc #$FFFC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp L4a9e_4c44
+L4a9e_4c3a:
+    lda #$0000
+    sep #$20
+    sta $14
+    rep #$20
+    lda $14
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $14
+    lda $14
+    pha
+    lda $38
+    clc
+    adc #$FFFC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L4a9e_4c44:
+    lda $38
+    clc
+    adc #$FFFC
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $1C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1E
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_cd1a: CP1 2.2 — task resume $00CD1A (stable across tick classes); 30-instr
+; spine ending in a FAITHFUL rts (pops the real $D522 return -> ors_pre routes it to the
+; interp; the post-rts pc-rel jmp(a0) dispatcher/handler chain stays interpreted = the
+; documented 2.2 residual) ---
+; --- transpiled from $00CD1A (30 instrs) by tools/transpile.py [bank1] ---
+entry_cd1a:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$2A49
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0001
+    beq Lfcd1a_1
+    jmp Lcd1a_cd34
+Lfcd1a_1:
+    lda #$0012
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$01B6
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C9A
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brcd1a_1
+    lda #brcd1a_1
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brcd1a_1:
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+Lcd1a_cd34:
+    lda $34
+    clc
+    adc #$2A49
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0002
+    beq Lfcd1a_2
+    jmp Lcd1a_cd4e
+Lfcd1a_2:
+    lda #$0012
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$03AC
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C9A
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brcd1a_2
+    lda #brcd1a_2
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brcd1a_2:
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+Lcd1a_cd4e:
+    lda $34
+    clc
+    adc #$2A49
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0004
+    beq Lfcd1a_3
+    jmp Lcd1a_cd68
+Lfcd1a_3:
+    lda #$0012
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$01DE
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C9A
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brcd1a_3
+    lda #brcd1a_3
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brcd1a_3:
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+Lcd1a_cd68:
+    lda $34
+    clc
+    adc #$2A49
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0008
+    beq Lfcd1a_4
+    jmp Lcd1a_cd82
+Lfcd1a_4:
+    lda #$0012
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$03D4
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C9A
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brcd1a_4
+    lda #brcd1a_4
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brcd1a_4:
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+Lcd1a_cd82:
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A48
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre

@@ -222,7 +222,40 @@ d96/d96t never collided only because they live in different banks). t50 instr 43
 builder fired); t25/ce4 unchanged; escbank4 → $F5B3. Same full gate battery GREEN incl. t50
 yield-state identity (same 3-byte below-SP sentinel residue class, tick-end washed).
 
-**Then:** 2.2 CBxx+$4A9E per the CP1 re-rank (2.3 trap#5 shells SHIPPED below).
+**Then:** 2.2 CBxx+$4A9E per the CP1 re-rank (2.3 trap#5 shells SHIPPED below; 2.2 slice 1 SHIPPED below).
+
+## Phase 2.1 item 2.2 slice 1 — the light-tick lever MOVES (2026-07-03): light 8.4× → **7.7×**
+
+**THE FIRST LIGHT-TICK WIN OF THE CAMPAIGN: trip1000 1.509M → 1.378M cyc (−131K, interp 263→183).**
+STREAMDUMP on trip1000 resolved the light tick into four task visits (resumes after $0796):
+$46DE (11i, small — residual), **$C604** (26i: the $C58A game-mode yield loop), **$C78E** (56i:
+movem/push spine + `jsr $4a9e.l` + tail w/ the hot `jsr (a0)` via $1c8a(a5) → xlat → entry_ce4t)
+and **$CD1A** (30i spine; stable across tick classes). All three shipped as --coroutine bodies in
+escbank5 + CORO_PCS (bank-$00 xlat pages, existing machinery). entry_c604 registers resume $C604
+but decodes from the loop head $C58A (the resume instr is `bra.b $c58a`; the --coroutine
+backward-bra heuristic would otherwise decode 1 instr). entry_cd1a ends in a FAITHFUL rts (pops
+the real $D522 return → ors_pre routes real banks to the interp); its post-rts pc-rel jmp(a0)
+dispatcher/handler chain (~50i: $D522/$CEB6/$CF8A/$D6B0/$D226 stubs) = the 2.2 residual, along
+with $46DE + the $3B48 prologue. Gameplay triples: byte-identical sets (the 2.2 tasks yield at
+OTHER PCs there — $C170/$C846/$7828/$11752 etc. = future CORO additions); span_quiet untouched.
+
+**F6 `--xflag` (transpiler, inert-off):** entry_4a9e has 22 X-setter sites (lsl/lsr/neg/subq) —
+hand-patching is untenable, so the trap5-shells lesson became a transpiler mode: emit $A2 from the
+live native carry at add/sub/addq/subq (X=C / borrow), inside dynamic-shift loops per step
+(count=0 → untouched, faithful), after imm-shift chains, and NZ-derived for NEG. Guarded inert:
+the deployed entry_1e7c0 regen is byte-identical without the flag.
+
+**$4A9E resolved (the old "hard target: link frame + uninit-local read" deferral):** it transpiles
+clean with --bail + --xflag; the REAL story behind the deferral is that its link-frame locals are
+read UNINITIALIZED → its outputs are below-SP-garbage-dependent, and that garbage ALREADY differs
+interp-vs-MAME on the deployed build (tick-end byte $F0104F: interp 00 vs MAME 10 = this task's
+saved-SR X — divergent pre-2.2, GREEN-tolerated forever). The native arm changes the garbage
+flavor (saves $19 there), NOT the class: yield dumps show c604 bit-exact, cd1a exact-at-handoff,
+c78e CCR/frame diffs all garbage-derived and tick-end-washed except the pre-existing $F0104F.
+
+Gates: FULLDIFF GREEN ×4 (t25/ce4/t50 byte-identical sets; t10 position-identical to the deployed
+baseline incl. the pre-existing $F0104F/$F0004D/$F00E19 class) + A/B position-identical (POKEROM
+2B180C/2B1CAA/2B1E4E) + ESC0 GREEN + smoke OK + the three yield/handoff dumps as above.
 
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 

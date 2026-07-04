@@ -184,6 +184,7 @@ def is_frame(an): return an in ('a6', 'a7')
 # the captured entry regs). NOTE: only ever WIDEN this when the register cannot be ROM (reads) -- stores
 # already assume work-RAM-or-video, and RMW already assumes work RAM (writable). Validate bit-exact.
 WORKRAM = set()                                  # --workram=<csv>: extra provably-work-RAM An regs
+XFLAG = False                                  # --xflag: emit X ($A2) at X-setters
 def is_workram(an): return an in ('a5', 'a6', 'a7') or an in WORKRAM
 
 def hi_ext(disp): return '#$FFFF' if disp < 0 else '#$0000'   # sign-extend a 16-bit disp into hi16
@@ -826,6 +827,7 @@ def gen(e, ins, nxt):
                     e('asl $%02X' % dp); e('rol $%02X' % (dp+2))
                 else:                                    # hi>>1 -> carry -> lo
                     e('lsr $%02X' % (dp+2)); e('ror $%02X' % dp)
+                emit_xflag_c(e)                          # --xflag per step: X = last bit out (count=0 -> untouched)
                 e('dex'); e('bra %s' % loop)
                 e.lbl(done)
                 if fuses: raise Unsupported('dynamic shift feeding branch — add if needed')
@@ -835,7 +837,9 @@ def gen(e, ins, nxt):
             e('lda $%02X' % dm); e('and #$003F'); e('tax')   # X = count (low 6 bits, 0-63)
             e('lda $%02X' % dp)                              # A = Dn.w
             e.lbl(loop); e('cpx #$0000'); e('beq %s' % done)
-            one(e); e('dex'); e('bra %s' % loop)
+            one(e)
+            emit_xflag_c(e, preserve_a=True)                 # --xflag per step: X = last bit out (count=0 -> untouched)
+            e('dex'); e('bra %s' % loop)
             e.lbl(done); e('sta $%02X' % dp)
             if fuses: raise Unsupported('dynamic shift feeding branch — add if needed')
             return 1
@@ -843,6 +847,7 @@ def gen(e, ins, nxt):
         def lv(e):
             ea_load_A(e, dst, size)
             for _ in range(cnt[1] & 0xFFFF): one(e)
+            emit_xflag_c(e, preserve_a=True)                 # --xflag: X = last bit out (68K imm count >= 1)
         ea_store_A_from(e, dst, size, lv)
         if fuses:                                        # result Z/N is live; only Z/N-testable branches
             if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('shift feeding %s (needs C/V)' % nb)
@@ -912,6 +917,7 @@ def gen(e, ins, nxt):
         if size == 'l': raise Unsupported('neg.l — add if needed')
         def modify(e):
             e('eor #$FFFF'); e('inc a')                 # two's complement: 0 - A (X preserved)
+            emit_xflag_nz(e, size)                      # --xflag: 68K NEG X=C=(result != 0)
         ea_rmw(e, dst, size, modify)                    # works for Dn and memory EAs
         if fuses: raise Unsupported('neg feeding branch')
         return 1
@@ -1364,6 +1370,31 @@ def expand_reglist(s):
             out.append(part)
     return out
 
+
+def emit_xflag_c(e, invert=False, preserve_a=False):
+    """--xflag: materialize the 68K X var ($A2) from the LIVE native carry, preserving P (and A).
+    invert=True for sub/neg-family (68K X = borrow = !native C). Needed when an X-SETTER can be the
+    last one before a trap#5 yield: the interp trap SAVES SR (sr_build reads $A2) into the task
+    frame, so a stale X lands in work RAM (the trap5-shells $F00D01 lesson)."""
+    if not XFLAG: return
+    e('php')
+    if preserve_a: e('pha')
+    e('lda #$0000'); e('rol a')
+    if invert: e('eor #$0001')
+    e('sta $A2')
+    if preserve_a: e('pla')
+    e('plp')
+
+def emit_xflag_nz(e, size):
+    """--xflag for NEG (emitted as eor/inc, no native carry): 68K X=C=(result != 0)."""
+    if not XFLAG: return
+    z, d2 = e.fresh(), e.fresh()
+    e('php'); e('pha')
+    e('and #$%04X' % (0x00FF if size == 'b' else 0xFFFF))
+    e('beq %s' % z); e('lda #$0001'); e('bra %s' % d2)
+    e.lbl(z); e('lda #$0000')
+    e.lbl(d2); e('sta $A2'); e('pla'); e('plp')
+
 def gen_addsub(e, base, size, ops, nxt, fuses, nb):
     is_sub = base.startswith('sub')
     src, dst = ops
@@ -1403,12 +1434,15 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
         e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp + 2)); e('tax')   # X = LOW word offset
         e('jsr rdw40'); e(init); e('%s %s' % (op, slo)); e('php'); e('jsr wrw40')
         e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')       # X = HIGH word offset
-        e('jsr rdw40'); e('plp'); e('%s %s' % (op, shi)); e('jsr wrw40')          # plp restores LOW's C
+        e('jsr rdw40'); e('plp'); e('%s %s' % (op, shi))                          # plp restores LOW's C
+        emit_xflag_c(e, invert=is_sub, preserve_a=True)        # --xflag: X from the 32-bit op's carry
+        e('jsr wrw40')
         if dst[0] == '(An)+': bump_an(e, an, 4)
         return 1
     if is_sub:
         if dst[0] == 'Dn':                                      # register dest: sbc + sta $dp (flags live)
             emit_signed_cmp(e, dst, src, size, store_dp=store_dp)
+            emit_xflag_c(e, invert=True)                        # --xflag: X = borrow (P preserved)
             if fuses: emit_branch(e, nb, branch_target(nxt), 'signed32' if size == 'l' else 'signed'); return 2
             return 1
         # MEMORY dest: sub is read-modify-WRITE (not a flagless cmp). emit the sub into A with flags,
@@ -1416,6 +1450,7 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
         wr = 'wrb40' if size == 'b' else 'wrw40'
         if fuses:
             emit_signed_cmp(e, dst, src, size, store_dp=None)  # A=result; N,V,Z,C live
+            emit_xflag_c(e, invert=True, preserve_a=True)      # --xflag: X = borrow
             e('php'); e('pha')                                 # save sub flags, then result value
             ea_addr_to_X(e, dst)                               # X = dest work-RAM offset (clobbers A)
             e('pla'); e('jsr %s' % wr)                         # A=result; write back (clobbers flags)
@@ -1426,6 +1461,7 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
             if src[0] == 'imm': e2('sbc %s' % imm16(src[1]))
             elif src[0] in ('Dn', 'An'): e2('sbc $%02X' % reg_dp(src[1]))
             else: raise Unsupported('sub mem,mem')
+            emit_xflag_c(e2, invert=True, preserve_a=True)     # --xflag: X = borrow (A = result kept)
         ea_rmw(e, dst, size, modify); return 1
     # add family (RMW; (An)+ increments once). A MEMORY src is pre-loaded to TMP BEFORE ea_rmw sets X
     # for the dst (so the src load can't clobber the RMW address); modify then `adc $TMP`.
@@ -1436,6 +1472,7 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
         if src[0] == 'imm': e('adc %s' % imm16(src[1]))
         elif src[0] in ('Dn', 'An'): e('adc $%02X' % reg_dp(src[1]))
         else: e('adc $%02X' % TMP)
+        emit_xflag_c(e, invert=False, preserve_a=True)         # --xflag: X = carry (A = result kept)
     ea_rmw(e, dst, size, modify)
     if fuses:
         # bne/beq/bmi/bpl need only Z/N -> reload the result (RMW write clobbered A/flags).
@@ -1510,11 +1547,12 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED, BANK2, WORKRAM
+    global VIDEO, ESCAPED, BANK2, WORKRAM, XFLAG
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     BANK2 = '--bank2' in sys.argv
     bank1 = '--bank1' in sys.argv or BANK2            # bank2 reuses all of bank1's jsl.l/jml.l transforms
     VIDEO = '--video' in sys.argv
+    XFLAG = '--xflag' in sys.argv
     for a in sys.argv:                                # --workram=a0,a1: extra provably-work-RAM An regs (EA fast path)
         if a.startswith('--workram='): WORKRAM |= {r.strip() for r in a.split('=',1)[1].split(',') if r.strip()}
     coroutine = '--coroutine' in sys.argv                 # task-BODY escape (see main-loop-coroutine-arch):
