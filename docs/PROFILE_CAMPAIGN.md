@@ -345,6 +345,31 @@ smoke + HOOKTEST fire-verify.
 prologue (choke class), sched plumbing, CC10/CCD8-class stale-reach audit (old $92 bodies whose
 jah2 arms miss bsr reaches — the cc10/ccd8 find suggests more).
 
+## The $92-bridge stale-reach audit — COMPLETE (2026-07-04): 1 candidate, evaluated, DROPPED
+
+Enumerated ALL `jml.l inext` call-bridges (the pre-ojmp_hook convention): 16 in escbank ($92) +
+4 in escbank2. Fire-rate screen (stream grep): every bridged callee is COLD on all triples
+($2D8A ×8, $2E26, $17DA ×2, $3E0E, $90C4, $24920 ×2 — boot/cold-path) EXCEPT **$00CD1A (1/tick,
+BOTH triples)**: the ce58 body ($00CEB4 task) bridges `jsr $cd1a.l`.
+
+**The one swap evaluated and DROPPED (evidence-based):** swapping that bridge to ojmp_hook made
+t25 DIFF=9 (2 new bytes: the fd2 counter + a task byte) — and the POKEROM-DISABLED arm reproduced
+the IDENTICAL diff: the divergence is NOT entry_cd1a's logic but the ojmp_hook detour's ~50 native
+cycles SHIFTING AN IRQ-SLICE BOUNDARY (fd2t fired 3×; one slice-sensitive task byte flipped — the
+known $0708-timing-artifact class). Win = −1 interp instr (the body first-guard-bails on t25
+state). Timing perturbation for zero win → reverted. **RULE: bridge-swap candidates must clear
+the fire-rate screen AND a disabled-arm (POKEROM) timing-sensitivity check — a pure dispatch
+detour can flip IRQ-slice-sensitive bytes with zero functional change.**
+
+**Bookkeeping correction: entry_cd1a is DEAD** — HOOKTEST 0 fires on BOTH triples, both reaches
+of $CD1A are the ce58 bridge (no trap sits where an rte could ever resume $CD1A). Slice 1's
+light win was entirely c604 + c78e/4a9e (the numbers stand; the attribution is corrected). The
+body + its CORO entry stay deployed (harmless, provably unreached) — flagged for removal on the
+next escbank5 re-org.
+
+**Campaign line (final this session): trip2500 11.9× → 9.4×, ce4 11.8× → 9.3×, light 8.4× →
+7.6×.** Next: $3B48 prologue (choke class), sched plumbing.
+
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 
 The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick
