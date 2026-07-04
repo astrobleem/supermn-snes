@@ -632,3 +632,23 @@ scheduler semantic-rewrite finally pays) + interp 335K (contiguous-compile).
   ISR/frame counters) to price the 68K ISR + close the steering blind spot; (2) a 5A22-contention
   probe (SA-1 cycleCount vs wall-frames with VID stubbed vs live); (3) re-project the 30fps gap
   from FREE-RUN numbers; only then rank scheduler-rewrite vs contiguous-compile.
+
+## Free-run ISR probe (tools/freerun_isr_probe.py, 2026-07-04): the blind spot is SMALL
+
+Free-running the NAT (smoke-release flags: $072E=1,$0704=1) with escapes armed, exec-hook on
+take_irq: **7 fires over 7 game ticks (9.41M cyc window, 1.34M cyc/tick — matching the injected
+light-class number!)** — the 68K vblank ISR fires ONCE PER GAME TICK, not per display frame: the
+$0818 idle-spin FORCE-FIRES the vblank ($AC=1 -> $AA) when the tick's work completes, so ISR
+frequency is tick-paced by design. Consequences:
+- The injected-window ISR blind spot is ~1 ISR body/tick, NOT 10-12x/frame — the steering
+  numbers are only slightly optimistic, and free-run tick cost CONFIRMS them (1.34M ≈ hle_span's
+  1.33M light). The scary version of the blind spot is dead.
+- The per-frame self-pricing hypothesis for the 1.08M unattributed is WEAKENED: it isn't ISR.
+  Remaining suspects unchanged: 5A22<->SA-1 BW-RAM contention during VID render + window slack +
+  helper time. The contention probe (VID stubbed vs live) is now the decisive measurement.
+- Probe caveats: ISR-body spans didn't capture (op_rte alternation quirk, n=0) — the fires/tick
+  + free-run-vs-injected agreement are the load-bearing data; frame counting approximate.
+
+**30fps standing after this round: the gap is REAL (~3-4.6x wait-adjusted, free-run-confirmed),
+not an artifact — closing it = the contention probe, then scheduler-rewrite (244K) +
+contiguous-compile (335K) + whatever contention reveals.**
