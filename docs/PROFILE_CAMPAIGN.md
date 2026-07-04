@@ -257,6 +257,24 @@ Gates: FULLDIFF GREEN ×4 (t25/ce4/t50 byte-identical sets; t10 position-identic
 baseline incl. the pre-existing $F0104F/$F0004D/$F00E19 class) + A/B position-identical (POKEROM
 2B180C/2B1CAA/2B1E4E) + ESC0 GREEN + smoke OK + the three yield/handoff dumps as above.
 
+**2.2 slice 2 attempted + DROPPED (drop-rule; the loop_hook-collapse lesson RE-LEARNED):** the
+post-rts jmp(a0) dispatcher/handler chain (~59 STREAMDUMP instr/tick: $D522/$CEB6/$D6B0/$D226
+dispatchers + $CF8A/$D6D8/$D374 idle rts handlers) was built + registered (7 jmp-state xlat
+entries, all gates GREEN) — and HOOKTEST exec-hooks showed **0 fires**: the whole idle chain is
+loop_hook-COLLAPSED (dbg_fetch/STREAMDUMP logs the PCs, but they never reach lh_off/op_jmp_idx/
+op_rts_norm, so no dispatch hook ever sees them and their real cost is ≈ free). Fully reverted.
+RULE (write it on your hand): STREAMDUMP counts ≠ real cost — before scoping any residual, verify
+REAL (genuinely-interpreted, ilog/$40:C000) vs ALL, or HOOKTEST a candidate body FIRST; the
+hle_span "interp-instr" ($4A) counter ALSO includes collapsed instrs. The light tick's remaining
+183 $4A-instrs are therefore an OVERCOUNT of real residual — the true light-tick lever is now
+smaller than it reads; next-lever ranking should use cycle deltas, not instr counts.
+
+**2.2 remaining (re-scoped):** the $46DE visit (11i, decode truncates at 5 — cold-middle rts
+bounds; needs a decoder range override or stays interpreted), the $3B48 prologue (14i,
+branch-reached = choke-allowlist class), sched plumbing (~37i), and the GAMEPLAY-tick task
+resumes ($C170/$C846/$7828/$11752/$17586 = CORO additions for the avg tick — likely the real
+next lever, cycle-verify first).
+
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 
 The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick
