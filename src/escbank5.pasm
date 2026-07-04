@@ -7182,3 +7182,948 @@ L46de_47ec:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; --- CP1 2.2: the $3B48 GAME_TICK PROLOGUE fragments (every tick class incl. quiet): the
+; jsr-dispatch spine to the 6 native $92 header callees + the 15-reg movem/rts tail.
+; entry_3b48 = choke-reached ($3B48 fall-through fetch; ct_ext arm); entry_3b58/entry_3b70
+; = rts-pop-reached (the callees exit jml.l ors_pre -> op_rts_norm -> xlat). Each jsr site
+; is a JAH2-REACH BAIL (see stubs) so the callees keep their native jah2 dispatch. ---
+
+; --- entry_3b48 ---
+; --- transpiled from $003B48 (16 instrs) by tools/transpile.py [bank1] ---
+entry_3b48:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $00
+    sta $9A
+    lda $02
+    sta $9C
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$1C58
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$1C5A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1B12
+    tax
+    lda $400000,x
+    xba
+    ora $02
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1B14
+    tax
+    lda $400000,x
+    xba
+    ora $00
+    xba
+    sta $400000,x
+    xba
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $08c2): the interp DECODES the jsr at $3B50
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B50
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b48_1:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $26a0): the interp DECODES the jsr at $3B54
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B54
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b48_2:
+    lda $34
+    clc
+    adc #$1C5C
+    tax
+    lda $400000,x
+    xba
+    beq Lf3b48_1
+    jmp L3b48_3b64
+Lf3b48_1:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $158e): the interp DECODES the jsr at $3B5E
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B5E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b48_3:
+    jmp L3b48_3b68
+L3b48_3b64:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $17b4): the interp DECODES the jsr at $3B64
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B64
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b48_4:
+L3b48_3b68:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $2d8e): the interp DECODES the jsr at $3B68
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B68
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b48_5:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $5c32): the interp DECODES the jsr at $3B6C
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B6C
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b48_6:
+    lda $34
+    clc
+    adc #$1CCE
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$AAAA
+    beq Lf3b48_2
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    jmp L3b48_3b7e
+Lf3b48_2:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $90c4): the interp DECODES the jsr at $3B78
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B78
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b48_7:
+L3b48_3b7e:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $06
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $04
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $08
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $0C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $12
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $10
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $16
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $14
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $18
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $1C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $36
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $34
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_3b58 ---
+; --- transpiled from $003B58 (12 instrs) by tools/transpile.py [bank1] ---
+entry_3b58:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$1C5C
+    tax
+    lda $400000,x
+    xba
+    beq Lf3b58_1
+    jmp L3b58_3b64
+Lf3b58_1:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $158e): the interp DECODES the jsr at $3B5E
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B5E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b58_1:
+    jmp L3b58_3b68
+L3b58_3b64:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $17b4): the interp DECODES the jsr at $3B64
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B64
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b58_2:
+L3b58_3b68:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $2d8e): the interp DECODES the jsr at $3B68
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B68
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b58_3:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $5c32): the interp DECODES the jsr at $3B6C
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B6C
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b58_4:
+    lda $34
+    clc
+    adc #$1CCE
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$AAAA
+    beq Lf3b58_2
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    jmp L3b58_3b7e
+Lf3b58_2:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $90c4): the interp DECODES the jsr at $3B78
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B78
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b58_5:
+L3b58_3b7e:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $06
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $04
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $08
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $0C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $12
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $10
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $16
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $14
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $18
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $1C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $36
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $34
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_3b70 ---
+; --- transpiled from $003B70 (5 instrs) by tools/transpile.py [bank1] ---
+entry_3b70:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$1CCE
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$AAAA
+    beq Lf3b70_1
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    jmp L3b70_3b7e
+Lf3b70_1:
+    ; JAH2-REACH BAIL (was CALL-BRIDGE jsr $90c4): the interp DECODES the jsr at $3B78
+    ; itself -> the jah2/bhp hook dispatches the native callee; its ors_pre exit pops the
+    ; return -> op_rts_norm -> xlat -> the next prologue fragment (or interp for jsr-adjacent
+    ; returns). A bridge here would DEMOTE the callee (the hook only sees DECODED jsr's).
+    lda #$3B78
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+br3b70_1:
+L3b70_3b7e:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $06
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $04
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $08
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $0C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $12
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $10
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $16
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $14
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $18
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $1C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $36
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $34
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre

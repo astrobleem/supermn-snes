@@ -370,6 +370,35 @@ next escbank5 re-org.
 **Campaign line (final this session): trip2500 11.9× → 9.4×, ce4 11.8× → 9.3×, light 8.4× →
 7.6×.** Next: $3B48 prologue (choke class), sched plumbing.
 
+## The $3B48 GAME_TICK prologue — SHIPPED (2026-07-04): the QUIET tick moves for the first time
+
+The prologue = a jsr-dispatch spine to the 6 native $92 header callees (8c2/26a0/158e|17b4/2d8e/
+5c32, all jah2-dispatched) + a 15-reg movem/rts tail — running on EVERY tick class. Shipped as 3
+fragments (escbank5): **entry_3b48** (choke-reached: the $3B48 fall-through fetch) +
+**entry_3b58/entry_3b70** (rts-pop-reached: the callees exit `jml.l ors_pre` → op_rts_norm →
+xlat). Each jsr site is a **JAH2-REACH BAIL** (PC=the jsr itself, zero pushes) — the interp
+DECODES the jsr so the hook keeps dispatching the callee native (a bridge would demote it);
+interp cost/tick = the 6 jsr instrs only (14 → ~7). Jsr-adjacent return PCs ($3B54/$3B62/$3B68/
+$3B6C) are deliberately UNregistered (a body that immediately bails = pure detour).
+
+**Choke allowlist extension (ct_ext):** choke_tramp's 42-byte block was full → its last arm is
+now `jmp ct_ext` (size-neutral: jmp+2nop == cmp+bne) with the tail ($0FD2 moved + $3B48 + future
+arms) carved at $D2E8 in the dead-25110 corpse, abutting ors_99chk.
+
+**NEW GATE RULE (an A/B arm bit us):** choke-reached entries assume GUARANTEED table hits (the
+choke pla's the jsr-return before xlat_dispatch) — POKEROM-zeroing their xlat entry corrupts the
+interp stack and runs away (112K-instr hang). The correct A/B for the choke class = disable the
+ARM (patch the ct_ext cmp immediate in BOTH bank-$00 ROM copies: D2EE:ffff,52EE:ffff);
+pop-reached entries zero normally.
+
+**Win: light 1.356M→1.346M (165 instr); t25 1.667M (9.31×, 199 instr); ce4/t50 GREEN;
+span_quiet 1.328M→1.316M (109 instr) — the FIRST quiet-tick movement of the campaign.**
+Gates: FULLDIFF ×4 known sets + quiet + A/B (arm-disable, = the 178-instr baseline) + ESC0 +
+smoke + HOOKTEST 3/3.
+
+**Campaign line: trip2500 11.9× → 9.31×, ce4 11.8× → 9.3×, light 8.4× → 7.52×, quiet 7.4× →
+7.35×.** Next: sched plumbing (the last 2.2 residual).
+
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 
 The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick

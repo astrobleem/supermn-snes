@@ -11328,6 +11328,21 @@ ors_pre_99:
     lda #$0099
     sta $42
     jml [$0040]
+
+; ct_ext — the fetch-chokepoint allowlist TAIL (choke_tramp's 42-byte block is full; its last
+; arm is now `jmp ct_ext`). Carved from the dead-25110 corpse like ors_99chk above. Contract:
+; A = 68K PC lo16 ($42 already checked == 0), the jsr-choke_tramp return still on the stack.
+; HIT: drop the return + xlat_dispatch (the PC IS in the table). MISS: rts (ilog contract).
+.org $D2E8
+ct_ext:
+    cmp #$0FD2           ; CAMPAIGN 2 fd2 arm (moved from choke_tramp)
+    beq ctx_hit
+    cmp #$3B48           ; GAME_TICK prologue fragment 1 (entry_3b48; $3B58/$3B70 are pop-reached)
+    beq ctx_hit
+    rts
+ctx_hit:
+    pla
+    jml $94F900          ; xlat_dispatch
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
     sta $54
@@ -19085,8 +19100,11 @@ choke_tramp:
     beq ct_hit
     cmp #$08FA           ; CAMPAIGN 2: block-copy, jsr-reached (446 instr/heavy-tick) -> entry_8fat
     beq ct_hit
-    cmp #$0FD2           ; CAMPAIGN 2: $0FB8-fill MID-LOOP RESUME (IRQ-sliced; ISR-exit rte lands
-    bne ct_ret           ;   here -- no jsr/jmp/rte table can catch it; 595 instr/heavy-tick) -> entry_fd2t
+    jmp ct_ext           ; 42-byte block FULL -> the allowlist TAIL continues in the dead-25110
+                         ; corpse (ct_ext: $0FD2 moved there + $3B48 prologue + future arms).
+                         ; SIZE-NEUTRAL: jmp(3)+nop(2) == the old cmp #$0FD2(3)+bne(2).
+    nop
+    nop
 ct_hit:
     pla                  ; drop the jsr choke_tramp return (16-bit) -> dispatch at inext stack level
     jml $94F900          ; xlat_dispatch (guaranteed HIT for an allowlisted PC; symbol in escbank2)
