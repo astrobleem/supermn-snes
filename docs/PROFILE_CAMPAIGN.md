@@ -222,7 +222,39 @@ d96/d96t never collided only because they live in different banks). t50 instr 43
 builder fired); t25/ce4 unchanged; escbank4 → $F5B3. Same full gate battery GREEN incl. t50
 yield-state identity (same 3-byte below-SP sentinel residue class, tick-end washed).
 
-**Then:** 2.3 trap#5 shells / 2.2 CBxx+$4A9E per the CP1 re-rank.
+**Then:** 2.2 CBxx+$4A9E per the CP1 re-rank (2.3 trap#5 shells SHIPPED below).
+
+## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
+
+The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick
+(STREAMDUMP: resume $024BC2 59 instr / $02429C 68 instr, each $000796-switch-in-entered, each
+yielding at the trap#5 immediately before its own resume PC — the objproc pattern). Shipped as
+**escbank5** ($99:8000, file $2C8000, NEW): entry_24bc2 + entry_2429c (--coroutine --bail) + their
+still-interpreted callees entry_23e34/23e42/259ca/28ddc/24d98, ALL static-linked via --escapes —
+incl. the already-native Phase-1.4 roots ($23342/$235E0/$23864 escbank4) and entry_25110 (escbank3)
+as CROSS-BANK `jml.l` links (gen_escbank5_syms imports their 24-bit addresses), killing the jsr.l
+dispatch tax. Machinery: xlat 512→**768 pages** (bank $02; xlat_dispatch `cmp #$0003`, size-neutral)
++ CORO_PCS += the 2 resume PCs + the **$00FA sentinel arm** (ors_98chk zero-shift tail swap →
+ors_99chk, carved at $D2D8 out of the DEAD old-inline-25110 front half — bank $00 has NO free gaps
+left; the dead-corpse reclaim is the remaining space source). Post-processing: sed #$00FD→#$00FA +
+the 11 mechanically-emitted jsr(An) guarded t-variant arms STRIPPED (all cold; the INDIRECT-BRIDGE
+fall-through stays faithful — entry_25110t etc. don't exist and 25110 is too big to duplicate).
+
+**X-FLAG LESSON (a FULLDIFF catch, new failure surface):** the transpiler's known "X-untouched"
+gap (gen_addsub never writes $A2; only branch-to-exit edges materialize it) becomes OBSERVABLE
+when a coroutine body yields via trap#5 — the interpreted trap SAVES SR (sr_build reads $A2) into
+the task frame, so a stale X lands in work RAM ($F00D01 = $14 vs $04 = bit 4). The shell cluster
+has exactly ONE hot-path X-setter (`sub.w $2a32(a5),d1` in entry_24d98) — hand-patched (php/rol/
+eor/sta $A2/plp at the sbc, carry still live). Cold-path X-setters keep the documented gap.
+RULE for future --coroutine bodies: census X-SETTERS (add/sub/addq/subq/neg/shifts, NOT cmp/adda)
+on the hot path — any one upstream of a yield needs the $A2 write (or the transpiler grows it).
+
+**Win: t25 1.983M→1.830M (−153K, 10.2×, interp 403→294); ce4 1.816M (10.1×); t50 1.826M;
+light 1.509M/263 untouched.** Gates: FULLDIFF GREEN ×3 identical-set + light + A/B set-identical
+(POKEROM 2B2ED4/2B3246 = both bank-$02 xlat entries) + ESC0 GREEN + smoke OK + yield-state identity
+at BOTH yields (regs/CCR identical; 6-byte below-SP sentinel-vs-return residue = the accepted A2
+class, trap-frame-overwritten by tick end; flag vars are TRUTHY words — nat Z=2 vs int Z=1 is the
+same semantic).
 
 **NEW (audit find, follow-up): tools/audit_banks.py flags a PRE-EXISTING escbank overlap** — the
 $8000 block's bodies have grown to $F29F, PAST the pinned .org $F000/$F400 dispatcher blocks, which

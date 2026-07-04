@@ -54,10 +54,11 @@ TABLE_PCS = {0xCE4, 0x295A, 0x29B6, 0x13BE,
 # ((PC>>8) & 0x1FF) so bank-$01 resume PCs dispatch through the SAME ors_rte_x->ojmp_hook route
 # with ZERO bank-$00 changes (xlat_dispatch accepts $42 in {0,1}). $01D5F0 = objproc physics visit,
 # $01E7C0 = objproc render visit (docs/OBJPROC_SPEC.md).
-CORO_PCS = {0xC172, 0x01D5F0, 0x01E7C0}
+CORO_PCS = {0xC172, 0x01D5F0, 0x01E7C0,
+            0x024BC2, 0x02429C}   # trap#5 SHELL resume PCs (escbank5; bank-$02 pages)
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS | CORO_PCS
-BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94, "src/escbank3.sym": 0x97, "src/escbank4.sym": 0x98}
+BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94, "src/escbank3.sym": 0x97, "src/escbank4.sym": 0x98, "src/escbank5.sym": 0x99}
 
 def load_native_addrs():
     """entry_X -> 24-bit native address (bank forced per source bank)."""
@@ -75,7 +76,7 @@ def load_native_addrs():
 def load_entry_pcs():
     """entry_X -> 68K PC, from the `transpiled from $XXXXXX` comment preceding each label."""
     out = {}
-    for f in ("src/escbank.pasm", "src/escbank2.pasm", "src/escbank3.pasm", "src/escbank4.pasm"):
+    for f in ("src/escbank.pasm", "src/escbank2.pasm", "src/escbank3.pasm", "src/escbank4.pasm", "src/escbank5.pasm"):
         last = None
         for ln in Path(f).read_text().splitlines():
             m = re.search(r"transpiled from \$([0-9A-Fa-f]+)", ln)
@@ -115,14 +116,14 @@ def main():
         print("gen_xlat_table: WARNING missing jmp-state entries: %s"
               % [hex(x) for x in ALLOWED_PCS - got], file=sys.stderr)
 
-    # build the page table: 512 pages, index = (PC>>8) & 0x1FF (bit 8 = the PC bank, 0 or 1 only —
-    # xlat_dispatch accepts $42 in {0,1} and merges bank<<8 into the page index)
+    # build the page table: 768 pages, index = (bank<<8)|(PC>>8) (bank 0/1/2 —
+    # xlat_dispatch accepts $42 in {0,1,2} and merges bank<<8 into the page index)
     for pc, _, _ in pairs:
-        assert (pc >> 16) <= 1, "xlat table PC $%06X: only banks 0/1 supported" % pc
-    PAGE_BYTES = 512 * 2
+        assert (pc >> 16) <= 2, "xlat table PC $%06X: only banks 0/1/2 supported" % pc
+    PAGE_BYTES = 768 * 2
     page_off = {}                       # page index -> sub-table offset in blob
     for pc, _, _ in pairs:
-        hib = (pc >> 8) & 0x1FF
+        hib = (pc >> 8) & 0x3FF
         page_off.setdefault(hib, None)
     # allocate sub-tables after the page array
     cur = PAGE_BYTES
@@ -133,7 +134,7 @@ def main():
         cur += 256 * 3
     # fill sub-table entries
     for pc, addr, name in pairs:
-        hib, lob = (pc >> 8) & 0x1FF, pc & 0xFF
+        hib, lob = (pc >> 8) & 0x3FF, pc & 0xFF
         st = subtab[hib]
         st[lob*3+0] = addr & 0xFF
         st[lob*3+1] = (addr >> 8) & 0xFF
@@ -152,7 +153,7 @@ def main():
     print("gen_xlat_table: %d entries, %d pages, %d bytes -> src/xlat_table.bin (@ $96:8000)"
           % (len(pairs), len(page_off), len(blob)))
     for pc, addr, name in pairs:
-        print("    $%06X -> $%06X  [%s]  page $%03X off $%04X" % (pc, addr, name, (pc>>8)&0x1FF, page_off[(pc>>8)&0x1FF]))
+        print("    $%06X -> $%06X  [%s]  page $%03X off $%04X" % (pc, addr, name, (pc>>8)&0x3FF, page_off[(pc>>8)&0x3FF]))
 
 if __name__ == "__main__":
     main()

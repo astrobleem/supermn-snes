@@ -8,7 +8,8 @@ import re, sys
 from pathlib import Path
 
 BANKS = [("src/escbank.pasm", "src/escbank.sym"), ("src/escbank2.pasm", "src/escbank2.sym"),
-         ("src/escbank3.pasm", "src/escbank3.sym"), ("src/escbank4.pasm", "src/escbank4.sym")]
+         ("src/escbank3.pasm", "src/escbank3.sym"), ("src/escbank4.pasm", "src/escbank4.sym"),
+         ("src/escbank5.pasm", "src/escbank5.sym")]
 bad = 0
 for pasm, sym in BANKS:
     if not Path(pasm).exists() or not Path(sym).exists():

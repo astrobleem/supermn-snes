@@ -28,6 +28,12 @@ if [ -f src/escbank4.pasm ]; then
   python3 tools/gen_escbank4_syms.py
   dotnet "$POPPY" -t snes -I . -o src/escbank4.bin -s src/escbank4.sym src/escbank4.pasm
 fi
+# FIFTH escape bank ($99:8000, file $2C8000) — the $023-25xxx trap#5-cluster SHELL segments.
+# Assembled AFTER escbank3/escbank4 (imports their entry_X addresses for cross-bank jml.l links).
+if [ -f src/escbank5.pasm ]; then
+  python3 tools/gen_escbank5_syms.py
+  dotnet "$POPPY" -t snes -I . -o src/escbank5.bin -s src/escbank5.sym src/escbank5.pasm
+fi
 # Escape bank (native escapes too big for bank-$00 gaps; runs at SA-1 $92:8000, file $290000).
 # Refresh its bank-$00 symbol constants from interp.sym (+ escbank2 entry_X) first (addresses shift
 # when interp.pasm changes), then assemble. Skipped if src/escbank.pasm is absent.

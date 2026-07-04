@@ -11308,9 +11308,24 @@ jb2_miss:
 ors_98chk:
     cmp #$00FB
     beq ors_pre_98
-    jmp op_rts_sentinel
+    jmp ors_99chk        ; (was op_rts_sentinel) -> check the bank-$99 sentinel ($00FA) too (SIZE-NEUTRAL)
 ors_pre_98:
     lda #$0098
+    sta $42
+    jml [$0040]
+
+; ors_99chk / ors_pre_99 — bank-$99 (escbank5, trap#5 shells) CALL-BRIDGE sentinel resume ($00FA),
+; chained from ors_98chk's zero-shift tail swap. Carved out of the DEAD front half of the old inline
+; entry_25110 body (unreachable since the $D1ED `jml $978000` redirect; same reclaim as bhp_bank_ext/
+; jb2_ext/ors_98chk above). .org-pinned past ors_pre_98's `jml [$0040]` (Poppy mis-sizes it tracked-2/
+; emitted-3 -> an unpinned following label drifts by 1; ors_rte precedent).
+.org $D2D8
+ors_99chk:
+    cmp #$00FA
+    beq ors_pre_99
+    jmp op_rts_sentinel
+ors_pre_99:
+    lda #$0099
     sta $42
     jml [$0040]
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)

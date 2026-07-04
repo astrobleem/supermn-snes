@@ -71,6 +71,14 @@ if _osp.exists("src/escbank3.bin"):
     assert len(ESC3) <= 0x8000, ("escbank3 %d bytes overflows the $2B8000..$2C0000 bank" % len(ESC3))
     ROM[0x2B8000:0x2B8000+len(ESC3)] = ESC3          # @ SA-1 $97:8000 (file $2B8000)
 
+# --- FIFTH SA-1 escape bank ($99:8000, file $2C8000) ---
+# The $023-25xxx trap#5-cluster SHELL segments (coroutine yield-loop bodies + their callees;
+# CP1 item 2.3). Resume PCs dispatch via bank-$02 xlat pages; $00FA call-bridge sentinel.
+if _osp.exists("src/escbank5.bin"):
+    ESC5 = Path("src/escbank5.bin").read_bytes()
+    assert len(ESC5) <= 0x8000, ("escbank5 %d bytes overflows the $2C8000..$2D0000 bank" % len(ESC5))
+    ROM[0x2C8000:0x2C8000+len(ESC5)] = ESC5          # @ SA-1 $99:8000 (file $2C8000)
+
 # --- SA-1 LoROM mirror of the interpreter ---
 # Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style
 # (32KB/bank): $00:8000-FFFF -> FILE $0-$7FFF, so $00:FFFC (reset) -> FILE $7FFC and the
