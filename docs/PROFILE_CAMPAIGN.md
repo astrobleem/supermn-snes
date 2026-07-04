@@ -652,3 +652,45 @@ frequency is tick-paced by design. Consequences:
 **30fps standing after this round: the gap is REAL (~3-4.6x wait-adjusted, free-run-confirmed),
 not an artifact — closing it = the contention probe, then scheduler-rewrite (244K) +
 contiguous-compile (335K) + whatever contention reveals.**
+
+## 5A22-contention probe + WRAM-supervisor fix (2026-07-04): the unattributed 1.08M is mostly BUS CONTENTION
+
+**The probe** (tools/contention_probe.py light free-run, tools/contention_combat.py injected
+ce4trip64): Nexen's SA-1 core prices bus conflicts into cycleCount (Sa1Cpu::ProcessCpuCycle —
+ROM/IRAM conflict +1-2 cyc, BW-RAM 2→4 cyc, whenever the SA-1's access type matches the 5A22's
+latched Bus-A type). The 5A22 video supervisor busy-polled FROM ROM at 100% duty. Measured by
+parking the 5A22 in a WRAM `bra $` (NOT stp — `_memTypeBusA` is a LATCH; a stopped/wai'd 5A22
+whose last fetch was ROM fake-conflicts forever; any idle loop must EXECUTE FROM WRAM):
+
+| class | live | 5A22 parked | contention | share |
+|---|---|---|---|---|
+| light (NAT free-run) | 1.426M | 1.016M | 411K/tick | 28.8% |
+| combat (ce4trip64) | 2.017M | 1.439M | 578K/tick | 28.7% |
+
+Graded stubs (light): the BUSY-SPIN itself is the tax (spin fetch/IRAM = 544K at 100% duty);
+the joy BW-RAM hammer is noise (-0.4%); nopping vid_frame made it WORSE (+9% — render periods
+are $7E-write/DMA-heavy = LESS conflicting than the raw ROM spin). **Combat accounting: 578K
+contention + ~300K window slack ≈ 880K of the 1.08M unattributed; residual ~200K helpers.**
+
+**The fix (SHIPPED, video.pasm):** the supervisor poll loop now lives in WRAM $7E:F000
+(wl_setup copies a 23-byte position-independent blob; throttled IRAM poll ~0.7% duty; jsl
+$E98004 → vf_tick = joy+vid_frame once per game tick — joy moves from continuous to per-tick,
+one-tick-stale harness input pokes). Zero-shift: cv_loop's 21 bytes became boundary-safe pads
+(old save states resume the 5A22 at old cv_loop PCs or inside joy5a22 — joy5a22 UNMOVED at
+$E9:884A). $8004 = the old VID_INIT no-op slot, repurposed (BOOT_ARM owns the boot jsl).
+Validated: REQ-bump → ack + $410002→$410000 forward + render + return-to-WRAM; smoke GREEN.
+
+**Results on the fixed ROM:** light 1.426M → **1.137M (−289K, −20%; 3.18× of the 358K budget)**,
+parked residual 138K. Combat **UNCHANGED (~2.0M)**: in-window sampling shows per-tick VID_FRAME
+(REQ++ every tick) keeps the 5A22 rendering ~100% of the wall time — combat contention is
+RENDER-PERIOD conflicts (5A22 ROM code fetches + $41 BW-RAM shadow reads while the SA-1 works),
+not spin. **Next contention lever (rank vs scheduler-rewrite/contiguous-compile): relocate the
+render's hot inner loops (decode_tile/vid_bg/vid_obj walkers) to WRAM too** — same latch rule.
+Also flagged for the 30fps pacing phase: today's render spans MULTIPLE display frames per tick;
+at 30fps it must fit ~2 (delta rendering / cache hit-rate work may be needed).
+
+**Free-run render gotcha (pre-existing, both ROMs):** in the NAT free-run harness mode the
+$AC-reload VID_FRAME path effectively doesn't advance FRAME_REQ per tick (REQ frozen; a slow
+REQ/ACK oscillation triggers occasional re-renders). Injected windows DO render per tick. The
+old light "live" numbers therefore under-count production render contention slightly; combat
+numbers are production-shaped.

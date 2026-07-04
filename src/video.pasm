@@ -34,15 +34,15 @@ SHADOW_PAL=$2000
 SHADOW_D0=$3000
 SHADOW_COD=$4000
 STAGING_CGRAM=$8000
+VFT_VEC=$E98004          ; fixed wrapper slot: per-tick joy+render vector (jsl'd from WRAM)
 .bank 0
 .org $8000
 ; entry wrappers (interp: jsl $E90000 vid_frame, jsl $E90004 vid_init, jml $E90008 vidtest)
     inc $3300            ; $8000 VID_FRAME: the SA-1's interp calls this each game-frame
     rtl                  ;   boundary -> signals FRAME_REQ++ in shared IRAM ($00:3000).
-    rtl                  ; $8004 VID_INIT: SA-1 no-op (the 5A22 runs vid_init in the
-    nop                  ;   supervisor). pad keeps VIDTEST at $8008.
-    nop
-    nop
+    jmp vf_tick          ; $8004 VF_TICK: per-tick joy+render for the WRAM poll loop (this
+    nop                  ;   was the VID_INIT no-op rtl slot, unreferenced since BOOT_ARM
+                         ;   took its jsl; see wl_setup). pad keeps VIDTEST at $8008.
     jmp vidtest_init     ; $8008 VIDTEST
     jmp cpu5a22_video    ; $800B CPU5A22_VIDEO: 5A22 supervisor (cpu5a22_boot jml's here)
 
@@ -1296,9 +1296,15 @@ bhc_l:
 ; cpu5a22_video — the 5A22's video supervisor (Phase A3). cpu5a22_boot jml's here
 ; ($E9:800B) after bootstrapping the SA-1, instead of stp. The SA-1 runs the interpreter
 ; and writes the raw arcade shadow into BW-RAM $41; at each game-frame boundary it bumps
-; FRAME_REQ (IRAM $00:3000) via the VID_FRAME wrapper. This loop polls that counter and,
-; on a new frame, rebuilds CGRAM/OAM/BG from the $41 shadow and DMAs to the PPU. (Spin-poll
-; like OutRun's WaitForSa1Done; a vblank-NMI wake is a later contention optimization.)
+; FRAME_REQ (IRAM $00:3000) via the VID_FRAME wrapper. The poll loop watches that counter
+; and, on a new frame, rebuilds CGRAM/OAM/BG from the $41 shadow and DMAs to the PPU.
+; CONTENTION FIX (2026-07-04): the poll loop now lives in WRAM ($7E:F000, see wl_setup) —
+; the old in-ROM busy-poll conflicted with the SA-1 on every ROM/IRAM/BW-RAM cycle and
+; taxed it 411K (light) / 578K (combat) cyc/tick = ~29% of the tick (tools/
+; contention_probe.py, tools/contention_combat.py). cv_loop below is now just a
+; state-resume-compatible thunk: pre-fix save states resume the 5A22 at old cv_loop
+; instruction boundaries (or inside joy5a22, which must therefore stay at its old
+; address) — every old boundary lands on a pad that routes to wl_setup.
 cpu5a22_video:
     jsr vid_init         ; clear derived $7E + raw shadow $41, TM=0, screen off
     rep #$30
@@ -1311,14 +1317,17 @@ cpu5a22_video:
     sta $410000          ; input mailbox = idle (SA-1 joy_read reads this; 5A22 fills it)
     sta $410002          ; virtual-controller injection word (harness pokes; OR'd in)
 cv_loop:
-    rep #$30
-    jsr joy5a22          ; refresh the JOY1 mailbox ($41:0000) -- the SA-1 can't read $4016
-    lda $3300            ; FRAME_REQ (the SA-1 increments it once per game-frame)
-    cmp $3302            ; FRAME_ACK
-    beq cv_loop          ; no new game-frame -> spin
-    sta $3302            ; ack this frame
-    jsr vid_frame        ; build CGRAM/OAM/BG from $41 shadow + DMA to PPU (forced blank)
-    bra cv_loop
+    bra cv_go            ; 2B (old `rep #$30` slot: keeps $8837 an instruction boundary)
+    nop                  ; $8837-$8839: old `jsr joy5a22` slot -> slide to cv_go
+    nop
+    nop
+cv_go:
+    jmp wl_setup         ; $883A: ALSO the old joy5a22 rts-return PC (resume-safe)
+    jmp wl_setup         ; $883D: old `cmp $3302` boundary
+    bra cv_go            ; $8840: old `beq` boundary
+    jmp wl_setup         ; $8842: old `sta $3302` boundary
+    jmp wl_setup         ; $8845: old `jsr vid_frame` boundary
+    bra cv_go            ; $8848: old `bra cv_loop` boundary (21B total: joy5a22 UNMOVED)
 
 ; joy5a22 — 5A22-side manual JOY1 read into the BW-RAM input mailbox $41:0000. The interp
 ; runs on the SA-1, which cannot touch $4016 (CPU-bus I/O) or $00:0200 (WRAM); so the 5A22
@@ -1433,3 +1442,59 @@ BOOT_ARM:
     lda #$5EEC
     sta $0736            ; SEL   on  (scheduler SELECT escape, magic-match gate)
     rtl                  ; VID_INIT was a SA-1 no-op rtl; return to the boot caller
+
+; ---- WRAM-resident supervisor loop (the 5A22<->SA-1 contention fix, 2026-07-04) -----
+; Nexen's SA-1 bus model (Sa1Cpu::ProcessCpuCycle, hardware-shaped): the SA-1 pays wait
+; cycles whenever its access's memory TYPE matches the 5A22's current Bus-A type — ROM/
+; IRAM conflict +1-2 cyc, BW-RAM 2->4 cyc. The old cv_loop busy-polled FROM ROM at 100%
+; duty (ROM code fetch + IRAM $3300/$3302 poll + BW-RAM joy mailbox every iteration), a
+; constant tax on every SA-1 cycle: measured 411K cyc/tick light (28.8%) / 578K combat
+; (28.7%) — the bulk of the combat "unattributed 1.08M" (docs/PROFILE_CAMPAIGN.md).
+; Fix: the 5A22 idles in WRAM — WRAM fetches can never conflict (the SA-1 has no WRAM
+; path) — polling IRAM only ~2 accesses per ~700 cyc (throttle loop), and drops into ROM
+; once per game tick for joy+render. joy sampling moves from continuous to per-tick,
+; which is when the SA-1 consumes it anyway (one-tick-stale input for harness pokes made
+; between ticks — acceptable; noted for lockstep tooling).
+; NOTE the WAI trap for future NMI-wake work: Nexen latches the 5A22's Bus-A type
+; (_memTypeBusA) — a `wai` FETCHED FROM ROM leaves the latch on PrgRom and fake-conflicts
+; for the whole sleep. Any idle loop must EXECUTE from WRAM, wai included.
+vf_tick:                 ; reached via the fixed $8004 wrapper (jsl VFT_VEC from the blob)
+    php
+    rep #$30
+    jsr joy5a22          ; refresh the JOY1 mailbox ($41:0000) once per game tick
+    jsr vid_frame        ; build CGRAM/OAM/BG from the $41 shadow + DMA to PPU
+    plp
+    rtl
+
+wl_setup:                ; jmp'd from cv_loop (rep #$30, DBR=$00): copy the blob, move in
+    phb
+    sep #$20
+    lda #$E9
+    pha
+    plb                  ; DBR=$E9 so `lda wl_blob,x` (bank-local abs) reads THIS bank
+    ldx #$0000
+wl_copy:
+    lda wl_blob,x
+    sta $7EF000,x        ; long store, DBR-free ($7E:F000-F016; OBJ staging tops at $CFFF)
+    inx
+    cpx #$0017           ; WL_LEN = 23 bytes — keep in sync with the blob below
+    bne wl_copy
+    plb                  ; DBR=$00 again (the blob polls IRAM $3300 via abs)
+    rep #$30
+    jml $7EF000          ; the 5A22 lives in WRAM from here on
+
+wl_blob:                 ; assembled here, RUN at $7E:F000. Position-independent: relative
+                         ; branches only (backward, to in-blob labels); abs data is DBR-
+                         ; based; the ROM call is a fixed 24-bit vector. rep #$30 + DBR=$00
+                         ; on entry and forever.
+wl_poll:
+    ldx #$0080           ; throttle: ~128 dex/bne of pure-WRAM fetches (~700 cyc) per poll
+wl_dly:
+    dex
+    bne wl_dly
+    lda $3300            ; FRAME_REQ (IRAM: the SA-1 bumps it once per game tick)
+    cmp $3302            ; FRAME_ACK
+    beq wl_poll          ; no new tick -> keep idling in WRAM
+    sta $3302            ; ack this tick
+    jsl VFT_VEC          ; $E98004 -> vf_tick: joy + render in ROM, once per tick
+    bra wl_poll          ; back to the throttle
