@@ -612,3 +612,23 @@ cuts ISR share), and the true 30fps gap is much smaller than the raw 4.6x. NEXT 
 on ce4trip64, and re-project the gap with the per-frame share scaled to 2 frames/tick. If the
 hypothesis holds, the remaining REAL work = the jah2-native bodies (sel+swin = 244K -> the
 scheduler semantic-rewrite finally pays) + interp 335K (contiguous-compile).
+
+## ISR verification round (2026-07-04): three suspects ELIMINATED + a steering blind spot found
+
+- **take_irq fires 0× in injected windows** — the $AC countdown (2F60) never expires inside a
+  ~200-instr tick, and no hardware path delivers the 68K vblank ISR there either. Consequence A:
+  the 1.08M unattributed is NOT the 68K ISR. **Consequence B (steering-validity): every injected
+  tick total (hle_span — the campaign currency) EXCLUDES the per-frame 68K ISR cost entirely** —
+  free-run reality is higher by the ISR share (this is the long-open freerun-vs-injected
+  discrepancy, now mechanistically explained). The 358K/tick 30fps budget MUST count the ISR at
+  2 fires/tick — needs a free-run instrument, not lockstep.
+- **The SA-1 nmi/irq handlers are bare `rti`** (0 fires) — no native per-frame ISR either.
+- Remaining suspects for the 1.08M: (a) **5A22↔SA-1 BW-RAM bus contention** while the 5A22 runs
+  the per-frame VID render pipeline (SA-1 stall cycles ∝ frames/tick → still SELF-PRICING at
+  30fps, via contention rather than code); (b) window slack (body_residency's B0→B1 anchors read
+  ~2.0M/tick vs hle_span's 1.68M ≈ ~300K boundary spin in the denominator); (c) interp helper
+  time not captured by body anchors.
+- **Next session (30fps track, in order):** (1) a free-run per-frame cost instrument (freerun +
+  ISR/frame counters) to price the 68K ISR + close the steering blind spot; (2) a 5A22-contention
+  probe (SA-1 cycleCount vs wall-frames with VID stubbed vs live); (3) re-project the 30fps gap
+  from FREE-RUN numbers; only then rank scheduler-rewrite vs contiguous-compile.
