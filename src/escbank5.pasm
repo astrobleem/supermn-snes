@@ -25,6 +25,15 @@ entry_23342=$988000
 entry_235e0=$989200
 entry_23864=$989800
 entry_25110=$978000
+entry_12e56=$97A000
+entry_12c1a=$97B000
+entry_129c6=$97A800
+entry_12a92=$97B800
+entry_12af6=$97C000
+entry_117b4=$97C800
+entry_cc44=$97D000
+entry_cc80=$97D400
+entry_caf6=$97D800
 ; <<< ESCBANK5_SYMS <<<
 
 .snes
@@ -6297,5 +6306,743 @@ Ltjc846_c8da:
     lda #$C8DA
     sta $40
     lda #$0000
+    sta $42
+    jml.l inext
+
+; --- CP1 2.2: the $011752 CONTIGUOUS TREE (the parked Phase-1.1 blob, unblocked by the
+; pushed-sentinel static-bridge convention): the task-loop spine + its 12 bsr callees all
+; native. The 9 escbank3 callees (standard convention, ors_pre exits — sentinel-safe) take
+; cross-bank jml.l static links; entry_cc10/entry_ccd8 get FRESH same-bank bodies (their old
+; $92 bodies never caught this bsr reach); the hle_12b6c callee splits the spine (see stub). ---
+
+; --- entry_cc10: fresh standard body ($00CC10) ---
+; --- transpiled from $00CC10 (16 instrs) by tools/transpile.py [bank1] ---
+entry_cc10:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $38
+    clc
+    adc #$FFFC
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    bne Lfcc10_1
+    jmp Lcc10_cc2a
+Lfcc10_1:
+Lcc10_cc1a:
+    lda #$2578
+    sta $20
+    lda #$0003
+    sta $22
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $20
+    clc
+    adc #$0002
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    pla
+    pha
+    lda $38
+    clc
+    adc #$FFEC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp Lcc10_cc3a
+Lcc10_cc2a:
+    lda $38
+    clc
+    adc #$FFEA
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    pla
+    plp
+    php
+    pha
+    lda $38
+    clc
+    adc #$FFEA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    plp
+    beq Lfcc10_4
+    bvs Lfcc10_2
+    bpl Lfcc10_3
+    bra Lfcc10_4
+Lfcc10_2:
+    bmi Lfcc10_3
+    bra Lfcc10_4
+Lfcc10_3:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    jmp Lcc10_cc42
+Lfcc10_4:
+    lda $38
+    clc
+    adc #$FFEC
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    pla
+    plp
+    php
+    pha
+    lda $38
+    clc
+    adc #$FFEC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    plp
+    bvs Lfcc10_5
+    bmi Lfcc10_6
+    bra Lfcc10_7
+Lfcc10_5:
+    bpl Lfcc10_6
+    bra Lfcc10_7
+Lfcc10_6:
+    jmp Lcc10_cc1a
+Lfcc10_7:
+    lda $38
+    clc
+    adc #$FFEE
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+Lcc10_cc3a:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $20
+    clc
+    adc #$0004
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $9C
+    pha
+    lda $38
+    clc
+    adc #$FFE8
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $38
+    clc
+    adc #$FFEA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9C
+    pha
+    lda $38
+    clc
+    adc #$FFEE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $38
+    clc
+    adc #$FFF0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+Lcc10_cc42:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_ccd8: fresh standard body ($00CCD8) ---
+; --- transpiled from $00CCD8 (18 instrs) by tools/transpile.py [bank1] ---
+entry_ccd8:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$0000
+    sta $1C
+    sta $1E
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0010
+    beq Lfccd8_1
+    jmp Lccd8_cd00
+Lfccd8_1:
+    lda $38
+    clc
+    adc #$FFBD
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0010
+    bne Lfccd8_2
+    jmp Lccd8_cd00
+Lfccd8_2:
+    lda $38
+    clc
+    adc #$FFB8
+    tax
+    lda $400000,x
+    xba
+    beq Lfccd8_3
+    jmp Lccd8_ccf8
+Lfccd8_3:
+    lda #$1B5C
+    sta $9A
+    lda #$0001
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Lccd8_cd18
+Lccd8_ccf8:
+    lda #$1E88
+    sta $9A
+    lda #$0001
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Lccd8_cd18
+Lccd8_cd00:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0020
+    beq Lfccd8_4
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Lccd8_cd18
+Lfccd8_4:
+    lda $38
+    clc
+    adc #$FFBD
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0020
+    bne Lfccd8_5
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp Lccd8_cd18
+Lfccd8_5:
+    lda #$1814
+    sta $9A
+    lda #$0001
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+Lccd8_cd18:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- entry_11752: spine first half (resume $011752, CORO bank-$01 page) ---
+; --- transpiled from $011752 (31 instrs) by tools/transpile.py [bank1] ---
+entry_11752:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    ; CALL-BRIDGE bsr.w $12e56 -> entry_12e56 (NATIVE escape), resume br11752_1
+    lda #br11752_1
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_12e56
+br11752_1:
+    lda $1C
+    bne Lf11752_1
+    jmp L11752_11764
+Lf11752_1:
+    lda $1C
+    sec
+    sbc #$00A0
+    bvs Lf11752_2
+    bmi Lf11752_3
+    bra Lf11752_4
+Lf11752_2:
+    bpl Lf11752_3
+    bra Lf11752_4
+Lf11752_3:
+    jmp L11752_11764
+Lf11752_4:
+    ; CALL-BRIDGE bsr.w $117b4 -> entry_117b4 (NATIVE escape), resume br11752_2
+    lda #br11752_2
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_117b4
+br11752_2:
+L11752_11764:
+    ; CALL-BRIDGE bsr.w $12c1a -> entry_12c1a (NATIVE escape), resume br11752_3
+    lda #br11752_3
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_12c1a
+br11752_3:
+    lda $1E
+    bne Lf11752_5
+    lda $1C
+    bne Lf11752_5
+    jmp L11752_11770
+Lf11752_5:
+    lda $1C
+    sta $20
+    lda $1E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+L11752_11770:
+    ; CALL-BRIDGE bsr.w $129c6 -> entry_129c6 (NATIVE escape), resume br11752_4
+    lda #br11752_4
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_129c6
+br11752_4:
+    ; CALL-BRIDGE bsr.w $cc10 -> entry_cc10 (NATIVE escape), resume br11752_5
+    lda #br11752_5
+    sta $40
+    lda #$00FA
+    sta $42
+    jmp entry_cc10
+br11752_5:
+    ; SPLIT at the hle_12b6c callee (a bridge would DEMOTE the hle -> interpreted): bail to the
+    ; interp AT the bsr instr ($011778), zero pushes (idempotent). bhp_bank_ext dispatches the hle
+    ; natively; its rts pops the REAL $01177C return -> op_rts_norm -> ojmp_hook -> xlat ->
+    ; entry_1177c (the second spine half). Everything emitted after this stub in THIS body is
+    ; dead (the resume path re-enters via entry_1177c) — left in place, harmless.
+    lda #$1778
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+br11752_6:
+    ; CALL-BRIDGE bsr.w $12a92 -> entry_12a92 (NATIVE escape), resume br11752_7
+    lda #br11752_7
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_12a92
+br11752_7:
+    ; CALL-BRIDGE bsr.w $cc44 -> entry_cc44 (NATIVE escape), resume br11752_8
+    lda #br11752_8
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_cc44
+br11752_8:
+    ; CALL-BRIDGE bsr.w $cc80 -> entry_cc80 (NATIVE escape), resume br11752_9
+    lda #br11752_9
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_cc80
+br11752_9:
+    ; CALL-BRIDGE bsr.w $12af6 -> entry_12af6 (NATIVE escape), resume br11752_10
+    lda #br11752_10
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_12af6
+br11752_10:
+    ; CALL-BRIDGE bsr.w $117b4 -> entry_117b4 (NATIVE escape), resume br11752_11
+    lda #br11752_11
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_117b4
+br11752_11:
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    lda $400000,x
+    xba
+    beq Lf11752_6
+    jmp L11752_117a2
+Lf11752_6:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0002
+    beq Lf11752_7
+    jmp L11752_117a2
+Lf11752_7:
+    lda #$18DE
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+L11752_117a2:
+    ; CALL-BRIDGE bsr.w $ccd8 -> entry_ccd8 (NATIVE escape), resume br11752_12
+    lda #br11752_12
+    sta $40
+    lda #$00FA
+    sta $42
+    jmp entry_ccd8
+br11752_12:
+    lda $1E
+    bne Lf11752_8
+    lda $1C
+    bne Lf11752_8
+    jmp L11752_117ae
+Lf11752_8:
+    lda $1C
+    sta $20
+    lda $1E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+L11752_117ae:
+    ; CALL-BRIDGE bsr.w $caf6 -> entry_caf6 (NATIVE escape), resume br11752_13
+    lda #br11752_13
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_caf6
+br11752_13:
+    lda #$1750
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+
+; --- entry_1177c: spine second half (rts-pop-reached at $01177C via op_rts_norm -> xlat,
+; jmp-state class, bank-$01 page) ---
+; --- transpiled from $01177C (17 instrs) by tools/transpile.py [bank1] ---
+entry_1177c:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    ; CALL-BRIDGE bsr.w $12a92 -> entry_12a92 (NATIVE escape), resume br1177c_1
+    lda #br1177c_1
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_12a92
+br1177c_1:
+    ; CALL-BRIDGE bsr.w $cc44 -> entry_cc44 (NATIVE escape), resume br1177c_2
+    lda #br1177c_2
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_cc44
+br1177c_2:
+    ; CALL-BRIDGE bsr.w $cc80 -> entry_cc80 (NATIVE escape), resume br1177c_3
+    lda #br1177c_3
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_cc80
+br1177c_3:
+    ; CALL-BRIDGE bsr.w $12af6 -> entry_12af6 (NATIVE escape), resume br1177c_4
+    lda #br1177c_4
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_12af6
+br1177c_4:
+    ; CALL-BRIDGE bsr.w $117b4 -> entry_117b4 (NATIVE escape), resume br1177c_5
+    lda #br1177c_5
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_117b4
+br1177c_5:
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    lda $400000,x
+    xba
+    beq Lf1177c_1
+    jmp L1177c_117a2
+Lf1177c_1:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0002
+    beq Lf1177c_2
+    jmp L1177c_117a2
+Lf1177c_2:
+    lda #$18DE
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+L1177c_117a2:
+    ; CALL-BRIDGE bsr.w $ccd8 -> entry_ccd8 (NATIVE escape), resume br1177c_6
+    lda #br1177c_6
+    sta $40
+    lda #$00FA
+    sta $42
+    jmp entry_ccd8
+br1177c_6:
+    lda $1E
+    bne Lf1177c_3
+    lda $1C
+    bne Lf1177c_3
+    jmp L1177c_117ae
+Lf1177c_3:
+    lda $1C
+    sta $20
+    lda $1E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+L1177c_117ae:
+    ; CALL-BRIDGE bsr.w $caf6 -> entry_caf6 (NATIVE escape), resume br1177c_7
+    lda #br1177c_7
+    sta $40
+    lda #$00FA
+    sta $42
+    jml.l entry_caf6
+br1177c_7:
+    lda #$1750
+    sta $40
+    lda #$0001
     sta $42
     jml.l inext

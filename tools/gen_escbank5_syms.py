@@ -19,7 +19,10 @@ NEEDED = ["inext", "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
 XBANK = [("entry_23342", "src/escbank4.sym", 0x98),
          ("entry_235e0", "src/escbank4.sym", 0x98),
          ("entry_23864", "src/escbank4.sym", 0x98),
-         ("entry_25110", "src/escbank3.sym", 0x97)]
+         ("entry_25110", "src/escbank3.sym", 0x97)] + [
+         (n, "src/escbank3.sym", 0x97) for n in    # the $011752 contiguous-tree callees
+         ("entry_12e56", "entry_12c1a", "entry_129c6", "entry_12a92", "entry_12af6",
+          "entry_117b4", "entry_cc44", "entry_cc80", "entry_caf6")]
 
 sym_path = Path("src/interp.sym")
 esc_path = Path("src/escbank5.pasm")

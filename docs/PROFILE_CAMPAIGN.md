@@ -294,6 +294,32 @@ disabled arm restores the 300-instr lockstep baseline) + ESC0 + smoke + $C844 yi
 Next: the $011752 contiguous-tree item (needs --table variants for its jah2 callees), $46DE
 decoder range gap, $3B48 choke class, sched plumbing.
 
+## The $011752 CONTIGUOUS TREE — SHIPPED (2026-07-04): trip2500 9.8× → **9.5×**
+
+The parked Phase-1.1 blob, unblocked WITHOUT the --table-variant work it was queued behind: the
+callee-convention census showed all 9 escbank3 callees (12e56/12c1a/129c6/12a92/12af6/117b4/
+cc44/cc80/caf6) are ALREADY standard-convention with sentinel-safe `jml.l ors_pre` exits → they
+take the pushed-$00FA static bridge directly (cross-bank jml.l, gen_escbank5_syms imports). The
+old blocker ("leaf-convention bodies always bounce through the interp") applied to the cb9e-class
+bank-$00 gap bodies, NOT these. Pieces:
+- **entry_cc10 / entry_ccd8**: FRESH standard escbank5 bodies (--bail --xflag) — their old $92
+  bodies never caught this bsr reach (both ran fully interpreted, 6 PCs each/tick).
+- **entry_11752** (resume $011752, CORO bank-$01 page): spine first half, 12 static links.
+- **The hle_12b6c SPLIT**: a bridge at `bsr $12b6c` would DEMOTE the hle → the emitted ojmp
+  bridge is hand-replaced with a zero-push bail AT the bsr ($011778) — the interp runs the bsr,
+  bhp_bank_ext dispatches the hle natively, and its rts pops the REAL $01177C return which
+  op_rts_norm routes through the xlat into **entry_1177c** (spine second half, jmp-state class,
+  bank-$01 page). The spine-split-at-unbridgeable-callee trick is REUSABLE.
+- HOOKTEST pre-gate: both halves fire (2/tick). Zero X-setters in the spine.
+
+**Win: t25 1.747M→1.699M (−47K, 9.49×, interp 249→217); ce4 1.684M (9.41×); t50 1.691M; light
+untouched (183, no $011752 resume there).** Gates: FULLDIFF ×4 byte-identical sets + A/B
+set-identical (POKEROM 2B33F6/2B3474; disabled arm = the 255-instr baseline) + ESC0 + smoke +
+$011750 yield dump (regs/CCR identical; 3-byte below-SP sentinel residue = accepted class).
+
+**Campaign line: trip2500 11.9× → 9.5×, ce4 11.8× → 9.4×, light 8.4× → 7.7×.** Next: $46DE
+decoder range gap, $3B48 choke class, sched plumbing, CC10/CCD8-class other reaches.
+
 ## Phase 2.1 item 2.3 — trap#5 SHELLS native (escbank5, 2026-07-03): trip2500 11.1× → **10.2×**
 
 The $023-25xxx shell residue = exactly TWO coroutine yield-loop segments per gameplay tick
