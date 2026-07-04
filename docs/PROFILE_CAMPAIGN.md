@@ -694,3 +694,30 @@ $AC-reload VID_FRAME path effectively doesn't advance FRAME_REQ per tick (REQ fr
 REQ/ACK oscillation triggers occasional re-renders). Injected windows DO render per tick. The
 old light "live" numbers therefore under-count production render contention slightly; combat
 numbers are production-shaped.
+
+## pt.21 (2026-07-04): render-to-WRAM SHIPPED but MEASURED SMALL — the lever was mis-premised
+
+The pt.20 "next lever" (relocate the render inner loops to WRAM) is BUILT and VALIDATED
+(video.pasm `rc_copy`: verbatim mirror $E9:8000-$8FFF -> $7F:8000 at supervisor boot; the $8004
+VF_TICK wrapper jml's the $7F copy; DRAFT PR #13, commit `50dfc62`). It is byte-faithful,
+zero-shift, smoke-GREEN, and the render **provably runs from $7F** (exec-hooks vid_frame$7F/
+vid_bg$7F fire; the 5A22's program bank is $7F during render vs $E9 on the ROM path).
+
+**BUT the win is only ~3.4%, not the projected ~27%.** Measured on a FRESH boot (Sa1 cyc/frame,
+render firing continuously with the heavy BG path + forced tile-decode): **ROM 92464 vs WRAM
+89341 = 3123 cyc/frame = 3.4% (~68K/combat-tick)**. WRAM is contention-FLAT regardless of render
+load; ROM rises with it. The projected 2.0M->1.45M (~550K, ~27%) over-estimated the render's
+contention share by ~8x: the render is DMA/$7E-write-heavy (this doc's own "nopping vid_frame
+made it +9% WORSE" already said render < spin), so the CODE-FETCH share — the only part WRAM
+relocation recovers — is minor. **Verdict: keep the change (small real win, safe) but the render
+lever is spent; the bigger levers stand — scheduler semantic rewrite (~244K) and
+contiguous-compile (~335K).**
+
+**HARNESS LESSON (this cost the session): the NAT (dump_b0_native jh_spin transplant) strands
+the 5A22 at $00:D161 — its `setcpu(cpu['snes'])` moves the 5A22 OUT of the $7E:F000 supervisor
+poll loop, so the render NEVER fires under NAT/injected harnesses (FRAME_ACK frozen;
+contention_combat + validate_wl_fix are both render-DEAD, and set_cpu_state('Snes') won't force
+it back). This is why pt.20's own migration "doesn't engage" in a fresh session — the pt.20
+combat contention numbers are NOT reproducible from the NAT.** Measure render/5A22 changes on a
+FRESH boot instead (cpu5a22_boot puts the 5A22 in the supervisor): inject the combat shadow +
+force game-alive ($400002=$0300/frame) + bump FRAME_REQ/frame. Tool: `tools/measure_render_wram.py`.
