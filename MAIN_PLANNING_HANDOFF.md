@@ -1,33 +1,40 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-04 (pt.20). **THE STRATEGIC FORK IS SETTLED (user, 2026-07-04): 30fps
+Last updated: 2026-07-04 (pt.21). **THE STRATEGIC FORK IS SETTLED (user, 2026-07-04): 30fps
 retarget (budget 358K/tick, tick = 2 display frames) + the TAD/YM2610 sound port; realtime-60
 abandoned (ISA-floor verdict). Don't re-litigate.**
 
-**CURRENT TASK (pt.21): relocate the 5A22 RENDER path to WRAM — the biggest single-session
-lever on the table.** The pt.20 contention probe proved 5A22↔SA-1 bus contention = **28.8% of
-every tick** (411K light / 578K combat — the bulk of the old "unattributed 1.08M"); the WRAM
-*supervisor-loop* fix shipped (PR #12) and bought light **1.426M→1.137M (−20%, 3.18× of
-budget)**, but combat is UNCHANGED (~2.0M = 5.6×) because its 5A22 renders ~100% of the wall
-window (per-tick VID_FRAME) and the render code itself fetches from ROM at full duty. Plan:
-assemble the render routines a SECOND time org'd for WRAM (`$7E:D000-$EFFF` is free — staging
-tops at $CFFF, the supervisor blob sits at $F000-F016; video.bin is only ~2.4KB so it FITS),
-copy at vid_init, point vf_tick at the WRAM copy (keep the ROM copy for boot/state-resume
-compat). THE LATCH RULE (hardware-true + Nexen-modeled, `SnesMemoryManager::_memTypeBusA`):
-5A22 code only stops taxing the SA-1 if it EXECUTES from WRAM — wai/stp/idle with a
-ROM-fetched last access fake-conflicts forever. Expected: combat ~2.0M→~1.45M (4.0×), light
-1.14M→~1.02M (2.84×). Validate: tools/contention_probe.py + tools/contention_combat.py (the
-park deltas should collapse toward 0) + smoke_gameplay + a REQ-bump render check
-(tools/validate_wl_fix.py pattern). Start at memory `contention-probe-wram-supervisor` +
-docs/PROFILE_CAMPAIGN.md §"5A22-contention probe". Residual caveat: the render's $41 BW-RAM
-shadow reads still conflict (2→4 cyc) — only the code-fetch share is recoverable.
-THEN (pt.22+, re-rank by measurement): the 30fps pacing change ($AC/frame-sync = one
-GAME_TICK per 2 display frames + freerun validation — also makes per-tick renders REAL in
-free-run), scheduler semantic rewrite (sel+swin 244K), contiguous-compile (interp ~335K).
-Also flagged for the pacing phase: today a render spans MULTIPLE display frames; at 30fps it
-must fit ~2 (delta-render / cache-hit work may be needed). Sound track runs in parallel
-sessions (21/21 tracks converted; needs the musical pass + TAD engine integration — see
-memory `strategic-fork-30fps-sound`).
+**pt.21 DONE (render-to-WRAM SHIPPED + VALIDATED, DRAFT PR #13, commits `50dfc62`+`3c79000`):**
+relocated the 5A22 render to WRAM `$7F` via a VERBATIM SAME-OFFSET COPY (video.pasm `rc_copy`
+mirrors $E9:8000-$8FFF → $7F:8000 at supervisor boot; the $8004 VF_TICK wrapper jml's the $7F
+copy) — SIMPLER than the pt.20-plan's `$7E:D000` re-assembly (the render code is bank-relocatable
+by construction: jsr/bra K-relative, all data bank-explicit/DBR-relative). Byte-faithful (0-diff
+mirror), zero-shift (4 bytes; BOOT_ARM/cv_loop/joy5a22 unmoved), smoke-GREEN, render provably runs
+from $7F. **BUT the win is only ~3.4% (~68K/combat-tick), NOT the projected ~27% (~550K)** — the
+render is DMA/$7E-write-heavy so its code-fetch (the only WRAM-recoverable share) is a MINOR
+Bus-A conflict source. **The render lever is SPENT.** (Memory `render-to-wram-pt21`;
+docs/PROFILE_CAMPAIGN.md §pt.21.) HARNESS LESSON (cost the session, don't relearn): the NAT
+(dump_b0_native jh_spin transplant) STRANDS the 5A22 at $00:D161, OUT of its $7E:F000 supervisor
+poll loop → the render NEVER fires under NAT/injected harnesses (contention_combat + validate_wl_fix
+are render-DEAD; set_cpu_state('Snes') won't force it back). This is why pt.20's own migration
+"doesn't engage" fresh — those combat contention numbers are NOT reproducible from the NAT.
+MEASURE render/5A22 changes on a FRESH boot (`tools/measure_render_wram.py`).
+
+**CURRENT TASK (pt.22): re-rank the remaining 30fps levers by MEASUREMENT and pick one.** With
+the render lever spent, the candidates (all per docs/PROFILE_CAMPAIGN.md / pt.20 steering):
+(a) the **30fps pacing change** ($AC/frame-sync = one GAME_TICK per 2 display frames + freerun
+validation — also makes per-tick renders REAL in free-run, which would give a production-shaped
+combat-render harness the NAT can't); (b) **scheduler semantic rewrite** (sel+swin ~244K);
+(c) **contiguous-compile** (interp ~335K). Combat is still ~2.0M/tick = 5.6× the 358K budget;
+these are the biggest known remaining chunks. Suggest starting with (a) — it's a prerequisite for
+honest combat measurement anyway. Sound runs in parallel sessions (21/21 tracks converted; needs
+the musical pass + TAD engine integration — see memory `strategic-fork-30fps-sound`).
+
+**Branch topology:** pt.21 = branch `pt21-render-wram` (DRAFT PR #13), based on
+`worktree-a3-objproc-mid` (pt.20, PR #12 — still OPEN/unmerged; PR #13 STACKS on it). A next
+session continues from `pt21-render-wram` (or a fresh branch off it). Worktree env note: the
+gitignored `data/` + `tools/mame-trace/*.bin` build inputs must be symlinked from the main
+checkout; Nexen under Bash needs 2-level python nesting + absolute ROM path (exit-144 gotcha).
 
 **pt.19→pt.20 record (all on branch `worktree-a3-objproc-mid`, PRs #1-#12):** A3 objproc widen
 (`495ccf9`+`184a52b`, 11.9×→11.1×, PR #1); trap#5 shells (`2c0b33e`, →10.2×, PR #2); CP1 2.2
