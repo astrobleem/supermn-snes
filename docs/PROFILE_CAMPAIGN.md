@@ -565,3 +565,19 @@ slower in combat), with the residual-decomposition open cell moving the estimate
 - `tick_timeline.py` (lh_off hook): attribution works, but lh_off misses some instr class (31 stops
   vs 116 $4A-instrs on span_quiet) and idle-end detection is unreliable — fix before trusting totals.
 - inext is NOT a universal per-instr point (branch paths bypass it); lh_off is closer but imperfect.
+
+## THE FORK IS SETTLED (user, 2026-07-04): 30fps retarget + sound — kickoff measurements
+
+**Sound track LAUNCHED (PR #11):** 21/21 VGM tracks → TAD MML drafts + projects, all
+tad-compiler-check OK, SPC render proven; raw rips/ROM dumps/decoded audio gitignored (rights).
+Remaining = the musical pass (FM instruments, BRR drums, tempo/balance) + engine integration
+(TAD driver, SPC700 upload, sound-command mailbox → TAD triggers).
+
+**30fps decomposition SEEDED (body_residency, current build):** the wait story has CHANGED
+since R4b — waits already self-priced down as ticks got faster: quiet-tick waits now ≈ 120K
+(entry_8c2 109.6K = 12.2%, entry_26a0 11.8K) vs the old 224K-gap read; combat waits are
+NEGLIGIBLE (8c2 14.8K + 26a0 11.7K ≈ 2%). **Wait-adjusted gap to the 358K/tick 30fps budget:
+quiet/light ≈ 3-3.3×, combat ≈ 4.6× (the binding class).** The residual is now native bodies +
+dispatch + render/IRQ machinery, NOT waits — the pre-measurement 1.4-3× estimate was optimistic.
+NEXT (first task, next session): the full per-body sweep on ce4trip64 (swin/sel/ce4/d96/25110/
+objproc/shell bodies) to rank the contiguous-compile + semantic-HLE targets against the 4.6×.
