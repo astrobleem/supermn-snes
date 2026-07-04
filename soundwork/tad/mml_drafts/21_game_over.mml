@@ -1,0 +1,86 @@
+#Title Game Over
+#Composer Masahiko Takaki, Kazuyuki Ohnui, Shizuo Aizawa, Takami Asano
+#Author vgm2mml (Superman YM2610 conversion)
+#Tempo 76
+#ZenLen 192
+
+; Echo — tame defaults; tune to taste.
+#EchoLength 32
+#EchoFeedback 32
+#EchoVolume 24
+#FirFilter 64 0 0 0 0 0 0 0
+
+; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
+@0 sm_fm0
+@1 sm_fm1
+@2 sm_fm2
+@3 sm_fm3
+@10 sm_drum_065200
+@11 sm_drum_06c500
+@12 sm_drum_075800
+@13 sm_drum_077900
+@14 sm_drum_07b500
+
+; ===== Voice A: FM0  (octaves 2-2) =====
+A @0 v10
+; bar 0
+A r8.^32 o2 f+16 f+32 f+32 f+16 f+32 f+16 f+16 f+32 f+32 f+16 f+32 f+16 f+32 f+16 f+8
+; bar 1
+A ^16 f+32 f+16 f+32 f+16 f+32 f+16 f8 r32 f32 f32 r32 f32 f4.
+; bar 2
+A ^16. r4^32
+
+; ===== Voice B: FM1  (octaves 3-5) =====
+B @1 v10
+; bar 0
+B r8.^32 o5 g16 g+32 g+32 r8^32 g+16 g+32 g+32 r8^32 g32 g+16 g+8
+; bar 1
+B ^16 f+32 g32 r32 g+32 g32 r32 g+32 a+32 r32 o3 f32 r8 f32 f32 r32 f32 f32 r3^96
+; bar 2
+B r4.
+
+; ===== Voice C: FM2  (octaves 4-5) =====
+C @2 v10
+; bar 0
+C r8.^32 o4 b16 o5 c+32 c+32 r8^32 c+16 c+32 c+32 r8^32 o4 b32 r32 o5 c+32 c+8
+; bar 1
+C ^16 o4 b32 r32 o5 c32 c+32 r32 c32 c+32 r32 d+32 f16 r16. f32 f16 f32 f16. r4^32
+; bar 2
+C r4.
+
+; ===== Voice D: FM3  (octaves 4-5) =====
+D @3 v10
+; bar 0
+D r4 o5 g16 g+32 g+32 r8^32 g+16 g+32 g+32 r8^32 g32 g+32 r32 g+16.
+; bar 1
+D ^16 r32 f+32 g32 r32 g+32 g32 r32 g+32 a+32 o4 a32 r8 a32 a32 r32 a32 a16. r4^32
+; bar 2
+D r4.
+
+; ===== Voice E: ADPCM-A ch3  (octaves 4-4) =====
+E v12
+; bar 0
+E r3^96 @14 c4 r32 c4 r8
+; bar 1
+E r3^96 @11 c4 r4.^32
+; bar 2
+E r4.
+
+; ===== Voice F: ADPCM-A ch4  (octaves 4-4) =====
+F v12
+; bar 0
+F r3^96 @10 c16 c32 c8. c16 c32 c8. c16 c32
+; bar 1
+F c16 c32 c32 c32 c32 c32 c32 c32 c32 c32 c32 c32 c32 c8^32 c32 c16 c32 c4 r32
+; bar 2
+F r4.
+
+; ===== Voice G: ADPCM-A ch5  (octaves 4-4) =====
+G v12
+; bar 0
+G r8.^32 @13 c16 c32 c8. c16 c32 c8. c32 c16 c8
+; bar 1
+G ^16 c32 c16 c32 c16 c32 c16 @12 c8^32 c32 c16 c32 c4 r8
+; bar 2
+G r4.
+

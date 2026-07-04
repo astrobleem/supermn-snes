@@ -1,0 +1,3 @@
+=== sfx_stub ===
+    set_instrument sm_drum_06f900
+    play_note c4 8

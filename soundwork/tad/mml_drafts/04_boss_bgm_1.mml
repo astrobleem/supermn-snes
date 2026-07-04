@@ -1,0 +1,115 @@
+#Title Boss BGM 1
+#Composer Masahiko Takaki, Kazuyuki Ohnui, Shizuo Aizawa, Takami Asano
+#Author vgm2mml (Superman YM2610 conversion)
+#Tempo 82
+#ZenLen 192
+
+; Echo — tame defaults; tune to taste.
+#EchoLength 32
+#EchoFeedback 32
+#EchoVolume 24
+#FirFilter 64 0 0 0 0 0 0 0
+
+; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
+@0 sm_fm0
+@1 sm_fm1
+@2 sm_fm2
+@3 sm_fm3
+@10 sm_drum_062a00
+@11 sm_drum_067800
+
+; ===== Voice A: FM0  (octaves 1-5) =====
+A @0 v10
+; bar 0
+A r8.^32 o5 c4.^32 r32 L o2 d32 r16. d16 r8^32
+; bar 1
+A r8. g16 a32 r32 o3 c32 o2 a16 o3 d32 o2 d16 r16. d16 r3^96
+; bar 2
+A g16 a32 g+16 g32 r32 f32 d16 r16. d16 r3^96 g32 r32 a32 o3 c16 o2 a32
+; bar 3
+A o3 d16 o2 d16 r16. d16 r3^96 o1 g32 g+16 a16 o2 c32 o1 a16 o2 d16 r16
+; bar 4
+A r32 d32 r4. g32 a16 o3 c32 r32 o2 a32 o3 d16 o2 d32 r8 d32 r8
+; bar 5
+A r4 g32 a16 g+32 g16 f32 r32 d32 r16. d16 r4^16
+; bar 6
+A r32 g16 a32 r32 o3 c32 o2 a16 o3 d32 o2 d16 r16. d16 r4^16 o1 g32 g+16 a32 o2 c16
+; bar 7
+A o1 a16 o2 c32 d32
+
+; ===== Voice B: FM1  (octaves 3-5) =====
+B @1 v10
+; bar 0
+B r8.^32 o5 c4.^32 r32 L o3 d32 r16 a32 g+8.^32
+; bar 1
+B ^16. r16. f16 g32 r32 g+32 g16 f32 d2^32 r32
+; bar 2
+B r4 d16 r32 a16 g+4.^32 f32 r32 g32 g+16 g32
+; bar 3
+B r32 f32 a2 r4^16 o4 d16 r32 a32
+; bar 4
+B ^32 g+4.^32 f32 g16 g+32 r32 g32 f16 d4^16
+; bar 5
+B ^4 r16. o3 a32 o4 c16 c+32 r32 d32 r16 a32 r32 g+3^96
+; bar 6
+B ^32 a16 o5 c32 r32 o4 a32 g16 f32 r32 o5 d2^8.
+; bar 7
+B ^16. o3 d32
+
+; ===== Voice C: FM2  (octaves 4-5) =====
+C @2 v10
+; bar 0
+C r4 o5 d4. r32 L c32 r16 c32 r16 c16 r32 c16
+; bar 1
+C r16 c32 r16 c32 r16 c16 r32 c16 r32 o4 b16 r16 b32 r16 b16 r32 b16 r32 b16 r16 b32
+; bar 2
+C r16 b32 r16 b16 r32 a+16 r16 a+32 r16 a+32 r16 a+16 r32 a+16 r32 a+16 r16 a+32 r16 a+32
+; bar 3
+C ^32 r32 a16 r32 a16 r16 a32 r16 a32 r16 a16 r32 a16 r16 a32 r16 a32 r16 g16 r32 g32
+; bar 4
+C ^32 r32 g16 r16 g32 r16 g32 r16 g16 r32 g16 r16 g32 r16 f32 r16 f16 r32 f16 r16
+; bar 5
+C f32 r16 f32 r16 f16 r32 f16 r32 f16 r16 e32 r16 e16 r32 e16 r32 e16 r16 e32 r16
+; bar 6
+C e32 r16 e16 r32 e16 r16 a32 r16 a32 r16 a16 r32 a16 r32 a16 r16 a32 r16 a16 r32
+; bar 7
+C a16 a32 o5 c32
+
+; ===== Voice D: FM3  (octaves 5-5) =====
+D @3 v10
+; bar 0
+D r4 o5 d4.^32 L d32 r16 d16 r32 d16 r32 d16
+; bar 1
+D r16 d32 r16 d16 r32 d16 r32 d16 r16 d32 r16 d32 r16 d16 r32 d16 r16 d32 r16 d32
+; bar 2
+D r16 d16 r32 d16 r32 d16 r16 d32 r16 d16 r32 d16 r32 d16 r16 d32 r16 d32 r16 d32
+; bar 3
+D ^32 r32 d16 r16 d32 r16 d32 r16 d16 r32 d16 r32 d16 r16 d32 r16 d16 r32 d16 r32 d32
+; bar 4
+D ^32 r16 d32 r16 d32 r16 d16 r32 d16 r16 d32 r16 d32 r16 d16 r32 d16 r32 d16 r16
+; bar 5
+D d32 r16 d16 r32 d16 r32 d16 r16 d32 r16 d32 r16 d16 r32 d16 r16 d32 r16 d32 r16
+; bar 6
+D d16 r32 d16 r32 d16 r16 d32 r16 d16 r32 d16 r32 d16 r16 d32 r16 d32 r16 d16 r32
+; bar 7
+D d16 d32 r32
+
+; ===== Voice E: ADPCM-A ch5  (octaves 4-4) =====
+E v12
+; bar 0
+E r1
+; bar 1
+E L r8. @10 c16 @11 c16 c32 c16 @10 c4 r3^96
+; bar 2
+E c16 c32 c16 c16 c4 r3^96 c16 @11 c32 c16 c32
+; bar 3
+E ^32 @10 c4 r3^96 c16 c32 c16 c32 c8.
+; bar 4
+E ^16 r4. c32 @11 c16 c16 c32 @10 c4 r8
+; bar 5
+E r4 c32 c16 c32 c16 c4 r4^16
+; bar 6
+E r32 c16 @11 c16 c32 c16 @10 c4 r3^96 c16 c16 c32
+; bar 7
+E c16 c4
+

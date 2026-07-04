@@ -1,0 +1,76 @@
+#Title Round Clear
+#Composer Masahiko Takaki, Kazuyuki Ohnui, Shizuo Aizawa, Takami Asano
+#Author vgm2mml (Superman YM2610 conversion)
+#Tempo 93
+#ZenLen 192
+
+; Echo — tame defaults; tune to taste.
+#EchoLength 32
+#EchoFeedback 32
+#EchoVolume 24
+#FirFilter 64 0 0 0 0 0 0 0
+
+; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
+@0 sm_fm0
+@1 sm_fm1
+@2 sm_fm2
+@3 sm_fm3
+@10 sm_drum_060000
+@11 sm_drum_062a00
+@12 sm_drum_079a00
+@13 sm_drum_07b500
+
+; ===== Voice A: FM0  (octaves 2-3) =====
+A @0 v10
+; bar 0
+A r4.^16 o3 f16 f32 f32 c32 f16 f16 c16 f16 f32 f32 c32 f16
+; bar 1
+A f16 c16 f16 f32 f32 c32 f16 f16 c16 f16 c32 r32 o2 f32 o3 f16 c16 o2 f4
+; bar 2
+A ^8^32 r2^8.
+
+; ===== Voice B: FM1  (octaves 4-5) =====
+B @1 v10
+; bar 0
+B r4.^16 o4 f8^32 a8. o5 c8^32 a16
+; bar 1
+B ^8 g2.^8
+; bar 2
+B ^8^32 r2^8.
+
+; ===== Voice C: FM2  (octaves 3-5) =====
+C @2 v10
+; bar 0
+C r4.^16 o3 f8^32 r32 a8^32 o4 c8^32 r32 o5 e32
+; bar 1
+C ^8 d2.^8
+; bar 2
+C ^8^32 r2^8.
+
+; ===== Voice D: FM3  (octaves 4-5) =====
+D @3 v10
+; bar 0
+D r4.^16 o5 f32 e32 f32 e32 d32 c32 f32 e32 f32 e32 d32 c32 f32 e32 d32 c32 o4 a+32 a32
+; bar 1
+D g32 a32 a+32 o5 c32 d32 e32 f32 e32 f32 e32 d32 c32 f32 e32 f32 e32 d32 c32 f32 e32 d32 c32 o4 a+32 a32 g32 a32 a+32 o5 c32 e8
+; bar 2
+D ^4^32 r2^16
+
+; ===== Voice E: ADPCM-A ch4  (octaves 4-4) =====
+E v12
+; bar 0
+E r4.^16 @13 c4 r4^16
+; bar 1
+E r8 @12 c8. c8^32 c4 r16. @13 c8.
+; bar 2
+E ^16 r2.^32
+
+; ===== Voice F: ADPCM-A ch5  (octaves 4-4) =====
+F v12
+; bar 0
+F r4^32 @10 c32 c32 @11 c16 @10 c16 c4 r4 c32
+; bar 1
+F c16 c16 c16 @11 c16 @10 c16 c32 @11 c16 @10 c16 c16 @11 c16 @10 c16 c32 @11 c16 @13 c4
+; bar 2
+F r2.^16.
+

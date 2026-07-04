@@ -1,0 +1,181 @@
+{
+  "_about": {
+    "file_type": "Terrific Audio Driver project file",
+    "version": "0.2.0-beta.2"
+  },
+  "instruments": [
+    {
+      "name": "sm_fm0",
+      "source": "instruments/placeholder.wav",
+      "freq": 523.252,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 2,
+      "last_octave": 5,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_fm1",
+      "source": "instruments/placeholder.wav",
+      "freq": 1046.504,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 6,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_fm2",
+      "source": "instruments/placeholder.wav",
+      "freq": 2093.008,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 3,
+      "last_octave": 7,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_fm3",
+      "source": "instruments/placeholder.wav",
+      "freq": 2093.008,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 2,
+      "last_octave": 7,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_drum_060000",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x060000-0x0629FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_062a00",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x062A00-0x0651FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_065200",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x065200-0x0677FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_067800",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x067800-0x069EFF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_069f00",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x069F00-0x06C4FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_06f900",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x06F900-0x0727FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_077900",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x077900-0x0799FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_079a00",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x079A00-0x07B4FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_07b500",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x07B500-0x07F1FF; extract+decode to BRR"
+    }
+  ],
+  "samples": [],
+  "default_sfx_flags": {
+    "one_channel": true,
+    "interruptible": true
+  },
+  "high_priority_sound_effects": [],
+  "sound_effects": [
+    "sfx_stub"
+  ],
+  "low_priority_sound_effects": [],
+  "sound_effect_file": "08_main_bgm_3.sfx_stub.txt",
+  "songs": [
+    {
+      "name": "s08_main_bgm_3",
+      "source": "08_main_bgm_3.mml"
+    }
+  ]
+}

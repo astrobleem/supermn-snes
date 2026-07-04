@@ -86,3 +86,8 @@ audio/songs/*.vgm
 
 # Keep: requirements / lockfiles even though *.txt is ignored above
 !requirements.txt
+
+# soundwork: raw rips / ROM dumps / decoded audio stay local (rights)
+soundwork/source/
+soundwork/samples/
+soundwork/traces/

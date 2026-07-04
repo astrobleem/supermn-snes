@@ -1,0 +1,451 @@
+#Title Ending
+#Composer John Williams, Masahiko Takaki, Kazuyuki Ohnui, Shizuo Aizawa, Takami Asano
+#Author vgm2mml (Superman YM2610 conversion)
+#Tempo 130
+#ZenLen 192
+
+; Echo — tame defaults; tune to taste.
+#EchoLength 32
+#EchoFeedback 32
+#EchoVolume 24
+#FirFilter 64 0 0 0 0 0 0 0
+
+; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
+@0 sm_fm0
+@1 sm_fm1
+@2 sm_fm2
+@3 sm_fm3
+@10 sm_drum_060000
+@11 sm_drum_062a00
+@12 sm_drum_065200
+@13 sm_drum_067800
+@14 sm_drum_069f00
+@15 sm_drum_06f900
+@16 sm_drum_079a00
+@17 sm_drum_07b500
+
+; ===== Voice A: FM0  (octaves 1-5) =====
+A @0 v10
+; bar 0
+A r4. o4 d2^32 f+16.
+; bar 1
+A ^4.^16 a2^32 o5 f+32
+; bar 2
+A ^2 e2
+; bar 3
+A ^1
+; bar 4
+A ^2^8 r4^32 d16.
+; bar 5
+A ^32 c+8 d4^32 c+8 o4 b8 r32 d4^32
+; bar 6
+A ^8.^32 r32 e2 r32 f+8.^32
+; bar 7
+A ^2.^16. o3 a32 b32 r32 o4 c+32 d32
+; bar 8
+A r32 e32 f+32 c+16 d32 e32 r32 f+32 g32 r32 a32 e32 f+32 r32 g32 a32 r32 b32 o5 c+32 o4 a16 b32 o5 c+32 r32 d32 e32 r32 f+32 r16.
+; bar 9
+A r8^32 o3 c8.^32 o2 f16. f16 f16. f8^32 f16. r8
+; bar 10
+A r16. o3 c4 o2 f8^32 f16 r32 f16 f8^32 o3 c8^32 r32
+; bar 11
+A c16 c16 r32 c8^32 o2 f16 f16. f16 r32 f8.^32 o3 c8^32 c32 r32
+; bar 12
+A c32 o2 f16 f4 f16 r32 f16 f16. f16 f16. f16 f16. f16 r32
+; bar 13
+A f16 f16 r32 f16 o3 c4 c16 r32 c16 c16 r32 o2 f16 f16 r32 f16 f16
+; bar 14
+A ^32 f16 f16. o3 c8.^32 r32 c16 c16. c16 o2 f16. e16 r32 d+16 d16.
+; bar 15
+A ^8.^32 d16. d16 d16. d16 r32 o3 d16 o2 c4 c16 c16
+; bar 16
+A ^32 c16 c4 r4 o3 c8 r8 c16. r16
+; bar 17
+A r16 c8 r8 c8^32 c16 r32 c16. r8 c8 r16.
+; bar 18
+A r32 c16. r32 g16. r32 c16 c16 r32 o2 g16 o3 c8 r8 c8 r8
+; bar 19
+A c16. r8 c8 r8 c8 r8 c16. r8 c16
+; bar 20
+A r16 o2 c16 c16 o3 c16 r16 o2 c16 c32 r32 o3 c16. r8 c8 r8 c16.
+; bar 21
+A ^32 r8 c16. r8^32 o2 e16 e16 r32 e16 d+4.
+; bar 22
+A ^16. r32 e16 e16 r32 e16 g+16. g+16 g+16. f4^16 f16 r32
+; bar 23
+A f16 f16. f16 f16. o3 c+16. r16 c16 r32 c4.^16
+; bar 24
+A ^32 o2 d16 r32 e16 f+16 r32 g8.^32 f+4 e8.^32 r32
+; bar 25
+A d8.^32 c4 o1 b4 a8.^32 o2 g16
+; bar 26
+A ^8. g4 f+8.^32 r32 e8.^32 d16.
+; bar 27
+A ^8^32 o3 c16 r16. d16 r32 d4.^16. o2 d8
+; bar 28
+A ^16. r32 g8.^32 f+4 e8.^32 r32 d8^32
+; bar 29
+A ^16 g8^32 f+16. e8^32 d16 r32 d+4.^16
+; bar 30
+A ^32 d+8.^32 r32 d+8.^32 d+4 d+4
+; bar 31
+A o3 d+16 o2 d+16. d+8^32 o3 f16 r32 o2 f16 f16 r32 d16 d16. d16 d16. d16 r32 o3 d+32
+; bar 32
+A ^32 o2 d+16 r32 d+8 r32 o3 f16 o2 f16. f8.^32 r32 d16 d16 r32 d16 g16.
+; bar 33
+A ^32 g32 g32 r32 g32 g16. r32 g32 g32 g8 g16 r32 g16 g16. g16 g16. g16. r32
+; bar 34
+A g32 g32 g32 r32 g16. g16 g32 g8 g16 g16. g16 r32 g16 g16 r32 g8^32
+; bar 35
+A g32 g8 g16 r32 g16 g8^32 g32 r32 g16. g16. g16 g8^32 r32 g32
+; bar 36
+A g16. r32 g16 g16. g8^32 g32 g8 g16 r32 g16 g4
+; bar 37
+A g16 g16. g16 r32 g8 r32 g32 g32 g16. g16 g16. g8^32 g32 g32 r32 g32
+; bar 38
+A ^32 g16 r32 g16 g2.^16
+; bar 39
+A ^2^8 g8^32 r8.^32
+; bar 40
+A r2.^16.
+
+; ===== Voice B: FM1  (octaves 2-6) =====
+B @1 v10
+; bar 0
+B r4. o3 d2^8
+; bar 1
+B ^1
+; bar 2
+B ^2 e2
+; bar 3
+B ^1
+; bar 4
+B ^2^8 o2 g4.
+; bar 5
+B ^1
+; bar 6
+B ^2. r32 o3 d8.^32
+; bar 7
+B ^1
+; bar 8
+B ^2.^8^32 o5 c32 r16
+; bar 9
+B r16 c16 r32 g3^96 g16. a16. r32 g32 f32 r16. g8
+; bar 10
+B ^2^16. o4 g32 r32 g16 r32 g32 r32 o5 c32 r8^32
+; bar 11
+B c16 g4.^32 g16 r32 a32 r16 f32 d16 r32 a16 r32 g8
+; bar 12
+B ^2 c16 r32 c32 r32 c16 r32 b4
+; bar 13
+B ^8.^32 g16 r8. c32 r16 c32 r32 c16 r32 b4^32
+; bar 14
+B ^8. g32 r8.^32 c32 r32 c16 r32 c32 r32 b16. a16 r32 b16 o6 c16.
+; bar 15
+B ^1
+; bar 16
+B ^3^96 o4 c16 r16. c16. d4. r32
+; bar 17
+B d16 d8 f8 e16. r32 d16. r32 a32 r8 g16 g8.^32
+; bar 18
+B ^4 r32 c32 r8 c16 d4. d16. r32
+; bar 19
+B d16. o5 c4 o4 b16 g16 a32 r16. g32 r32 f32 r32 e4^32
+; bar 20
+B ^8. c16 r16. c16 r32 d4. r32 d16 d16.
+; bar 21
+B ^32 f8 e8 d16. r32 b16 a16 r32 b16 o5 c4.
+; bar 22
+B ^16. r32 o4 c16 f16 r32 a16 o5 c16. o4 b16 o5 c16. d4^16 d16 r32
+; bar 23
+B d16 d16. d16 d16. f16 r16. e16 r32 c4.^16
+; bar 24
+B ^32 o4 g32 r16 b32 r32 o5 d32 r16 d8.^32 d32 r16 o4 g32 r16 o5 d32 r32 d4
+; bar 25
+B ^8.^32 g4 d4 o4 g4^32
+; bar 26
+B ^8. o5 d4 d32 r16 o4 g32 r32 o5 d32 r16 d4^16
+; bar 27
+B ^8^32 b32 r8 a16 r32 a4.^16. o4 g32 r16 b32
+; bar 28
+B r32 o5 d32 r16 d8.^32 r32 d32 r32 o4 g32 r16 o5 d32 r32 d4.^32
+; bar 29
+B ^16 g16 r8 f+32 r32 e32 r8 d16 r32 d+4.^16
+; bar 30
+B ^32 d+8.^32 r32 f8.^32 f+4 g4
+; bar 31
+B d+32 r32 d+16 r32 d+8^32 f32 r16 f32 r32 f4 d+32 r32 d+16 r32 d+32 r16 d+32
+; bar 32
+B r32 d+16 r32 d+8^32 f32 r32 f16 r32 f8.^32 r32 d+16 r16. d16 o4 d16.
+; bar 33
+B ^32 d32 d32 r32 d32 d16. r32 d32 d32 d8 d16 r32 d16 d16. d16 d16. d16. r32
+; bar 34
+B d32 d32 d32 r32 d16. d16 d32 d8 d16 r32 d16 d16 r32 d16 d16 r32 o3 g32 r32 o4 d+16 r32
+; bar 35
+B d32 r32 c+16 r32 g+32 r16 g32 r32 f+16 r32 a+32 r32 a16 r32 g32 r32 o5 c+16 r32 d+32 r32 o4 g16 r32 o5 d32 r16 c+32
+; bar 36
+B r32 c16 r32 f32 r32 e16 r32 d+32 r32 o4 a16 r32 a+32 r16 b32 r32 o5 c32 r16 c+32 r32 d16 r8.
+; bar 37
+B o4 g32 r32 g32 r16 g32 r16 g16 r16. g32 g32 g32 r16 g32 r32 g32 r16 g16 r16. g32 g32 r32 g32
+; bar 38
+B r32 g32 r16 g32 r32 g2.^16
+; bar 39
+B ^2^8 o5 g16. r4^32
+; bar 40
+B r2.^16.
+
+; ===== Voice C: FM2  (octaves 3-7) =====
+C @2 v10
+; bar 0
+C r4. o5 f+2^8
+; bar 1
+C ^1
+; bar 2
+C ^2 d2
+; bar 3
+C ^32 e2^32 f+4.^16
+; bar 4
+C ^16. g2^32 g4.
+; bar 5
+C ^2^8. r32 a4^32
+; bar 6
+C ^2. r32 c+8.^32
+; bar 7
+C ^4^16 d2^32 e8^32
+; bar 8
+C ^4. f+2^32 r16 c32
+; bar 9
+C r8 c16 g4. g16 r32 a16. g32 f16 r16. g16
+; bar 10
+C ^2^8 r32 o4 g32 r32 g32 r16 g32 r32 o5 c32 r16.
+; bar 11
+C r32 c16. g4. r32 g16 a16 r16 f32 d32 r16 a32 r16 g16
+; bar 12
+C ^2^16 c32 r16 c32 r32 c32 o4 a4
+; bar 13
+C ^8.^32 b16 r8. a32 r16 a32 r32 a16 r32 a4^32
+; bar 14
+C ^8. b32 r8.^32 a32 r32 a16 r32 a32 r32 o5 e16. d16 r32 e16 f16.
+; bar 15
+C ^1
+; bar 16
+C ^2^16. r16 o4 d3^96
+; bar 17
+C ^32 d16. d16. r32 f16. r32 e16. d8 a16 r16. g32 o6 c16 r16 c16 c32
+; bar 18
+C ^32 c16 r16 c32 r32 c32 r32 c16 c16. c16 r16 o4 d3^96 r32 d16
+; bar 19
+C ^32 d8 o5 c4 o4 b16 g32 r32 a32 r16 g16 r32 o6 c32 r16 c16 c16 c16
+; bar 20
+C r16 c16 c16 c16 r32 c16 c16. r16 o4 d4. d16. d32
+; bar 21
+C ^16. f16. r32 e16. r32 d16. b16. a16 b32 o6 c+32 r32 d+32 f32 f+32 g+32 r32 a+32 o7 c32 o6 a+32 r32 g+32
+; bar 22
+C f+32 f32 d+16 c+32 c32 c+16 d+32 f32 f+32 r16 o5 c16 r32 o4 b16 o5 c16 r32 d4^16 d32
+; bar 23
+C ^32 d16. d16 r32 d16 d16 r32 f16 r16. e16 c32 o6 c32 r32 d32 e32 f32 g32 r32 f32 e32 d32 c16
+; bar 24
+C o5 b32 a32 g32 r32 f+32 g32 a32 r32 b32 r16 d8.^32 r32 d32 r32 o4 g32 r16 o5 d32 r32 d8.
+; bar 25
+C ^4^32 r32 g8.^32 d4 o4 g8.^32
+; bar 26
+C ^4 o5 d4 d32 r16 o4 g32 r16 o5 d32 r32 d4
+; bar 27
+C ^8^32 g32 r8 f+16 r32 f+2^32 o4 g32 r32
+; bar 28
+C r32 b32 r32 o5 d32 r16 d4 d32 r32 o4 g32 r16 o5 d32 r16 d4^16
+; bar 29
+C ^16 d16 r8 d32 r32 d32 r8 d16 r32 c+4.^16
+; bar 30
+C ^32 o4 a+4 o5 c8.^32 r32 d8.^32 d+4
+; bar 31
+C o4 g32 r32 g16 r32 g8^32 a32 r16 a32 r32 a4 f+16 r32 f+16 f+16 r32 g32
+; bar 32
+C r32 g16 r32 g8^32 a32 r32 a16 r32 a8.^32 r32 g16 r16. f+16 r32 c16
+; bar 33
+C ^32 c32 r32 c32 c32 c8 c32 c32 r32 c16. r32 c16 c16 r32 c16 c16. c16 c8
+; bar 34
+C c32 c32 r32 c32 c16. r32 c32 c32 c8 c16. c16 c16. c16 c16. r32 o3 g16 r32 o4 d+32
+; bar 35
+C r16 d32 r32 c+16 r32 g+32 r32 g16 r32 f+32 r32 a+16 r32 a32 r16 g32 r32 o5 c+32 r16 d+32 r32 o4 g16 r32 o5 d32 r32
+; bar 36
+C c+16 r32 c32 r32 f16 r32 e32 r16 d+32 r32 o4 a16 r32 a+32 r32 b16 r32 o5 c32 r32 c+16 r32 d32 r8^32
+; bar 37
+C o3 d32 r16 d32 r32 d32 r16 d16 r16. d32 d32 d32 r16 d32 r32 d32 r16 d16. r16 d32 d32 r32 d32
+; bar 38
+C r32 d32 r16 d32 r32 d2.^16
+; bar 39
+C ^2^8 o4 d16. r4^32
+; bar 40
+C r2.^16.
+
+; ===== Voice D: FM3  (octaves 3-7) =====
+D @3 v10
+; bar 0
+D r2^16 o4 d4.^16
+; bar 1
+D ^16 r32 f+2 r32 a4.
+; bar 2
+D ^8^32 o5 f+2^32 e4^16
+; bar 3
+D ^1
+; bar 4
+D ^2.^16 r8.
+; bar 5
+D r16. d8 c+8 d4 r32 c+8 o4 b8 d8
+; bar 6
+D ^4.^32 e2^32 f+16
+; bar 7
+D ^1
+; bar 8
+D r32 o3 a32 b32 o4 c+16 d32 e32 r32 f+32 c+32 r32 d32 e32 f+16 g32 a32 r32 e32 f+32 r32 g32 a32 b16 o5 c+32 o4 a32 r32 b32 o5 c32 o4 b32 r32
+; bar 9
+D a32 g32 a32 r32 b32 o5 c32 o4 b32 o5 c32 r32 d32 e32 f32 g16 f32 e32 d32 r32 e32 f32 g32 a32 r32 b32 o6 c32 o5 b32 r32 o6 c32 o5 b32 o6 c32 o5 a32 r32
+; bar 10
+D b32 g32 a32 g16 a32 b32 o6 c32 r32 d32 e32 f32 r32 e32 d32 e32 f32 r32 e32 d32 e32 d16 c32 d32 c32 r32 o5 g32 a32 b32 o6 c32 r32
+; bar 11
+D d32 c32 o5 b32 r32 o6 c32 d32 e32 f32 r32 g32 d32 e32 f16 g32 a32 g32 r32 e32 f32 e32 r32 f32 e32 f32 e32 r32 f32 e32 f32 e16
+; bar 12
+D f32 c32 d32 r32 c32 d32 c32 d32 r32 o5 b32 o6 c32 o5 b32 r32 o6 c32 o5 b32 o6 c32 o5 g32 r32 a32 g32 f32 e16 d32 o6 c16 r32 c32 o5 b32 o6 c32 o5 b32 r32
+; bar 13
+D o6 c16 c32 o5 b16 o6 c32 o5 b32 o6 c16. c32 o5 b32 o6 c32 r32 o5 b32 o6 c16 r32 c32 o5 b32 o6 c32 o5 b32 r32 o6 c16 c32 o5 b16 o6 c32 o5 b32 o6 c16
+; bar 14
+D ^32 c32 o5 b32 r32 o6 c32 o5 b32 o6 c16 r32 c32 o5 b32 o6 c32 o5 b16 o6 c16 c32 o5 b16 o6 c32 o5 b32 r32 o6 c16 c32 o5 b32 r32 o6 c32 o5 b32 o6 c32 o5 b32 r32
+; bar 15
+D a32 b32 o6 c32 d16 e32 d32 c32 d16 e32 f32 r32 g32 a32 g32 f32 r32 e32 d32 c32 r32 o5 f32 g32 a32 b32 r32 o6 c32 d32 e32 f16
+; bar 16
+D g32 a32 b32 r32 o7 c8^32 r16 o3 g16 r16. g16. a4. r32
+; bar 17
+D a16 a8 o4 c8 o3 b16. r32 a16. r32 o4 d32 r8 d16 d8.^32
+; bar 18
+D ^4 r32 o3 g32 r8 g16 a4. a16. r32
+; bar 19
+D a16. o4 g4 e16 e16 d32 r16. d16 c16 o3 g4^32
+; bar 20
+D ^8. g16 r16. g16. a4. r32 a16 a16.
+; bar 21
+D ^32 o4 c8 o3 b8 a16. r32 o4 d16 d16 r32 d16 f4.
+; bar 22
+D ^16. r32 o3 g16 o4 c16 r32 f16 f16. f16 f16. g+4^16 g+16 r32
+; bar 23
+D g+16 g+16. g+16 g+16. g+16 r16. g16 r32 g4.^16
+; bar 24
+D ^32 d32 r16 g32 r32 b32 r16 o6 g32 r32 g32 r32 f+32 g32 f+32 g16 r32 g32 f+32 r32 g32 f+32 g16 r32 g32 f+32 g32 r32 f+32
+; bar 25
+D g32 r32 g32 r32 f+32 g32 f+32 r32 g32 r32 g32 f+32 r32 g32 f+32 g16 r32 g32 f+32 g32 r32 f+32 g32 r32 g16 f+32 g32 f+32 r32 g32
+; bar 26
+D r32 g32 r32 f+32 g32 f+32 g16 r32 g32 f+32 g32 r32 f+32 g32 r32 g16 f+32 g32 f+32 r32 g32 r32 g32 r32 f+32 g32 f+32 g16.
+; bar 27
+D f+16 e16. g16 r16. a16 r32 a4.^16. o5 a32 b32 r32 o6 c32
+; bar 28
+D d32 e32 r32 f+32 g32 r32 g32 r32 f+32 g32 f+32 g16 r32 g32 f+32 r32 g32 f+32 g32 r16 g32 f+32 g32 r32 f+32 g32 r32 g32 r32 f+32
+; bar 29
+D g32 f+32 g16 r32 g32 f+32 r32 g32 f+32 g32 r16 g32 f+32 g32 r32 f+32 o5 g16 a+16. o6 c+16 d+8.^32
+; bar 30
+D ^32 o4 d+32 r32 f32 g32 a32 b32 r32 o5 c+32 o4 g32 a32 b16 o5 c+32 d+32 f32 r32 c+32 d+32 f32 g32 r32 a32 b32 f32 r32 g32 a32 b32 o6 c+32 r32 d+32
+; bar 31
+D o5 g16 g16. g8^32 a16 r32 a16 a4 d+16 r32 d+16 d+16 r32 o6 g32
+; bar 32
+D ^32 g16 r32 g8^32 a16 a16. a8.^32 r32 d+16 r16. d16 g16 r32
+; bar 33
+D r32 g32 g32 r32 g32 g32 r16. g32 g32 g16 r16 g16 r32 g32 r32 g16 r32 g32 r16 g32 r32 g32 r16.
+; bar 34
+D g32 g32 g32 r32 g32 r16 g16 g32 g32 r16. g32 r16 g32 r32 g32 r16 g32 r32 g16 r32 g16 r16.
+; bar 35
+D g32 g32 r16. g32 r16 g32 r32 g16. r16 g32 r32 g32 r16 g16 r32 g32 r16 o5 g32 r32 o6 d16 r32 c+32
+; bar 36
+D r32 c16 r32 f32 r16 e32 r32 d+16 r32 o5 a32 r32 a+16 r32 b32 r32 o6 c16 r32 c+32 r16 g16 r8^32
+; bar 37
+D o5 g16 r32 g32 r32 g16 r32 g16 r16. g32 g32 r32 g32 r32 g16 r32 g32 r32 g16. r16 g16 g32 g32
+; bar 38
+D r32 g16 r32 g32 r16 g2.^32
+; bar 39
+D ^2^8^32 o6 g16 r4^32
+; bar 40
+D r2.^16.
+
+; ===== Voice E: ADPCM-A ch5  (octaves 4-4) =====
+E v12
+; bar 0
+E r1
+; bar 1
+E r1
+; bar 2
+E r1
+; bar 3
+E r1
+; bar 4
+E r1
+; bar 5
+E r1
+; bar 6
+E r1
+; bar 7
+E r1
+; bar 8
+E r4. @11 c16. c16. c32 c16 c16 c16. c8.
+; bar 9
+E ^16 r16. c4 r16. @10 c16 c32 c32 c8^32 @11 c8.^32
+; bar 10
+E ^32 r4^16 @10 c16. c8^32 c8^32 c4
+; bar 11
+E r1
+; bar 12
+E r32 c32 c16 c32 c32 c16 c32 c32 c32 c16 c32 c32 c32 @17 c4 @14 c16. c16 c16.
+; bar 13
+E c16 c16. c16 @15 c4 r4 @14 c16 c16. c16 c16
+; bar 14
+E ^32 c16. c16 @15 c4 r4.^16. @17 c16.
+; bar 15
+E ^8^32 r2.^16.
+; bar 16
+E @11 c32 c32 c16 @10 c8.^32 c8^32 c16. @11 c4 @10 c8^32
+; bar 17
+E ^16 @11 c4 @10 c4 @11 c8.^32 @10 c8.^32
+; bar 18
+E ^32 @11 c4 @10 c8.^32 @11 c4 @10 c4
+; bar 19
+E @11 c8.^32 @10 c4 @11 c4 @10 c4 @11 c32
+; bar 20
+E ^8. c16. c16 c16. c4 @10 c8.^32 @11 c16.
+; bar 21
+E ^8^32 @10 c4 c16 c16. c16 c4 c16 c16
+; bar 22
+E ^32 c16. @17 c4 r8.^32 @11 c4 r16 c16.
+; bar 23
+E c16 c16. c16. c16 @10 c16. @11 c16 @10 c16. @11 c16 @10 c16. @11 c16 @17 c8.^32
+; bar 24
+E ^32 r4 @16 c16 c8. c8^32 c16 c16. c8^32
+; bar 25
+E c8^32 c16. c16 c8^32 c8^32 c16. c16 c8. c32
+; bar 26
+E ^8 c16 c16. c8^32 c8^32 c16. @13 c32 c32 c16 c32 c32 c32 c16 c32
+; bar 27
+E c32 c32 c16 c32 @10 c8^32 c16. c8.^32 @11 c16 c32 c16 c16. @17 c8
+; bar 28
+E ^8 r16 @16 c8^32 c8. c16 c16. c8^32 c8^32
+; bar 29
+E c16. @14 c8^32 c16 c8^32 c16. @17 c4 r8^32 @12 c32
+; bar 30
+E ^32 c16. c16 c16. c16 c16. c16. c16 c16. c16 c16. c16 c16.
+; bar 31
+E c16. c16 c8^32 c16. c16 c4 c16. c16 c16. c32
+; bar 32
+E ^32 c16. c8^32 c16 c16. c4 c8^32 c32 @15 c8
+; bar 33
+E ^8 r3^96 @13 c16. c16 c16. c16. c16 c8
+; bar 34
+E ^32 c16 c32 c8^32 c32 c8 c16. c16 c16. c16 c16. c8^32
+; bar 35
+E c32 c8 c16. c16 c8^32 c16 c16. c16. c16. c8^32 c32
+; bar 36
+E c8 c16 c16. c8^32 c32 c8 c16. c16 @17 c4
+; bar 37
+E r4 @13 c8^32 c32 c32 c16. c16. c16 c8^32 c16 c32 c32
+; bar 38
+E ^32 c16. c16 c16 c32 c32 c32 c16 c32 c32 c16 c32 c32 c16 c32 c32 c32 c16 c32 c32 c32 c16 c32
+; bar 39
+E c32 c16 c32 c32 c32 c16 c32 c32 c16 c32 c32 c32 c16 c32 c32 @15 c4 r8^32
+; bar 40
+E r2.^16.
+

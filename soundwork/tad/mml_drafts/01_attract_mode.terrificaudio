@@ -1,0 +1,97 @@
+{
+  "_about": {
+    "file_type": "Terrific Audio Driver project file",
+    "version": "0.2.0-beta.2"
+  },
+  "instruments": [
+    {
+      "name": "sm_fm0",
+      "source": "instruments/placeholder.wav",
+      "freq": 1046.504,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 3,
+      "last_octave": 6,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_fm1",
+      "source": "instruments/placeholder.wav",
+      "freq": 261.626,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 1,
+      "last_octave": 4,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_fm2",
+      "source": "instruments/placeholder.wav",
+      "freq": 130.813,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 3,
+      "last_octave": 3,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_fm3",
+      "source": "instruments/placeholder.wav",
+      "freq": 1046.504,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 6,
+      "last_octave": 6,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "sm_drum_060000",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x060000-0x0629FF; extract+decode to BRR"
+    },
+    {
+      "name": "sm_drum_065200",
+      "source": "instruments/placeholder.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x065200-0x0677FF; extract+decode to BRR"
+    }
+  ],
+  "samples": [],
+  "default_sfx_flags": {
+    "one_channel": true,
+    "interruptible": true
+  },
+  "high_priority_sound_effects": [],
+  "sound_effects": [
+    "sfx_stub"
+  ],
+  "low_priority_sound_effects": [],
+  "sound_effect_file": "01_attract_mode.sfx_stub.txt",
+  "songs": [
+    {
+      "name": "s01_attract_mode",
+      "source": "01_attract_mode.mml"
+    }
+  ]
+}
