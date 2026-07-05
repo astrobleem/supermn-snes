@@ -1,7 +1,8 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: July 4, 2026. Per-area detail lives in the linked docs.
+Last updated: July 5, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) (pt.21 banner → CURRENT TASK is pt.22).**
+**Repo consolidated 2026-07-05: PRs #1–#13 ALL MERGED — `main` is the single source of truth; branch off `main` for pt.22.**
 
 > ## ⭐ DIRECTION SET (user decision 2026-07-04): 30fps retarget + SOUND — realtime-60 abandoned
 > The CP0 STOP-rule fired (optimistic projections still 2.2-3.1× over the 60fps budget = at the
@@ -12,7 +13,7 @@ Last updated: July 4, 2026. Per-area detail lives in the linked docs.
 > proven; remaining = the musical pass + engine integration (TAD driver, SPC700 upload,
 > sound-command mailbox → TAD triggers). Steering: docs/PROFILE_CAMPAIGN.md.
 
-> ## ✅ pt.21 RENDER-TO-WRAM — SHIPPED + VALIDATED, small win (DRAFT PR #13, `50dfc62`+`3c79000`)
+> ## ✅ pt.21 RENDER-TO-WRAM — SHIPPED + VALIDATED, small win (PR #13 MERGED, `50dfc62`+`3c79000`)
 > Relocated the 5A22 render to WRAM `$7F` via a verbatim same-offset copy (`rc_copy` mirrors
 > $E9:8000-$8FFF → $7F:8000 at boot; the $8004 wrapper jml's the $7F copy) — simpler than the
 > pt.20-plan's `$7E:D000` re-assembly. Byte-faithful, zero-shift, smoke-GREEN, render **provably
@@ -23,7 +24,7 @@ Last updated: July 4, 2026. Per-area detail lives in the linked docs.
 > (`tools/measure_render_wram.py`). Memory `render-to-wram-pt21`; docs/PROFILE_CAMPAIGN.md §pt.21.
 > **NEXT (pt.22): re-rank levers — 30fps pacing change / scheduler rewrite (244K) / contiguous (335K).**
 
-> ## ✅ 5A22-CONTENTION PROBE + WRAM SUPERVISOR — SHIPPED `8933076` (2026-07-04, PR #12)
+> ## ✅ 5A22-CONTENTION PROBE + WRAM SUPERVISOR — SHIPPED `8933076` (2026-07-04, PR #12 MERGED)
 > The combat tick's "unattributed 1.08M" is mostly **5A22↔SA-1 bus contention**: the video
 > supervisor busy-polled from ROM at 100% duty, taxing the SA-1 +1-2 cyc per ROM/IRAM access and
 > doubling BW-RAM (Nexen `Sa1Cpu::ProcessCpuCycle`, hardware-shaped). Parking the 5A22 measured

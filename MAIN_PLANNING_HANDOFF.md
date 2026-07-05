@@ -30,11 +30,13 @@ these are the biggest known remaining chunks. Suggest starting with (a) — it's
 honest combat measurement anyway. Sound runs in parallel sessions (21/21 tracks converted; needs
 the musical pass + TAD engine integration — see memory `strategic-fork-30fps-sound`).
 
-**Branch topology:** pt.21 = branch `pt21-render-wram` (DRAFT PR #13), based on
-`worktree-a3-objproc-mid` (pt.20, PR #12 — still OPEN/unmerged; PR #13 STACKS on it). A next
-session continues from `pt21-render-wram` (or a fresh branch off it). Worktree env note: the
-gitignored `data/` + `tools/mame-trace/*.bin` build inputs must be symlinked from the main
-checkout; Nexen under Bash needs 2-level python nesting + absolute ROM path (exit-144 gotcha).
+**Branch topology (CONSOLIDATED 2026-07-05): `main` is the single source of truth.** PRs #12
+(pt.20) and #13 (pt.21) were validated + fast-forward-merged into `main` (tip `108ecce`); PRs
+#1–#13 are ALL merged. The main checkout (`/home/chad/supermn-snes`) is on `main` with the real
+`data/` build inputs — a next session branches off `main` for pt.22, no worktree env setup
+needed. (If using a fresh worktree instead: the gitignored `data/` + `tools/mame-trace/*.bin`
+build inputs must be symlinked from the main checkout; Nexen under Bash needs 2-level python
+nesting + absolute ROM path — exit-144 gotcha.)
 
 **pt.19→pt.20 record (all on branch `worktree-a3-objproc-mid`, PRs #1-#12):** A3 objproc widen
 (`495ccf9`+`184a52b`, 11.9×→11.1×, PR #1); trap#5 shells (`2c0b33e`, →10.2×, PR #2); CP1 2.2
