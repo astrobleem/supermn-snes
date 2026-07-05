@@ -20,14 +20,22 @@ are render-DEAD; set_cpu_state('Snes') won't force it back). This is why pt.20's
 "doesn't engage" fresh — those combat contention numbers are NOT reproducible from the NAT.
 MEASURE render/5A22 changes on a FRESH boot (`tools/measure_render_wram.py`).
 
-**CURRENT TASK (pt.22): re-rank the remaining 30fps levers by MEASUREMENT and pick one.** With
-the render lever spent, the candidates (all per docs/PROFILE_CAMPAIGN.md / pt.20 steering):
-(a) the **30fps pacing change** ($AC/frame-sync = one GAME_TICK per 2 display frames + freerun
-validation — also makes per-tick renders REAL in free-run, which would give a production-shaped
-combat-render harness the NAT can't); (b) **scheduler semantic rewrite** (sel+swin ~244K);
-(c) **contiguous-compile** (interp ~335K). Combat is still ~2.0M/tick = 5.6× the 358K budget;
-these are the biggest known remaining chunks. Suggest starting with (a) — it's a prerequisite for
-honest combat measurement anyway. Sound runs in parallel sessions (21/21 tracks converted; needs
+**CURRENT TASK (pt.22): user picked the CONTIGUOUS-COMPILE lever (make the 335K combat interp
+residual native). Re-profile DONE (2026-07-05) + a major finding — see docs/PROFILE_CAMPAIGN.md
+§pt.22.** Fresh injected profiles (current build): combat 204 interp fetches/tick, light 133. The
+dominant BOTH-class residual is the **sprite-build coroutine system** ($00CE58 + its jump-table
+handlers $ceb6/$d522/$d6b0/$d226). **THE FINDING: all three bank-0 `op_rte` coroutine escapes
+(entry_c2f8/$C300, entry_4542/$455E, entry_ce58/$CE58) fire 0× in gameplay (HOOKTEST-verified,
+injected + free-run) — the whole `op_rte` coroutine-resume dispatch path is DEAD; the coroutines
+loop within-tick via interpreted `bra` (e.g. `$ceb4 bra $ce58`), never the rte the hook waits for.
+Their ledger wins were `$07xx`-counter artifacts.** LEVER: **(A) revive coroutine dispatch** (loop_hook
+the trampoline `bra`s — lh_sched precedent — activates 3+ shipped escapes both-class; risks: never-run
+bodies UNVALIDATED, `--coroutine` entry convention vs a bra-reach) — RECOMMENDED; **(B)** escape the leaf
+handlers directly via the bsr-hook (safe incremental fallback, all 4 transpile clean). **RULE banked:
+HOOKTEST-verify every "shipped" coroutine/rts/table escape — that class's counter-based wins are
+suspect until matchedEventsEmitted>0.** (NOTE: the pt.21 "pacing change / scheduler-rewrite / contiguous"
+menu is superseded by this measurement — contiguous-compile IS the picked lever, and the coroutine-
+dispatch revival is where it starts.) Sound runs in parallel sessions (21/21 tracks converted; needs
 the musical pass + TAD engine integration — see memory `strategic-fork-30fps-sound`).
 
 **Branch topology (CONSOLIDATED 2026-07-05): `main` is the single source of truth.** PRs #12
