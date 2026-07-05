@@ -722,7 +722,7 @@ combat contention numbers are NOT reproducible from the NAT.** Measure render/5A
 FRESH boot instead (cpu5a22_boot puts the 5A22 in the supervisor): inject the combat shadow +
 force game-alive ($400002=$0300/frame) + bump FRAME_REQ/frame. Tool: `tools/measure_render_wram.py`.
 
-## pt.22 (2026-07-05): current interp-residual re-profile + the entry_ce58 DEAD-ESCAPE finding
+## pt.22 (2026-07-05): current interp-residual re-profile → lever = escape the coroutine's leaf handlers
 
 User picked the **contiguous-compile lever** (make the 335K combat interp residual native). First
 step = re-profile the CURRENT residual (all prior cluster breakdowns are stale — A2/A3 objproc,
@@ -731,8 +731,9 @@ trap#5 shells, and the whole CP1-2.2 light-tick campaign shipped after them). Me
 ENTRYCLASS=1` (the 2-level-nesting + ABSOLUTE-ROM Nexen-under-Bash recipe; runners in the pt.22
 session scratchpad).
 
-**Fresh injected profiles (current `main` build):** combat (ce4trip64) **204** interp fetches/tick;
-light (trip1000) **133**. Dominant BOTH-class residual = the **sprite-build coroutine system**:
+**Fresh injected profiles (current `main` build) — ADDRESS-INDEPENDENT, correct:** combat (ce4trip64)
+**204** interp fetches/tick; light (trip1000) **133**. Dominant BOTH-class residual = the
+**sprite-build coroutine system**:
 
 | cluster | combat | light | character |
 |---|---|---|---|
@@ -742,52 +743,36 @@ light (trip1000) **133**. Dominant BOTH-class residual = the **sprite-build coro
 | GAME_TICK spine $003Axx–3Bxx | ~29 | **~4** | static `jsr(pc)` tree, callees already native — **COMBAT-ONLY** ($1cca(a5)=0 early-exits light at $3AB6) |
 | $024xxx trap#5 residue | ~15 | — | escbank5 shell residue |
 
-**THE FINDING — `entry_ce58` (the SHIPPED sprite-build coroutine escape, commit bc65b91, SA-1
-`$00:E889`, escbank.pasm:12539, a 23-instr spine + call-bridges to $cd1a/$26fa/$d522/$ceb6/$d6b0/
-$d226/$d18a) FIRES 0×.** Verified three ways (HOOKTEST exec-hook, `matchedEventsEmitted=0`):
-injected combat, injected light, AND production free-run (300 frames; `take_irq` control fired +
-ticks advanced → harness good). So the whole cluster runs INTERPRETED in production — the injected
-profile is NOT overcounting it.
+**⚠️ CORRECTED FINDING (a mid-session error, caught + fixed same day): `entry_ce58` FIRES — it is NOT
+dead.** An intermediate step wrongly concluded the three `op_rte` coroutine escapes (c2f8/4542/ce58)
+"fire 0× / the dispatch is systemically dead." **That was a HOOKTEST BANK-ADDRESSING ARTIFACT** — the
+escbank bodies execute at **`$92:xxxx`**, but the HOOKTESTs used bare `$00`-bank addresses
+(E889/E3C9/E810), so they hooked dead addresses; the `take_irq` control was genuinely bank-$00 and fired,
+falsely validating the addressing. The evidence it actually fires:
+- **Fetch stream (address-independent):** the coroutine **spine `$CE58–$CEB0` is ABSENT** from the
+  interpreted stream (it runs native); only `$CEB2` ×1 — entry_ce58's documented native EXIT
+  (`Lce58_ceb2` sets PC=$CEB2, `jml inext`, escbank.pasm:12739) — and the **bridge-interpreted handler
+  prologues** ($ceb6 ×6, $d522/$d6b0/$d226 ×1-2) are present. Exact signature of entry_ce58 firing.
+- **Corrected HOOKTEST:** `entry_swin @ $92FB00` → `matchedEventsEmitted=11` (== its counter =
+  calibration proof the `$92` addressing is right); `entry_ce58 @ $92E889` → **fires 1×/tick**;
+  c2f8/4542 @ their `$92` addresses also fire. (Independent code-trace corroboration: the resume routes
+  `entry_swin → op_rte → ors_rte(=$CEB4) → cors_disp → entry_ce58` and works.)
 
-**Root cause:** entry_ce58 is dispatched ONLY via the `op_rte` coroutine-resume hook —
-`op_rte → ors_rte` (interp.pasm:11095) checks resume-PC `$CEB4` → `jml cors_disp ($92F800)` →
-`jmp entry_ce58` (escbank.pasm:14055). But the coroutine's hot WITHIN-tick loop re-enters via an
-**interpreted `bra $ce58`** at $ceb4 (after the `trap #$5` yield at $ceb2 returns inline — it does
-NOT round-trip through an `op_rte` at $ceb4), so `ors_rte` never sees it. entry_ce58 catches at
-most a cross-tick first-resume (0 in every window measured). Its original "356→310 interp PCs"
-ledger win (bc65b91) predates the HOOKTEST discipline → it was a **$07xx-counter artifact; the
-escape almost certainly never fired** (the documented "rts/coroutine-class dispatch fires 0×" trap —
-[[rts-class-dispatch-nonfunctional]], [[hot-cluster-rts-dispatch]]).
+**RULE (BANKED — this cost real time): HOOKTEST escbank bodies at their `$92:xxxx` EXECUTION address, and
+calibrate every HOOKTEST against a known-firing escape AT `$92` (`entry_swin @ $92FB00 == 11`), never a
+bank-$00 control.** (The `$07xx`-counter caution still holds — but the fix is the right hook *address*,
+not distrusting the escape.)
 
-**SYSTEMIC — CONFIRMED (HOOKTEST E3C9,E810,E889 on ce4trip64 = matchedEventsEmitted 0):** ALL THREE
-bank-0 op_rte coroutine bodies — entry_c2f8 (`$C300`, "first main-loop escape" 57a78c9), entry_4542
-(`$455E`), entry_ce58 (`$CE58`) — fire **0×** in gameplay, while swin=11/sel=10 DO fire (those use the
-switch-IN magic-match / scheduler-SELECT hooks, not op_rte). **The entire `op_rte` coroutine-resume
-dispatch path (`ors_rte`→`cors_disp`, interp.pasm:11095) is dead in gameplay** — it waits for an
-rte-resume at the trampoline PCs ($C2F8/$455E/$CEB4) that essentially never occurs, because the
-coroutines loop WITHIN a tick via interpreted `bra` (e.g. `$ceb4 bra $ce58` after the `trap#5` at
-$ceb2 returns inline), not via a scheduler rte round-trip. Three "shipped" coroutine escapes are inert;
-their `$07xx`-counter ledger wins were artifacts.
+**So the real residual is the leaf handlers `entry_ce58` CALL-BRIDGES TO INTERPRET** (escbank.pasm:12539+):
+`bsr $d522`→brce58_3, `bsr $ceb6`→brce58_4, `bsr $d6b0`→brce58_5, `bsr $d226`→brce58_6, `jsr $cd1a`
+→brce58_1 (all "interpret callee"); only `$26fa`/`$d18a` are native bridges. These handlers are the
+same jump-table state-handler class as the shipped siblings `entry_d5c4/d6fc/d386/d3b0/d18a`.
 
-**LEVER (pt.22):**
-- **(A) Revive the coroutine dispatch (the big both-class prize)** — catch the trampoline reaches with
-  loop_hook (the `lh_sched` precedent, [[scheduler-escape-loophook]]): hook `bra $ce58`@$ceb4 (and the
-  $C2F8/$455E trampolines) → dispatch the body. Activates 3+ shipped escapes at once, both classes.
-  RISKS to resolve first: (1) these bodies have NEVER executed → correctness UNVALIDATED (bit-exact gate
-  each); (2) CONVENTION — the `--coroutine` bodies assume the op_rte-resume state (reg file restored by
-  the $07E4 movem, a7 past the trap frame, no re-push); reaching them via `bra`@trampoline is mid-task —
-  confirm the state matches or adjust the entry convention; (3) understand WHY the design assumed op_rte
-  (was cross-tick resume expected? is the inline-return trap#5 the anomaly?).
-- **(B) Escape the leaf handlers directly (safe incremental)** — deploy entry_ceb6/d522/d6b0/d226 as
-  standard bsr-reached escapes (jah2_ext_bsr catches the interpreted coroutine's `bsr`; same class as
-  shipped siblings d5c4/d386/d3b0/d18a; all 4 transpile clean, 0 UNIMPLEMENTED, lower `jmp(a0)`→ojmp_hook
-  with targets $D718/$D6FC already native). Independent of the coroutine dispatch; moves both classes;
-  modest per-handler win. Good fallback / warm-up if (A)'s convention proves thorny.
-
-**RECOMMENDATION:** pursue (A) — it's the systemic both-class prize and the fix generalizes to the whole
-coroutine class. Start by reading op_trap5/the scheduler yield to answer risk (3), then a loop_hook
-`bra $ce58`@$ceb4 dispatch + FULLDIFF/HOOKTEST-fire gate on entry_ce58 as the pilot. If the convention
-fight is deep, ship (B) first for an incremental both-class win while designing (A). **RULE (bank this):
-HOOKTEST-verify every "shipped" coroutine/rts/table escape — the ledger's counter-based wins for that
-class are suspect until a matchedEventsEmitted>0 confirms real dispatch.** Memory:
-[[rts-class-dispatch-nonfunctional]], [[scheduler-escape-loophook]], [[hot-cluster-rts-dispatch]].
+**LEVER (pt.22) = escape the leaf handlers** (the coroutine dispatch already works, so no revival needed):
+for each ($ceb6 highest @ ×6, then $d522/$d226/$d6b0/$cd1a), transpile the handler (all clean, 0
+UNIMPLEMENTED; `jmp(a0)`→ojmp_hook, sub-handlers native-if-in-table else interpret) and **retarget its
+entry_ce58 bridge interpret→native** exactly like `brce58_1`→`jmp entry_26fa` /
+`brce58_7`→`jmp entry_d18a` (escbank.pasm:12560-12565, 12732-12737). Then batch the still-interpreted
+sub-handlers (like the `$d01a/$d05e/$d0bc/$d07a` set). Gate + bit-exact (ON-vs-OFF `$40`/`$41` diff=0,
+`val_frame_diff.py`) + **`$92` HOOKTEST-fire** + smoke each. Full plan: the pt.22 approved plan file.
+Related: [[scheduler-switchin-shipped]], [[bulk-transpile-phase]], [[escape-deploy-shift-safe]].
