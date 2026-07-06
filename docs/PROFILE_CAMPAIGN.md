@@ -776,3 +776,37 @@ entry_ce58 bridge interpret→native** exactly like `brce58_1`→`jmp entry_26fa
 sub-handlers (like the `$d01a/$d05e/$d0bc/$d07a` set). Gate + bit-exact (ON-vs-OFF `$40`/`$41` diff=0,
 `val_frame_diff.py`) + **`$92` HOOKTEST-fire** + smoke each. Full plan: the pt.22 approved plan file.
 Related: [[scheduler-switchin-shipped]], [[bulk-transpile-phase]], [[escape-deploy-shift-safe]].
+
+### pt.22 BATCH RESULTS (branch `pt22-lever-b-handlers`) — the "mechanical repeat" premise is INVALIDATED
+
+Executed the lever handler-by-handler with per-handler empirical validation (combat + light bit-exact
+diff vs MAME, `$92` HOOKTEST fire, smoke). Outcome split cleanly and **not** the way the plan assumed:
+
+| handler | bridge | result | Δ interp/tick | commit |
+|---|---|---|---|---|
+| `$ceb6` | brce58_4 | ✅ **SHIPPED** bit-exact both-class | −24 | `1bef4cb` (pilot) |
+| `$d6b0` | brce58_5 | ✅ **SHIPPED** bit-exact both-class | −8 | `375198e` |
+| `$d522` | brce58_3 | ❌ **DERAILS** (reverted) — 62B RED | — | — |
+| `$d226` | brce58_6 | ❌ **DERAILS** (reverted) — 65B RED, **`trap=False`** | — | — |
+| `$cd1a` | brce58_1 | ⏸️ untested (harder: 30 instrs, 4× indirect `jsr`/`ibridge`) | — | — |
+
+**The derail (`d522`/`d226`):** the naive interpret→native bridge flip breaks the WHOLE tick — the
+coroutine spine's rts chain corrupts so `entry_ce58` never returns (`trap=False`; the tick runs to the
+`WN=65536` instr budget → the lockstep diff HANGS >2min). `swin` drops 11→6; both share the exact same
+divergence signature (`$F00005/09/4D/29F/2E9/30A-F…`). **It is NOT any static predicate** we can screen on:
+- `d6b0`'s OWN targets `$D6FC/$D718` have escapes (`entry_d6fc`/`entry_d718`) and it's GREEN → not "escaped target".
+- ALL targets (incl. d6b0's) are `; coroutine task body: NO return-push` → not "coroutine-convention target".
+- `entry_d5c4` (d522's index-0 target) **fires 2× AND is GREEN in the baseline** (interpreted `jmp(a0)` →
+  `op_jmp_idx` → `ojmp_hook` → xlat → `entry_d5c4`) → the target is not dormant/broken.
+- `ojmp_hook` is STATELESS (interp.pasm:11128 — gate `$071A` + `$40/$42` only); the native prologue sets
+  `$40/$42`=target identically; the two prologues are BYTE-IDENTICAL modulo the table-base immediate.
+
+Root cause = a non-obvious native-prologue ↔ dispatched-coroutine-escape runtime interaction (needs
+FETCH-STREAM tracing, GPPROF good-vs-broken — not static analysis). **DISCIPLINE: validate every
+coroutine-bridge retarget EMPIRICALLY; a derail shows as `trap=False` / a >2min diff hang, NOT a small
+byte delta.** See [[coroutine-bridge-retarget-derails]].
+
+**USER DECISION (2026-07-05): ship the 2 clean wins (PR the branch), then RE-RANK the levers toward the
+playable-game goal** — do NOT grind the delicate d522/d226 root-cause for ~8-interp/tick leaf handlers.
+The hot SUB-handlers (`$00CF80` sprite-build etc.) remain the higher-value target and likely dispatch via
+the `ojmp_hook` path that already WORKS, not the derailing coroutine-bridge retarget.
