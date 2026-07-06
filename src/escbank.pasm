@@ -13872,19 +13872,17 @@ entry_d6b0:
     sta $42
     jml.l ojmp_hook
 
-; --- $00D226 jmp-table state handler (pt.22 Lever B P1; entry_ce58 brce58_6 native bridge) ---
-; --- STATIC JUMP-TABLE SWITCH prototype (hand-authored). Replaces the transpiler's
-; --- movea.l (a0),a0 + jml ojmp_hook tail (the Stage-A derail) with a compare-chain on
-; --- index memory[a4-2]. Table @ $00D376: $00->D3F6 $04->D386 $08->D3DE(interp) $0C->D3B0.
+; --- $00D226 jmp-table state handler (pt.22 P2: MECHANIZED via transpile.py --jtstatic=D376:4;
+; --- regenerated, instruction-identical to the P1 hand-authored body daf2e97). ---
 entry_d226:
     rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame = (brce58_6,$00FE), $92 sentinel)
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
     sta $54
     lda $42
     sta $56
     jsl.l push32_l
-    ; read runtime dispatch index memory[a4-2] (a4=$30/$32) into A + $9A
+    ; JTSTATIC $00D376(a0 jmp-table, 4 cases): static index switch, movea/ojmp_hook default
     lda $30
     clc
     adc #$FFFE
@@ -13893,52 +13891,47 @@ entry_d226:
     adc #$FFFF
     sta $52
     jsl.l rdw_ea_l
-    sta $9A                     ; $9A = index (state*4); A still = index (sta doesn't clobber A)
-    ; --- STATIC SWITCH (bne-next idiom; mirrors jah2_ext / ors_rte) ---
-    ; Each case reproduces the movea.l+jmp(a0) SIDE EFFECTS the sub-handler depends on:
-    ; a0 ($20/$22) = target (movea.l result) AND 68K PC ($40/$42) = target (op_jmp_idx).
+    sta $9A
     cmp #$0000
-    bne Ld226_n0
-    lda #$D3F6                 ; idx $00 -> $D3F6 escape @ $94 (cross-bank)
+    bne Lfd226_1
+    lda #$D3F6
     sta $20
     sta $40
     lda #$0000
     sta $22
     sta $42
     jml.l entry_d3f6
-Ld226_n0:
+Lfd226_1:
     cmp #$0004
-    bne Ld226_n4
-    lda #$D386                 ; idx $04 -> $D386 escape @ $92 (same bank)
+    bne Lfd226_2
+    lda #$D386
     sta $20
     sta $40
     lda #$0000
     sta $22
     sta $42
     jmp entry_d386
-Ld226_n4:
+Lfd226_2:
     cmp #$0008
-    bne Ld226_n8
-    lda #$D3DE                 ; idx $08 -> $D3DE INTERPRETED (no escape)
+    bne Lfd226_3
+    lda #$D3DE
     sta $20
     sta $40
     lda #$0000
     sta $22
     sta $42
     jml.l inext
-Ld226_n8:
+Lfd226_3:
     cmp #$000C
-    bne Ld226_def
-    lda #$D3B0                 ; idx $0C -> $D3B0 escape @ $92 (same bank)
+    bne Lfd226_4
+    lda #$D3B0
     sta $20
     sta $40
     lda #$0000
     sta $22
     sta $42
     jmp entry_d3b0
-Ld226_def:
-    ; default (un-enumerated index; never hit for valid states): reproduce the ORIGINAL
-    ; transpiled movea.l (a0),a0 + jml ojmp_hook exactly (base $D376) -> correctness preserved.
+Lfd226_4:
     lda #$D376
     sta $20
     lda #$0000

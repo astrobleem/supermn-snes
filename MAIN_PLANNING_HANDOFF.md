@@ -1,6 +1,6 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-05 (pt.22 leaf-escape lever done + lever re-rank). **THE STRATEGIC FORK IS
+Last updated: 2026-07-06 (pt.22 P2 static-switch MECHANIZED + PROVEN on d226; d522 = the scheduler-boundary wall, deferred). **THE STRATEGIC FORK IS
 SETTLED (user, 2026-07-04): 30fps retarget (budget 358K/tick, tick = 2 display frames) + the
 TAD/YM2610 sound port; realtime-60 abandoned (ISA-floor verdict). Don't re-litigate.**
 
@@ -44,13 +44,30 @@ bit-exact both-class (combat 4B / light 8B GREEN, `trap=True`, −8 interp/tick,
 requirement (learned the hard way): each switch case MUST set a0 (`$20/$22`)=target AND 68K PC
 (`$40/$42`)=target** — the `movea.l+jmp(a0)` side-effects the sub-handler depends on; omitting a0 leaks
 the prior handler's stale a0 → a 2-byte divergence (identical combat+light = logic, not `$AC` timing).
-**REMAINING = P2-P4**, fully specced in the APPROVED PLAN `/home/chad/.claude/plans/mutable-coalescing-hippo.md`:
-**P2** mechanize the `jmp(An)` static-switch in `tools/transpile.py` (near the jmp handler `:1103-1114`;
-mirror `gen_jumptable :1258-1281` / `jsr(An)` guarded-link `:1317-1335`), regen `$D522`/`$D226`, re-validate
-identical to `daf2e97`; **P3** scale the whole `ce58` subtree (transpile the still-interpreted sub-handlers
-+ shared bodies, static-resolve all 4 dispatchers, retarget the spine, **keep the 11 indirect `$1cXX(a5)`
-draws dynamic**); **P4** measure the `CYCLES=1` cyc/tick win. Honest ceiling stands: narrows heavy combat,
-stays sub-30fps. Refs: `coroutine-bridge-retarget-derails` (derail+fix), `pt22-lever-rerank-verdict` (the fork).
+**✅ P2 DONE + PROVEN (2026-07-06, branch `pt22-lever-b-handlers`):** the static switch is now a transpiler
+lowering — `tools/transpile.py --jtstatic=BASE:COUNT` + `gen_jtstatic` (fused 4-instr matcher on the
+`lea/adda/movea/jmp(An)` idiom; per-case sets a0+PC=target then jumps direct; default = original
+movea+ojmp_hook). Regenerated `$D226` is **INSTRUCTION-IDENTICAL to the P1 hand body (`daf2e97`)** and
+mechanized-d226 + d522-interp validates **combat 4B / light 8B GREEN** (Test A). Two codegen fixes: (1)
+**same-bank target MUST use `jmp entry_X`, not `jml.l`** — Poppy resolves a same-FILE `entry_X` to its
+file-local `$00` origin so `jml.l` jumps to bank $00 (a DERAIL); cross-bank keeps `jml.l` (24-bit const);
+added `escbank_bank_of` (BANK_OF_SYM lookup). (2) the a0+PC per-case set (the P1 lesson).
+
+**⚠️ d522 = THE SCHEDULER-BOUNDARY WALL (extensively root-caused; DEFERRED, reverted to interpreted).**
+Deploying `d522`-native (dispatching `entry_d5c4`) does NOT derail (trap=True, swin=11) but is **27B/32B
+RED** and intractable. Bisect: hand-d226(proven)+d522-native = 27B → **mechanized-d226 EXONERATED; d522-native
+the sole culprit.** RULED OUT: `$AC`-timing (inline charge = zero effect; capture is PC-fixed at `$0708`);
+codegen (d522-native is byte-IDENTICAL to d522-interp at the first-`$CD1A` checkpoint — a7/stack/regs). The
+divergence is the SAVED coroutine stack at **`$0E00`** (`$0E1C` = interp `$00FE` sentinel vs mame `$CEB4`),
+manifesting AFTER the checkpoint. MECHANISM: the sprite-build coroutine runs on a **TINY stack at `$0E00`**
+(scheduler `lea $350a(a5),a7` switch) NOT in the harness stack-exclusion → its interp sentinels are EXPOSED;
+`entry_d5c4` (unlike GREEN `entry_d386`) manipulates a7 (push args + `jsr [$1c9a(a5)]` draws). d522-native vs
+-interp stack OPS are provably identical, so the asymmetry is a subtle multi-call/yield interaction (resisted
+advisor [timed out], a Plan agent [stalled], write-trace, fetch-stream, two a7-captures, bisect; pinning needs
+native-instr lockstep). **This CONVERTS `pt22-lever-rerank-verdict`'s wall HYPOTHESIS into EMPIRICAL EVIDENCE:
+P3 (scale the ce58 subtree) will hit this for every a7-touching sub-handler → strengthens the lean to (b)
+ship-playable + sound.** P3/P4 NOT started. Refs: `coroutine-bridge-retarget-derails` (full P2 grind),
+`pt22-lever-rerank-verdict` (fork), plan `/home/chad/.claude/plans/mutable-coalescing-hippo.md`.
 
 **Branch topology (CONSOLIDATED 2026-07-05): `main` is the single source of truth.** PRs #12
 (pt.20) and #13 (pt.21) were validated + fast-forward-merged into `main` (tip `108ecce`); PRs
