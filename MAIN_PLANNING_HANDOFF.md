@@ -35,13 +35,22 @@ lever is de-prioritized: the MEASURED economics say interpretation is NOT the wa
 coverage); the wall is dispatch+bridge overhead (~86%). **HONEST CEILING: no lever on the board reaches
 true-30fps HEAVY combat** — contiguous compilation (measured 4.85× on LEAF subtrees) narrows the gap but
 STALLS at the scheduler root, exactly where the sprite-build coroutine lives, and the d522/d226 derail is
-at that same boundary. **THE FORK:** (a) grind a delicate contiguous-compile at the scheduler boundary
-[narrows heavy combat, stays sub-30fps] vs **(b) ship playable-now: lock the achievable logic-rate + pace
-heavy spikes + land the TAD/YM2610 sound** (21/21 tracks converted; needs musical pass + engine
-integration; `strategic-fork-30fps-sound`) — the game is ALREADY interactive (`gameplay-input-validated`),
-so (b) is viable. **Recommendation: lean (b).** FIRMING MEASUREMENT before funding (a): `CYCLES=1`
-decomposition of CURRENT combat cyc/tick into {interp / bridge-overhead / native floor} + resolve
-average-vs-heavy (does typical combat already fit 30fps, only spikes overflowing?).
+at that same boundary. **USER CHOSE (a) contiguous-compile (2026-07-05); P1 DONE + PROVEN (commit
+`daf2e97`, branch `pt22-lever-b-handlers`).** The d522/d226 derail is FIXED via STATIC jump-table
+resolution — `cmp` the runtime index (`memory[a4-2]`) against each ROM-table entry → direct `jml.l
+entry_X` (escaped) / `jml inext` (interpreted), default = the original `movea.l+ojmp_hook` — instead of
+the transpiler's derailing `jmp(a0)→ojmp_hook` lowering. `entry_d226` (hand-authored) is now native +
+bit-exact both-class (combat 4B / light 8B GREEN, `trap=True`, −8 interp/tick, fires 2×). **KEY codegen
+requirement (learned the hard way): each switch case MUST set a0 (`$20/$22`)=target AND 68K PC
+(`$40/$42`)=target** — the `movea.l+jmp(a0)` side-effects the sub-handler depends on; omitting a0 leaks
+the prior handler's stale a0 → a 2-byte divergence (identical combat+light = logic, not `$AC` timing).
+**REMAINING = P2-P4**, fully specced in the APPROVED PLAN `/home/chad/.claude/plans/mutable-coalescing-hippo.md`:
+**P2** mechanize the `jmp(An)` static-switch in `tools/transpile.py` (near the jmp handler `:1103-1114`;
+mirror `gen_jumptable :1258-1281` / `jsr(An)` guarded-link `:1317-1335`), regen `$D522`/`$D226`, re-validate
+identical to `daf2e97`; **P3** scale the whole `ce58` subtree (transpile the still-interpreted sub-handlers
++ shared bodies, static-resolve all 4 dispatchers, retarget the spine, **keep the 11 indirect `$1cXX(a5)`
+draws dynamic**); **P4** measure the `CYCLES=1` cyc/tick win. Honest ceiling stands: narrows heavy combat,
+stays sub-30fps. Refs: `coroutine-bridge-retarget-derails` (derail+fix), `pt22-lever-rerank-verdict` (the fork).
 
 **Branch topology (CONSOLIDATED 2026-07-05): `main` is the single source of truth.** PRs #12
 (pt.20) and #13 (pt.21) were validated + fast-forward-merged into `main` (tip `108ecce`); PRs

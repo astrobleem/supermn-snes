@@ -806,7 +806,22 @@ FETCH-STREAM tracing, GPPROF good-vs-broken — not static analysis). **DISCIPLI
 coroutine-bridge retarget EMPIRICALLY; a derail shows as `trap=False` / a >2min diff hang, NOT a small
 byte delta.** See [[coroutine-bridge-retarget-derails]].
 
-**USER DECISION (2026-07-05): ship the 2 clean wins (PR the branch), then RE-RANK the levers toward the
-playable-game goal** — do NOT grind the delicate d522/d226 root-cause for ~8-interp/tick leaf handlers.
-The hot SUB-handlers (`$00CF80` sprite-build etc.) remain the higher-value target and likely dispatch via
-the `ojmp_hook` path that already WORKS, not the derailing coroutine-bridge retarget.
+**USER DECISION (2026-07-05): ship the 2 clean wins (PR #14), then RE-RANK the levers toward the
+playable-game goal.** The re-rank (`pt22-lever-rerank-verdict`) surfaced an honest fork; **the user chose
+(a) CONTIGUOUS-COMPILE** the sprite-build coroutine subtree. Approved plan:
+`/home/chad/.claude/plans/mutable-coalescing-hippo.md`.
+
+### pt.22 CONTIGUOUS-COMPILE — P1 DONE + PROVEN (commit `daf2e97`)
+The d522/d226 derail root cause = the transpiler's `jmp(a0)→jml ojmp_hook` lowering: its runtime
+`movea.l (a0),a0` computes a WRONG a0 → `ojmp_hook`/xlat HITs a wrong native escape → coroutine never
+returns (`trap=False`). **FIX (P1): resolve the jump table STATICALLY** — replace `movea.l+jml ojmp_hook`
+with a `bne`-to-next compare-chain on the runtime index (`memory[a4-2]`), one case per ROM-table entry →
+direct `jml.l entry_X` (escaped) / `jml inext` (interpreted); default = the original `movea.l+ojmp_hook`.
+`entry_d226` (hand-authored, `escbank.pasm`) = **combat 4B / light 8B GREEN, `trap=True`, −8 interp/tick
+both classes, fires 2×, smoke OK.** **KEY codegen requirement: each case MUST set a0 (`$20/$22`)=target
+AND 68K PC (`$40/$42`)=target** (the `movea.l+jmp(a0)` side-effects; omitting a0 leaked d6b0's stale
+`$D718` into `$0DFE` → a 2-byte divergence IDENTICAL in combat+light, i.e. logic not `$AC` timing). This
+PROVES the contiguous mechanism: the derailing dispatchers ARE escapable via static resolution.
+**REMAINING (approved plan): P2** mechanize the `jmp(An)` static-switch in `tools/transpile.py` (regen
+`$D522`/`$D226`); **P3** scale the whole `ce58` subtree (keep the 11 indirect `$1cXX(a5)` draws dynamic);
+**P4** measure the `CYCLES=1` cyc/tick win. Honest ceiling stands (narrows heavy combat, sub-30fps).
