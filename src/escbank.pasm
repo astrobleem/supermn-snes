@@ -34,23 +34,25 @@ entry_c9f8=$948039
 entry_d5a0=$94849E
 entry_1008=$94855B
 entry_d01a=$948AC0
-entry_d05e=$948C3D
-entry_d0bc=$948CD7
-entry_d07a=$948D79
-entry_ce4t=$948F7F
-entry_d718=$9494F2
-entry_d3f6=$94980E
-entry_c172=$949D81
-entry_295at=$94A372
-entry_29b6t=$94A49A
-entry_13bet=$94A953
-entry_8fat=$94ABE7
-entry_fd2t=$94AE58
-entry_c9a6=$94AF1A
+entry_d05e=$948C3C
+entry_d0bc=$948CD5
+entry_d07a=$948D76
+entry_ce4t=$948F7C
+entry_d718=$9494EF
+entry_d3f6=$94980B
+entry_c172=$949D7E
+entry_295at=$94A36F
+entry_29b6t=$94A497
+entry_13bet=$94A950
+entry_8fat=$94ABE4
+entry_fd2t=$94AE55
+entry_c9a6=$94AF17
 entry_d6e6=$94E299
 entry_d64a=$94E305
-entry_d3de=$94E5D0
-entry_cfa4=$94E660
+entry_d3de=$94E5CF
+entry_cfa4=$94E65F
+entry_cec2=$94E96B
+entry_d52e=$94EE0C
 entry_25110=$978000
 entry_12e56=$97A000
 entry_129c6=$97A800
@@ -64,6 +66,7 @@ entry_caf6=$97D800
 entry_cb9e=$97E800
 entry_1d5f0=$97EC00
 ; <<< ESCBANK_SYMS <<<
+entry_d232=$99EB00   ; pt.22 P3b: --bank5 $99 body, .org-fixed (gen_escbank_syms doesn't harvest $99; hand const)
 
     .org $8000
 escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jmp = 3 bytes)
@@ -13348,7 +13351,7 @@ Ld5c4_d5fe:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_d52e       ; pt.22 P3b COVERAGE: -> NATIVE $D52E (was jml.l inext); cross-bank $94
 
 ; --- $00D6FC jmp-table state handler ---
 ; --- transpiled from $00D6FC (9 instrs) by tools/transpile.py [bank1] ---
@@ -13558,7 +13561,7 @@ Ld386_d3ac:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_d232       ; pt.22 P3b COVERAGE: -> NATIVE $D232 (was jml.l inext); cross-bank $99 (--bank5)
 
 ; --- $00D3B0 jmp-table state handler ---
 ; --- transpiled from $00D3B0 (14 instrs) by tools/transpile.py [bank1] ---

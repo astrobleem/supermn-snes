@@ -40,6 +40,8 @@ def reg_dp(name):
 TMP = 0x9E                                      # transpiler compare/store scratch (avoids rdw_ea $90)
 VIDEO = False                                   # --video: route non-frame stores via writeword/writebyte
                                                 # (IO-aware: video $B0/$D0/$E0 -> $41 shadow). For $002xxx.
+BANK5 = False                                   # --bank5: body lives in escbank5 ($99:8000); host resume
+                                                # sentinel = $00FA (ors_pre -> ors_99chk -> ors_pre_99).
 BANK2 = False                                   # --bank2: body lives in the 2nd escape bank ($94:8000,
                                                 # file $2A0000). ibridge ($92) is unreachable + its $00FE
                                                 # resume lands in $92, so INLINE the interpret-bridge with
@@ -395,7 +397,7 @@ def emit_tailjump(e, tgt):
     e('lda %s' % imm16(tgt & 0xFFFF)); e('sta $40')
     e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
     if tgt in ESCAPED:
-        nm = 'entry_%x' % tgt; home = 0x94 if BANK2 else 0x92
+        nm = 'entry_%x' % tgt; home = (0x99 if BANK5 else 0x94 if BANK2 else 0x92)
         if (escbank_bank_of(nm) or home) == home: e('jmp %s' % nm)
         else: e('jml.l %s' % nm)
     else:
@@ -1357,7 +1359,7 @@ def gen_jtstatic(e, base, an, idx_ea):
     a0 set leaked the prior handler's stale a0 -> a 2-byte divergence (proven both-class GREEN as
     the hand-authored entry_d226, commit daf2e97; see [[coroutine-bridge-retarget-derails]])."""
     tgts = JTSTATIC[base]
-    home = 0x94 if BANK2 else 0x92                          # the escape's own execute bank (--bank1=$92, --bank2=$94)
+    home = (0x99 if BANK5 else 0x94 if BANK2 else 0x92)                          # the escape's own execute bank (--bank1=$92, --bank2=$94)
     e.cmt('JTSTATIC $%06X(%s jmp-table, %d cases): static index switch, movea/ojmp_hook default' % (base, an, len(tgts)))
     ea_load_A(e, idx_ea, 'w'); e('sta $9A')                 # A = $9A = runtime dispatch index memory[idx_ea]
     for off in sorted(tgts):
@@ -1402,7 +1404,7 @@ def gen_call(e, ins):
         e.cmt('CALL-BRIDGE %s %s -> entry_%x (NATIVE escape), resume %s' % (ins.mnemonic, t, a, cont))
         # sentinel = the HOST bank so the callee's rts (pops $42:$40) resumes cont IN THE HOST bank:
         # $00FE -> ors_pre_92 ($92); $00FD -> ors_94chk ($94). Was hardcoded $00FE (bank-$92 only).
-        esc_sent = '$00FD' if BANK2 else '$00FE'
+        esc_sent = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')
         e('lda #%s' % cont); e('sta $40'); e('lda #%s' % esc_sent); e('sta $42')
         e('jmp entry_%x' % a)
         e.lbl(cont)
@@ -1425,7 +1427,7 @@ def gen_call(e, ins):
             # callee re-simulating the push; a --table callee doesn't, and a standard-convention
             # OLD body like the $92 entry_d96 exits via popped-PC jml inext, which would fetch the
             # sentinel as a 68K address. The A2 deploy hang taught this.) Miss -> generic bridge.
-            esc_sent = '$00FD' if BANK2 else '$00FE'
+            esc_sent = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')
             for a in sorted(ESCAPED):
                 nxtl = e.fresh()
                 e.cmt('GUARDED DIRECT-LINK %s %s: An==$%06X -> entry_%xt native (pushed-sentinel return), resume %s' % (ins.mnemonic, t, a, a, cont))
@@ -1434,8 +1436,8 @@ def gen_call(e, ins):
                 e('lda #%s' % cont); e('sta $54'); e('lda #%s' % esc_sent); e('sta $56'); e('jsr push32')
                 e('jmp entry_%xt' % a)
                 e.lbl(nxtl)
-        if BANK2:
-            # ibridge is a $92 label (unreachable from $94) and its ib_miss resumes in bank $92. INLINE
+        if BANK2 or BANK5:
+            # ibridge is a $92 label (unreachable from $94/$99) and its ib_miss resumes in bank $92. INLINE
             # the interpret-bridge: push the $00FD sentinel:cont, set PC=An, jml inext. The callee's rts
             # pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont. (No native draw dispatch
             # in $94 -- the callee always interprets; the per-jsr(An) native-draw win is forgone here.)
@@ -1444,7 +1446,7 @@ def gen_call(e, ins):
             # draw win, e.g. c172's $295A/$29B6 renderers); MISS/gate-off -> jml inext (interpret, as before).
             # Either way the callee's rts pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont.
             e.cmt('INDIRECT-BRIDGE %s %s -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume %s' % (ins.mnemonic, t, cont))
-            e('lda #%s' % cont); e('sta $54'); e('lda #$00FD'); e('sta $56'); e('jsr push32')
+            e('lda #%s' % cont); e('sta $54'); e('lda #%s' % ('$00FA' if BANK5 else '$00FD')); e('sta $56'); e('jsr push32')
             e('lda $%02X' % dp); e('sta $40'); e('lda $%02X' % (dp+2)); e('sta $42')
             e('jmp ojmp_hook')
             e.lbl(cont)
@@ -1460,7 +1462,7 @@ def gen_call(e, ins):
     # jml inext (interpret, as before). Same size as `jmp inext` -> safe in-place swap for bank-$00
     # escapes. The pushed $00FF/$00FD sentinel + faithful-rts callee resume cont either way.
     e.cmt('CALL-BRIDGE %s %s -> ojmp_hook (callee --table escape, else interpret), resume %s' % (ins.mnemonic, t, cont))
-    sentinel = '$00FD' if BANK2 else '$00FF'         # bank2: $00FD resumes in $94 (not $00 via $00FF)
+    sentinel = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FF')  # bank5:$00FA($99) bank2:$00FD($94) else $00FF
     e('lda #%s' % cont); e('sta $54'); e('lda #%s' % sentinel); e('sta $56'); e('jsr push32')
     a = int(m.group(1), 16)                              # jsr.l absolute / bsr (capstone resolves PC-rel)
     e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
@@ -1684,10 +1686,11 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED, BANK2, WORKRAM, XFLAG, FNFRAG, STOPAT
+    global VIDEO, ESCAPED, BANK2, BANK5, WORKRAM, XFLAG, FNFRAG, STOPAT
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     BANK2 = '--bank2' in sys.argv
-    bank1 = '--bank1' in sys.argv or BANK2            # bank2 reuses all of bank1's jsl.l/jml.l transforms
+    BANK5 = '--bank5' in sys.argv                     # body -> escbank5 ($99); host sentinel $00FA
+    bank1 = '--bank1' in sys.argv or BANK2 or BANK5   # bank2/5 reuse all of bank1's jsl.l/jml.l transforms
     VIDEO = '--video' in sys.argv
     XFLAG = '--xflag' in sys.argv
     FNFRAG = '--fnfrag' in sys.argv

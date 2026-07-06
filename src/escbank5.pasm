@@ -8429,3 +8429,850 @@ Ltj77a_74c:
     lda #$0000
     sta $42
     jml.l inext
+
+; --- $00D232 sprite-build shared body (pt.22 P3b COVERAGE full, --bank5 $99 --coroutine no-push;
+;     escbank2 $94 was full -> $99; .org $EB00 = free tail past op_rts_sentinel@$EA3A) ---
+    .org $EB00
+entry_d232:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF9
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0001
+    bne Lfd232_1
+    jmp Ld232_d270
+Lfd232_1:
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0001
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0004
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$000E
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFC
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0006
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0006
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0001
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFC
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0008
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$000E
+    xba
+    sta $400000,x
+    xba
+    jmp Ld232_d2a4
+Ld232_d270:
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda $9E
+    sta $2E
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0003
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0004
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$000C
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFC
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0006
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0006
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0003
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFC
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $2C
+    clc
+    adc #$0008
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$000C
+    xba
+    sta $400000,x
+    xba
+Ld232_d2a4:
+    lda $30
+    clc
+    adc #$FFEF
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0001
+    php
+    pha
+    lda $30
+    clc
+    adc #$FFEF
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    plp
+    bvs Lfd232_2
+    bpl Lfd232_3
+    bra Lfd232_4
+Lfd232_2:
+    bmi Lfd232_3
+    bra Lfd232_4
+Lfd232_3:
+    jmp Ld232_d2ae
+Lfd232_4:
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFEF
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+Ld232_d2ae:
+    lda $30
+    clc
+    adc #$FFF9
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0003
+    bvs Lfd232_5
+    bmi Lfd232_6
+    bra Lfd232_7
+Lfd232_5:
+    bpl Lfd232_6
+    bra Lfd232_7
+Lfd232_6:
+    jmp Ld232_d2fe
+Lfd232_7:
+    lda $2C
+    clc
+    adc #$000E
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    bne Lfd232_8
+    jmp Ld232_d2fe
+Lfd232_8:
+    lda $30
+    clc
+    adc #$FFEF
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    beq Lfd232_9
+    jmp Ld232_d2fe
+Lfd232_9:
+    lda #$0004
+    pha
+    lda $30
+    clc
+    adc #$FFEF
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $18
+    sta $54
+    lda $1A
+    sta $56
+    jsl.l push32_l
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $34
+    clc
+    adc #$365C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFC
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $34
+    clc
+    adc #$365A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    pha
+    lda $34
+    clc
+    adc #$3659
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF9
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0004
+    beq Lfd232_10
+    jmp Ld232_d2ea
+Lfd232_10:
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$3659
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+Ld232_d2ea:
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    pha
+    lda $34
+    clc
+    adc #$358A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $24588.l -> ojmp_hook (callee --table escape, else interpret), resume brd232_1
+    lda #brd232_1
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$4588
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l ojmp_hook
+brd232_1:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $18
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+Ld232_d2fe:
+    lda $2C
+    clc
+    adc #$000E
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$00BF
+    bne Lfd232_11
+    jmp Ld232_d316
+Lfd232_11:
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0006
+    bne Lfd232_12
+    jmp Ld232_d328
+Lfd232_12:
+    lda $2C
+    clc
+    adc #$000E
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$00A0
+    bvs Lfd232_13
+    bmi Lfd232_14
+    bra Lfd232_15
+Lfd232_13:
+    bpl Lfd232_14
+    bra Lfd232_15
+Lfd232_14:
+    jmp Ld232_d328
+Lfd232_15:
+Ld232_d316:
+    lda #$FFFF
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0005
+    pha
+    lda $30
+    clc
+    adc #$FFF8
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0008
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+Ld232_d328:
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$27D0
+    sta $20
+    lda #$0004
+    sta $22
+    lda $30
+    clc
+    adc #$FFF9
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0001
+    bne Lfd232_16
+    jmp Ld232_d340
+Lfd232_16:
+    lda #$27C4
+    sta $20
+    lda #$0004
+    sta $22
+Ld232_d340:
+    lda #$0800
+    sta $04
+    lda $30
+    clc
+    adc #$FFF9
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0003
+    bvs Lfd232_17
+    bmi Lfd232_18
+    bra Lfd232_19
+Lfd232_17:
+    bpl Lfd232_18
+    bra Lfd232_19
+Lfd232_18:
+    jmp Ld232_d350
+Lfd232_19:
+    lda #$1000
+    sta $04
+Ld232_d350:
+    lda $30
+    clc
+    adc #$FFF4
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    sec
+    sbc $9A
+    sta $20
+    lda $22
+    sbc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFC
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1CAE
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brd232_2
+    lda #brd232_2
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brd232_2:
+    lda #$000A
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
