@@ -1,8 +1,8 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-04 (pt.21). **THE STRATEGIC FORK IS SETTLED (user, 2026-07-04): 30fps
-retarget (budget 358K/tick, tick = 2 display frames) + the TAD/YM2610 sound port; realtime-60
-abandoned (ISA-floor verdict). Don't re-litigate.**
+Last updated: 2026-07-05 (pt.22 leaf-escape lever done + lever re-rank). **THE STRATEGIC FORK IS
+SETTLED (user, 2026-07-04): 30fps retarget (budget 358K/tick, tick = 2 display frames) + the
+TAD/YM2610 sound port; realtime-60 abandoned (ISA-floor verdict). Don't re-litigate.**
 
 **pt.21 DONE (render-to-WRAM SHIPPED + VALIDATED, DRAFT PR #13, commits `50dfc62`+`3c79000`):**
 relocated the 5A22 render to WRAM `$7F` via a VERBATIM SAME-OFFSET COPY (video.pasm `rc_copy`
@@ -20,22 +20,28 @@ are render-DEAD; set_cpu_state('Snes') won't force it back). This is why pt.20's
 "doesn't engage" fresh — those combat contention numbers are NOT reproducible from the NAT.
 MEASURE render/5A22 changes on a FRESH boot (`tools/measure_render_wram.py`).
 
-**CURRENT TASK (pt.22): user picked the CONTIGUOUS-COMPILE lever (make the 335K combat interp
-residual native). Re-profile DONE (2026-07-05) — see docs/PROFILE_CAMPAIGN.md §pt.22 + the approved
-plan.** Fresh injected profiles (address-independent, correct): combat 204 interp fetches/tick, light
-133. Dominant BOTH-class residual = the **sprite-build coroutine system** ($00CE58 + its jump-table
-handlers $ceb6/$d522/$d6b0/$d226). **⚠️ CORRECTION: an intermediate finding "all 3 op_rte coroutine
-escapes fire 0× / dispatch systemically dead" was WRONG — a HOOKTEST bank-addressing artifact. escbank
-bodies execute at `$92:xxxx`, not `$00:xxxx`; hooking bare `$00` addresses gave false 0×. entry_ce58
-FIRES 1×/tick (proof: `entry_swin @ $92FB00`=11 matches its counter; `entry_ce58 @ $92E889`=1; and the
-fetch-stream shows the coroutine spine running NATIVE). The pt.22 profiles stand; only that exec-hook
-conclusion was wrong.** **RULE BANKED: HOOKTEST escbank bodies at their `$92:xxxx` execution address;
-calibrate every HOOKTEST against a known-firing escape at `$92` (`entry_swin @ $92FB00 == 11`), never a
-bank-$00 control.** LEVER (approved) = **escape the leaf handlers `entry_ce58` bridges to INTERPRET**
-($ceb6/$d522/$d6b0/$d226/$cd1a): transpile each (all clean) + retarget the entry_ce58 bridge
-interpret→native (like its existing `brce58_1`→entry_26fa / `brce58_7`→entry_d18a native bridges); same
-class as shipped siblings d5c4/d386/d3b0/d18a. Low-risk, both-class. Sound runs in parallel sessions
-(21/21 tracks converted; needs the musical pass + TAD engine integration — see `strategic-fork-30fps-sound`).
+**pt.22 DONE (leaf-handler escape lever EXECUTED, 2026-07-05, PR #14 on branch `pt22-lever-b-handlers`):**
+re-profile confirmed the dominant BOTH-class residual = the sprite-build coroutine ($00CE58 + its
+jump-table leaf handlers), combat 204 interp fetches/tick, light 133. Escaped the leaf handlers by
+retargeting `entry_ce58`'s `brce58_N` call-bridges interpret→native. **Outcome split — the "mechanical
+repeat" premise was INVALIDATED:** ✅ `ceb6` (−24 interp/tick) + `d6b0` (−8) SHIPPED bit-exact both-class;
+❌ `d522`+`d226` **DERAIL the whole tick** (trap=False, tick never returns, diff hangs — not any static
+predicate; see `coroutine-bridge-retarget-derails`), reverted; `cd1a` untested. **RULE BANKED (cost real
+time): HOOKTEST escbank bodies at their `$92:xxxx` execution address, calibrate vs `entry_swin @ $92FB00
+== 11`, never a bank-$00 control** (`hooktest-escbank-92-addressing`).
+
+**⚠️ CURRENT STATE = LEVER RE-RANK, USER DECISION PENDING (`pt22-lever-rerank-verdict`).** The interp-escape
+lever is de-prioritized: the MEASURED economics say interpretation is NOT the wall (~0.42× budget at full
+coverage); the wall is dispatch+bridge overhead (~86%). **HONEST CEILING: no lever on the board reaches
+true-30fps HEAVY combat** — contiguous compilation (measured 4.85× on LEAF subtrees) narrows the gap but
+STALLS at the scheduler root, exactly where the sprite-build coroutine lives, and the d522/d226 derail is
+at that same boundary. **THE FORK:** (a) grind a delicate contiguous-compile at the scheduler boundary
+[narrows heavy combat, stays sub-30fps] vs **(b) ship playable-now: lock the achievable logic-rate + pace
+heavy spikes + land the TAD/YM2610 sound** (21/21 tracks converted; needs musical pass + engine
+integration; `strategic-fork-30fps-sound`) — the game is ALREADY interactive (`gameplay-input-validated`),
+so (b) is viable. **Recommendation: lean (b).** FIRMING MEASUREMENT before funding (a): `CYCLES=1`
+decomposition of CURRENT combat cyc/tick into {interp / bridge-overhead / native floor} + resolve
+average-vs-heavy (does typical combat already fit 30fps, only spikes overflowing?).
 
 **Branch topology (CONSOLIDATED 2026-07-05): `main` is the single source of truth.** PRs #12
 (pt.20) and #13 (pt.21) were validated + fast-forward-merged into `main` (tip `108ecce`); PRs
