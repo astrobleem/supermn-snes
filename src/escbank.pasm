@@ -12571,17 +12571,12 @@ brce58_2:
     lda #$0001
     sta $18
 Lce58_ce6a:
-    ; CALL-BRIDGE bsr.w $d522 -> interpret callee, resume brce58_3
+    ; CALL-BRIDGE bsr.w $d522 -> entry_d522 (NATIVE, pt.22 P2, @.org $FE00 free $92 tail), resume brce58_3
     lda #brce58_3
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$D522
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_d522
 brce58_3:
     lda #$0010
     sta $9A
@@ -14817,3 +14812,87 @@ lsel_set:
     stz $42
     pla                  ; drop the jsr loop_hook return
     jml.l irq_none       ; re-fetch $40 (no $AC dec, matching the original lhs_found handoff)
+
+; --- $00D522 jmp-table state handler (pt.22 P2 MECHANIZED; .org $FE00 = free $92 tail,
+; --- ESCBANK_BODIES_END overflows into the .org $F400 jah2_ext_bsr region -> corruption). ---
+.org $FE00
+entry_d522:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; JTSTATIC $00D5BC(a0 jmp-table, 2 cases): static index switch, movea/ojmp_hook default
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    cmp #$0000
+    bne Lfd522_1
+    lda #$D5C4
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d5c4
+Lfd522_1:
+    cmp #$0004
+    bne Lfd522_2
+    lda #$D64A
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l inext
+Lfd522_2:
+    lda #$D5BC
+    sta $20
+    lda #$0000
+    sta $22
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook

@@ -1,6 +1,6 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-06 (pt.22 P2 static-switch MECHANIZED + PROVEN on d226; d522 = the scheduler-boundary wall, deferred). **THE STRATEGIC FORK IS
+Last updated: 2026-07-06 (pt.22 P2 static-switch MECHANIZED; BOTH d226 + d522 SHIP GREEN — the d522 "derail" was escbank $92 space exhaustion, fixed @ .org $FE00, NOT a wall). **THE STRATEGIC FORK IS
 SETTLED (user, 2026-07-04): 30fps retarget (budget 358K/tick, tick = 2 display frames) + the
 TAD/YM2610 sound port; realtime-60 abandoned (ISA-floor verdict). Don't re-litigate.**
 
@@ -47,26 +47,27 @@ the prior handler's stale a0 → a 2-byte divergence (identical combat+light = l
 **✅ P2 DONE + PROVEN (2026-07-06, branch `pt22-lever-b-handlers`):** the static switch is now a transpiler
 lowering — `tools/transpile.py --jtstatic=BASE:COUNT` + `gen_jtstatic` (fused 4-instr matcher on the
 `lea/adda/movea/jmp(An)` idiom; per-case sets a0+PC=target then jumps direct; default = original
-movea+ojmp_hook). Regenerated `$D226` is **INSTRUCTION-IDENTICAL to the P1 hand body (`daf2e97`)** and
-mechanized-d226 + d522-interp validates **combat 4B / light 8B GREEN** (Test A). Two codegen fixes: (1)
+movea+ojmp_hook). Regenerated `$D226` is **INSTRUCTION-IDENTICAL to the P1 hand body (`daf2e97`)**. Two codegen fixes: (1)
 **same-bank target MUST use `jmp entry_X`, not `jml.l`** — Poppy resolves a same-FILE `entry_X` to its
 file-local `$00` origin so `jml.l` jumps to bank $00 (a DERAIL); cross-bank keeps `jml.l` (24-bit const);
-added `escbank_bank_of` (BANK_OF_SYM lookup). (2) the a0+PC per-case set (the P1 lesson).
+added `escbank_bank_of` (BANK_OF_SYM lookup). (2) the a0+PC per-case set (the P1 lesson). **BOTH d226 AND
+d522 ship GREEN (combat 4B / light 8B, both-class).**
 
-**⚠️ d522 = THE SCHEDULER-BOUNDARY WALL (extensively root-caused; DEFERRED, reverted to interpreted).**
-Deploying `d522`-native (dispatching `entry_d5c4`) does NOT derail (trap=True, swin=11) but is **27B/32B
-RED** and intractable. Bisect: hand-d226(proven)+d522-native = 27B → **mechanized-d226 EXONERATED; d522-native
-the sole culprit.** RULED OUT: `$AC`-timing (inline charge = zero effect; capture is PC-fixed at `$0708`);
-codegen (d522-native is byte-IDENTICAL to d522-interp at the first-`$CD1A` checkpoint — a7/stack/regs). The
-divergence is the SAVED coroutine stack at **`$0E00`** (`$0E1C` = interp `$00FE` sentinel vs mame `$CEB4`),
-manifesting AFTER the checkpoint. MECHANISM: the sprite-build coroutine runs on a **TINY stack at `$0E00`**
-(scheduler `lea $350a(a5),a7` switch) NOT in the harness stack-exclusion → its interp sentinels are EXPOSED;
-`entry_d5c4` (unlike GREEN `entry_d386`) manipulates a7 (push args + `jsr [$1c9a(a5)]` draws). d522-native vs
--interp stack OPS are provably identical, so the asymmetry is a subtle multi-call/yield interaction (resisted
-advisor [timed out], a Plan agent [stalled], write-trace, fetch-stream, two a7-captures, bisect; pinning needs
-native-instr lockstep). **This CONVERTS `pt22-lever-rerank-verdict`'s wall HYPOTHESIS into EMPIRICAL EVIDENCE:
-P3 (scale the ce58 subtree) will hit this for every a7-touching sub-handler → strengthens the lean to (b)
-ship-playable + sound.** P3/P4 NOT started. Refs: `coroutine-bridge-retarget-derails` (full P2 grind),
+**✅ d522 FIXED — the "derail" was ESCBANK $92 SPACE EXHAUSTION, NOT a logic bug (I first WRONGLY deferred it
+as a "scheduler-boundary wall"; it is DETERMINISTIC).** `deploy` inserts bodies at `ESCBANK_BODIES_END`, but
+the $92 body region already overflows past the `.org $F000` ceiling (entry_d386@$F020, d3b0@$F0FD, d226@$F395
+survive only because their reached code fits the pre-`.org` gaps). Adding entry_d522 pushed it to **`$F471` —
+INSIDE the `.org $F400 jah2_ext_bsr` dispatch region** → Poppy assembles the body then `.org $F400` **silently
+OVERWRITES entry_d522's bytes** → `jmp entry_d522` runs garbage → derail (surfaces at `$CD1A`'s rts → `$92:$00FE`).
+**FIX (shipped): place `entry_d522` at `.org $FE00`** (free $92 tail past `lsel_set@$FDCA`, ~512B) + `jmp
+entry_d522`. **How found (after wrongly chasing $AC-timing / coroutine-stack / "wall"): DP ($00-$FF) AND full
+work-RAM were BYTE-IDENTICAL native-vs-interp at `$CD1A` entry, yet native derailed → the divergence is NOT 68K
+state → it's the ROM LAYOUT → the sym showed entry_d522@$F471 in the `.org $F400` region.** **LESSON FOR P3:
+the binding constraint is ESCBANK $92 SPACE, NOT a coroutine wall — every new ce58 sub-handler must go in FREE
+space (a $92 `.org` gap or cross-bank $94 via --bank2), never blindly at `ESCBANK_BODIES_END`; a body landing
+in a `.org`-pinned region corrupts with NO build error.** This RETRACTS the earlier "wall confirmed" claim.
+P3/P4 NOT started. Refs: `coroutine-bridge-retarget-derails` (full P2 grind + the escbank-space root cause),
+`escape-deploy-shift-safe` / `escbank-overflow-second-bank` (the .org-overlap hazard),
 `pt22-lever-rerank-verdict` (fork), plan `/home/chad/.claude/plans/mutable-coalescing-hippo.md`.
 
 **Branch topology (CONSOLIDATED 2026-07-05): `main` is the single source of truth.** PRs #12
