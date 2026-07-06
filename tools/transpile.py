@@ -1445,8 +1445,9 @@ def gen_call(e, ins):
             # via jml.l): xlat HIT -> dispatch the callee's --table native escape (the per-jsr(An) native-
             # draw win, e.g. c172's $295A/$29B6 renderers); MISS/gate-off -> jml inext (interpret, as before).
             # Either way the callee's rts pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont.
-            e.cmt('INDIRECT-BRIDGE %s %s -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume %s' % (ins.mnemonic, t, cont))
-            e('lda #%s' % cont); e('sta $54'); e('lda #%s' % ('$00FA' if BANK5 else '$00FD')); e('sta $56'); e('jsr push32')
+            ib_sent = '$00FA' if BANK5 else '$00FD'  # bank-correct sentinel: bank5:$00FA($99) else $00FD($94)
+            e.cmt('INDIRECT-BRIDGE %s %s -> ojmp_hook (a0 --table escape, else interpret); %s sentinel, resume %s' % (ins.mnemonic, t, ib_sent, cont))
+            e('lda #%s' % cont); e('sta $54'); e('lda #%s' % ib_sent); e('sta $56'); e('jsr push32')
             e('lda $%02X' % dp); e('sta $40'); e('lda $%02X' % (dp+2)); e('sta $42')
             e('jmp ojmp_hook')
             e.lbl(cont)

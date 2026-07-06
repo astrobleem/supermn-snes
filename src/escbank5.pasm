@@ -9234,7 +9234,7 @@ Ld232_d350:
     lda $400000,x
     xba
     sta $20
-    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brd232_2
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FA sentinel, resume brd232_2
     lda #brd232_2
     sta $54
     lda #$00FA
