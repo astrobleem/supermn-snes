@@ -12608,17 +12608,12 @@ Lfce58_1:
     lda #$0005
     sta $18
 Lce58_ce7a:
-    ; CALL-BRIDGE bsr.w $ceb6 -> interpret callee, resume brce58_4
+    ; CALL-BRIDGE bsr.w $ceb6 -> entry_ceb6 (NATIVE escape, pt.22 Lever B), resume brce58_4
     lda #brce58_4
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$CEB6
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_ceb6
 brce58_4:
     lda #$0010
     sta $9A
@@ -13762,6 +13757,68 @@ brd3b0_1:
     lda #$0000
     sta $42
     jml.l inext
+
+; --- $00CEB6 sprite-build jump-table state handler (pt.22 Lever B; entry_ce58 brce58_4 native bridge) ---
+; --- transpiled from $00CEB6 (4 instrs) by tools/transpile.py [bank1] ---
+entry_ceb6:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$CF8C
+    sta $20
+    lda #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
 
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
