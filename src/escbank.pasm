@@ -13743,129 +13743,7 @@ brd3b0_1:
     sta $42
     jml.l inext
 
-; --- $00CEB6 sprite-build jump-table state handler (pt.22 Lever B; entry_ce58 brce58_4 native bridge) ---
-; --- transpiled from $00CEB6 (4 instrs) by tools/transpile.py [bank1] ---
-entry_ceb6:
-    rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
-    sta $54
-    lda $42
-    sta $56
-    jsl.l push32_l
-    lda #$CF8C
-    sta $20
-    lda #$0000
-    sta $22
-    lda $30
-    clc
-    adc #$FFFE
-    sta $54
-    lda $32
-    adc #$FFFF
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9A
-    lda $9A
-    asl a
-    lda #$0000
-    sbc #$0000
-    eor #$FFFF
-    sta $9C
-    lda $20
-    clc
-    adc $9A
-    sta $20
-    lda $22
-    adc $9C
-    sta $22
-    lda $20
-    clc
-    adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9E
-    lda $20
-    clc
-    adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $20
-    lda $9E
-    sta $22
-    lda $20
-    sta $40
-    lda $22
-    sta $42
-    jml.l ojmp_hook
 
-; --- $00D6B0 jmp-table state handler (pt.22 Lever B; entry_ce58 brce58_5 native bridge) ---
-; --- transpiled from $00D6B0 (4 instrs) by tools/transpile.py [bank1] ---
-entry_d6b0:
-    rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
-    sta $54
-    lda $42
-    sta $56
-    jsl.l push32_l
-    lda #$D6DA
-    sta $20
-    lda #$0000
-    sta $22
-    lda $30
-    clc
-    adc #$FFFE
-    sta $54
-    lda $32
-    adc #$FFFF
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9A
-    lda $9A
-    asl a
-    lda #$0000
-    sbc #$0000
-    eor #$FFFF
-    sta $9C
-    lda $20
-    clc
-    adc $9A
-    sta $20
-    lda $22
-    adc $9C
-    sta $22
-    lda $20
-    clc
-    adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9E
-    lda $20
-    clc
-    adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $20
-    lda $9E
-    sta $22
-    lda $20
-    sta $40
-    lda $22
-    sta $42
-    jml.l ojmp_hook
 
 ; --- $00D226 jmp-table state handler (pt.22 P2: MECHANIZED via transpile.py --jtstatic=D376:4;
 ; --- regenerated, instruction-identical to the P1 hand-authored body daf2e97). ---
@@ -14242,6 +14120,103 @@ jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40
     jml bhp_after        ; -> bank-$00 push32r/rts (must run in bank $00)
+
+; --- $00D6B0 jmp-table state handler (pt.22 P3a: STATIC-SWITCH, relocated to the free
+;     jah2_ext_bsr tail .org $F600 -- was $F291 in the $8000 overflow chain w/ jml.l ojmp_hook.
+;     Kills the ojmp_hook round-trip: d718/d6fc -> direct jmp/jml.l, $D6E6 -> jml.l inext.
+;     Reached same-bank via brce58_5 `jmp entry_d6b0`. NOTE: below the .org $F800 cors_disp;
+;     ~126B remains between jxb_real and here for future bsr-scan growth. ---
+    .org $F600
+entry_d6b0:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; JTSTATIC $00D6DA(a0 jmp-table, 3 cases): static index switch, movea/ojmp_hook default
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    cmp #$0000
+    bne Lfd6b0_1
+    lda #$D718
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d718
+Lfd6b0_1:
+    cmp #$0004
+    bne Lfd6b0_2
+    lda #$D6E6
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l inext
+Lfd6b0_2:
+    cmp #$0008
+    bne Lfd6b0_3
+    lda #$D6FC
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d6fc
+Lfd6b0_3:
+    lda #$D6DA
+    sta $20
+    lda #$0000
+    sta $22
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
 
 ; ===================== COROUTINE RESUME DISPATCH ($92:F800) =====================
 ; Reached from bank-$00 op_rte via `ors_rte -> jml $92F800`. PC ($40/$42) = the task resume-PC (the
@@ -14896,3 +14871,130 @@ Lfd522_2:
     lda $22
     sta $42
     jml.l ojmp_hook
+
+; --- $00CEB6 sprite-build jump-table state handler (pt.22 P3a: STATIC-SWITCH, relocated to the
+;     free $92 tail .org $FEB0 -- was $F291 in the $8000 overflow chain w/ jml.l ojmp_hook.
+;     Kills the ojmp_hook round-trip: 5 escaped states -> direct jmp/jml.l, $CFA4 -> jml.l inext,
+;     default preserves movea+ojmp_hook. Reached same-bank via brce58_4 `jmp entry_ceb6`. ---
+    .org $FEB0
+entry_ceb6:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; JTSTATIC $00CF8C(a0 jmp-table, 6 cases): static index switch, movea/ojmp_hook default
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    cmp #$0000
+    bne Lfceb6_1
+    lda #$D0D0
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d0d0
+Lfceb6_1:
+    cmp #$0004
+    bne Lfceb6_2
+    lda #$D01A
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d01a
+Lfceb6_2:
+    cmp #$0008
+    bne Lfceb6_3
+    lda #$D05E
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d05e
+Lfceb6_3:
+    cmp #$000C
+    bne Lfceb6_4
+    lda #$D0BC
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d0bc
+Lfceb6_4:
+    cmp #$0010
+    bne Lfceb6_5
+    lda #$D07A
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d07a
+Lfceb6_5:
+    cmp #$0014
+    bne Lfceb6_6
+    lda #$CFA4
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l inext
+Lfceb6_6:
+    lda #$CF8C
+    sta $20
+    lda #$0000
+    sta $22
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+

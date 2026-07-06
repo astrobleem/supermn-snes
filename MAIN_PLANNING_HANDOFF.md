@@ -1,6 +1,14 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-06 (pt.22 P2 static-switch MECHANIZED; BOTH d226 + d522 SHIP GREEN — the d522 "derail" was escbank $92 space exhaustion, fixed @ .org $FE00, NOT a wall). **THE STRATEGIC FORK IS
+Last updated: 2026-07-06 (**pt.22 P3a DONE**: ceb6 + d6b0 STATIC-RESOLVED via `--jtstatic` — all 4 sprite-build
+coroutine leaf dispatchers (ceb6/d6b0 + d226/d522) now dispatch DIRECT, 8 ojmp_hook round-trips/tick eliminated;
+GREEN both-class bit-exact, same-bank $92 relocation (ceb6 @ .org $FEB0 tail, d6b0 @ .org $F600 jah2_ext_bsr tail),
+smoke OK. **MEASURED (deterministic instr-counts): P3a cycle win is small (~500 cyc/tick, <0.15% budget — the
+ojmp_hook round-trip is the CHEAP native→native bridge). P3b sub-handler ceiling directly measured SMALL (~4 interp
+PCs/tick of 165); the interp mass is the SCHEDULER ROOT ~42% + the cd1a spine $CD40 x18 (~25 PCs, harder shape).**
+USER (2026-07-06) chose: commit P3a + do the 9 sub-handlers (P3b) despite the low ceiling — finish the subtree.
+HARNESS: regen /tmp/b0_native.mss via dump_b0_native.py after EVERY rebuild or lockstep gives false trap=False/instr=0.)
+**THE STRATEGIC FORK IS
 SETTLED (user, 2026-07-04): 30fps retarget (budget 358K/tick, tick = 2 display frames) + the
 TAD/YM2610 sound port; realtime-60 abandoned (ISA-floor verdict). Don't re-litigate.**
 
