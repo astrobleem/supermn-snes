@@ -6580,6 +6580,880 @@ hle_pC_go:
     sta $42
     jml.l inext
 
+; --- $00D6E6 sprite-build sub-handler (pt.22 P3b COVERAGE: d6b0 state1, --coroutine no-push) ---
+entry_d6e6:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0008
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFA
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$01A0
+    beq Lfd6e6_2
+    bvs Lfd6e6_1
+    bmi Lfd6e6_2
+    bra Lfd6e6_3
+Lfd6e6_1:
+    bpl Lfd6e6_2
+    bra Lfd6e6_3
+Lfd6e6_2:
+    jmp Ltjd6e6_d6bc
+Lfd6e6_3:
+    lda #$0008
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$D6D8
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjd6e6_d6bc:
+    lda #$D6BC
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- $00D64A sprite-build sub-handler (pt.22 P3b COVERAGE: d522 state1, --coroutine no-push) ---
+entry_d64a:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $34
+    clc
+    adc #$2AA8
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l readbyte_l
+    bne Lfd64a_1
+    jmp Ld64a_d68c
+Lfd64a_1:
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sec
+    sbc #$0001
+    php
+    pha
+    lda $30
+    clc
+    adc #$FFF8
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    plp
+    beq Lfd64a_2
+    jmp Ld64a_d6ac
+Lfd64a_2:
+    lda $34
+    clc
+    adc #$2A4C
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    bne Lfd64a_3
+    jmp Ld64a_d66e
+Lfd64a_3:
+    lda $34
+    clc
+    adc #$2A58
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+Ld64a_d66e:
+    lda $20
+    clc
+    adc #$0008
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$000A
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    clc
+    adc #$FF8C
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0001
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFF2
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0004
+    php
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFF0
+    tax
+    lda $400000,x
+    xba
+    plp
+    adc #$0000
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $00
+    lda $00
+    beq Lfd64a_4
+    bmi Lfd64a_4
+    jmp Ld64a_d6a6
+Lfd64a_4:
+    bne Lfd64a_5
+    jmp Ld64a_d68c
+Lfd64a_5:
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9C
+    pha
+    lda $30
+    clc
+    adc #$FFF0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $30
+    clc
+    adc #$FFF2
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp Ld64a_d6a6
+Ld64a_d68c:
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0003
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C9A
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume brd64a_1
+    lda #brd64a_1
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+brd64a_1:
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    lda #$D5A0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ld64a_d6a6:
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$FFF8
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+Ld64a_d6ac:
+    lda #$D52E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- $00D3DE sprite-build sub-handler (pt.22 P3b COVERAGE: d226 state, --coroutine no-push) ---
+entry_d3de:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF8
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0001
+    php
+    pha
+    lda $30
+    clc
+    adc #$FFF8
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    plp
+    beq Lfd3de_1
+    jmp Ld3de_d3f2
+Lfd3de_1:
+    lda #$0005
+    pha
+    lda $30
+    clc
+    adc #$FFF8
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF4
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sec
+    sbc #$0002
+    php
+    pha
+    lda $30
+    clc
+    adc #$FFF4
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    plp
+    beq Lfd3de_2
+    jmp Ld3de_d3f2
+Lfd3de_2:
+    lda #$D3B0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ld3de_d3f2:
+    lda #$D328
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
+; --- $00CFA4 sprite-build sub-handler (pt.22 P3b COVERAGE: ceb6 state5 + 2 d0d0 tails, --coroutine no-push) ---
+entry_cfa4:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    ; CALL-BRIDGE jsr $24920.l -> ojmp_hook (callee --table escape, else interpret), resume brcfa4_1
+    lda #brcfa4_1
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda #$4920
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l ojmp_hook
+brcfa4_1:
+    lda $1E
+    bne Lfcfa4_1
+    lda $1C
+    bne Lfcfa4_1
+    jmp Lcfa4_d012
+Lfcfa4_1:
+    lda $1C
+    sta $9A
+    lda $1E
+    sta $9C
+    lda $9C
+    pha
+    lda $30
+    clc
+    adc #$FFF0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $30
+    clc
+    adc #$FFF2
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$2A4C
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda #$8035
+    sta $14
+    lda #$002E
+    sta $10
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    bne Lfcfa4_2
+    jmp Lcfa4_cfd0
+Lfcfa4_2:
+    lda $34
+    clc
+    adc #$2A58
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda #$8055
+    sta $14
+    lda #$004E
+    sta $10
+Lcfa4_cfd0:
+    lda $10
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.l -> ojmp_hook (callee --table escape, else interpret), resume brcfa4_2
+    lda #brcfa4_2
+    sta $54
+    lda #$00FD
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+brcfa4_2:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $1C
+    sta $28
+    lda $1E
+    sta $2A
+    lda $2C
+    clc
+    adc #$0004
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$001F
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFF9
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0000
+    pha
+    lda $28
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $28
+    clc
+    adc #$000C
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0001
+    pha
+    lda $28
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    pha
+    lda $28
+    clc
+    adc #$000D
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $14
+    pha
+    lda $28
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0004
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    jmp Lcfa4_d01a
+Lcfa4_d012:
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$CF8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Lcfa4_d01a:
+    lda $34
+    clc
+    adc #$2A4C
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    bne Lfcfa4_3
+    jmp Lcfa4_d028
+Lfcfa4_3:
+    lda $34
+    clc
+    adc #$2A58
+    sta $2C
+    lda $36
+    adc #$0000
+    sta $2E
+Lcfa4_d028:
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$FFFC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFC
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0011
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0004
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $30
+    clc
+    adc #$FFFA
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$001F
+    xba
+    sta $400000,x
+    xba
+    lda #$0020
+    pha
+    lda $30
+    clc
+    adc #$FFF9
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA4
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda #$0008
+    pha
+    lda $30
+    clc
+    adc #$FFFE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$CEC2
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
 ; ============================================================================

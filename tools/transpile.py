@@ -383,14 +383,29 @@ def branch_label(e, tgt):
     e.tailjumps.add(tgt)
     return 'Ltj%s_%x' % (e.pfx, tgt)
 
+def emit_tailjump(e, tgt):
+    """Tail-jump to tgt (out-of-function jmp/bra): set 68K PC ($40/$42)=tgt, then jump. If tgt is
+    ESCAPED, jump DIRECT to its native body -- jmp entry_X (same bank -> stay in PBR) / jml.l entry_X
+    (cross bank -> the 24-bit const carries it) -- for CONTIGUOUS linking with NO interp round-trip
+    (the sprite-build shared TAIL bodies $CEC2/$D6BC/... a state reaches by a tail-jmp). Else jmp
+    inext (interpret; bank1_transform -> jml.l inext). PC is set unconditionally = the faithful
+    side-effect (the escaped body may read $40/$42; mirrors the interp set-PC-then-fetch). Same
+    jmp/jml.l bank rule + escbank_bank_of as gen_jtstatic (a same-bank jml.l wrong-banks to $00)."""
+    tgt &= 0xFFFFFF
+    e('lda %s' % imm16(tgt & 0xFFFF)); e('sta $40')
+    e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
+    if tgt in ESCAPED:
+        nm = 'entry_%x' % tgt; home = 0x94 if BANK2 else 0x92
+        if (escbank_bank_of(nm) or home) == home: e('jmp %s' % nm)
+        else: e('jml.l %s' % nm)
+    else:
+        e('jmp inext')
+
 def emit_tailjump_stubs(e):
     """Emit the out-of-function tail-jump stubs collected by branch_label. Placed after the body
-    (only reached via jmp): set 68K PC=tgt and jmp inext. bank1_transform -> jml.l inext."""
+    (only reached via jmp). ESCAPED target -> direct native jump (contiguous); else jmp inext."""
     for tgt in sorted(getattr(e, 'tailjumps', ())):
-        e.lbl('Ltj%s_%x' % (e.pfx, tgt))
-        e('lda %s' % imm16(tgt & 0xFFFF)); e('sta $40')
-        e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
-        e('jmp inext')
+        e.lbl('Ltj%s_%x' % (e.pfx, tgt)); emit_tailjump(e, tgt)
 
 def emit_ccr_native(e, fsrc):
     """Materialize the 68K CCR MEMORY ($60=Z $6E=C $70=N $72=V $A2=X) that the interp-CALLER's
@@ -1134,10 +1149,8 @@ def gen(e, ins, nxt):
             e('lda $%02X' % dp); e('sta $40')            # interpret) exactly like the interp's op_jmp_idx hook.
             e('lda $%02X' % (dp+2)); e('sta $42')
             e('jmp ojmp_hook'); return 1
-        if ea[0] == 'abs':                               # jmp $XXXX: tail-jump (interpret the target)
-            e('lda %s' % imm16(ea[1] & 0xFFFF)); e('sta $40')
-            e('lda %s' % imm16((ea[1] >> 16) & 0xFFFF)); e('sta $42')
-            e('jmp inext'); return 1
+        if ea[0] == 'abs':                               # jmp $XXXX: tail-jump (interpret, or DIRECT if escaped)
+            emit_tailjump(e, ea[1]); return 1
         raise Unsupported('jmp %r' % (ea,))
     # ---- branches ----
     if base == 'bra':
@@ -1145,10 +1158,8 @@ def gen(e, ins, nxt):
         if getattr(e, 'entry', None) is not None and not (e.entry <= t < e.end):
             # TAIL-JUMP: bra to another function (e.g. GAME_TICK -> $2e6a). Set PC=t and jmp inext;
             # the target runs interpreted and rts's to OUR caller (the return we re-pushed in the
-            # prologue). No sentinel (it's a tail, not a call). bank1_transform -> jml.l inext.
-            e('lda %s' % imm16(t & 0xFFFF)); e('sta $40')
-            e('lda %s' % imm16((t >> 16) & 0xFFFF)); e('sta $42')
-            e('jmp inext'); return 1
+            # prologue). No sentinel (it's a tail, not a call). ESCAPED -> direct native (contiguous).
+            emit_tailjump(e, t); return 1
         emit_branch(e, 'bra', t, None); return 1
     if base in ('dbra', 'dbf'):
         dp = reg_dp(ops[0][1]); tgt = branch_target(ins)

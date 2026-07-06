@@ -47,6 +47,10 @@ entry_13bet=$94A953
 entry_8fat=$94ABE7
 entry_fd2t=$94AE58
 entry_c9a6=$94AF1A
+entry_d6e6=$94E299
+entry_d64a=$94E305
+entry_d3de=$94E5D0
+entry_cfa4=$94E660
 entry_25110=$978000
 entry_12e56=$97A000
 entry_129c6=$97A800
@@ -12935,7 +12939,7 @@ Lfd0d0_3:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_cfa4       ; pt.22 P3b COVERAGE: d0d0 tail -> NATIVE $CFA4 (was jml.l inext); $94
 Ld0d0_d11a:
     lda $34
     clc
@@ -13140,7 +13144,7 @@ Lfd0d0_6:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_cfa4       ; pt.22 P3b COVERAGE: d0d0 tail -> NATIVE $CFA4 (was jml.l inext); $94
 Ld0d0_d166:
     lda #$CF8A
     sta $40
@@ -13793,7 +13797,7 @@ Lfd226_2:
     lda #$0000
     sta $22
     sta $42
-    jml.l inext
+    jml.l entry_d3de       ; pt.22 P3b COVERAGE: d226 -> NATIVE $D3DE (was jml.l inext); $94
 Lfd226_3:
     cmp #$000C
     bne Lfd226_4
@@ -14163,7 +14167,7 @@ Lfd6b0_1:
     lda #$0000
     sta $22
     sta $42
-    jml.l inext
+    jml.l entry_d6e6       ; pt.22 P3b COVERAGE: d6b0 state1 -> NATIVE $D6E6 (was jml.l inext); cross-bank $94
 Lfd6b0_2:
     cmp #$0008
     bne Lfd6b0_3
@@ -14827,7 +14831,7 @@ Lfd522_1:
     lda #$0000
     sta $22
     sta $42
-    jml.l inext
+    jml.l entry_d64a       ; pt.22 P3b COVERAGE: d522 s1 -> NATIVE $D64A (was jml.l inext); $94
 Lfd522_2:
     lda #$D5BC
     sta $20
@@ -14953,7 +14957,7 @@ Lfceb6_5:
     lda #$0000
     sta $22
     sta $42
-    jml.l inext
+    jml.l entry_cfa4       ; pt.22 P3b COVERAGE: ceb6 s5 -> NATIVE $CFA4 (was jml.l inext); $94
 Lfceb6_6:
     lda #$CF8C
     sta $20
