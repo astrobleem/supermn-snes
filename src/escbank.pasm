@@ -12672,17 +12672,12 @@ Lfce58_3:
     lda #$0001
     sta $18
 Lce58_ce9a:
-    ; CALL-BRIDGE bsr.w $d226 -> interpret callee, resume brce58_6
+    ; CALL-BRIDGE bsr.w $d226 -> entry_d226 (NATIVE escape, pt.22 P1 static-switch), resume brce58_6
     lda #brce58_6
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$D226
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_d226
 brce58_6:
     lda #$0020
     sta $9A
@@ -13838,6 +13833,116 @@ entry_d6b0:
     sta $52
     jsl.l rdw_ea_l
     sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+
+; --- $00D226 jmp-table state handler (pt.22 Lever B P1; entry_ce58 brce58_6 native bridge) ---
+; --- STATIC JUMP-TABLE SWITCH prototype (hand-authored). Replaces the transpiler's
+; --- movea.l (a0),a0 + jml ojmp_hook tail (the Stage-A derail) with a compare-chain on
+; --- index memory[a4-2]. Table @ $00D376: $00->D3F6 $04->D386 $08->D3DE(interp) $0C->D3B0.
+entry_d226:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame = (brce58_6,$00FE), $92 sentinel)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; read runtime dispatch index memory[a4-2] (a4=$30/$32) into A + $9A
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A                     ; $9A = index (state*4); A still = index (sta doesn't clobber A)
+    ; --- STATIC SWITCH (bne-next idiom; mirrors jah2_ext / ors_rte) ---
+    ; Each case reproduces the movea.l+jmp(a0) SIDE EFFECTS the sub-handler depends on:
+    ; a0 ($20/$22) = target (movea.l result) AND 68K PC ($40/$42) = target (op_jmp_idx).
+    cmp #$0000
+    bne Ld226_n0
+    lda #$D3F6                 ; idx $00 -> $D3F6 escape @ $94 (cross-bank)
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d3f6
+Ld226_n0:
+    cmp #$0004
+    bne Ld226_n4
+    lda #$D386                 ; idx $04 -> $D386 escape @ $92 (same bank)
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d386
+Ld226_n4:
+    cmp #$0008
+    bne Ld226_n8
+    lda #$D3DE                 ; idx $08 -> $D3DE INTERPRETED (no escape)
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l inext
+Ld226_n8:
+    cmp #$000C
+    bne Ld226_def
+    lda #$D3B0                 ; idx $0C -> $D3B0 escape @ $92 (same bank)
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d3b0
+Ld226_def:
+    ; default (un-enumerated index; never hit for valid states): reproduce the ORIGINAL
+    ; transpiled movea.l (a0),a0 + jml ojmp_hook exactly (base $D376) -> correctness preserved.
+    lda #$D376
+    sta $20
+    lda #$0000
+    sta $22
     lda $9A
     asl a
     lda #$0000
