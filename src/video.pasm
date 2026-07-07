@@ -1474,6 +1474,9 @@ vf_tick:                 ; reached via the fixed $8004 wrapper (jsl VFT_VEC from
     rep #$30
     jsr joy5a22          ; refresh the JOY1 mailbox ($41:0000) once per game tick
     jsr vid_frame        ; build CGRAM/OAM/BG from the $41 shadow + DMA to PPU
+    sep #$20             ; TAD ABI wants 8-bit A (X stays 16-bit); plp restores below
+    jsl.l Tad_Process|$E90000  ; TAD per-tick (far/rtl). At bank $E9 (ROM); bank-explicit jsl works
+                               ;   from the $7F WRAM copy of vf_tick. Advances SPC upload + playback.
     plp
     rtl
 
@@ -1536,4 +1539,11 @@ rc_l:
     bne rc_l
     plp
     jsr vid_init         ; exactly the action cpu5a22_video's `jsr` originally performed
+    ; --- TAD sound (P1): upload SPC700 driver + queue the placeholder song, once at boot ---
+    ;   BSS state lives at $00:1F00 (WRAM-mirror region, DB-independent); D=0 in the supervisor.
+    sep #$20             ; A8
+    rep #$10             ; X16  (TAD ABI)
+    jsl.l Tad_Init|$E90000       ; upload loader.bin -> audio-driver.bin -> common data (blocking)
+    lda #$01             ; Song id 1 = s02_coin (placeholder sine); load it (per-tick Process finishes it)
+    jsr Tad_LoadSong
     rts
