@@ -8,97 +8,105 @@
       "name": "sm_fm0",
       "source": "instruments/placeholder.wav",
       "freq": 261.626,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 2,
       "last_octave": 4,
-      "envelope": "adsr 12 2 6 8",
-      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch",
+      "loop_setting": 2
     },
     {
       "name": "sm_fm1",
       "source": "instruments/placeholder.wav",
       "freq": 1046.504,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 4,
       "last_octave": 6,
-      "envelope": "adsr 12 2 6 8",
-      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch",
+      "loop_setting": 2
     },
     {
       "name": "sm_fm2",
       "source": "instruments/placeholder.wav",
       "freq": 523.252,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 4,
       "last_octave": 5,
-      "envelope": "adsr 12 2 6 8",
-      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch",
+      "loop_setting": 2
     },
     {
       "name": "sm_fm3",
       "source": "instruments/placeholder.wav",
       "freq": 523.252,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 3,
       "last_octave": 5,
-      "envelope": "adsr 12 2 6 8",
-      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+      "envelope": "gain F127",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch",
+      "loop_setting": 2
     },
     {
       "name": "sm_drum_062a00",
       "source": "instruments/placeholder.wav",
       "freq": 500.0,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 4,
       "last_octave": 4,
       "envelope": "gain F127",
-      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x062A00-0x0651FF; extract+decode to BRR"
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x062A00-0x0651FF; extract+decode to BRR",
+      "loop_setting": 2
     },
     {
       "name": "sm_drum_06c500",
       "source": "instruments/placeholder.wav",
       "freq": 500.0,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 4,
       "last_octave": 4,
       "envelope": "gain F127",
-      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x06C500-0x06F8FF; extract+decode to BRR"
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x06C500-0x06F8FF; extract+decode to BRR",
+      "loop_setting": 2
     },
     {
       "name": "sm_drum_075800",
       "source": "instruments/placeholder.wav",
       "freq": 500.0,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 4,
       "last_octave": 4,
       "envelope": "gain F127",
-      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x075800-0x0778FF; extract+decode to BRR"
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x075800-0x0778FF; extract+decode to BRR",
+      "loop_setting": 2
     },
     {
       "name": "sm_drum_07b500",
       "source": "instruments/placeholder.wav",
       "freq": 500.0,
-      "loop": "none",
+      "loop": "dupe_block_hack_filter_1",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 4,
       "last_octave": 4,
       "envelope": "gain F127",
-      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x07B500-0x07F1FF; extract+decode to BRR"
+      "comment": "PLACEHOLDER drum \u2014 ADPCM-A window 0x07B500-0x07F1FF; extract+decode to BRR",
+      "loop_setting": 2
     }
   ],
   "samples": [],

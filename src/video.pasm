@@ -1544,6 +1544,7 @@ rc_l:
     sep #$20             ; A8
     rep #$10             ; X16  (TAD ABI)
     jsl.l Tad_Init|$E90000       ; upload loader.bin -> audio-driver.bin -> common data (blocking)
+    jsr Tad_GlobalVolumesResetOnSongStart  ; start songs at MAX global volume (else default=faint)
     lda #$01             ; Song id 1 = s02_coin (placeholder sine); load it (per-tick Process finishes it)
     jsr Tad_LoadSong
     rts
