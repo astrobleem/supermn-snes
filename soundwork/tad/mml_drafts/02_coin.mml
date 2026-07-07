@@ -22,6 +22,7 @@
 
 ; ===== Voice A: FM0  (octaves 2-4) =====
 A @0 v10
+A L
 ; bar 0
 A r8.^32 o2 f32 o3 f16 f32 f32 f32 o2 f16 f16 f16 o3 d+32 f32 f+32 g32 g+32 a32 a+32 b32 o4 c32 c+32 d32 d+32 e32
 ; bar 1
@@ -29,6 +30,7 @@ A o2 f8 r8.^32
 
 ; ===== Voice B: FM1  (octaves 4-6) =====
 B @1 v10
+B L
 ; bar 0
 B r4 o5 c32 r32 c32 c32 c32 c32 r32 c32 r32 c32 r32 o4 a+32 o5 c32 d32 d+32 e32 f32 f+32 g32 g+32 a32 a+32 b32 o6 c32
 ; bar 1
@@ -36,6 +38,7 @@ B ^16. r4
 
 ; ===== Voice C: FM2  (octaves 4-5) =====
 C @2 v10
+C L
 ; bar 0
 C r4 o4 a+32 r32 a+32 a+32 a+32 a+32 r32 a+32 r32 a+32 r32 g32 a32 b32 o5 c32 c+32 d32 d+32 e32 f32 f+32 g32 g+32 a32
 ; bar 1
@@ -43,6 +46,7 @@ C ^16. r4
 
 ; ===== Voice D: FM3  (octaves 3-5) =====
 D @3 v10
+D L
 ; bar 0
 D r4^32 o5 c32 r32 c32 c32 c32 c32 r32 c32 r32 c32 o3 a+32 o4 c32 d32 d+32 e32 f32 f+32 g32 g+32 a32 a+32 b32 o5 c32
 ; bar 1
