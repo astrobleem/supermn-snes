@@ -1474,9 +1474,8 @@ vf_tick:                 ; reached via the fixed $8004 wrapper (jsl VFT_VEC from
     rep #$30
     jsr joy5a22          ; refresh the JOY1 mailbox ($41:0000) once per game tick
     jsr vid_frame        ; build CGRAM/OAM/BG from the $41 shadow + DMA to PPU
-    sep #$20             ; TAD ABI wants 8-bit A (X stays 16-bit); plp restores below
-    jsl.l Tad_Process|$E90000  ; TAD per-tick (far/rtl). At bank $E9 (ROM); bank-explicit jsl works
-                               ;   from the $7F WRAM copy of vf_tick. Advances SPC upload + playback.
+    ; NOTE: Tad_Process is NOT here -- it runs at a steady 60Hz in the wl_blob poll loop (VBlank-paced),
+    ;   decoupled from this sub-realtime game-frame render (TAD is host-tick-driven).
     plp
     rtl
 
@@ -1491,26 +1490,42 @@ wl_copy:
     lda wl_blob,x
     sta $7EF000,x        ; long store, DBR-free ($7E:F000-F016; OBJ staging tops at $CFFF)
     inx
-    cpx #$0017           ; WL_LEN = 23 bytes — keep in sync with the blob below
+    cpx #$0033           ; WL_LEN = 51 bytes — keep in sync with the blob below
     bne wl_copy
     plb                  ; DBR=$00 again (the blob polls IRAM $3300 via abs)
     rep #$30
     jml $7EF000          ; the 5A22 lives in WRAM from here on
 
 wl_blob:                 ; assembled here, RUN at $7E:F000. Position-independent: relative
-                         ; branches only (backward, to in-blob labels); abs data is DBR-
-                         ; based; the ROM call is a fixed 24-bit vector. rep #$30 + DBR=$00
-                         ; on entry and forever.
+                         ; branches only (to in-blob labels); abs data is DBR($00)-based; ROM
+                         ; calls are fixed 24-bit vectors. rep #$30 + DBR=$00 on entry.
+                         ; WL_LEN below = 0x33 (51 bytes) -- keep wl_setup's cpx in sync.
 wl_poll:
     ldx #$0080           ; throttle: ~128 dex/bne of pure-WRAM fetches (~700 cyc) per poll
 wl_dly:
     dex
     bne wl_dly
+    ; --- steady ~60Hz Tad_Process, VBlank-edge-paced. TAD is HOST-TICK-DRIVEN (the song advances
+    ;     one tick per Tad_Process call), so it MUST run at a steady 60Hz -- NOT coupled to the
+    ;     sub-realtime, irregular game-frame render (vf_tick) below. $3304 = "handled this vblank". ---
+    sep #$20             ; A8 (X stays 16-bit); TAD ABI = A8/X16
+    lda $4212            ; HVBJOY: bit7 = in-VBlank
+    bpl wl_notvb         ; not in vblank -> arm for the next rising edge
+    lda $3304            ; already ran Tad_Process this vblank?
+    bne wl_novb
+    lda #$01
+    sta $3304            ; mark this vblank handled (edge -> one call per frame = 60Hz)
+    jsl.l Tad_Process|$E90000   ; A8/X16 already set; bank $E9 (ROM), bank-explicit from WRAM
+    bra wl_novb
+wl_notvb:
+    stz $3304            ; out of vblank -> re-arm
+wl_novb:
+    rep #$30
     lda $3300            ; FRAME_REQ (IRAM: the SA-1 bumps it once per game tick)
     cmp $3302            ; FRAME_ACK
     beq wl_poll          ; no new tick -> keep idling in WRAM
     sta $3302            ; ack this tick
-    jsl VFT_VEC          ; $E98004 -> vf_tick (now $7F WRAM copy): joy + render, once per tick
+    jsl VFT_VEC          ; $E98004 -> vf_tick ($7F WRAM copy): joy + render, once per game tick
     bra wl_poll          ; back to the throttle
 
 ; ---- rc_copy — pt.21: mirror the render code into WRAM bank $7F ------------------------
