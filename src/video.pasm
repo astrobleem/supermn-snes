@@ -1507,18 +1507,18 @@ wl_dly:
     bne wl_dly
     ; --- steady ~60Hz Tad_Process, VBlank-edge-paced. TAD is HOST-TICK-DRIVEN (the song advances
     ;     one tick per Tad_Process call), so it MUST run at a steady 60Hz -- NOT coupled to the
-    ;     sub-realtime, irregular game-frame render (vf_tick) below. $3304 = "handled this vblank". ---
+    ;     sub-realtime, irregular game-frame render (vf_tick) below. $1F10 = "handled this vblank". ---
     sep #$20             ; A8 (X stays 16-bit); TAD ABI = A8/X16
     lda $4212            ; HVBJOY: bit7 = in-VBlank
     bpl wl_notvb         ; not in vblank -> arm for the next rising edge
-    lda $3304            ; already ran Tad_Process this vblank?
+    lda $1F10            ; already ran Tad_Process this vblank?
     bne wl_novb
     lda #$01
-    sta $3304            ; mark this vblank handled (edge -> one call per frame = 60Hz)
+    sta $1F10            ; mark this vblank handled (edge -> one call per frame = 60Hz)
     jsl.l Tad_Process|$E90000   ; A8/X16 already set; bank $E9 (ROM), bank-explicit from WRAM
     bra wl_novb
 wl_notvb:
-    stz $3304            ; out of vblank -> re-arm
+    stz $1F10            ; out of vblank -> re-arm
 wl_novb:
     rep #$30
     lda $3300            ; FRAME_REQ (IRAM: the SA-1 bumps it once per game tick)
@@ -1554,12 +1554,23 @@ rc_l:
     bne rc_l
     plp
     jsr vid_init         ; exactly the action cpu5a22_video's `jsr` originally performed
-    ; --- TAD sound (P1): upload SPC700 driver + queue the placeholder song, once at boot ---
-    ;   BSS state lives at $00:1F00 (WRAM-mirror region, DB-independent); D=0 in the supervisor.
+    ; --- TAD BSS zero-init (defensive, replicates ca65 crt0). vid_init clears only $7E:2000+,
+    ;     so the supervisor never zeroes $7E:0000-1FFF where TAD's BSS ($00:1F00-1F0F) and
+    ;     sfxQueue DP ($68/$69) live; the stock ca65 sound-test gets this from crt0. Correct
+    ;     hygiene on random power-on WRAM, but NOT the P1 boot-flakiness root cause -- that
+    ;     was the DataTable segment-offset skew in tad_glue.pasm (see DATA_SEGMENT_SKEW). ---
+    rep #$30             ; 16-bit A/X (guaranteed, independent of plp/vid_init) for the long stores
+    lda #$0000
+    ldx #$000e
+tad_bssclr:
+    sta $7e1f00,x        ; $7E:1F00..1F0F = TAD BSS (16 bytes) -> 0  (== $00:1F00; long,X, DBR-free)
+    dex
+    dex
+    bpl tad_bssclr
+    sta $7e0068          ; Tad_sfxQueue_sfx($68)/_pan($69) -> 0 (Tad_Init re-sets sfx=$ff next)
     sep #$20             ; A8
     rep #$10             ; X16  (TAD ABI)
-    jsl.l Tad_Init|$E90000       ; upload loader.bin -> audio-driver.bin -> common data (blocking)
-    jsr Tad_GlobalVolumesResetOnSongStart  ; start songs at MAX global volume (else default=faint)
-    lda #$01             ; Song id 1 = s02_coin (placeholder sine); load it (per-tick Process finishes it)
-    jsr Tad_LoadSong
+    jsl.l Tad_Init|$E90000       ; upload loader.bin -> audio-driver.bin (blocking IPL handshake)
+    lda #$01             ; Song id 1 = s02_coin (placeholder); queue it
+    jsr Tad_LoadSong     ; the poll loop's steady 60Hz Tad_Process finishes the load + starts playback
     rts

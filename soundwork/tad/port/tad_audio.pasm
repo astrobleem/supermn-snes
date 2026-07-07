@@ -452,8 +452,8 @@ TadPrivate_nextCommand_parameter1 = $001F0F
 ;; ---------------------------------------
 ; [segment ZEROPAGE -> re-homed]
     ;; see tad-audio.inc
-Tad_sfxQueue_sfx = $EE
-Tad_sfxQueue_pan = $EF
+Tad_sfxQueue_sfx = $68
+Tad_sfxQueue_pan = $69
 
 
 ;; Memory Map Asserts

@@ -17,6 +17,16 @@ Tad_AudioDriver_Bin  = $ED0074
 Tad_AudioDriver_SIZE = $0C92          ; 3218
 Tad_DataTable        = $ED0D06        ; blob base + 3334
 N_DATA_ITEMS         = 2
+; DataTable entries are SEGMENT-relative, NOT blob-relative: tad-compiler's ca65-export
+; emits [43-byte LoadAudioData proc][blob] in ONE segment, and the u24 entries (+ u16 end
+; footer) are offsets from the SEGMENT start ("table of PRG ROM offsets (from the start of
+; the first Audio Data segment)"; footer = 43+4169 = $1074). This ROM incbins the BARE blob
+; at $ED:0000 (no 43-byte proc prefix), so every entry is 43 too high; subtract it when
+; forming the far address. Sizes (entry-to-entry deltas) are unaffected.
+; THIS WAS THE SOUND-P1 BOOT-FLAKINESS ROOT CAUSE (2026-07-07): common+song uploaded 43
+; bytes skewed -> driver parsed a garbage song header -> channels executed random power-on
+; ARAM as bytecode -> seed-dependent loud/quiet/silent boots (NOT a Mesen/SA-1 artifact).
+DATA_SEGMENT_SKEW    = 43
 
 ; --- LoadAudioData (HIROM) — jsl-called (rtl). IN: A=0 common (returns carry SET); A>=1 song.
 ;     OUT: carry set if valid; A:X = far address; Y = size. ------------------------------------
@@ -41,6 +51,13 @@ LoadAudioData__Valid:
     sbc.l Tad_DataTable,x
     tay
     lda.l Tad_DataTable,x
+    sec
+    sbc #DATA_SEGMENT_SKEW             ; segment offset -> bare-blob offset. NOTE: subtracts from the
+                                       ; low16 only; the sep #$21 below re-forces carry, so a borrow is
+                                       ; NOT propagated to the bank byte. Safe here because every item's
+                                       ; low16 >= $D06 (single-bank P1 blob). P3 (multi-bank real songs,
+                                       ; an item whose low16 < $2B) must instead incbin the blob at
+                                       ; $ED:002B to match stock's segment layout and drop this -$2B.
     sta 1,s
     sep #$21
 .a8
