@@ -10,23 +10,23 @@
 #EchoVolume 24
 #FirFilter 64 0 0 0 0 0 0 0
 
-; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
-@0 fm_p41
-@1 fm_p30
-@2 fm_p41
+; --- instrument bindings (real FM patches; per-note @ switches in the body) ---
+@0 fm_p06
+@1 fm_p41
+@2 fm_p30
 @3 fm_p44
+@4 fm_p13
 @10 sm_drum_079a00
 
 ; ===== Voice A: FM0  (octaves 2-5) =====
-A @0 v10
 ; bar 0
-A r4^16 o2 e4.^16 L g4
+A r4^16 @0 v6 o2 e4.^16 L g4
 ; bar 1
 A ^8. a4.^16 b4.
 ; bar 2
-A ^16 g8.^32 a8.^32 b8.^32 o3 d8.^32 o2 b16
+A ^16 g8.^32 a8.^32 b8.^32 o3 d8.^32 v4 o2 b16
 ; bar 3
-A ^8^32 o3 d8.^32 e8.^32 g8.^32 o5 e8.
+A ^8^32 v5 o3 d8.^32 v7 e8.^32 v8 g8.^32 @1 v12 o5 e8.
 ; bar 4
 A ^4^16 r8^32 e16 r32 o4 b16 o5 e16 d+4^16
 ; bar 5
@@ -40,47 +40,45 @@ A ^16. a16. g2^8^32 g8 a32
 ; bar 9
 A ^16 b2^8^32 b16 e16 r32 b16 b16
 ; bar 10
-A ^2^16. r8.^32 o5 g16 r16 g16
+A ^2^16. r8.^32 @2 v14 o5 g16 r16 v8 g16
 ; bar 11
-A r16. g32 r32 g32 r16 g16 r32 g32 g32 r32 g32 g16 g16 g16 r32 o2 e32
+A r16. g32 r32 g32 r16 v14 g16 r32 v10 g32 g32 r32 g32 g16 g16 g16 r32 @0 v6 o2 e32
 
 ; ===== Voice B: FM1  (octaves 5-6) =====
-B @1 v10
 ; bar 0
-B r4^16 o5 b16. L o6 d16 o5 a16 o6 d16. o5 g16 o6 d16 o5 f+16. o6 d16 o5 g16 o6 d32
+B r4^16 @2 v7 o5 b16. L v5 o6 d16 o5 a16 o6 d16. o5 g16 o6 d16 v6 o5 f+16. o6 d16 o5 g16 v8 o6 d32
 ; bar 1
-B ^16 o5 a16 o6 d16 o5 b16. o6 d16 o5 a16 o6 d16. o5 g16 o6 d16 o5 f+16. o6 d16 o5 g16 o6 d16. o5 a16
+B ^16 o5 a16 o6 d16 v7 o5 b16. v5 o6 d16 o5 a16 o6 d16. o5 g16 o6 d16 v6 o5 f+16. o6 d16 o5 g16 v8 o6 d16. o5 a16
 ; bar 2
-B o6 d16 o5 b16. o6 d16 o5 a16 o6 d16. o5 g16 o6 d16 o5 f+16. o6 d16 o5 g16 o6 d16 r32 o5 a16 o6 d16 o5 b16
+B o6 d16 v7 o5 b16. v5 o6 d16 o5 a16 o6 d16. o5 g16 o6 d16 v6 o5 f+16. o6 d16 o5 g16 v8 o6 d16 r32 o5 a16 o6 d16 v7 o5 b16
 ; bar 3
-B r32 o6 d16 o5 a16 o6 d16 r32 o5 g16 o6 d16 o5 f+16 r32 o6 d16 o5 g16 o6 d16 r32 o5 a16 o6 d16 o5 b16 r32 o6 d16 o5 a32
+B r32 v5 o6 d16 o5 a16 o6 d16 r32 o5 g16 o6 d16 v6 o5 f+16 r32 o6 d16 o5 g16 v8 o6 d16 r32 o5 a16 o6 d16 v7 o5 b16 r32 v5 o6 d16 o5 a32
 ; bar 4
-B ^32 o6 d16 r32 o5 g16 o6 d16 o5 f+16 r32 o6 d16 o5 g16 o6 d16 r32 o5 a16 o6 d16 o5 b16 r32 o6 d16 o5 a16 o6 d16 r32
+B ^32 o6 d16 r32 o5 g16 o6 d16 v6 o5 f+16 r32 o6 d16 o5 g16 v8 o6 d16 r32 o5 a16 o6 d16 v7 o5 b16 r32 v5 o6 d16 o5 a16 o6 d16 r32
 ; bar 5
-B o5 g16 o6 d16 o5 f+16 r32 o6 d16 o5 g16 o6 d16 r32 o5 a16 o6 d16 o5 b16 r32 o6 d16 o5 a16 o6 d16 r32 o5 g16 o6 d16
+B o5 g16 o6 d16 v6 o5 f+16 r32 o6 d16 o5 g16 v8 o6 d16 r32 o5 a16 o6 d16 v7 o5 b16 r32 v5 o6 d16 o5 a16 o6 d16 r32 o5 g16 o6 d16
 ; bar 6
-B o5 f+16 r32 o6 d16 o5 g16 o6 d16 r32 o5 a16 o6 d16 o5 b16 r32 o6 d16 o5 a16 o6 d16 r32 o5 g32 r32 o6 d16 o5 f+16 o6 d16
+B v6 o5 f+16 r32 o6 d16 o5 g16 v8 o6 d16 r32 o5 a16 o6 d16 v7 o5 b16 r32 v5 o6 d16 o5 a16 o6 d16 r32 o5 g32 r32 o6 d16 v6 o5 f+16 o6 d16
 ; bar 7
-B r32 o5 g16 o6 d16 o5 a16 r32 o6 d16 o5 b16 o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 o5 f+16 o6 d16 r32 o5 g16 o6 d32
+B r32 o5 g16 v8 o6 d16 o5 a16 r32 o6 d16 v7 o5 b16 v5 o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 v6 o5 f+16 o6 d16 r32 o5 g16 v8 o6 d32
 ; bar 8
-B ^32 o5 a16 r32 o6 d16 o5 b16 o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 o5 f+16 o6 d16 r32 o5 g16 o6 d16 o5 a16 r32
+B ^32 o5 a16 r32 o6 d16 v7 o5 b16 v5 o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 v6 o5 f+16 o6 d16 r32 o5 g16 v8 o6 d16 o5 a16 r32
 ; bar 9
-B o6 d16 o5 b16 o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 o5 f+16 o6 d16 r32 o5 g16 o6 d16 o5 a16 r32 o6 d16 o5 b16
+B o6 d16 v7 o5 b16 v5 o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 v6 o5 f+16 o6 d16 r32 o5 g16 v8 o6 d16 o5 a16 r32 o6 d16 v7 o5 b16
 ; bar 10
-B o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 o5 f+16 o6 d16 r32 o5 g16 o6 d16 o5 a16 r32 o6 d32 r8.^32
+B v5 o6 d16 r32 o5 a16 o6 d16 o5 g16 r32 o6 d16 v6 o5 f+16 o6 d16 r32 o5 g16 v8 o6 d16 o5 a16 r32 o6 d32 r8.^32
 ; bar 11
-B r2^8. o5 b32
+B r2^8. v7 o5 b32
 
 ; ===== Voice C: FM2  (octaves 2-5) =====
-C @2 v10
 ; bar 0
-C r4^16 o2 e4.^16 L g4
+C r4^16 @0 v5 o2 e4.^16 L g4
 ; bar 1
 C ^8. a4.^16 b4.
 ; bar 2
-C ^16 g8.^32 a8.^32 b8.^32 o3 d8.^32 o2 b16
+C ^16 g8.^32 a8.^32 b8.^32 o3 d8.^32 v4 o2 b16
 ; bar 3
-C ^8^32 o3 d8.^32 e8.^32 g8.^32 r16. o5 e16.
+C ^8^32 v5 o3 d8.^32 v6 e8.^32 v7 g8.^32 r16. @1 v8 o5 e16.
 ; bar 4
 C ^4.^32 r8^32 e16 r32 o4 b16 o5 e16 d+8.^32
 ; bar 5
@@ -94,20 +92,19 @@ C r16 o4 b8 a16. g2^8^32 g16
 ; bar 9
 C ^16 a16. b2^8^32 b16 e16 r32 b32
 ; bar 10
-C ^32 b2^8^32 r8. o5 g16 r16
+C ^32 b2^8^32 r8. @2 v7 o5 g16 r16
 ; bar 11
-C g16 r16. g32 r32 g32 r16 g16 r32 g32 g32 r32 g32 g16 g16. o2 e32
+C v4 g16 r16. g32 r32 g32 r16 v7 g16 r32 v5 g32 g32 r32 g32 g16 g16. @0 o2 e32
 
 ; ===== Voice D: FM3  (octaves 4-4) =====
-D @3 v10
 ; bar 0
-D r3^96 L o4 d8 d8 d8^32 d8 d16. d32
+D r3^96 L @3 v14 o4 d8 d8 d8^32 d8 d16. d32
 ; bar 1
 D ^32 d16. d16 d8 d32 d32 d32 r32 d16 d16 d16 d8 d32 d32 d32 r32 d16 d16
 ; bar 2
 D d16 d8^32 d8 d8^32 d8 d16. d16 d16. d16 d16
 ; bar 3
-D ^16 d32 d32 d32 r32 d16 d16 d16 d16. r32 d32 d32 d32 d16 r32 d16 d16 d8 r32 d32
+D ^16 d32 d32 d32 r32 d16 d16 d16 d16. r32 d32 d32 d32 d16 r32 d16 d16 v10 d8 r32 d32
 ; bar 4
 D ^16. d8 r32 d8 d16 r32 d16 d16 r32 d16 d16. r32 d32 d32 d32 d16 r32
 ; bar 5
@@ -121,7 +118,7 @@ D ^32 d16 d16. d16. d32 r32 d32 d32 d16 d16 r32 d16 d16. d32 r32 d32 d32 d16 d16
 ; bar 9
 D d16 d8 d8^32 d8 d8^32 d16 d16. d16 d16. d16
 ; bar 10
-D ^32 d32 r32 d32 d32 d16 d16 r32 d16 d16. d32 r32 d32 d32 d16 d16 r32 d16 f16 r16 f16
+D ^32 d32 r32 d32 d32 d16 d16 r32 d16 d16. d32 r32 d32 d32 d16 d16 r32 d16 @4 v5 f16 r16 f16
 ; bar 11
 D r16. f32 r32 f32 r16 f16 r32 f32 r32 f32 f32 f16 f16 f16.
 

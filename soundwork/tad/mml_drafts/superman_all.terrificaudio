@@ -12,7 +12,7 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 3,
-   "last_octave": 6,
+   "last_octave": 4,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 0 (ymfm render, modal g3)",
    "loop_setting": 384
@@ -51,7 +51,7 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 1,
-   "last_octave": 5,
+   "last_octave": 3,
    "envelope": "adsr 15 2 1 10",
    "comment": "YM2610 FM patch 6 (ymfm render, modal g2)",
    "loop_setting": 128
@@ -65,22 +65,22 @@
    "ignore_gaussian_overflow": false,
    "first_octave": 2,
    "last_octave": 4,
-   "envelope": "adsr 15 1 2 10",
-   "comment": "YM2610 FM patch 7 (ymfm render, modal g2)",
+   "envelope": "adsr 15 2 1 10",
+   "comment": "YM2610 FM patch 7 (ymfm render, modal c3)",
    "loop_setting": 128
   },
   {
    "name": "fm_p08",
    "source": "instruments/fm_p08.wav",
-   "freq": 1000.0,
+   "freq": 500.0,
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 2,
-   "last_octave": 7,
+   "first_octave": 3,
+   "last_octave": 6,
    "envelope": "gain F127",
-   "comment": "YM2610 FM patch 8 (ymfm render, modal d5)",
-   "loop_setting": 224
+   "comment": "YM2610 FM patch 8 (ymfm render, modal c5)",
+   "loop_setting": 384
   },
   {
    "name": "fm_p09",
@@ -103,23 +103,23 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 2,
-   "last_octave": 5,
+   "last_octave": 3,
    "envelope": "adsr 15 2 1 10",
-   "comment": "YM2610 FM patch 10 (ymfm render, modal f2)",
+   "comment": "YM2610 FM patch 10 (ymfm render, modal c3)",
    "loop_setting": 128
   },
   {
    "name": "fm_p11",
    "source": "instruments/fm_p11.wav",
-   "freq": 1000.0,
+   "freq": 500.0,
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 2,
-   "last_octave": 7,
+   "last_octave": 6,
    "envelope": "adsr 15 5 0 0",
-   "comment": "YM2610 FM patch 11 (ymfm render, modal d3)",
-   "loop_setting": 224
+   "comment": "YM2610 FM patch 11 (ymfm render, modal g3)",
+   "loop_setting": 256
   },
   {
    "name": "fm_p15",
@@ -128,7 +128,7 @@
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 3,
+   "first_octave": 4,
    "last_octave": 7,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 15 (ymfm render, modal c6)",
@@ -142,7 +142,7 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 2,
-   "last_octave": 5,
+   "last_octave": 3,
    "envelope": "adsr 15 0 2 10",
    "comment": "YM2610 FM patch 17 (ymfm render, modal g2)",
    "loop_setting": 128
@@ -154,7 +154,7 @@
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 2,
+   "first_octave": 5,
    "last_octave": 7,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 20 (ymfm render, modal b5)",
@@ -180,7 +180,7 @@
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 1,
+   "first_octave": 3,
    "last_octave": 5,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 25 (ymfm render, modal b4)",
@@ -220,7 +220,7 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 4,
-   "last_octave": 6,
+   "last_octave": 5,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 29 (ymfm render, modal e5)",
    "loop_setting": 896
@@ -246,7 +246,7 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 3,
-   "last_octave": 6,
+   "last_octave": 5,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 31 (ymfm render, modal b3)",
    "loop_setting": 512
@@ -272,7 +272,7 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 4,
-   "last_octave": 5,
+   "last_octave": 6,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 33 (ymfm render, modal c+5)",
    "loop_setting": 512
@@ -280,15 +280,15 @@
   {
    "name": "fm_p35",
    "source": "instruments/fm_p35.wav",
-   "freq": 500.0,
+   "freq": 1000.0,
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 4,
-   "last_octave": 6,
+   "first_octave": 3,
+   "last_octave": 7,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 35 (ymfm render, modal a+4)",
-   "loop_setting": 448
+   "loop_setting": 256
   },
   {
    "name": "fm_p36",
@@ -297,8 +297,8 @@
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 3,
-   "last_octave": 6,
+   "first_octave": 5,
+   "last_octave": 5,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 36 (ymfm render, modal g5)",
    "loop_setting": 896
@@ -313,7 +313,7 @@
    "first_octave": 3,
    "last_octave": 5,
    "envelope": "gain F127",
-   "comment": "YM2610 FM patch 37 (ymfm render, modal f4)",
+   "comment": "YM2610 FM patch 37 (ymfm render, modal e4)",
    "loop_setting": 512
   },
   {
@@ -324,7 +324,7 @@
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
    "first_octave": 3,
-   "last_octave": 6,
+   "last_octave": 5,
    "envelope": "adsr 15 2 1 10",
    "comment": "YM2610 FM patch 38 (ymfm render, modal c5)",
    "loop_setting": 128
@@ -336,7 +336,7 @@
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 1,
+   "first_octave": 4,
    "last_octave": 6,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 39 (ymfm render, modal g4)",
@@ -362,7 +362,7 @@
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 2,
+   "first_octave": 3,
    "last_octave": 5,
    "envelope": "gain F127",
    "comment": "YM2610 FM patch 41 (ymfm render, modal b4)",
@@ -375,7 +375,7 @@
    "loop": "loop_reset_filter",
    "evaluator": "default",
    "ignore_gaussian_overflow": false,
-   "first_octave": 2,
+   "first_octave": 4,
    "last_octave": 4,
    "envelope": "adsr 15 6 0 0",
    "comment": "YM2610 FM patch 42 (ymfm render, modal f4)",
@@ -430,7 +430,7 @@
    "first_octave": 4,
    "last_octave": 5,
    "envelope": "adsr 15 0 2 10",
-   "comment": "YM2610 FM patch 48 (ymfm render, modal b4)",
+   "comment": "YM2610 FM patch 48 (ymfm render, modal a+4)",
    "loop_setting": 128
   },
   {
@@ -460,6 +460,71 @@
    "loop_setting": 640
   },
   {
+   "name": "fm_p16",
+   "source": "instruments/fm_p16.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 16 (ymfm render, modal f3)",
+   "loop_setting": 384
+  },
+  {
+   "name": "fm_p13",
+   "source": "instruments/fm_p13.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 6,
+   "envelope": "adsr 15 3 3 10",
+   "comment": "YM2610 FM patch 13 (ymfm render, modal g5)",
+   "loop_setting": 448
+  },
+  {
+   "name": "fm_p12",
+   "source": "instruments/fm_p12.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "adsr 15 6 0 0",
+   "comment": "YM2610 FM patch 12 (ymfm render, modal g4)",
+   "loop_setting": 896
+  },
+  {
+   "name": "fm_p50",
+   "source": "instruments/fm_p50.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 50 (ymfm render, modal d4)",
+   "loop_setting": 192
+  },
+  {
+   "name": "fm_p45",
+   "source": "instruments/fm_p45.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 45 (ymfm render, modal g4)",
+   "loop_setting": 128
+  },
+  {
    "name": "sm_drum_060000",
    "source": "instruments/sm_drum_060000.wav",
    "freq": 797.335,
@@ -469,7 +534,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x060000 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x060000 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_062a00",
@@ -481,7 +546,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x062a00 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x062a00 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_065200",
@@ -493,7 +558,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x065200 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x065200 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_067800",
@@ -505,7 +570,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x067800 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x067800 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_069f00",
@@ -517,7 +582,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x069f00 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x069f00 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_06c500",
@@ -553,7 +618,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x072800 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x072800 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_075800",
@@ -565,7 +630,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x075800 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x075800 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_077900",
@@ -577,7 +642,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x077900 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x077900 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_079a00",
@@ -589,7 +654,7 @@
    "first_octave": 4,
    "last_octave": 4,
    "envelope": "gain F127",
-   "comment": "ADPCM-A window 0x079a00 @10500Hz 0.379s (trimmed+faded)"
+   "comment": "ADPCM-A window 0x079a00 @10500Hz 0.349s (trimmed+faded)"
   },
   {
    "name": "sm_drum_07b500",

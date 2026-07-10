@@ -5,7 +5,7 @@
   },
   "instruments": [
     {
-      "name": "sm_fm0",
+      "name": "fm_p40",
       "source": "instruments/placeholder.wav",
       "freq": 65.406,
       "loop": "none",
@@ -17,19 +17,7 @@
       "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
     },
     {
-      "name": "sm_fm1",
-      "source": "instruments/placeholder.wav",
-      "freq": 1046.504,
-      "loop": "none",
-      "evaluator": "default",
-      "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
-      "envelope": "adsr 12 2 6 8",
-      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
-    },
-    {
-      "name": "sm_fm2",
+      "name": "fm_p39",
       "source": "instruments/placeholder.wav",
       "freq": 1046.504,
       "loop": "none",
@@ -41,7 +29,7 @@
       "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
     },
     {
-      "name": "sm_fm3",
+      "name": "fm_p48",
       "source": "instruments/placeholder.wav",
       "freq": 523.252,
       "loop": "none",

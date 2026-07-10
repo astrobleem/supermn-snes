@@ -1,40 +1,40 @@
 {
- "total_brr": 26946,
+ "total_brr": 25326,
  "drums": {
   "sm_drum_060000": {
    "window": "060000_0629ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_062a00": {
    "window": "062a00_0651ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_065200": {
    "window": "065200_0677ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_067800": {
    "window": "067800_069eff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_069f00": {
    "window": "069f00_06c4ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_06c500": {
    "window": "06c500_06f8ff",
@@ -53,30 +53,30 @@
   "sm_drum_072800": {
    "window": "072800_0757ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_075800": {
    "window": "075800_0778ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_077900": {
    "window": "077900_0799ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_079a00": {
    "window": "079a00_07b4ff",
    "rate": 10500,
-   "samples": 3984,
-   "seconds": 0.379,
-   "brr_bytes": 2241
+   "samples": 3664,
+   "seconds": 0.349,
+   "brr_bytes": 2061
   },
   "sm_drum_07b500": {
    "window": "07b500_07f1ff",

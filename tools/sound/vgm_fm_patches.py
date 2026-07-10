@@ -123,7 +123,7 @@ def main():
         clock = cap["clock"]
         for (tt, fmidx, raw, ident, ctl, block, fnum) in cap["events"]:
             key = ident.hex()
-            e = patches.setdefault(key, {"id": len(patches), "raw": raw.hex(),
+            e = patches.setdefault(key, {"id": len(patches), "ident": key, "raw": raw.hex(),
                                          "min_carrier_tl": 127, "keyons": 0})
             e["keyons"] += 1
             mtl = min(ctl) if ctl else 127

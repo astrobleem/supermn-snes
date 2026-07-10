@@ -10,10 +10,10 @@
 
 | MML | Source | Notes/Hits | Octaves | Instrument stub |
 |----|--------|-----------:|---------|-----------------|
-| A | FM0 | 60 | 2-2 | sm_fm0 |
-| B | FM1 | 22 | 3-5 | sm_fm1 |
-| C | FM2 | 266 | 4-5 | sm_fm2 |
-| D | FM3 | 253 | 4-5 | sm_fm3 |
+| A | FM0 | 60 | 2-2 | fm_p47 |
+| B | FM1 | 22 | 3-5 | fm_p41 |
+| C | FM2 | 266 | 4-5 | fm_p30 |
+| D | FM3 | 253 | 4-5 | fm_p30 |
 | E | ADPCM-A ch5 | 63 | 4-4 | (drum kit, see below) |
 
 ## FM instruments to build (4 melodic voices)

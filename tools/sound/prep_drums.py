@@ -23,7 +23,7 @@ from pathlib import Path
 
 # Per-window overrides: (max_seconds, out_rate). Defaults chosen to spend budget
 # on the frequently-hit drums; rare/long crashes get trimmed+downsampled harder.
-DEFAULT_MAX_S = 0.38
+DEFAULT_MAX_S = 0.35
 DEFAULT_RATE = 10500
 OVERRIDES = {
     # window        (max_s, rate)

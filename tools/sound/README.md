@@ -48,16 +48,34 @@ Sound-port P3 turned the drafts into real audio. Four new tools, run in this ord
 python3 tools/sound/vgm_fm_patches.py soundwork/source/vgm_unpacked/*.vgm -o soundwork/samples/fm_patches.json
 python3 tools/sound/render_fm_patches.py --renderer /path/to/patch_render
 python3 tools/sound/prep_drums.py
+python3 tools/sound/vgm2mml.py soundwork/source/vgm_unpacked/*.vgm -o soundwork/tad/mml_drafts \
+    --fm-map soundwork/tad/mml_drafts/instruments/fm_instruments.json
 python3 tools/sound/build_common_project.py
 soundwork/tad/build_blob.sh          # check + ca65-export + generated glue symbols
 ```
 
+### Polish stage (per-note timbre + dynamics)
+
+The initial P3 pass bound each (track, FM-voice) to its *dominant* patch with a flat
+`v10`. The polish stage restores per-note fidelity:
+
+- `render_fm_patches.py --extra-budget N` renders the highest-impact **non-dominant**
+  patches too (default ~4 KB of extra BRR) and **aliases** every remaining patch to its
+  nearest rendered timbre (weighted register distance: algorithm ≫ MUL/TL ≫ envelope
+  rates). `fm_instruments.json` gains `ident_to_inst` (every captured patch → an
+  instrument that exists) + `inst_render_tl`.
+- `vgm2mml.py --fm-map fm_instruments.json` re-walks each VGM with the patch capture
+  (same 44100 Hz timeline; keyons matched by exact `(voice, onset_sample)`) and emits
+  **per-note `@` instrument switches** and **`v1..16` velocities** from each keyon's
+  carrier TL (`amp = 10^(-0.75·ΔTL/20)` vs the instrument's render TL; v14 = pack-wide
+  loudest so the average note lands near the old flat v10). Instrument octave ranges
+  tighten to only the notes each instrument actually plays.
+
 ARAM budget (verified by `tad-compiler check`, which validates per-song fit): common data
-44.3 KB (16.8 KB FM + 26.9 KB drums + tables/SFX) + largest song 6.5 KB + 4 KB echo +
-driver ≈ 59.3 KB of 64 KB. Known first-pass limits: one instrument per (track,voice) uses
-the *dominant* patch (53/84 voices switch patches mid-song — add `@` switches by ear
-later); FM velocity stays flat `v10`; long drum tails are capped (in-game hits retrigger
-gate-style, masking this).
+(FM + drums + tables/SFX) + largest song + 4 KB echo + driver must stay ≤ 64 KB — after
+the polish stage this is nearly full; `check` is the gate when tuning `--extra-budget` /
+drum caps. Remaining by-ear items: echo/vibrato taste, FM pitch-bends (`MP`), long drum
+tails capped (in-game hits retrigger gate-style, masking this).
 
 ## Typical iterative loop (one track)
 

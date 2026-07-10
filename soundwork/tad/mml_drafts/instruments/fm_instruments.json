@@ -7,11 +7,14 @@
    "freq": 500.0,
    "loop_offset": 384,
    "first_octave": 3,
-   "last_octave": 6,
+   "last_octave": 4,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "g3",
-   "samples": 896
+   "samples": 896,
+   "aliased_pids": [
+    3
+   ]
   },
   {
    "name": "fm_p01",
@@ -24,7 +27,10 @@
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "c3",
-   "samples": 1536
+   "samples": 1536,
+   "aliased_pids": [
+    5
+   ]
   },
   {
    "name": "fm_p02",
@@ -37,7 +43,10 @@
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "f+6",
-   "samples": 1472
+   "samples": 1472,
+   "aliased_pids": [
+    4
+   ]
   },
   {
    "name": "fm_p06",
@@ -46,11 +55,14 @@
    "freq": 500.0,
    "loop_offset": 128,
    "first_octave": 1,
-   "last_octave": 5,
+   "last_octave": 3,
    "envelope": "adsr 15 2 1 10",
    "env_class": "decaying",
    "modal_note": "g2",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": [
+    43
+   ]
   },
   {
    "name": "fm_p07",
@@ -60,23 +72,28 @@
    "loop_offset": 128,
    "first_octave": 2,
    "last_octave": 4,
-   "envelope": "adsr 15 1 2 10",
+   "envelope": "adsr 15 2 1 10",
    "env_class": "decaying",
-   "modal_note": "g2",
-   "samples": 640
+   "modal_note": "c3",
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p08",
    "pid": 8,
    "wav": "instruments/fm_p08.wav",
-   "freq": 1000.0,
-   "loop_offset": 224,
-   "first_octave": 2,
-   "last_octave": 7,
+   "freq": 500.0,
+   "loop_offset": 384,
+   "first_octave": 3,
+   "last_octave": 6,
    "envelope": "gain F127",
    "env_class": "sustained",
-   "modal_note": "d5",
-   "samples": 480
+   "modal_note": "c5",
+   "samples": 896,
+   "aliased_pids": [
+    52,
+    54
+   ]
   },
   {
    "name": "fm_p09",
@@ -89,7 +106,8 @@
    "envelope": "adsr 15 5 0 0",
    "env_class": "percussive",
    "modal_note": "c5",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p10",
@@ -98,24 +116,26 @@
    "freq": 500.0,
    "loop_offset": 128,
    "first_octave": 2,
-   "last_octave": 5,
+   "last_octave": 3,
    "envelope": "adsr 15 2 1 10",
    "env_class": "decaying",
-   "modal_note": "f2",
-   "samples": 640
+   "modal_note": "c3",
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p11",
    "pid": 11,
    "wav": "instruments/fm_p11.wav",
-   "freq": 1000.0,
-   "loop_offset": 224,
+   "freq": 500.0,
+   "loop_offset": 256,
    "first_octave": 2,
-   "last_octave": 7,
+   "last_octave": 6,
    "envelope": "adsr 15 5 0 0",
    "env_class": "percussive",
-   "modal_note": "d3",
-   "samples": 480
+   "modal_note": "g3",
+   "samples": 768,
+   "aliased_pids": []
   },
   {
    "name": "fm_p15",
@@ -123,12 +143,15 @@
    "wav": "instruments/fm_p15.wav",
    "freq": 1000.0,
    "loop_offset": 480,
-   "first_octave": 3,
+   "first_octave": 4,
    "last_octave": 7,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "c6",
-   "samples": 736
+   "samples": 736,
+   "aliased_pids": [
+    51
+   ]
   },
   {
    "name": "fm_p17",
@@ -137,11 +160,12 @@
    "freq": 500.0,
    "loop_offset": 128,
    "first_octave": 2,
-   "last_octave": 5,
+   "last_octave": 3,
    "envelope": "adsr 15 0 2 10",
    "env_class": "decaying",
    "modal_note": "g2",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p20",
@@ -149,12 +173,13 @@
    "wav": "instruments/fm_p20.wav",
    "freq": 1000.0,
    "loop_offset": 448,
-   "first_octave": 2,
+   "first_octave": 5,
    "last_octave": 7,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "b5",
-   "samples": 704
+   "samples": 704,
+   "aliased_pids": []
   },
   {
    "name": "fm_p21",
@@ -167,7 +192,8 @@
    "envelope": "adsr 15 3 2 10",
    "env_class": "decaying",
    "modal_note": "f5",
-   "samples": 1024
+   "samples": 1024,
+   "aliased_pids": []
   },
   {
    "name": "fm_p25",
@@ -175,12 +201,13 @@
    "wav": "instruments/fm_p25.wav",
    "freq": 500.0,
    "loop_offset": 512,
-   "first_octave": 1,
+   "first_octave": 3,
    "last_octave": 5,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "b4",
-   "samples": 1024
+   "samples": 1024,
+   "aliased_pids": []
   },
   {
    "name": "fm_p26",
@@ -193,7 +220,8 @@
    "envelope": "adsr 15 5 0 10",
    "env_class": "decaying",
    "modal_note": "d5",
-   "samples": 768
+   "samples": 768,
+   "aliased_pids": []
   },
   {
    "name": "fm_p28",
@@ -206,7 +234,8 @@
    "envelope": "adsr 15 1 2 10",
    "env_class": "decaying",
    "modal_note": "g+2",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p29",
@@ -215,11 +244,12 @@
    "freq": 500.0,
    "loop_offset": 896,
    "first_octave": 4,
-   "last_octave": 6,
+   "last_octave": 5,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "e5",
-   "samples": 1408
+   "samples": 1408,
+   "aliased_pids": []
   },
   {
    "name": "fm_p30",
@@ -232,7 +262,8 @@
    "envelope": "adsr 15 5 0 0",
    "env_class": "percussive",
    "modal_note": "d+5",
-   "samples": 960
+   "samples": 960,
+   "aliased_pids": []
   },
   {
    "name": "fm_p31",
@@ -241,11 +272,12 @@
    "freq": 500.0,
    "loop_offset": 512,
    "first_octave": 3,
-   "last_octave": 6,
+   "last_octave": 5,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "b3",
-   "samples": 1024
+   "samples": 1024,
+   "aliased_pids": []
   },
   {
    "name": "fm_p32",
@@ -258,7 +290,8 @@
    "envelope": "adsr 15 1 2 10",
    "env_class": "decaying",
    "modal_note": "c+2",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p33",
@@ -267,24 +300,32 @@
    "freq": 500.0,
    "loop_offset": 512,
    "first_octave": 4,
-   "last_octave": 5,
+   "last_octave": 6,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "c+5",
-   "samples": 1024
+   "samples": 1024,
+   "aliased_pids": [
+    14
+   ]
   },
   {
    "name": "fm_p35",
    "pid": 35,
    "wav": "instruments/fm_p35.wav",
-   "freq": 500.0,
-   "loop_offset": 448,
-   "first_octave": 4,
-   "last_octave": 6,
+   "freq": 1000.0,
+   "loop_offset": 256,
+   "first_octave": 3,
+   "last_octave": 7,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "a+4",
-   "samples": 960
+   "samples": 512,
+   "aliased_pids": [
+    18,
+    22,
+    27
+   ]
   },
   {
    "name": "fm_p36",
@@ -292,12 +333,13 @@
    "wav": "instruments/fm_p36.wav",
    "freq": 500.0,
    "loop_offset": 896,
-   "first_octave": 3,
-   "last_octave": 6,
+   "first_octave": 5,
+   "last_octave": 5,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "g5",
-   "samples": 1408
+   "samples": 1408,
+   "aliased_pids": []
   },
   {
    "name": "fm_p37",
@@ -309,8 +351,9 @@
    "last_octave": 5,
    "envelope": "gain F127",
    "env_class": "sustained",
-   "modal_note": "f4",
-   "samples": 1024
+   "modal_note": "e4",
+   "samples": 1024,
+   "aliased_pids": []
   },
   {
    "name": "fm_p38",
@@ -319,11 +362,15 @@
    "freq": 500.0,
    "loop_offset": 128,
    "first_octave": 3,
-   "last_octave": 6,
+   "last_octave": 5,
    "envelope": "adsr 15 2 1 10",
    "env_class": "decaying",
    "modal_note": "c5",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": [
+    23,
+    24
+   ]
   },
   {
    "name": "fm_p39",
@@ -331,12 +378,13 @@
    "wav": "instruments/fm_p39.wav",
    "freq": 500.0,
    "loop_offset": 128,
-   "first_octave": 1,
+   "first_octave": 4,
    "last_octave": 6,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "g4",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p40",
@@ -349,7 +397,11 @@
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "e2",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": [
+    19,
+    53
+   ]
   },
   {
    "name": "fm_p41",
@@ -357,12 +409,13 @@
    "wav": "instruments/fm_p41.wav",
    "freq": 500.0,
    "loop_offset": 448,
-   "first_octave": 2,
+   "first_octave": 3,
    "last_octave": 5,
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "b4",
-   "samples": 960
+   "samples": 960,
+   "aliased_pids": []
   },
   {
    "name": "fm_p42",
@@ -370,12 +423,13 @@
    "wav": "instruments/fm_p42.wav",
    "freq": 500.0,
    "loop_offset": 320,
-   "first_octave": 2,
+   "first_octave": 4,
    "last_octave": 4,
    "envelope": "adsr 15 6 0 0",
    "env_class": "percussive",
    "modal_note": "f4",
-   "samples": 832
+   "samples": 832,
+   "aliased_pids": []
   },
   {
    "name": "fm_p44",
@@ -388,7 +442,8 @@
    "envelope": "adsr 15 4 0 0",
    "env_class": "percussive",
    "modal_note": "d4",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p46",
@@ -401,7 +456,10 @@
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "g+4",
-   "samples": 960
+   "samples": 960,
+   "aliased_pids": [
+    34
+   ]
   },
   {
    "name": "fm_p47",
@@ -414,7 +472,8 @@
    "envelope": "adsr 15 1 2 10",
    "env_class": "decaying",
    "modal_note": "e2",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p48",
@@ -426,8 +485,9 @@
    "last_octave": 5,
    "envelope": "adsr 15 0 2 10",
    "env_class": "decaying",
-   "modal_note": "b4",
-   "samples": 640
+   "modal_note": "a+4",
+   "samples": 640,
+   "aliased_pids": []
   },
   {
    "name": "fm_p56",
@@ -440,7 +500,10 @@
    "envelope": "adsr 15 4 0 0",
    "env_class": "percussive",
    "modal_note": "d3",
-   "samples": 640
+   "samples": 640,
+   "aliased_pids": [
+    55
+   ]
   },
   {
    "name": "fm_p57",
@@ -453,7 +516,83 @@
    "envelope": "gain F127",
    "env_class": "sustained",
    "modal_note": "g+5",
-   "samples": 1152
+   "samples": 1152,
+   "aliased_pids": [
+    58,
+    59
+   ]
+  },
+  {
+   "name": "fm_p16",
+   "pid": 16,
+   "wav": "instruments/fm_p16.wav",
+   "freq": 500.0,
+   "loop_offset": 384,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "f3",
+   "samples": 896,
+   "aliased_pids": []
+  },
+  {
+   "name": "fm_p13",
+   "pid": 13,
+   "wav": "instruments/fm_p13.wav",
+   "freq": 500.0,
+   "loop_offset": 448,
+   "first_octave": 4,
+   "last_octave": 6,
+   "envelope": "adsr 15 3 3 10",
+   "env_class": "decaying",
+   "modal_note": "g5",
+   "samples": 960,
+   "aliased_pids": []
+  },
+  {
+   "name": "fm_p12",
+   "pid": 12,
+   "wav": "instruments/fm_p12.wav",
+   "freq": 500.0,
+   "loop_offset": 896,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "adsr 15 6 0 0",
+   "env_class": "percussive",
+   "modal_note": "g4",
+   "samples": 1408,
+   "aliased_pids": []
+  },
+  {
+   "name": "fm_p50",
+   "pid": 50,
+   "wav": "instruments/fm_p50.wav",
+   "freq": 500.0,
+   "loop_offset": 192,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "d4",
+   "samples": 704,
+   "aliased_pids": []
+  },
+  {
+   "name": "fm_p45",
+   "pid": 45,
+   "wav": "instruments/fm_p45.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 2,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "g4",
+   "samples": 640,
+   "aliased_pids": [
+    49
+   ]
   }
  ],
  "bindings": [
@@ -962,5 +1101,131 @@
    "instrument": "fm_p57"
   }
  ],
- "total_brr_estimate": 16758
+ "ident_to_inst": {
+  "71514171171700004e4a4f4f00000000090909092424242400000000340000": "fm_p00",
+  "3030353004163a00c48fd20c0102020202000000211111f100000000180000": "fm_p01",
+  "11011211203a2100595c53510a07090f0000000012133204000000003a0000": "fm_p02",
+  "417072500a112a00df9f9f5f0c09060807060608261616f600000000030000": "fm_p06",
+  "4070725112123200df9f9f5f0709060707060608291919f900000000000000": "fm_p07",
+  "71414272120000004f52521200000008090909092626262600000000350000": "fm_p08",
+  "72727071121117001f1f1f1f030d0d0d00050505f5f5f5f500000000310000": "fm_p09",
+  "407071510f0f3200df9f9f5f0709060807060608261616f600000000000000": "fm_p10",
+  "415174611c321200595c59510a0d0b0f0000000b16265616000000003a0000": "fm_p11",
+  "415171611a231a0092155250060e0803020000001828182800000000390000": "fm_p15",
+  "417072500a112a00df9f9fdf0c09060307060602261616f400000000030000": "fm_p17",
+  "5151714133323400121f12120906060006060606f0f9bbf900000000390000": "fm_p20",
+  "41614272120000004f52521205040404030303031616360600000000350000": "fm_p21",
+  "4141725112121a001f1212120000000000000001f4f4f4f400000000110000": "fm_p25",
+  "3262627212120000971fdf5f0606060602000000e4d4e4d400000000340000": "fm_p26",
+  "3630353118163a00df9fdf9f0709060607060608291919f900000000200000": "fm_p28",
+  "71514171171b00004e4a4f4f00000000090909092424242400000000340000": "fm_p29",
+  "7142427212000000515252120a0a0a0a090909092626262600000000350000": "fm_p30",
+  "71514171171d00004e4a4f4f00000000090909092424242400000000340000": "fm_p31",
+  "417072520f0f3200df9f9f5f0709060707060608291919f900000000000000": "fm_p32",
+  "120216121d3a2100595c53510a07090c0000000012133204000000003a0000": "fm_p33",
+  "327172331c1a1a001a120f120700000007060608f9f9f9f9000000003a0000": "fm_p35",
+  "404040401a2332008e1adf12060e080202000000e8d8e8d8000000003a0000": "fm_p36",
+  "010272611f00000012ca0a0a0303000300000100f2e7e6e6000000003d0000": "fm_p37",
+  "125050701d121200525656560707070705050508f9f9f9f900000000280000": "fm_p38",
+  "71616151160000005f5f5f1f0000000000000000f6f6f6f6000000003d0000": "fm_p39",
+  "417072500a122a00df9f9f5f0c09060007060608261616f600000000030000": "fm_p40",
+  "416071411a1a120015151513000000000000000004f4f4f400000000300000": "fm_p41",
+  "7c7a7a7a0c0c00001212121a0a0a0f0f0a0a0f0fffffffff000000003c0000": "fm_p42",
+  "115050710f1212004f5656560a0a0a0a05050508f9f9f9f900000000300000": "fm_p44",
+  "50507161120f07001fdf1f120303000300000100f4e4e4e4000000002b0000": "fm_p46",
+  "30504070230c28001e1cd89c0e06060608060606b666b6b500000000300000": "fm_p47",
+  "11505071121212005a5a5a5a06060606050505087575757500000000300000": "fm_p48",
+  "4070725118123200c59c9c5c0505020a02020208291919f4000000002a0000": "fm_p56",
+  "71424171120000005152521200000008090909092626262600000000350000": "fm_p57",
+  "020272621d00000017d010100303000300000100f6e6e6e6000000003d0000": "fm_p16",
+  "6152527212000000515252520505050505050505f6f6f6f600000000350000": "fm_p13",
+  "020174421a1d000093934f4f00000e0e00000000f2f2d7d6000000003c0000": "fm_p12",
+  "72447471150000005f5f5f1f0000000000000000f7f7f7f7000000003e0000": "fm_p50",
+  "41424242121a2300171212170000000000000000f5f5f5f500000000320000": "fm_p45",
+  "71514171171700004e4a4f4f00000404090909092424252500000000340000": "fm_p00",
+  "11011211203a2100595c53470a07090f0000000512133204000000003a0000": "fm_p02",
+  "3030353004163a00c48fd20c01020208020000062111118100000000180000": "fm_p01",
+  "417072500a112a00df9f9f5f0c09060007060600261616f600000000030000": "fm_p40",
+  "120216121d3a210056565656030303030000000015153505000000003a0000": "fm_p33",
+  "31717131232323001212120f0700000007060608f9f9f9f9000000003a0000": "fm_p35",
+  "3171713123232300121212120700000007060608f9f9f9f9000000003a0000": "fm_p35",
+  "3f6f6f7f150f1800971fdf440000000002000000e4d4e4d400000000380000": "fm_p38",
+  "3565657515231800971fdf440000000002000000e4d4e4d400000000380000": "fm_p38",
+  "327172331c1a1a001a120f120900000006060606f0f6f6f6000000003a0000": "fm_p35",
+  "315171611a1f16001a1818120000000000000000f6f6f6f600000000030000": "fm_p46",
+  "417072500a112a00df9f9f5c0c0906050706060f261616b600000000030000": "fm_p06",
+  "417072500a112a00df9f9f1f0c09060107060601261616f600000000030000": "fm_p40",
+  "405075601e1f28005210520a0205050202020000f2f2f2f200000000320000": "fm_p45",
+  "71414272120000004f515112000a0a08090909092629292600000000350000": "fm_p08",
+  "415171611a231a0092155250060e0803020000001525152500000000390000": "fm_p15",
+  "71414272120000004f51510c000a0a0109090901262929f600000000350000": "fm_p08",
+  "4070725118123200c59c9c540505020402020208291919f9000000002a0000": "fm_p56",
+  "7142417112000000515252160000000909090908262626f800000000350000": "fm_p57",
+  "7142417112000000515252160000000809090908262626f600000000350000": "fm_p57"
+ },
+ "inst_render_tl": {
+  "fm_p00": 15,
+  "fm_p01": 15,
+  "fm_p02": 33,
+  "fm_p06": 11,
+  "fm_p07": 14,
+  "fm_p08": 17,
+  "fm_p09": 22,
+  "fm_p10": 10,
+  "fm_p11": 12,
+  "fm_p15": 17,
+  "fm_p17": 14,
+  "fm_p20": 22,
+  "fm_p21": 21,
+  "fm_p25": 19,
+  "fm_p26": 28,
+  "fm_p28": 12,
+  "fm_p29": 24,
+  "fm_p30": 24,
+  "fm_p31": 26,
+  "fm_p32": 17,
+  "fm_p33": 15,
+  "fm_p35": 18,
+  "fm_p36": 19,
+  "fm_p37": 14,
+  "fm_p38": 21,
+  "fm_p39": 19,
+  "fm_p40": 13,
+  "fm_p41": 21,
+  "fm_p42": 31,
+  "fm_p44": 25,
+  "fm_p46": 20,
+  "fm_p47": 17,
+  "fm_p48": 23,
+  "fm_p56": 13,
+  "fm_p57": 30,
+  "fm_p16": 25,
+  "fm_p13": 19,
+  "fm_p12": 30,
+  "fm_p50": 28,
+  "fm_p45": 23
+ },
+ "aliases": {
+  "3": 0,
+  "4": 2,
+  "5": 1,
+  "14": 33,
+  "18": 35,
+  "19": 40,
+  "22": 35,
+  "23": 38,
+  "24": 38,
+  "27": 35,
+  "34": 46,
+  "43": 6,
+  "49": 45,
+  "51": 15,
+  "52": 8,
+  "53": 40,
+  "54": 8,
+  "55": 56,
+  "58": 57,
+  "59": 57
+ },
+ "total_brr_estimate": 19494
 }

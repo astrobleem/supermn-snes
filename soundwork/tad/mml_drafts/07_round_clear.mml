@@ -10,49 +10,44 @@
 #EchoVolume 24
 #FirFilter 64 0 0 0 0 0 0 0
 
-; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
+; --- instrument bindings (real FM patches; per-note @ switches in the body) ---
 @0 fm_p10
 @1 fm_p37
-@2 fm_p37
-@3 fm_p33
+@2 fm_p33
 @10 sm_drum_060000
 @11 sm_drum_062a00
 @12 sm_drum_079a00
 @13 sm_drum_07b500
 
 ; ===== Voice A: FM0  (octaves 2-3) =====
-A @0 v10
 ; bar 0
-A r4.^16 o3 f16 f32 f32 c32 f16 f16 c16 f16 f32 f32 c32 f16
+A r4.^16 @0 v6 o3 f16 v9 f32 f32 v6 c32 f16 f16 c16 f16 f32 f32 c32 v8 f16
 ; bar 1
-A f16 c16 f16 f32 f32 c32 f16 f16 c16 f16 c32 r32 o2 f32 o3 f16 c16 o2 f4
+A f16 c16 v6 f16 v9 f32 f32 v6 c32 f16 f16 c16 v4 f16 v5 c32 r32 o2 f32 o3 f16 v6 c16 v8 o2 f4
 ; bar 2
 A ^8^32 r2^8.
 
 ; ===== Voice B: FM1  (octaves 4-5) =====
-B @1 v10
 ; bar 0
-B r4.^16 o4 f8^32 a8. o5 c8^32 a16
+B r4.^16 @1 v6 o4 f8^32 a8. o5 c8^32 a16
 ; bar 1
 B ^8 g2.^8
 ; bar 2
 B ^8^32 r2^8.
 
 ; ===== Voice C: FM2  (octaves 3-5) =====
-C @2 v10
 ; bar 0
-C r4.^16 o3 f8^32 r32 a8^32 o4 c8^32 r32 o5 e32
+C r4.^16 @1 v6 o3 f8^32 r32 a8^32 o4 c8^32 r32 o5 e32
 ; bar 1
 C ^8 d2.^8
 ; bar 2
 C ^8^32 r2^8.
 
 ; ===== Voice D: FM3  (octaves 4-5) =====
-D @3 v10
 ; bar 0
-D r4.^16 o5 f32 e32 f32 e32 d32 c32 f32 e32 f32 e32 d32 c32 f32 e32 d32 c32 o4 a+32 a32
+D r4.^16 @2 v7 o5 f32 v5 e32 f32 e32 d32 c32 v7 f32 v5 e32 f32 e32 d32 c32 f32 e32 d32 c32 o4 a+32 a32
 ; bar 1
-D g32 a32 a+32 o5 c32 d32 e32 f32 e32 f32 e32 d32 c32 f32 e32 f32 e32 d32 c32 f32 e32 d32 c32 o4 a+32 a32 g32 a32 a+32 o5 c32 e8
+D g32 v6 a32 v7 a+32 v8 o5 c32 v10 d32 v8 e32 v7 f32 v5 e32 f32 e32 d32 c32 v7 f32 v5 e32 f32 e32 d32 c32 f32 e32 d32 c32 o4 a+32 a32 g32 v6 a32 v8 a+32 v9 o5 c32 v5 e8
 ; bar 2
 D ^4^32 r2^16
 

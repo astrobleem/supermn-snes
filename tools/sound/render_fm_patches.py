@@ -140,6 +140,28 @@ def build_looped(a, period):
     return out, ls
 
 
+def patch_distance(raw_a: str, raw_b: str) -> float:
+    """Timbre distance between two captured patches (raw 31-byte register dumps).
+    Weighted: algorithm structure dominates, then op MUL ratios and modulator TLs,
+    then envelope rates. Used to alias unrendered patches to the nearest rendered."""
+    a = bytes.fromhex(raw_a)
+    b = bytes.fromhex(raw_b)
+    d = 0.0
+    if (a[28] & 7) != (b[28] & 7):
+        d += 1000.0                                   # different FM algorithm
+    d += 20.0 * abs(((a[28] >> 3) & 7) - ((b[28] >> 3) & 7))   # feedback
+    for s in range(4):
+        d += 30.0 * abs((a[s] & 0xF) - (b[s] & 0xF))           # MUL
+        d += 5.0 * abs(((a[s] >> 4) & 7) - ((b[s] >> 4) & 7))  # DT
+        d += 3.0 * abs(a[4 + s] - b[4 + s])                    # TL (carriers zeroed in ident)
+        for grp in range(2, 6):                                # AR/DR/SR/SL-RR
+            d += 2.0 * abs(a[grp * 4 + s] - b[grp * 4 + s])
+        if a[24 + s] != b[24 + s]:                             # SSG-EG
+            d += 50.0
+    d += 10.0 * abs(a[30] - b[30])                             # LFO
+    return d
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--patches", default="soundwork/samples/fm_patches.json")
@@ -147,46 +169,55 @@ def main():
     ap.add_argument("--out", default="soundwork/tad/mml_drafts/instruments")
     ap.add_argument("--tmp", default="/tmp/fm_render")
     ap.add_argument("--target-peak", type=int, default=24000)
+    ap.add_argument("--extra-budget", type=int, default=4200,
+                    help="BRR bytes for non-dominant patches (per-note @ switches); "
+                         "the rest alias to their nearest rendered timbre")
     args = ap.parse_args()
 
     j = json.loads(Path(args.patches).read_text())
     clock = j["ym2610_clock"]
+    plist = j["patches"]
 
-    # dominant patch per (track, voice) + union note stats per dominant patch
-    bindings = []                 # {track, fm_voice, instrument}
-    per_patch_notes = {}          # pid -> {notekey: count} (all keyons on voices it dominates)
-    per_patch_octaves = {}        # pid -> (lo, hi) across the WHOLE voice range it must cover
+    # dominant patch per (track, voice) (kept for the legacy binding map) +
+    # GLOBAL per-patch note histogram (every keyon of that patch, any voice) —
+    # with per-note @ switches an instrument only has to cover its own notes.
+    bindings = []
+    patch_notes = {}              # pid -> {notekey: count}
+    global_keyons = {}            # pid -> total keyons
     for u in j["usage"]:
         ph = {int(k): v for k, v in u["patch_hist"].items()}
         dom = max(ph, key=ph.get)
-        bindings.append({"track": u["track"], "fm_voice": u["fm_voice"], "pid": dom})
-        lo, hi = 9, 0
-        for pid, nh in u["note_hist"].items():
+        bindings.append({"track": u["track"], "fm_voice": u["fm_voice"], "pid": dom,
+                         "instrument": f"fm_p{dom:02d}"})
+        for pid_s, nh in u["note_hist"].items():
+            pid = int(pid_s)
+            d = patch_notes.setdefault(pid, {})
             for nk, cnt in nh.items():
-                o = note_octave(nk.split("|")[0])
-                lo, hi = min(lo, o), max(hi, o)
-                if int(pid) == dom:
-                    d = per_patch_notes.setdefault(dom, {})
-                    d[nk] = d.get(nk, 0) + cnt
-        plo, phi = per_patch_octaves.get(dom, (9, 0))
-        per_patch_octaves[dom] = (min(plo, lo), max(phi, hi))
+                d[nk] = d.get(nk, 0) + cnt
+            global_keyons[pid] = global_keyons.get(pid, 0) + sum(nh.values())
 
-    need = sorted(per_patch_notes)
-    print(f"{len(need)} dominant patches to render: {need}")
+    dominants = sorted({b["pid"] for b in bindings})
+    extras_ranked = sorted((p for p in patch_notes if p not in dominants),
+                           key=lambda p: -global_keyons[p])
+    print(f"{len(dominants)} dominant patches; {len(extras_ranked)} extra candidates "
+          f"(budget {args.extra_budget}B)")
+
     tmp = Path(args.tmp)
     tmp.mkdir(parents=True, exist_ok=True)
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    rendered = {}                 # pid -> (float samples, loop_offset, period, note, env)
-    gpeak = 0.0
-    for pid in need:
-        p = j["patches"][pid]
+    def patch_octaves(pid):
+        octs = [note_octave(nk.split("|")[0]) for nk in patch_notes[pid]]
+        return min(octs), max(octs)
+
+    def render_one(pid, period_override=None):
+        p = plist[pid]
         assert p["id"] == pid
-        mode = max(per_patch_notes[pid], key=per_patch_notes[pid].get)
+        mode = max(patch_notes[pid], key=patch_notes[pid].get)
         note, block, fnum = mode.split("|")
         f0 = fnum_to_freq(int(block), int(fnum), clock)
-        period = pick_period(per_patch_octaves[pid][1])
+        period = period_override or pick_period(patch_octaves(pid)[1])
         wf = tmp / f"p{pid}.wav"
         r = subprocess.run([args.renderer, p["raw"], block, fnum,
                             str(HOLD_S), str(TAIL_S), str(wf)],
@@ -201,16 +232,63 @@ def main():
         envstr, envclass = classify_envelope(a, src_rate, HOLD_S)
         rs = resample_to_period(a, src_rate, f0, period)
         looped, ls = build_looped(rs, period)
-        rendered[pid] = (looped, ls, period, note, envstr, envclass)
-        gpeak = max(gpeak, max(abs(x) for x in looped))
+        brr = len(looped) // 16 * 9
         print(f"  p{pid}: modal {note} f0={f0:.1f}Hz period={period} attack={ls} "
-              f"loop={LOOP_PERIODS*period} total={len(looped)} smp "
-              f"(~{len(looped)//16*9}B BRR) env={envclass} [{envstr}]")
+              f"total={len(looped)} smp (~{brr}B BRR) env={envclass} [{envstr}]")
+        return (looped, ls, period, note, envstr, envclass, brr)
 
-    scale = args.target_peak / gpeak
+    rendered = {}
+    for pid in dominants:
+        rendered[pid] = render_one(pid)
+    spent = 0
+    for pid in extras_ranked:
+        r = render_one(pid)
+        if spent + r[6] > args.extra_budget:
+            print(f"  p{pid}: over extra budget ({spent}+{r[6]}B) -> alias instead")
+            continue
+        rendered[pid] = r
+        spent += r[6]
+    print(f"extras rendered: {spent}B of {args.extra_budget}B budget")
+
+    # alias every unrendered patch to its nearest rendered timbre
+    alias = {}
+    for pid in patch_notes:
+        if pid in rendered:
+            continue
+        best = min(rendered, key=lambda rp: patch_distance(
+            plist[pid]["ident"], plist[rp]["ident"]))
+        alias[pid] = best
+
+    # per-INSTRUMENT octave range = union over every patch mapped to it (own + aliased)
+    inst_pids = {pid: {pid} for pid in rendered}
+    for pid, target in alias.items():
+        inst_pids[target].add(pid)
+    inst_range = {}
+    for rp, pids in inst_pids.items():
+        lo, hi = 9, 0
+        for pid in pids:
+            plo, phi = patch_octaves(pid)
+            lo, hi = min(lo, plo), max(hi, phi)
+        inst_range[rp] = (lo, hi)
+        # the period (freq base) was chosen from the OWN patch range; widen check:
+        if note_freq("b", hi) > 4000.0:
+            print(f"WARNING p{rp}: merged range tops o{hi} beyond the 4x ceiling "
+                  f"even at freq 1000")
+
+    # re-render any patch whose MERGED range (own + aliased notes) needs the
+    # tighter 32-sample period for the S-DSP 4x pitch ceiling
+    for rp in list(rendered):
+        need = 32 if note_freq("b", inst_range[rp][1]) > 2000.0 else 64
+        if rendered[rp][2] != need:
+            print(f"  p{rp}: merged range tops o{inst_range[rp][1]} -> re-render at period {need}")
+            rendered[rp] = render_one(rp, period_override=need)
+
+    scale = args.target_peak / max(max(abs(x) for x in r[0]) for r in rendered.values())
     instruments = []
+    ident_to_inst = {}
+    inst_render_tl = {}
     total_brr = 0
-    for pid, (samples, ls, period, note, envstr, envclass) in rendered.items():
+    for pid, (samples, ls, period, note, envstr, envclass, brr) in rendered.items():
         name = f"fm_p{pid:02d}"
         out = array.array("h", (max(-32768, min(32767, int(x * scale))) for x in samples))
         wpath = outdir / f"{name}.wav"
@@ -220,7 +298,7 @@ def main():
         w.setframerate(32000)     # nominal; TAD pitch comes from freq + note
         w.writeframes(out.tobytes())
         w.close()
-        lo, hi = per_patch_octaves[pid]
+        lo, hi = inst_range[pid]
         total_brr += len(out) // 16 * 9
         instruments.append({
             "name": name, "pid": pid, "wav": f"instruments/{name}.wav",
@@ -228,13 +306,19 @@ def main():
             "first_octave": lo, "last_octave": hi,
             "envelope": envstr, "env_class": envclass,
             "modal_note": note, "samples": len(out),
+            "aliased_pids": sorted(inst_pids[pid] - {pid}),
         })
-    for b in bindings:
-        b["instrument"] = f"fm_p{b['pid']:02d}"
+        ident_to_inst[plist[pid]["ident"]] = name
+        inst_render_tl[name] = plist[pid]["min_carrier_tl"]
+    for pid, target in alias.items():
+        ident_to_inst[plist[pid]["ident"]] = f"fm_p{target:02d}"
     Path(outdir / "fm_instruments.json").write_text(json.dumps(
         {"instruments": instruments, "bindings": bindings,
+         "ident_to_inst": ident_to_inst, "inst_render_tl": inst_render_tl,
+         "aliases": {str(k): v for k, v in sorted(alias.items())},
          "total_brr_estimate": total_brr}, indent=1))
-    print(f"TOTAL FM BRR ~= {total_brr} bytes across {len(instruments)} instruments")
+    print(f"TOTAL FM BRR ~= {total_brr} bytes across {len(instruments)} instruments "
+          f"({len(alias)} patches aliased)")
 
 
 if __name__ == "__main__":

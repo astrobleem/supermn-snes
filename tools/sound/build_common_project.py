@@ -101,6 +101,11 @@ def main():
     for m in mmls:
         num = m.stem[:2]
         text = m.read_text()
+        if re.search(r"(?m)^@\d+ fm_p\d\d$", text):
+            # regenerated with vgm2mml --fm-map: bindings + per-note @ switches are
+            # already real patch instruments — nothing to rewrite
+            print(f"{m.name}: fm-mapped (per-note switches), bindings left as-is")
+            continue
         for v in range(4):
             name = bind.get((num, v))
             if not name:

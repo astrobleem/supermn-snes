@@ -107,6 +107,7 @@ class ChannelEmitter:
         self.table = table
         self.bar = beats_per_bar_ticks
         self.cur_oct = None
+        self.cur_vel = None
 
     def _len(self, dur):
         return "^".join(ticks_to_lengths(dur, self.zenlen, self.table))
@@ -161,6 +162,14 @@ class ChannelEmitter:
                     cur_inst = ev["inst"]
                 head = "c"
             else:
+                # per-note FM patch switch + velocity (present when the converter
+                # runs with --fm-map; see convert())
+                if ev.get("inst_slot") is not None and ev["inst_slot"] != cur_inst:
+                    pending.append("@%d" % ev["inst_slot"])
+                    cur_inst = ev["inst_slot"]
+                if ev.get("vel") is not None and ev["vel"] != self.cur_vel:
+                    pending.append("v%d" % ev["vel"])
+                    self.cur_vel = ev["vel"]
                 octv = ev["octave"]
                 if octv != self.cur_oct:
                     pending.append("o%d" % octv)
@@ -213,7 +222,8 @@ def _c_of_octave(octave):
     return 261.626 * (2.0 ** (octave - 4))
 
 
-def _emit_project(proj_path, stem, voices, fm_used, fm_slot, sample_ids, tr):
+def _emit_project(proj_path, stem, voices, fm_used, fm_slot, sample_ids, tr,
+                  fm_range_override=None):
     """Write a compile-checkable .terrificaudio with placeholder samples.
 
     Per-instrument octave range = what the song actually plays, and `freq` is set
@@ -233,6 +243,10 @@ def _emit_project(proj_path, stem, voices, fm_used, fm_slot, sample_ids, tr):
         if v["kind"] == "fm":
             lo, hi = fm_range.get(v["inst"], (v["octlo"], v["octhi"]))
             fm_range[v["inst"]] = (min(lo, v["octlo"]), max(hi, v["octhi"]))
+    if fm_range_override:
+        # per-note @ switching: each instrument only covers the notes assigned to it
+        for name, octs in fm_range_override.items():
+            fm_range[name] = (min(octs), max(octs))
 
     inst_list = []
     for name in fm_used:
@@ -303,11 +317,37 @@ def _emit_project(proj_path, stem, voices, fm_used, fm_slot, sample_ids, tr):
     proj_path.write_text(json.dumps(project, indent=2), encoding="utf-8")
 
 
-def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32):
+def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32, fm_map=None):
     tr = ym.decode(path)
     h = tr.header
     title = h.gd3.get("track_en") or Path(path).stem
     stem = sanitize(Path(path).stem)
+
+    # --- optional per-note FM patch/velocity map (P3 polish) ---
+    # fm_map = fm_instruments.json from render_fm_patches.py. We re-walk the VGM
+    # with vgm_fm_patches.capture_file (same 44100 Hz timeline as ym.decode) and
+    # key each keyon by (fm_voice, onset_sample) -> (instrument name, carrier TL).
+    # Velocity: amp = 10^(-0.75*dTL/20) vs the instrument's render TL (its loudest
+    # captured instance), mapped to MML coarse volume v1..16 with v14 = loudest
+    # (anchor chosen so the pack-wide AVERAGE note lands near the old flat v10).
+    keyon_map = {}
+    inst_render_tl = {}
+    if fm_map:
+        import json as _json
+        import vgm_fm_patches as fmp
+        fmj = _json.loads(Path(fm_map).read_text())
+        ident_to_inst = fmj["ident_to_inst"]
+        inst_render_tl = fmj["inst_render_tl"]
+        cap = fmp.capture_file(Path(path))
+        for (t, fmidx, raw, ident, ctl, block, fnum) in cap["events"]:
+            name = ident_to_inst.get(ident.hex())
+            if name:
+                keyon_map[(fmidx, t)] = (name, min(ctl) if ctl else 127)
+
+    def vel_of(name, tl):
+        d_tl = max(0, tl - inst_render_tl.get(name, tl))
+        amp = 10.0 ** (-0.75 * d_tl / 20.0)
+        return max(1, min(16, round(14 * amp)))
 
     # gather onsets for tempo estimation
     onsets = []
@@ -354,9 +394,12 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32):
     letters = "ABCDEFGH"
 
     # FM voices
+    track_fm_insts = []           # ordered unique instrument names (fm_map mode)
+    inst_note_octs = {}           # inst name -> octaves of notes assigned to it
     for vi, fmi in enumerate(tr.used_fm):
         evs = []
         octs = []
+        last_inst = None
         for e in tr.fm[fmi]:
             if e.freq <= 0:
                 continue
@@ -364,19 +407,33 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32):
             name, octave = midi_to_name(midi)
             octave = max(1, min(7, octave))
             octs.append(octave)
-            evs.append({"on": q(e.t_on), "dur": max(grid_ticks, q(e.t_off) - q(e.t_on)),
-                        "note": name, "octave": octave})
+            ev = {"on": q(e.t_on), "dur": max(grid_ticks, q(e.t_off) - q(e.t_on)),
+                  "note": name, "octave": octave}
+            if keyon_map:
+                inst, tl = keyon_map.get((fmi, e.t_on), (last_inst, None))
+                if inst is None:                      # first note unmatched: fall back
+                    inst, tl = next(iter(keyon_map.values()))
+                last_inst = inst
+                if inst not in track_fm_insts:
+                    track_fm_insts.append(inst)
+                ev["inst_name"] = inst
+                ev["vel"] = vel_of(inst, tl) if tl is not None else None
+                inst_note_octs.setdefault(inst, set()).add(octave)
+            evs.append(ev)
         if not evs:
             continue
+        primary = (max((e["inst_name"] for e in evs if "inst_name" in e),
+                       key=lambda n: sum(1 for e in evs if e.get("inst_name") == n))
+                   if keyon_map else f"sm_fm{fmi}")
         voices.append({"letter": letters[len(voices)], "kind": "fm",
                        "label": f"FM{fmi}", "events": evs,
                        "octlo": min(octs), "octhi": max(octs),
-                       "inst": f"sm_fm{fmi}"})
+                       "inst": primary})
 
     # Drum voices — one TAD voice per ADPCM-A channel actually used.
     # Map each distinct sample window to a drum instrument id.
     sample_ids = {}   # start_addr -> (inst_index, name)
-    drum_inst_base = 10
+    drum_inst_base = max(10, len(track_fm_insts))    # avoid @-id collisions (fm_map mode)
     for k, st in enumerate(sorted(tr.drum_samples)):
         sample_ids[st] = (drum_inst_base + k,
                           f"sm_drum_{tr.drum_samples[st]['start']:06x}")
@@ -399,11 +456,22 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32):
                            "label": f"ADPCM-A ch{ch}", "events": evs,
                            "octlo": 4, "octhi": 4, "inst": None})
 
+    # assign per-note @ slots (fm_map mode): slot = index in track_fm_insts
+    if keyon_map:
+        slot_of = {n: i for i, n in enumerate(track_fm_insts)}
+        for v in voices:
+            if v["kind"] != "fm":
+                continue
+            for ev in v["events"]:
+                if "inst_name" in ev:
+                    ev["inst_slot"] = slot_of[ev["inst_name"]]
+
     # --- emit MML ---
     em = ChannelEmitter(zenlen, table, bar_ticks)
     body_lines = []
     for v in voices:
         em.cur_oct = None
+        em.cur_vel = None
         lines = em.emit(v["events"], loop_tick, total_ticks=total_ticks,
                         is_drum=(v["kind"] == "drum"))
         body_lines.append((v, lines))
@@ -423,9 +491,12 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32):
     out.append("#EchoVolume 24")
     out.append("#FirFilter 64 0 0 0 0 0 0 0")
     out.append("")
-    out.append("; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---")
-    # FM instrument stubs (4 max)
-    fm_used = sorted({v["inst"] for v in voices if v["kind"] == "fm"})
+    if keyon_map:
+        out.append("; --- instrument bindings (real FM patches; per-note @ switches in the body) ---")
+        fm_used = list(track_fm_insts)
+    else:
+        out.append("; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---")
+        fm_used = sorted({v["inst"] for v in voices if v["kind"] == "fm"})
     for idx, name in enumerate(fm_used):
         out.append(f"@{idx} {name}")
     # drum instrument stubs
@@ -442,9 +513,11 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32):
         out.append(f"; ===== Voice {L}: {v['label']}  "
                    f"(octaves {v['octlo']}-{v['octhi']}) =====")
         if v["kind"] == "fm":
-            slot = fm_slot[v["inst"]]
-            first = lines[0] if lines else ("", "")
-            out.append(f"{L} @{slot} v10")
+            if keyon_map:
+                pass          # @ and v are emitted per-note in the body
+            else:
+                slot = fm_slot[v["inst"]]
+                out.append(f"{L} @{slot} v10")
         else:
             out.append(f"{L} v12")
         for comment, toks in lines:
@@ -503,7 +576,8 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32):
 
     # --- project stub (.terrificaudio): compile-checkable + the skeleton to edit ---
     proj_path = outdir / f"{stem}.terrificaudio"
-    _emit_project(proj_path, stem, voices, fm_used, fm_slot, sample_ids, tr)
+    _emit_project(proj_path, stem, voices, fm_used, fm_slot, sample_ids, tr,
+                  fm_range_override=inst_note_octs if keyon_map else None)
 
     print(f"wrote {mml_path}")
     print(f"wrote {notes_path}")
@@ -526,10 +600,13 @@ def main():
                     help="tempo-detection grid resolution (ticks/quarter)")
     ap.add_argument("--grid", type=int, default=32,
                     help="quantization subdivision: 32 = snap to 1/32 notes")
+    ap.add_argument("--fm-map", default=None,
+                    help="fm_instruments.json from render_fm_patches.py: emit per-note "
+                         "FM patch @ switches + carrier-TL velocities (P3 polish)")
     args = ap.parse_args()
     for v in args.vgm:
         convert(v, args.outdir, bpm=args.bpm, zenlen=args.zenlen,
-                ppqn=args.ppqn, grid=args.grid)
+                ppqn=args.ppqn, grid=args.grid, fm_map=args.fm_map)
 
 
 if __name__ == "__main__":

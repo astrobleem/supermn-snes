@@ -10,10 +10,10 @@
 
 | MML | Source | Notes/Hits | Octaves | Instrument stub |
 |----|--------|-----------:|---------|-----------------|
-| A | FM0 | 263 | 1-5 | sm_fm0 |
-| B | FM1 | 212 | 2-6 | sm_fm1 |
-| C | FM2 | 255 | 3-7 | sm_fm2 |
-| D | FM3 | 466 | 3-7 | sm_fm3 |
+| A | FM0 | 263 | 1-5 | fm_p06 |
+| B | FM1 | 212 | 2-6 | fm_p08 |
+| C | FM2 | 255 | 3-7 | fm_p08 |
+| D | FM3 | 466 | 3-7 | fm_p15 |
 | E | ADPCM-A ch5 | 262 | 4-4 | (drum kit, see below) |
 
 ## FM instruments to build (4 melodic voices)
@@ -26,14 +26,14 @@ Extract these windows from the type-0x82 sample-ROM blocks (see vgm_extract_adpc
 
 | Instrument | ROM window | Bytes | Hits | ADPCM-A ch |
 |-----------|-----------|------:|-----:|-----------|
-| @10 sm_drum_060000 | 0x060000-0x0629FF | 10752 | 45 | [5] |
-| @11 sm_drum_062a00 | 0x062A00-0x0651FF | 10240 | 38 | [5] |
-| @12 sm_drum_065200 | 0x065200-0x0677FF | 9728 | 30 | [5] |
-| @13 sm_drum_067800 | 0x067800-0x069EFF | 9984 | 95 | [5] |
-| @14 sm_drum_069f00 | 0x069F00-0x06C4FF | 9728 | 16 | [5] |
-| @15 sm_drum_06f900 | 0x06F900-0x0727FF | 12032 | 4 | [5] |
-| @16 sm_drum_079a00 | 0x079A00-0x07B4FF | 6912 | 27 | [5] |
-| @17 sm_drum_07b500 | 0x07B500-0x07F1FF | 15616 | 7 | [5] |
+| @13 sm_drum_060000 | 0x060000-0x0629FF | 10752 | 45 | [5] |
+| @14 sm_drum_062a00 | 0x062A00-0x0651FF | 10240 | 38 | [5] |
+| @15 sm_drum_065200 | 0x065200-0x0677FF | 9728 | 30 | [5] |
+| @16 sm_drum_067800 | 0x067800-0x069EFF | 9984 | 95 | [5] |
+| @17 sm_drum_069f00 | 0x069F00-0x06C4FF | 9728 | 16 | [5] |
+| @18 sm_drum_06f900 | 0x06F900-0x0727FF | 12032 | 4 | [5] |
+| @19 sm_drum_079a00 | 0x079A00-0x07B4FF | 6912 | 27 | [5] |
+| @20 sm_drum_07b500 | 0x07B500-0x07F1FF | 15616 | 7 | [5] |
 
 ## Known limitations of the auto-conversion
 
