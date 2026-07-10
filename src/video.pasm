@@ -1444,17 +1444,13 @@ bg_hscroll:
 ; VID_INIT ($8004) is itself a SA-1 no-op (rtl), so arm-then-rtl is exactly equivalent.
 .org $8900
 BOOT_ARM:
-    rep #$30             ; force 16-bit A/X — the assembler's mode is 8-bit here (prior sep #$20),
-                         ; which would mis-size the immediates (lda #$A55A -> lda #$A5 + stray $5A).
-                         ; Harmless no-op at runtime (boot is already rep #$30).
-    lda #$0001
-    sta $071A            ; ESC   on  (jah2 jsr/bsr/jsr(An) + xlat jmp-state + coroutine rte)
-    sta $073A            ; CHOKE on  (fetch-chokepoint: ce4/13be render-path rts-reach)
-    lda #$A55A
-    sta $073C            ; SWIN  on  (scheduler switch-IN escape, magic-match gate)
-    lda #$5EEC
-    sta $0736            ; SEL   on  (scheduler SELECT escape, magic-match gate)
-    rtl                  ; VID_INIT was a SA-1 no-op rtl; return to the boot caller
+    rtl                  ; DEFERRED (2026-07-10): arming at reset broke the boot's RAM
+                         ; self-test (loop_hook corrupts a pass -> error display; open
+                         ; interp bug). The escape gates + loop fast-path now arm in
+                         ; snd_vframe when the 68K sound ring first reads initialized
+                         ; (self-test passed, gameplay code begins). The interp's boot
+                         ; `jsl BOOT_ARM` stays (zero bank-$00 shift); this is a no-op
+                         ; again, like the VID_INIT it originally replaced.
 
 ; ---- WRAM-resident supervisor loop (the 5A22<->SA-1 contention fix, 2026-07-04) -----
 ; Nexen's SA-1 bus model (Sa1Cpu::ProcessCpuCycle, hardware-shaped): the SA-1 pays wait
@@ -1471,6 +1467,11 @@ BOOT_ARM:
 ; NOTE the WAI trap for future NMI-wake work: Nexen latches the 5A22's Bus-A type
 ; (_memTypeBusA) — a `wai` FETCHED FROM ROM leaves the latch on PrgRom and fake-conflicts
 ; for the whole sleep. Any idle loop must EXECUTE from WRAM, wai included.
+.org $8918               ; vf_tick's PINNED address (the wl blob jsl's $7F8918 LITERALLY,
+                         ; and Nexen states resume here). It was previously pinned only by
+                         ; BOOT_ARM's byte count ending at $8917; when BOOT_ARM shrank to a
+                         ; bare rtl (deferred arming, 2026-07-10) vf_tick silently slid to
+                         ; $8901 — org-pin it so layout changes can't move it again.
 vf_tick:                 ; reached via the fixed $8004 wrapper (jsl VFT_VEC from the blob)
     php
     rep #$30
@@ -1733,6 +1734,47 @@ sv_cp:
     sep #$20             ; A8 for the single position byte
     lda $401c43          ; W = write-position byte ($40:1c43)
     sta $410120          ; $41 position slot
+    ; --- DEFERRED ACCELERATOR ARMING (boot-self-test fix, 2026-07-10) -----------------
+    ; The boot's walking-bit RAM test ($3F60-$4008 suite) FAILS when loop_hook is armed
+    ; (parks in the $1B90-$1D46 error display; open interp-side bug — an lh/gm collapse
+    ; corrupts a later pass). So NOTHING is armed at reset anymore (interp boot leaves
+    ; $072E=0; BOOT_ARM defers here). Arm ONCE when the 68K's sound-ring WRITE POINTER
+    ; longword at $40:1c40 reads as its initialized value $00F01C2x — a 4-byte signature
+    ; the game writes right after the self-test + hw init (exactly when gameplay code,
+    ; the accelerators' validated domain, begins) and which no RAM-test pattern can fake
+    ; (the tests sweep uniform/walking patterns through $1c40-43; W alone ($2x) CAN
+    ; transiently appear mid-test, which is why the full signature is checked).
+    ; SA-1-side, so the $07xx IRAM writes need no SIWP and cannot race the sled
+    ; mid-instruction (we ARE the SA-1, between instructions in the IRQ path).
+    rep #$20
+    ldx $0768            ; armed-once latch (free IRAM word, 0 at reset iramclr; NOT $0764,
+                         ;   which is the jah2 escape-dispatch counter. If a future counter
+                         ;   ever claims $0768 and wraps through 0 the arm block re-runs —
+                         ;   idempotent, so harmless, but keep it unclaimed.)
+    bne sv_armed
+    lda $401c40          ; wptr bytes [1c40]=$00 [1c41]=$F0 (LE word = $F000)
+    cmp #$F000
+    bne sv_armed
+    lda $401c42          ; wptr bytes [1c42]=$1C [1c43]=$20-$3F
+    and #$00FF
+    cmp #$001C
+    bne sv_armed
+    lda $401c43          ; position byte in [$20,$40)
+    and #$00FF
+    cmp #$0020
+    bcc sv_armed
+    cmp #$0040
+    bcs sv_armed
+    lda #$0001
+    sta $0768            ; latch first (never re-enter)
+    sta $072E            ; LOOP FAST-PATH on (gameplay loops; boot self-test is past)
+    sta $071A            ; ESC   on
+    sta $073A            ; CHOKE on
+    lda #$A55A
+    sta $073C            ; SWIN  on (magic-match gate)
+    lda #$5EEC
+    sta $0736            ; SEL   on (magic-match gate)
+sv_armed:
     rep #$20
     plx
     pla

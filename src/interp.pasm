@@ -153,8 +153,12 @@ rclr:
     stz $4A
     stz $4C
     stz $4E
-    lda #$0001
-    sta $072E            ; enable the LOOP FAST-PATH (boot accel); test mode leaves it 0
+    lda #$0000
+    sta $072E            ; LOOP FAST-PATH stays OFF through boot (2026-07-10): the boot's
+                         ; walking-bit RAM test FAILS under lh (parks in the $1B90 error
+                         ; display; open bug). snd_vframe (video.pasm) arms lh + escapes
+                         ; ONCE the 68K sound ring initializes (= self-test passed, game
+                         ; code begins). Same-size immediate edit: ZERO code shift.
     stz $7E              ; single-step test flag OFF in production
     stz $A2              ; X flag = 0
     stz $A4              ; USP low16  (Batch 8 MOVE USP)
