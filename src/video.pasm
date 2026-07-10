@@ -38,8 +38,10 @@ VFT_VEC=$E98004          ; fixed wrapper slot: per-tick joy+render vector (jsl'd
 .bank 0
 .org $8000
 ; entry wrappers (interp: jsl $E90000 vid_frame, jsl $E90004 vid_init, jml $E90008 vidtest)
-    inc $3300            ; $8000 VID_FRAME: the SA-1's interp calls this each game-frame
-    rtl                  ;   boundary -> signals FRAME_REQ++ in shared IRAM ($00:3000).
+    jmp snd_vframe       ; $8000 VID_FRAME (SA-1, each game-frame): snd_vframe does the original
+    nop                  ;   FRAME_REQ++ AND copies the 68K sound-cmd ring $40:1c20 -> IRAM $3304
+                         ;   (P2: the SA-1 reads its OWN $40 coherently; the 5A22 can't). jmp(3)+
+                         ;   nop(1) keeps the 4-byte slot so VF_TICK stays pinned at $8004.
     jml $7F8918          ; $8004 VF_TICK: jml to the $7F WRAM copy of vf_tick (render-to-WRAM,
                          ;   pt.21). The whole per-tick joy+render path now fetches from bank
                          ;   $7F (rc_copy mirrors $E9:8000-$8FFF -> $7F:8000 at supervisor boot),
@@ -1490,7 +1492,8 @@ wl_copy:
     lda wl_blob,x
     sta $7EF000,x        ; long store, DBR-free ($7E:F000-F016; OBJ staging tops at $CFFF)
     inx
-    cpx #$0033           ; WL_LEN = 51 bytes — keep in sync with the blob below
+    cpx #$0037           ; WL_LEN = 55 bytes — keep in sync with the blob below (was 51; +4 for the
+                         ;   jsl.l sound_tick added to wl_novb per-tick)
     bne wl_copy
     plb                  ; DBR=$00 again (the blob polls IRAM $3300 via abs)
     rep #$30
@@ -1499,7 +1502,7 @@ wl_copy:
 wl_blob:                 ; assembled here, RUN at $7E:F000. Position-independent: relative
                          ; branches only (to in-blob labels); abs data is DBR($00)-based; ROM
                          ; calls are fixed 24-bit vectors. rep #$30 + DBR=$00 on entry.
-                         ; WL_LEN below = 0x33 (51 bytes) -- keep wl_setup's cpx in sync.
+                         ; WL_LEN below = 0x37 (55 bytes) -- keep wl_setup's cpx in sync.
 wl_poll:
     ldx #$0080           ; throttle: ~128 dex/bne of pure-WRAM fetches (~700 cyc) per poll
 wl_dly:
@@ -1525,6 +1528,9 @@ wl_novb:
     cmp $3302            ; FRAME_ACK
     beq wl_poll          ; no new tick -> keep idling in WRAM
     sta $3302            ; ack this tick
+    jsl.l $E99800        ; P2: drain the 68K sound-command ring -> TAD (sound_tick, @ $E9:9800).
+                         ;   LITERAL vector (not a symbol) per the $7F8918 rule; sound_tick php/plp's
+                         ;   its own width so no state juggling here. Runs once per game tick.
     jsl VFT_VEC          ; $E98004 -> vf_tick ($7F WRAM copy): joy + render, once per game tick
     bra wl_poll          ; back to the throttle
 
@@ -1568,9 +1574,155 @@ tad_bssclr:
     dex
     bpl tad_bssclr
     sta $7e0068          ; Tad_sfxQueue_sfx($68)/_pan($69) -> 0 (Tad_Init re-sets sfx=$ff next)
+    ; --- P2 sound-mailbox init (5A22-private WRAM; see sound_tick @ $9800) ---
+    lda #$0020
+    sta $7e1f14          ; read cursor = ring base $0020 (empty until the game enqueues)
+    sta $410120          ; $41 position slot = $20 too, so before snd_vframe first runs (game not
+                         ;   yet executing at boot) sound_tick sees W==cursor==$20 -> empty, no drain
+    lda #$0000
+    sta $7e1f16          ; drained-count ($1F16) + last-cmd ($1F17) debug bytes -> 0
     sep #$20             ; A8
     rep #$10             ; X16  (TAD ABI)
     jsl.l Tad_Init|$E90000       ; upload loader.bin -> audio-driver.bin (blocking IPL handshake)
     lda #$01             ; Song id 1 = s02_coin (placeholder); queue it
     jsr Tad_LoadSong     ; the poll loop's steady 60Hz Tad_Process finishes the load + starts playback
     rts
+
+; ============================================================================
+; sound_tick — P2 STEP 2: drain the 68K sound-command ring and drive TAD.
+; ----------------------------------------------------------------------------
+; RE (docs/SOUND_COMMAND_MAP.md): the arcade sound interface is a SINGLE-BYTE
+; TRIGGER stream (proven: the Z80 owns the music engine; it wrote the YM2610 5116x
+; while the 68K sent 0 cmds over 120 frames). The 68K enqueues one command byte per
+; game event into a 32-byte ring at work RAM $f01c20-$f01c3f, write ptr $f01c40
+; (a big-endian 32-bit ADDRESS; its low/position byte is at $f01c43), wrap at $1c40.
+; The interp mirrors 68K work RAM $f0xxxx -> BW-RAM $40:xxxx, so the ring lives at
+; $40:1c20 (write position at $40:1c43). BUT the 5A22 CPU CANNOT reliably read live
+; $40 OR live IRAM (the SA-1 hammers work RAM + the $0400-05FF IRAM scheduler every cycle
+; -> the 5A22's reads there are stale: measured $1F/$14/$3B vs the true $24). The ONE
+; proven 5A22-readable shared channel is BW-RAM $41 -- the SA-1 writes it only in per-frame
+; bursts (the video shadow the render reads reliably). So the SA-1 (which reads its own $40
+; coherently) copies the ring into $41:0100 + the write position into $41:0120 each
+; game-frame, inside the VID_FRAME hook (snd_vframe). sound_tick reads that $41 copy. We
+; keep a 5A22-private read cursor and map each NEW command -> Tad_LoadSong / QueueSoundEffect.
+;
+; Why $41-via-SA-1 and not an interp-side $0080 mailbox: bank $00 is packed (no >=20B code
+; gap; wb_vid's early `jmp` can't be resized without a cascading shift). The SA-1-side ring
+; copy needs ZERO bank-$00 changes -- it rides the existing per-frame VID_FRAME hook (bank
+; $E9, roomy). Cost: couples to the 68K ring layout (verified: the write ptr reads
+; $00 F0 1C 2x, big-endian, position byte at $1c43).
+;
+; State (5A22-private $7E WRAM, inited in rc_copy; SA-1 can't touch $7E):
+;   $7E:1F14 = read cursor (16-bit, valid range $0020-$003F)
+;   $7E:1F16 = drained-command count (debug, 8-bit, wraps)
+;   $7E:1F17 = last command byte (debug)
+;   $7E:1F18 = scratch (W)
+; Called via `jsl.l $E99800` from wl_blob once per game tick. php/plp-bracketed so the
+; caller needs no width juggling. Tad_LoadSong/QueueSoundEffect are near (same bank $E9).
+; ============================================================================
+.org $9800
+sound_tick:
+    php
+    rep #$30             ; 16-bit A/X
+    lda $7e1f1a
+    inc a
+    sta $7e1f1a          ; DEBUG: sound_tick call counter (proves it runs)
+    lda.l $410120        ; W = write position from the $41 shadow copy (snd_vframe mirrors $40:1c43
+    and #$00ff           ;   here). $41 is the proven 5A22-readable channel (the render reads it);
+                         ;   force long (.l) so DBR is irrelevant.
+    sta $7e1f19          ; DEBUG: raw W as the 5A22 reads the IRAM copy
+    cmp #$0020
+    bcc st_done          ; W < $20  -> ring uninitialized / no valid position -> nothing to do
+    cmp #$0040
+    bcs st_done          ; W > $3f  -> invalid
+    sta $7e1f18          ; stash W
+    lda $7e1f14          ; cursor
+    cmp #$0020
+    bcc st_adopt         ; cursor invalid -> sync to W (process nothing this pass)
+    cmp #$0040
+    bcc st_drain
+st_adopt:
+    lda $7e1f18
+    sta $7e1f14          ; adopt W
+    bra st_done
+st_drain:
+    lda $7e1f14
+    cmp $7e1f18          ; cursor == W ? (no new commands)
+    beq st_done
+    tax                  ; X = cursor ($20-$3f)
+    sep #$20             ; A8 (X stays 16-bit for the TAD ABI)
+    lda.l $4100e0,x      ; command byte from the $41 ring copy (base $410100-$20 = $4100E0; +cursor)
+    sta $7e1f17          ; debug: last command
+    lda $7e1f16
+    inc a
+    sta $7e1f16          ; debug: drained count++ (long lda/sta; $7E not DBR)
+    lda.l $4100e0,x      ; reload command (A8) for the map (from the $41 ring copy)
+    jsr snd_map          ; A=cmd (A8), X16 -> Tad_LoadSong / Tad_QueueSoundEffect
+    rep #$20             ; 16-bit for the cursor advance
+    lda $7e1f14
+    inc a
+    cmp #$0040
+    bcc st_nowrap
+    lda #$0020           ; wrap $40 -> $20 (matches the 68K's $1c40 -> $1c20 ring wrap)
+st_nowrap:
+    sta $7e1f14
+    bra st_drain
+st_done:
+    plp
+    rtl
+
+; snd_map — arcade command byte (A8, X16) -> TAD action. See docs/SOUND_COMMAND_MAP.md.
+; The P1 placeholder blob has ONE song (id 1); all recognized MUSIC triggers load it for
+; now (P3 maps distinct TAD songs per cue). Unknown/SFX/control bytes are ignored for now.
+snd_map:
+    cmp #$05             ; attract music
+    beq sm_song
+    cmp #$19             ; coin
+    beq sm_song
+    cmp #$32             ; round-1 music
+    beq sm_song
+    rts                  ; other (SFX / control / unmapped) -> ignore
+sm_song:
+    lda #$01             ; TAD song id 1 (placeholder)
+    jsr Tad_LoadSong
+    rts
+
+; ============================================================================
+; snd_vframe — VID_FRAME hook (SA-1 side, bank $E9). Runs once per game-frame via the
+; $8000 wrapper's `jmp snd_vframe`. Does VID_FRAME's original FRAME_REQ++ AND copies the
+; 68K sound-command ring into BW-RAM $41 so the 5A22's sound_tick can read it (the 5A22
+; CANNOT reliably read the SA-1's live $40 work RAM OR live IRAM -- stale reads; the SA-1
+; reads its own $40 coherently, and $41 is written only in per-frame bursts so the 5A22
+; reads it cleanly, like the video shadow). DBR=$00 on entry (the original `inc $3300`
+; relies on it). Returns via rtl into the interp IRQ path (interp.pasm irq_chk) so P/A/X
+; MUST be preserved.
+;   $41:0100-$41:011f = 32-byte ring copy (mirrors $40:1c20-1c3f)
+;   $41:0120          = write-position byte (mirrors $40:1c43)
+; $41:0100+ is free (joy mailbox is $41:0000-3, video shadow starts $41:2000). Verify 8/8 boot.
+; ============================================================================
+.org $9900
+snd_vframe:
+    php
+    rep #$30             ; 16-bit A/X
+    pha
+    phx
+    ldx #$001e           ; copy $40:1c20..1c3f -> BW-RAM $41:0100..011f (16 words; x=$1e down to 0)
+sv_cp:
+    lda $401c20,x        ; long,X: the SA-1 reads its OWN work RAM $40 (coherent, no contention)
+    sta $410100,x        ; long,X: $41 shadow copy. NOT IRAM -- the SA-1 hammers IRAM ($0400-05FF
+                         ;   scheduler) so the 5A22's IRAM reads are stale; but $41 is written only
+                         ;   in per-frame bursts (like the video shadow the render reads reliably).
+    dex
+    dex
+    bpl sv_cp
+    sep #$20             ; A8 for the single position byte
+    lda $401c43          ; W = write-position byte ($40:1c43)
+    sta $410120          ; $41 position slot
+    rep #$20
+    plx
+    pla
+    plp
+    inc $3300            ; VID_FRAME's original action (FRAME_REQ++) -- ring the doorbell LAST, AFTER
+                         ;   the $41 copy is complete, so the 5A22 (sound_tick, fired off this same
+                         ;   FRAME_REQ edge) reads a fully-written copy, not a mid-write race.
+    rtl
