@@ -53,20 +53,42 @@ No nibble reassembly needed. (Status polls re-arm harmlessly — they never writ
 Event correlations are from driving the live machine (coin/start edges, button inputs) and a
 screenshot confirmation for round-1. TAD track numbers refer to `soundwork/tad/mml_drafts/NN_*`.
 
-| cmd | type    | cue (evidence)                              | → TAD track            | confidence | wired (P3) |
-|----:|---------|---------------------------------------------|------------------------|------------|------------|
-| `$00` | control | stop/silence — precedes coin & new SFX; fires at attract-end | (Tad stop / none) | high | ✅ song 0 (TAD built-in silence) |
-| `$05` | music   | **attract music** (fires as attract music starts, frame 29017; re-fires each attract loop) | 01 Attract | high | ✅ song 1 |
-| `$06` | control | fires ×3 at round start (init/fade-in?)     | (control)              | med | ignored |
-| `$07` | sfx     | **punch** (P1 Button 1, no enemy)           | — (SFX)                | med | ✅ sfx 0 `punch` |
-| `$19` | sfx/mus | **coin insert** (after a `$00` stop)        | 02 Coin                | high | ✅ song 2 |
-| `$32` | music   | **Round 1 music** (screenshot-confirmed: Superman city street, right after Start) | 03 Main BGM 1 | high | ✅ song 3 |
-| `$62` | sfx     | **jump/kick** (P1 Button 2 while walking)   | — (SFX)                | low | ✅ sfx 1 `kick` |
+**GROUND TRUTH (P3 backfill, 2026-07-09) — the full music map.** Method: every byte
+`$01-$7F` was stimulated DIRECTLY on the arcade machine in MAME (Lua writes to the
+TC0140SYT latch replicating the `$2df0` sequence, with the 68K halted so the attract demo
+couldn't contaminate), and the Z80's resulting YM2610 register stream was reduced to a
+key-on fingerprint and matched against all 21 VGM rips (same engine + data → exact-prefix
+matches). The music ids are the **contiguous block `$05-$19`** — a perfect bijection onto
+the 21 tracks; every weak first-pass match was re-captured at 32 events and confirmed
+exact. The two knowns anchor it ($05 attract, $19 coin).
 
-P3 (2026-07-09) wired the confirmed rows in `snd_map` (src/video.pasm) against the
-consolidated 21-song blob (`soundwork/tad/mml_drafts/superman_all.terrificaudio`; TAD song
-id N = track N, id 0 = silence). All 21 tracks are IN the blob — the unconfirmed cues
-(tracks 04-21) only await their trigger-byte observations, then one `snd_map` row each.
+| cmd | → track (VGM #) | TAD song id | | cmd | → track (VGM #) | TAD song id |
+|----:|------------------|----:|-|----:|------------------|----:|
+| `$00` | stop/silence   |  0 | | `$10` | 15 Round 5-3   | 15 |
+| `$05` | 01 Attract     |  1 | | `$11` | 16 Round 5-4   | 16 |
+| `$06` | 03 Main BGM 1  |  3 | | `$12` | 17 Boss BGM 6  | 17 |
+| `$07` | 08 Main BGM 3  |  8 | | `$13` | 18 Boss BGM 7  | 18 |
+| `$08` | 04 Boss BGM 1  |  4 | | `$14` | 07 Round Clear |  7 |
+| `$09` | 05 Main BGM 2  |  5 | | `$15` | 12 Continue    | 12 |
+| `$0A` | 06 Boss BGM 2  |  6 | | `$16` | 19 Ending      | 19 |
+| `$0B` | 09 Boss BGM 3  |  9 | | `$17` | 20 Name Entry  | 20 |
+| `$0C` | 10 Boss BGM 4  | 10 | | `$18` | 21 Game Over   | 21 |
+| `$0D` | 11 Boss BGM 5  | 11 | | `$19` | 02 Coin        |  2 |
+| `$0E` | 13 Round 5-1   | 13 | | `$2E`/`$4E` | action SFX (demo-dominant) | sfx 1/0 |
+| `$0F` | 14 Round 5-2   | 14 | | `$62` | two-drum thud SFX | sfx 1 |
+
+**CORRECTIONS to the earlier event-correlation guesses** (this is why direct stimulation
+beats correlation): `$32` is NOT round-1 music — it is a rising-scale SFX (likely the
+"Superman flies up" jingle); the round-start burst that was screenshot-correlated
+contained both `$06` (the REAL Main BGM 1 trigger, previously misread as "control ×3")
+and `$32`. And `$07` is Main BGM 3, NOT punch — the demo's dominant action SFX are
+`$4E`/`$2E`. Bytes `$1A-$7F` (minus the SFX rows above) are SFX/jingles — unmapped until
+real SFX are authored. Curiosity: a few ids ($1D/$2C/$3A/$52/$60/$6F) restart the attract
+music; harmless, left unmapped.
+
+All rows are wired in `snd_map` (src/video.pasm) as a 128-entry table (`snd_tbl`); music
+routes through `Tad_LoadSongIfChanged` so repeated sends (e.g. `$06` ×3 at round start)
+don't restart the song, while an intervening `$00` still forces a real restart.
 
 ### Full observed vocabulary (attract demo + driven events), by frequency
 `$4E`(144) `$2E`(141) `$23`(37) `$5B`(30) `$43`(26) `$1F`(12) `$59`(12) `$24`(10) `$1D`(9)
@@ -79,14 +101,18 @@ The `$1X`-`$7X` bytes appear to be SFX ids grouped by high nibble; `$0X` bytes a
 These are **not** a simple "song N = byte N" scheme — the Z80 has an arbitrary id→handler table
 (attract=`$05`, round1=`$32`), so each cue's byte must be observed, not computed.
 
-## UNKNOWN / to backfill (music triggers not yet reached)
+## Backfill method (used for the ground-truth table above)
 
-Tracks **04-21** (Boss 1-7, Main BGM 2/3, Round Clear, Continue, Round5 variants, Ending, Name
-Entry, Game Over) — not reached in the driven session (require deeper play). Not needed for the
-P2 mechanism proof; backfill during P3 when the real songs exist.
+Playing to each event was never needed. Instead, with a live MAME session:
+1. Halt the 68K (SR=$2700 + PC parked on a `bra.s *` in work RAM) so the attract demo
+   can't send contaminating commands.
+2. Install a Z80-side write tap on the YM2610 ports (`$E000-$E003`), reduced online to a
+   key-on fingerprint: `("F", fm_ch, block, fnum)` for FM key-ons (reg $28, using shadowed
+   $A0/$A4 pitch), `("A", mask)` for ADPCM-A key-ons (port-1 reg $00, bit7==0).
+3. Per candidate byte: send `$00` (stop), settle ~50 frames, then write the byte to the
+   TC0140SYT latch exactly as `$2df0` does (`$800001`=0, `$800003`=b, `$800003`=b>>4) and
+   capture 16-32 events.
+4. Match against the same fingerprint reduction of the 21 VGM rips (exact-prefix scoring;
+   the rip is the same Z80 engine + data, so real matches are event-for-event exact).
 
-**Backfill method (reliable):** the enqueue helper runs RAM-resident (`$f01b54`) so static-disasm
-caller labeling is noisy; instead re-run the live trace with the `$800003` write-tap (records
-frame + full command byte in D1) and reach each event (boss, round-clear, death, ending) by play
-or state-poke, noting the byte at the moment the music changes. Harness lives in this session's
-MAME logs: `.mame_mcp/snd_full.log` (send-side), `.mame_mcp/enq.log` (ring enqueues).
+Sweep of all of `$01-$7F`: ~35k emulated frames, one session.

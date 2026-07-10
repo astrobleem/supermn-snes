@@ -1673,56 +1673,6 @@ st_done:
     plp
     rtl
 
-; snd_map — arcade command byte (A8, X16) -> TAD action. See docs/SOUND_COMMAND_MAP.md.
-; P3: the consolidated blob has all 21 tracks (TAD song id N = track N, list order in
-; superman_all.terrificaudio; id 0 = TAD's built-in silence = the arcade $00 stop verb).
-; Confirmed cues route to their real songs; $07/$62 route to the punch/kick SFX (ids =
-; "sound_effects" list order). Unconfirmed cue bytes (boss/ending/etc, tracks 04-21)
-; stay ignored until observed live (backfill via the MAME $800003 write-tap).
-; ENTERED A8/X16 (sound_tick's TAD ABI). The explicit .a8 is LOAD-BEARING: Poppy's
-; sep/rep mode inference resets at a label after rtl and defaulted these immediates
-; to 16-bit -> the stray $00 operand bytes decoded as BRK at runtime in A8 (this bug
-; shipped silently in the P2 snd_map; caught by a byte-level encoding audit in P3).
-.a8
-.i16
-snd_map:
-    cmp #$00             ; stop/silence (attract end, pre-coin)
-    beq sm_s00
-    cmp #$05             ; attract music
-    beq sm_s01
-    cmp #$19             ; coin
-    beq sm_s02
-    cmp #$32             ; round-1 music (Main BGM 1)
-    beq sm_s03
-    cmp #$07             ; punch SFX
-    beq sm_sfx0
-    cmp #$62             ; kick/jump SFX
-    beq sm_sfx1
-    rts                  ; other (unmapped SFX / control) -> ignore
-sm_s00:
-    lda #$00             ; TAD song 0 = built-in silence
-    jsr Tad_LoadSong
-    rts
-sm_s01:
-    lda #$01             ; 01 Attract Mode
-    jsr Tad_LoadSong
-    rts
-sm_s02:
-    lda #$02             ; 02 Coin
-    jsr Tad_LoadSong
-    rts
-sm_s03:
-    lda #$03             ; 03 Main BGM 1
-    jsr Tad_LoadSong
-    rts
-sm_sfx0:
-    lda #$00             ; sfx 0 = punch
-    jsr Tad_QueueSoundEffect
-    rts
-sm_sfx1:
-    lda #$01             ; sfx 1 = kick
-    jsr Tad_QueueSoundEffect
-    rts
 
 ; ============================================================================
 ; snd_vframe — VID_FRAME hook (SA-1 side, bank $E9). Runs once per game-frame via the
@@ -1763,3 +1713,62 @@ sv_cp:
                          ;   the $41 copy is complete, so the 5A22 (sound_tick, fired off this same
                          ;   FRAME_REQ edge) reads a fully-written copy, not a mid-write race.
     rtl
+
+
+; snd_map — arcade command byte (A8, X16) -> TAD action, via a 128-entry table.
+; docs/SOUND_COMMAND_MAP.md has the full GROUND-TRUTH byte->track map (P3 backfill,
+; 2026-07-09): every byte $01-$7F was stimulated directly on the arcade machine in
+; MAME (TC0140SYT latch writes, 68K halted) and the Z80's YM2610 register stream
+; fingerprint-matched against the 21 VGM rips. Music ids are the contiguous block
+; $05-$19 (all 21 tracks); $00 = stop. NOTE this CORRECTED two P2 event-correlation
+; guesses: $32 is a rising-scale SFX (round-1 music is really $06), $07 is Main
+; BGM 3 (not punch; the demo's action SFX are $4E/$2E).
+; Table encoding: $00-$7F = TAD song id (0 = built-in silence); $80|n = SFX n;
+; $FF = ignore (unmapped SFX/control). Music goes through Tad_LoadSongIfChanged so
+; the game's repeated sends (e.g. $06 x3 at round start) don't restart the song —
+; an intervening $00 (silence) still forces a real restart when the arcade wants one.
+; ENTERED A8/X16 (sound_tick's TAD ABI); X is free to clobber (the caller reloads its
+; cursor from $7E:1F14 after we return). The explicit .a8 is LOAD-BEARING: Poppy's
+; sep/rep mode inference resets at a label after rtl and defaulted immediates here
+; to 16-bit -> stray $00 operand bytes decoded as BRK at runtime in A8 (shipped
+; silently in the P2 snd_map; caught by a byte-level encoding audit in P3).
+.org $9a00
+.a8
+.i16
+snd_map:
+    cmp #$80
+    bcs sm_done          ; ids >= $80 never observed -> ignore
+    phb                  ; save caller DBR (TAD API needs a low-RAM DB)
+    rep #$30
+.a16
+    and #$007f
+    tax
+    sep #$20
+.a8
+    phk
+    plb                  ; DBR = PB ($E9) for the table read
+    lda snd_tbl,x
+    plb                  ; restore caller DBR
+    cmp #$ff
+    beq sm_done
+    cmp #$80
+    bcs sm_sfx
+    jsr Tad_LoadSongIfChanged
+    rts
+sm_sfx:
+    and #$7f
+    jsr Tad_QueueSoundEffect
+    rts
+sm_done:
+    rts
+
+; arcade cmd byte -> action (see the encoding note above; TAD song id N = track N)
+snd_tbl:
+    .db $00,$ff,$ff,$ff,$ff,$01,$03,$08,$04,$05,$06,$09,$0a,$0b,$0d,$0e   ; $00-$0F
+    .db $0f,$10,$11,$12,$07,$0c,$13,$14,$15,$02,$ff,$ff,$ff,$ff,$ff,$ff   ; $10-$1F
+    .db $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$81,$ff   ; $20-$2F
+    .db $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff   ; $30-$3F
+    .db $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$80,$ff   ; $40-$4F
+    .db $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff   ; $50-$5F
+    .db $ff,$ff,$81,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff   ; $60-$6F
+    .db $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff   ; $70-$7F
