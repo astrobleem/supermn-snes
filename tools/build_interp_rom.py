@@ -79,15 +79,17 @@ if _osp.exists("src/escbank5.bin"):
     assert len(ESC5) <= 0x8000, ("escbank5 %d bytes overflows the $2C8000..$2D0000 bank" % len(ESC5))
     ROM[0x2C8000:0x2C8000+len(ESC5)] = ESC5          # @ SA-1 $99:8000 (file $2C8000)
 
-# --- TAD audio-data blob (sound port P1) ---
-# Self-contained: [loader.bin(116)][audio-driver.bin(3218)][DataTable@3334][common+song]. Placed at
-# file $2D0000 = 5A22 HiROM $ED:0000 (bank-aligned; map mode $31 keeps $C0-$FF linear so the 5A22
-# supervisor can long-read it). The ported LoadAudioData/Tad_Init upload it to the SPC700. Regen with
-# soundwork/tad/build_blob.sh. AUDIO_DATA_BANK=$ED matches soundwork/tad/port/tad_glue.pasm.
+# --- TAD audio-data blob (sound port P3: 21 songs + real samples, multi-bank) ---
+# Self-contained: [loader.bin(116)][audio-driver.bin(3218)][DataTable][common+21 songs]. Placed at
+# file $2D002B = 5A22 HiROM $ED:002B — segment offset 43, mirroring stock ca65's
+# [43-byte LoadAudioData proc][blob] layout so the DataTable's segment-relative u24 entries resolve
+# UNSKEWED (far addr = $ED:0000 + entry; map mode $31 keeps $C0-$FF file-linear across banks
+# $ED/$EE/...). The ported LoadAudioData/Tad_Init upload it to the SPC700. Regen with
+# soundwork/tad/build_blob.sh (also generates build/tad_blob_syms.pasm for tad_glue.pasm).
 if _osp.exists("soundwork/tad/build/audio-data.bin"):
     TADBLOB = Path("soundwork/tad/build/audio-data.bin").read_bytes()
-    assert len(TADBLOB) <= 0x10000, ("TAD blob %d bytes overflows bank $ED" % len(TADBLOB))
-    ROM[0x2D0000:0x2D0000+len(TADBLOB)] = TADBLOB     # @ 5A22 $ED:0000 (file $2D0000)
+    assert 0x2D002B + len(TADBLOB) <= 0x400000, ("TAD blob %d bytes overflows the ROM" % len(TADBLOB))
+    ROM[0x2D002B:0x2D002B+len(TADBLOB)] = TADBLOB     # @ 5A22 $ED:002B (file $2D002B)
 
 # --- SA-1 LoROM mirror of the interpreter ---
 # Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style

@@ -11,10 +11,10 @@
 #FirFilter 64 0 0 0 0 0 0 0
 
 ; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
-@0 sm_fm0
-@1 sm_fm1
-@2 sm_fm2
-@3 sm_fm3
+@0 fm_p06
+@1 fm_p39
+@2 fm_p30
+@3 fm_p30
 @10 sm_drum_060000
 @11 sm_drum_067800
 @12 sm_drum_069f00

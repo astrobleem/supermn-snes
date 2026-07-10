@@ -53,15 +53,20 @@ No nibble reassembly needed. (Status polls re-arm harmlessly — they never writ
 Event correlations are from driving the live machine (coin/start edges, button inputs) and a
 screenshot confirmation for round-1. TAD track numbers refer to `soundwork/tad/mml_drafts/NN_*`.
 
-| cmd | type    | cue (evidence)                              | → TAD track            | confidence |
-|----:|---------|---------------------------------------------|------------------------|------------|
-| `$00` | control | stop/silence — precedes coin & new SFX; fires at attract-end | (Tad stop / none) | high |
-| `$05` | music   | **attract music** (fires as attract music starts, frame 29017; re-fires each attract loop) | 01 Attract | high |
-| `$06` | control | fires ×3 at round start (init/fade-in?)     | (control)              | med |
-| `$07` | sfx     | **punch** (P1 Button 1, no enemy)           | — (SFX)                | med |
-| `$19` | sfx/mus | **coin insert** (after a `$00` stop)        | 02 Coin                | high |
-| `$32` | music   | **Round 1 music** (screenshot-confirmed: Superman city street, right after Start) | 03 Main BGM 1 | high |
-| `$62` | sfx     | **jump/kick** (P1 Button 2 while walking)   | — (SFX)                | low |
+| cmd | type    | cue (evidence)                              | → TAD track            | confidence | wired (P3) |
+|----:|---------|---------------------------------------------|------------------------|------------|------------|
+| `$00` | control | stop/silence — precedes coin & new SFX; fires at attract-end | (Tad stop / none) | high | ✅ song 0 (TAD built-in silence) |
+| `$05` | music   | **attract music** (fires as attract music starts, frame 29017; re-fires each attract loop) | 01 Attract | high | ✅ song 1 |
+| `$06` | control | fires ×3 at round start (init/fade-in?)     | (control)              | med | ignored |
+| `$07` | sfx     | **punch** (P1 Button 1, no enemy)           | — (SFX)                | med | ✅ sfx 0 `punch` |
+| `$19` | sfx/mus | **coin insert** (after a `$00` stop)        | 02 Coin                | high | ✅ song 2 |
+| `$32` | music   | **Round 1 music** (screenshot-confirmed: Superman city street, right after Start) | 03 Main BGM 1 | high | ✅ song 3 |
+| `$62` | sfx     | **jump/kick** (P1 Button 2 while walking)   | — (SFX)                | low | ✅ sfx 1 `kick` |
+
+P3 (2026-07-09) wired the confirmed rows in `snd_map` (src/video.pasm) against the
+consolidated 21-song blob (`soundwork/tad/mml_drafts/superman_all.terrificaudio`; TAD song
+id N = track N, id 0 = silence). All 21 tracks are IN the blob — the unconfirmed cues
+(tracks 04-21) only await their trigger-byte observations, then one `snd_map` row each.
 
 ### Full observed vocabulary (attract demo + driven events), by frequency
 `$4E`(144) `$2E`(141) `$23`(37) `$5B`(30) `$43`(26) `$1F`(12) `$59`(12) `$24`(10) `$1D`(9)

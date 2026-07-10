@@ -1584,7 +1584,7 @@ tad_bssclr:
     sep #$20             ; A8
     rep #$10             ; X16  (TAD ABI)
     jsl.l Tad_Init|$E90000       ; upload loader.bin -> audio-driver.bin (blocking IPL handshake)
-    lda #$01             ; Song id 1 = s02_coin (placeholder); queue it
+    lda #$01             ; Song id 1 = 01 Attract Mode (arcade boots into attract)
     jsr Tad_LoadSong     ; the poll loop's steady 60Hz Tad_Process finishes the load + starts playback
     rts
 
@@ -1651,6 +1651,7 @@ st_drain:
     beq st_done
     tax                  ; X = cursor ($20-$3f)
     sep #$20             ; A8 (X stays 16-bit for the TAD ABI)
+.a8
     lda.l $4100e0,x      ; command byte from the $41 ring copy (base $410100-$20 = $4100E0; +cursor)
     sta $7e1f17          ; debug: last command
     lda $7e1f16
@@ -1659,6 +1660,7 @@ st_drain:
     lda.l $4100e0,x      ; reload command (A8) for the map (from the $41 ring copy)
     jsr snd_map          ; A=cmd (A8), X16 -> Tad_LoadSong / Tad_QueueSoundEffect
     rep #$20             ; 16-bit for the cursor advance
+.a16
     lda $7e1f14
     inc a
     cmp #$0040
@@ -1672,19 +1674,54 @@ st_done:
     rtl
 
 ; snd_map — arcade command byte (A8, X16) -> TAD action. See docs/SOUND_COMMAND_MAP.md.
-; The P1 placeholder blob has ONE song (id 1); all recognized MUSIC triggers load it for
-; now (P3 maps distinct TAD songs per cue). Unknown/SFX/control bytes are ignored for now.
+; P3: the consolidated blob has all 21 tracks (TAD song id N = track N, list order in
+; superman_all.terrificaudio; id 0 = TAD's built-in silence = the arcade $00 stop verb).
+; Confirmed cues route to their real songs; $07/$62 route to the punch/kick SFX (ids =
+; "sound_effects" list order). Unconfirmed cue bytes (boss/ending/etc, tracks 04-21)
+; stay ignored until observed live (backfill via the MAME $800003 write-tap).
+; ENTERED A8/X16 (sound_tick's TAD ABI). The explicit .a8 is LOAD-BEARING: Poppy's
+; sep/rep mode inference resets at a label after rtl and defaulted these immediates
+; to 16-bit -> the stray $00 operand bytes decoded as BRK at runtime in A8 (this bug
+; shipped silently in the P2 snd_map; caught by a byte-level encoding audit in P3).
+.a8
+.i16
 snd_map:
+    cmp #$00             ; stop/silence (attract end, pre-coin)
+    beq sm_s00
     cmp #$05             ; attract music
-    beq sm_song
+    beq sm_s01
     cmp #$19             ; coin
-    beq sm_song
-    cmp #$32             ; round-1 music
-    beq sm_song
-    rts                  ; other (SFX / control / unmapped) -> ignore
-sm_song:
-    lda #$01             ; TAD song id 1 (placeholder)
+    beq sm_s02
+    cmp #$32             ; round-1 music (Main BGM 1)
+    beq sm_s03
+    cmp #$07             ; punch SFX
+    beq sm_sfx0
+    cmp #$62             ; kick/jump SFX
+    beq sm_sfx1
+    rts                  ; other (unmapped SFX / control) -> ignore
+sm_s00:
+    lda #$00             ; TAD song 0 = built-in silence
     jsr Tad_LoadSong
+    rts
+sm_s01:
+    lda #$01             ; 01 Attract Mode
+    jsr Tad_LoadSong
+    rts
+sm_s02:
+    lda #$02             ; 02 Coin
+    jsr Tad_LoadSong
+    rts
+sm_s03:
+    lda #$03             ; 03 Main BGM 1
+    jsr Tad_LoadSong
+    rts
+sm_sfx0:
+    lda #$00             ; sfx 0 = punch
+    jsr Tad_QueueSoundEffect
+    rts
+sm_sfx1:
+    lda #$01             ; sfx 1 = kick
+    jsr Tad_QueueSoundEffect
     rts
 
 ; ============================================================================

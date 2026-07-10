@@ -1,0 +1,705 @@
+{
+ "_about": {
+  "file_type": "Terrific Audio Driver project file",
+  "version": "0.2.0-beta.2"
+ },
+ "instruments": [
+  {
+   "name": "fm_p00",
+   "source": "instruments/fm_p00.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 0 (ymfm render, modal g3)",
+   "loop_setting": 384
+  },
+  {
+   "name": "fm_p01",
+   "source": "instruments/fm_p01.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 3,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 1 (ymfm render, modal c3)",
+   "loop_setting": 1024
+  },
+  {
+   "name": "fm_p02",
+   "source": "instruments/fm_p02.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 6,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 2 (ymfm render, modal f+6)",
+   "loop_setting": 960
+  },
+  {
+   "name": "fm_p06",
+   "source": "instruments/fm_p06.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 1,
+   "last_octave": 5,
+   "envelope": "adsr 15 2 1 10",
+   "comment": "YM2610 FM patch 6 (ymfm render, modal g2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p07",
+   "source": "instruments/fm_p07.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 4,
+   "envelope": "adsr 15 1 2 10",
+   "comment": "YM2610 FM patch 7 (ymfm render, modal g2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p08",
+   "source": "instruments/fm_p08.wav",
+   "freq": 1000.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 7,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 8 (ymfm render, modal d5)",
+   "loop_setting": 224
+  },
+  {
+   "name": "fm_p09",
+   "source": "instruments/fm_p09.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 5 0 0",
+   "comment": "YM2610 FM patch 9 (ymfm render, modal c5)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p10",
+   "source": "instruments/fm_p10.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 5,
+   "envelope": "adsr 15 2 1 10",
+   "comment": "YM2610 FM patch 10 (ymfm render, modal f2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p11",
+   "source": "instruments/fm_p11.wav",
+   "freq": 1000.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 7,
+   "envelope": "adsr 15 5 0 0",
+   "comment": "YM2610 FM patch 11 (ymfm render, modal d3)",
+   "loop_setting": 224
+  },
+  {
+   "name": "fm_p15",
+   "source": "instruments/fm_p15.wav",
+   "freq": 1000.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 7,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 15 (ymfm render, modal c6)",
+   "loop_setting": 480
+  },
+  {
+   "name": "fm_p17",
+   "source": "instruments/fm_p17.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 5,
+   "envelope": "adsr 15 0 2 10",
+   "comment": "YM2610 FM patch 17 (ymfm render, modal g2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p20",
+   "source": "instruments/fm_p20.wav",
+   "freq": 1000.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 7,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 20 (ymfm render, modal b5)",
+   "loop_setting": 448
+  },
+  {
+   "name": "fm_p21",
+   "source": "instruments/fm_p21.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 3 2 10",
+   "comment": "YM2610 FM patch 21 (ymfm render, modal f5)",
+   "loop_setting": 512
+  },
+  {
+   "name": "fm_p25",
+   "source": "instruments/fm_p25.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 1,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 25 (ymfm render, modal b4)",
+   "loop_setting": 512
+  },
+  {
+   "name": "fm_p26",
+   "source": "instruments/fm_p26.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "adsr 15 5 0 10",
+   "comment": "YM2610 FM patch 26 (ymfm render, modal d5)",
+   "loop_setting": 256
+  },
+  {
+   "name": "fm_p28",
+   "source": "instruments/fm_p28.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 1,
+   "last_octave": 3,
+   "envelope": "adsr 15 1 2 10",
+   "comment": "YM2610 FM patch 28 (ymfm render, modal g+2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p29",
+   "source": "instruments/fm_p29.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 29 (ymfm render, modal e5)",
+   "loop_setting": 896
+  },
+  {
+   "name": "fm_p30",
+   "source": "instruments/fm_p30.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 5 0 0",
+   "comment": "YM2610 FM patch 30 (ymfm render, modal d+5)",
+   "loop_setting": 448
+  },
+  {
+   "name": "fm_p31",
+   "source": "instruments/fm_p31.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 31 (ymfm render, modal b3)",
+   "loop_setting": 512
+  },
+  {
+   "name": "fm_p32",
+   "source": "instruments/fm_p32.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 3,
+   "envelope": "adsr 15 1 2 10",
+   "comment": "YM2610 FM patch 32 (ymfm render, modal c+2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p33",
+   "source": "instruments/fm_p33.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 33 (ymfm render, modal c+5)",
+   "loop_setting": 512
+  },
+  {
+   "name": "fm_p35",
+   "source": "instruments/fm_p35.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 35 (ymfm render, modal a+4)",
+   "loop_setting": 448
+  },
+  {
+   "name": "fm_p36",
+   "source": "instruments/fm_p36.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 36 (ymfm render, modal g5)",
+   "loop_setting": 896
+  },
+  {
+   "name": "fm_p37",
+   "source": "instruments/fm_p37.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 37 (ymfm render, modal f4)",
+   "loop_setting": 512
+  },
+  {
+   "name": "fm_p38",
+   "source": "instruments/fm_p38.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 2 1 10",
+   "comment": "YM2610 FM patch 38 (ymfm render, modal c5)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p39",
+   "source": "instruments/fm_p39.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 1,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 39 (ymfm render, modal g4)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p40",
+   "source": "instruments/fm_p40.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 1,
+   "last_octave": 3,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 40 (ymfm render, modal e2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p41",
+   "source": "instruments/fm_p41.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 41 (ymfm render, modal b4)",
+   "loop_setting": 448
+  },
+  {
+   "name": "fm_p42",
+   "source": "instruments/fm_p42.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 4,
+   "envelope": "adsr 15 6 0 0",
+   "comment": "YM2610 FM patch 42 (ymfm render, modal f4)",
+   "loop_setting": 320
+  },
+  {
+   "name": "fm_p44",
+   "source": "instruments/fm_p44.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "adsr 15 4 0 0",
+   "comment": "YM2610 FM patch 44 (ymfm render, modal d4)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p46",
+   "source": "instruments/fm_p46.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 46 (ymfm render, modal g+4)",
+   "loop_setting": 448
+  },
+  {
+   "name": "fm_p47",
+   "source": "instruments/fm_p47.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 1,
+   "last_octave": 3,
+   "envelope": "adsr 15 1 2 10",
+   "comment": "YM2610 FM patch 47 (ymfm render, modal e2)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p48",
+   "source": "instruments/fm_p48.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "adsr 15 0 2 10",
+   "comment": "YM2610 FM patch 48 (ymfm render, modal b4)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p56",
+   "source": "instruments/fm_p56.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 2,
+   "last_octave": 3,
+   "envelope": "adsr 15 4 0 0",
+   "comment": "YM2610 FM patch 56 (ymfm render, modal d3)",
+   "loop_setting": 128
+  },
+  {
+   "name": "fm_p57",
+   "source": "instruments/fm_p57.wav",
+   "freq": 500.0,
+   "loop": "loop_reset_filter",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "comment": "YM2610 FM patch 57 (ymfm render, modal g+5)",
+   "loop_setting": 640
+  },
+  {
+   "name": "sm_drum_060000",
+   "source": "instruments/sm_drum_060000.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x060000 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_062a00",
+   "source": "instruments/sm_drum_062a00.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x062a00 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_065200",
+   "source": "instruments/sm_drum_065200.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x065200 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_067800",
+   "source": "instruments/sm_drum_067800.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x067800 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_069f00",
+   "source": "instruments/sm_drum_069f00.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x069f00 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_06c500",
+   "source": "instruments/sm_drum_06c500.wav",
+   "freq": 930.224,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x06c500 @9000Hz 0.42s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_06f900",
+   "source": "instruments/sm_drum_06f900.wav",
+   "freq": 930.224,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x06f900 @9000Hz 0.42s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_072800",
+   "source": "instruments/sm_drum_072800.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x072800 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_075800",
+   "source": "instruments/sm_drum_075800.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x075800 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_077900",
+   "source": "instruments/sm_drum_077900.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x077900 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_079a00",
+   "source": "instruments/sm_drum_079a00.wav",
+   "freq": 797.335,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x079a00 @10500Hz 0.379s (trimmed+faded)"
+  },
+  {
+   "name": "sm_drum_07b500",
+   "source": "instruments/sm_drum_07b500.wav",
+   "freq": 930.224,
+   "loop": "none",
+   "evaluator": "default",
+   "ignore_gaussian_overflow": false,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "gain F127",
+   "comment": "ADPCM-A window 0x07b500 @9000Hz 0.5s (trimmed+faded)"
+  }
+ ],
+ "samples": [],
+ "default_sfx_flags": {
+  "one_channel": true,
+  "interruptible": true
+ },
+ "high_priority_sound_effects": [],
+ "sound_effects": [
+  "punch",
+  "kick"
+ ],
+ "low_priority_sound_effects": [],
+ "sound_effect_file": "superman_all.sfx.txt",
+ "songs": [
+  {
+   "name": "s01_attract_mode",
+   "source": "01_attract_mode.mml"
+  },
+  {
+   "name": "s02_coin",
+   "source": "02_coin.mml"
+  },
+  {
+   "name": "s03_main_bgm_1",
+   "source": "03_main_bgm_1.mml"
+  },
+  {
+   "name": "s04_boss_bgm_1",
+   "source": "04_boss_bgm_1.mml"
+  },
+  {
+   "name": "s05_main_bgm_2",
+   "source": "05_main_bgm_2.mml"
+  },
+  {
+   "name": "s06_boss_bgm_2",
+   "source": "06_boss_bgm_2.mml"
+  },
+  {
+   "name": "s07_round_clear",
+   "source": "07_round_clear.mml"
+  },
+  {
+   "name": "s08_main_bgm_3",
+   "source": "08_main_bgm_3.mml"
+  },
+  {
+   "name": "s09_boss_bgm_3",
+   "source": "09_boss_bgm_3.mml"
+  },
+  {
+   "name": "s10_boss_bgm_4",
+   "source": "10_boss_bgm_4.mml"
+  },
+  {
+   "name": "s11_boss_bgm_5",
+   "source": "11_boss_bgm_5.mml"
+  },
+  {
+   "name": "s12_continue",
+   "source": "12_continue.mml"
+  },
+  {
+   "name": "s13_round_5_1",
+   "source": "13_round_5_1.mml"
+  },
+  {
+   "name": "s14_round_5_2",
+   "source": "14_round_5_2.mml"
+  },
+  {
+   "name": "s15_round_5_3",
+   "source": "15_round_5_3.mml"
+  },
+  {
+   "name": "s16_round_5_4",
+   "source": "16_round_5_4.mml"
+  },
+  {
+   "name": "s17_boss_bgm_6",
+   "source": "17_boss_bgm_6.mml"
+  },
+  {
+   "name": "s18_boss_bgm_7",
+   "source": "18_boss_bgm_7.mml"
+  },
+  {
+   "name": "s19_ending",
+   "source": "19_ending.mml"
+  },
+  {
+   "name": "s20_name_entry",
+   "source": "20_name_entry.mml"
+  },
+  {
+   "name": "s21_game_over",
+   "source": "21_game_over.mml"
+  }
+ ]
+}

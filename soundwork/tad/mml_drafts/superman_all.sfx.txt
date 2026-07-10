@@ -1,0 +1,7 @@
+=== punch ===
+    set_instrument sm_drum_067800
+    play_note c4 8
+
+=== kick ===
+    set_instrument sm_drum_069f00
+    play_note c4 8

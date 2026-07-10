@@ -31,6 +31,34 @@ it; it's regenerated and the rips are copyrighted.
 | `make_check_project.py` | Bind all instruments of one-or-more MMLs to a placeholder sample for a multi-song compile check. |
 | `convert_pack.py` | Driver that chains the above over the whole pack. |
 
+## P3 real-sample pipeline (replaces the placeholder sine)
+
+Sound-port P3 turned the drafts into real audio. Four new tools, run in this order:
+
+| Script | What it does |
+|---|---|
+| `vgm_fm_patches.py` | Capture + dedupe every YM2610 FM patch at key-on across all VGMs (carrier-TL/volume normalized out) → `soundwork/samples/fm_patches.json` with per-(track,voice) usage + note histograms. |
+| `patch_render.cpp` | Standalone ymfm-based renderer: one captured patch → held-note mono WAV at the chip's native rate. Build: `g++ -O2 -std=c++17 -I ymfm/src patch_render.cpp ymfm/src/ymfm_opn.cpp ymfm/src/ymfm_adpcm.cpp ymfm/src/ymfm_ssg.cpp -o patch_render` (clone https://github.com/aaronsgiles/ymfm). |
+| `render_fm_patches.py` | For each *dominant* patch of some (track, FM-voice): render at the modal pitch, resample to 64 (or 32, for o7-reaching patches — the S-DSP 4× pitch ceiling) samples/period, keep a short attack + amplitude-flattened crossfaded 8-period loop, classify the FM envelope → TAD `gain`/`adsr`. Emits `instruments/fm_pNN.wav` + `fm_instruments.json`. |
+| `prep_drums.py` | Trim/fade/downsample the 12 unique decoded ADPCM-A windows to an ARAM-fitting budget → `instruments/sm_drum_XXXXXX.wav` + `drums_report.json`. |
+| `build_common_project.py` | Consolidate everything into ONE shared-pool project `superman_all.terrificaudio` (47 instruments, 21 songs, merged SFX file) and rewrite each MML's `@0-@3` bindings to its dominant-patch instruments. |
+
+```bash
+# full P3 regen (after unpacking VGMs to soundwork/source/vgm_unpacked)
+python3 tools/sound/vgm_fm_patches.py soundwork/source/vgm_unpacked/*.vgm -o soundwork/samples/fm_patches.json
+python3 tools/sound/render_fm_patches.py --renderer /path/to/patch_render
+python3 tools/sound/prep_drums.py
+python3 tools/sound/build_common_project.py
+soundwork/tad/build_blob.sh          # check + ca65-export + generated glue symbols
+```
+
+ARAM budget (verified by `tad-compiler check`, which validates per-song fit): common data
+44.3 KB (16.8 KB FM + 26.9 KB drums + tables/SFX) + largest song 6.5 KB + 4 KB echo +
+driver ≈ 59.3 KB of 64 KB. Known first-pass limits: one instrument per (track,voice) uses
+the *dominant* patch (53/84 voices switch patches mid-song — add `@` switches by ear
+later); FM velocity stays flat `v10`; long drum tails are capped (in-game hits retrigger
+gate-style, masking this).
+
 ## Typical iterative loop (one track)
 
 ```bash

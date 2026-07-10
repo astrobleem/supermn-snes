@@ -1,0 +1,966 @@
+{
+ "instruments": [
+  {
+   "name": "fm_p00",
+   "pid": 0,
+   "wav": "instruments/fm_p00.wav",
+   "freq": 500.0,
+   "loop_offset": 384,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "g3",
+   "samples": 896
+  },
+  {
+   "name": "fm_p01",
+   "pid": 1,
+   "wav": "instruments/fm_p01.wav",
+   "freq": 500.0,
+   "loop_offset": 1024,
+   "first_octave": 3,
+   "last_octave": 3,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "c3",
+   "samples": 1536
+  },
+  {
+   "name": "fm_p02",
+   "pid": 2,
+   "wav": "instruments/fm_p02.wav",
+   "freq": 500.0,
+   "loop_offset": 960,
+   "first_octave": 6,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "f+6",
+   "samples": 1472
+  },
+  {
+   "name": "fm_p06",
+   "pid": 6,
+   "wav": "instruments/fm_p06.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 1,
+   "last_octave": 5,
+   "envelope": "adsr 15 2 1 10",
+   "env_class": "decaying",
+   "modal_note": "g2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p07",
+   "pid": 7,
+   "wav": "instruments/fm_p07.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 2,
+   "last_octave": 4,
+   "envelope": "adsr 15 1 2 10",
+   "env_class": "decaying",
+   "modal_note": "g2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p08",
+   "pid": 8,
+   "wav": "instruments/fm_p08.wav",
+   "freq": 1000.0,
+   "loop_offset": 224,
+   "first_octave": 2,
+   "last_octave": 7,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "d5",
+   "samples": 480
+  },
+  {
+   "name": "fm_p09",
+   "pid": 9,
+   "wav": "instruments/fm_p09.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 5 0 0",
+   "env_class": "percussive",
+   "modal_note": "c5",
+   "samples": 640
+  },
+  {
+   "name": "fm_p10",
+   "pid": 10,
+   "wav": "instruments/fm_p10.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 2,
+   "last_octave": 5,
+   "envelope": "adsr 15 2 1 10",
+   "env_class": "decaying",
+   "modal_note": "f2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p11",
+   "pid": 11,
+   "wav": "instruments/fm_p11.wav",
+   "freq": 1000.0,
+   "loop_offset": 224,
+   "first_octave": 2,
+   "last_octave": 7,
+   "envelope": "adsr 15 5 0 0",
+   "env_class": "percussive",
+   "modal_note": "d3",
+   "samples": 480
+  },
+  {
+   "name": "fm_p15",
+   "pid": 15,
+   "wav": "instruments/fm_p15.wav",
+   "freq": 1000.0,
+   "loop_offset": 480,
+   "first_octave": 3,
+   "last_octave": 7,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "c6",
+   "samples": 736
+  },
+  {
+   "name": "fm_p17",
+   "pid": 17,
+   "wav": "instruments/fm_p17.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 2,
+   "last_octave": 5,
+   "envelope": "adsr 15 0 2 10",
+   "env_class": "decaying",
+   "modal_note": "g2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p20",
+   "pid": 20,
+   "wav": "instruments/fm_p20.wav",
+   "freq": 1000.0,
+   "loop_offset": 448,
+   "first_octave": 2,
+   "last_octave": 7,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "b5",
+   "samples": 704
+  },
+  {
+   "name": "fm_p21",
+   "pid": 21,
+   "wav": "instruments/fm_p21.wav",
+   "freq": 500.0,
+   "loop_offset": 512,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 3 2 10",
+   "env_class": "decaying",
+   "modal_note": "f5",
+   "samples": 1024
+  },
+  {
+   "name": "fm_p25",
+   "pid": 25,
+   "wav": "instruments/fm_p25.wav",
+   "freq": 500.0,
+   "loop_offset": 512,
+   "first_octave": 1,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "b4",
+   "samples": 1024
+  },
+  {
+   "name": "fm_p26",
+   "pid": 26,
+   "wav": "instruments/fm_p26.wav",
+   "freq": 500.0,
+   "loop_offset": 256,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "adsr 15 5 0 10",
+   "env_class": "decaying",
+   "modal_note": "d5",
+   "samples": 768
+  },
+  {
+   "name": "fm_p28",
+   "pid": 28,
+   "wav": "instruments/fm_p28.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 1,
+   "last_octave": 3,
+   "envelope": "adsr 15 1 2 10",
+   "env_class": "decaying",
+   "modal_note": "g+2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p29",
+   "pid": 29,
+   "wav": "instruments/fm_p29.wav",
+   "freq": 500.0,
+   "loop_offset": 896,
+   "first_octave": 4,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "e5",
+   "samples": 1408
+  },
+  {
+   "name": "fm_p30",
+   "pid": 30,
+   "wav": "instruments/fm_p30.wav",
+   "freq": 500.0,
+   "loop_offset": 448,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 5 0 0",
+   "env_class": "percussive",
+   "modal_note": "d+5",
+   "samples": 960
+  },
+  {
+   "name": "fm_p31",
+   "pid": 31,
+   "wav": "instruments/fm_p31.wav",
+   "freq": 500.0,
+   "loop_offset": 512,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "b3",
+   "samples": 1024
+  },
+  {
+   "name": "fm_p32",
+   "pid": 32,
+   "wav": "instruments/fm_p32.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 2,
+   "last_octave": 3,
+   "envelope": "adsr 15 1 2 10",
+   "env_class": "decaying",
+   "modal_note": "c+2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p33",
+   "pid": 33,
+   "wav": "instruments/fm_p33.wav",
+   "freq": 500.0,
+   "loop_offset": 512,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "c+5",
+   "samples": 1024
+  },
+  {
+   "name": "fm_p35",
+   "pid": 35,
+   "wav": "instruments/fm_p35.wav",
+   "freq": 500.0,
+   "loop_offset": 448,
+   "first_octave": 4,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "a+4",
+   "samples": 960
+  },
+  {
+   "name": "fm_p36",
+   "pid": 36,
+   "wav": "instruments/fm_p36.wav",
+   "freq": 500.0,
+   "loop_offset": 896,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "g5",
+   "samples": 1408
+  },
+  {
+   "name": "fm_p37",
+   "pid": 37,
+   "wav": "instruments/fm_p37.wav",
+   "freq": 500.0,
+   "loop_offset": 512,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "f4",
+   "samples": 1024
+  },
+  {
+   "name": "fm_p38",
+   "pid": 38,
+   "wav": "instruments/fm_p38.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 3,
+   "last_octave": 6,
+   "envelope": "adsr 15 2 1 10",
+   "env_class": "decaying",
+   "modal_note": "c5",
+   "samples": 640
+  },
+  {
+   "name": "fm_p39",
+   "pid": 39,
+   "wav": "instruments/fm_p39.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 1,
+   "last_octave": 6,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "g4",
+   "samples": 640
+  },
+  {
+   "name": "fm_p40",
+   "pid": 40,
+   "wav": "instruments/fm_p40.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 1,
+   "last_octave": 3,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "e2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p41",
+   "pid": 41,
+   "wav": "instruments/fm_p41.wav",
+   "freq": 500.0,
+   "loop_offset": 448,
+   "first_octave": 2,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "b4",
+   "samples": 960
+  },
+  {
+   "name": "fm_p42",
+   "pid": 42,
+   "wav": "instruments/fm_p42.wav",
+   "freq": 500.0,
+   "loop_offset": 320,
+   "first_octave": 2,
+   "last_octave": 4,
+   "envelope": "adsr 15 6 0 0",
+   "env_class": "percussive",
+   "modal_note": "f4",
+   "samples": 832
+  },
+  {
+   "name": "fm_p44",
+   "pid": 44,
+   "wav": "instruments/fm_p44.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 4,
+   "last_octave": 4,
+   "envelope": "adsr 15 4 0 0",
+   "env_class": "percussive",
+   "modal_note": "d4",
+   "samples": 640
+  },
+  {
+   "name": "fm_p46",
+   "pid": 46,
+   "wav": "instruments/fm_p46.wav",
+   "freq": 500.0,
+   "loop_offset": 448,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "g+4",
+   "samples": 960
+  },
+  {
+   "name": "fm_p47",
+   "pid": 47,
+   "wav": "instruments/fm_p47.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 1,
+   "last_octave": 3,
+   "envelope": "adsr 15 1 2 10",
+   "env_class": "decaying",
+   "modal_note": "e2",
+   "samples": 640
+  },
+  {
+   "name": "fm_p48",
+   "pid": 48,
+   "wav": "instruments/fm_p48.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 4,
+   "last_octave": 5,
+   "envelope": "adsr 15 0 2 10",
+   "env_class": "decaying",
+   "modal_note": "b4",
+   "samples": 640
+  },
+  {
+   "name": "fm_p56",
+   "pid": 56,
+   "wav": "instruments/fm_p56.wav",
+   "freq": 500.0,
+   "loop_offset": 128,
+   "first_octave": 2,
+   "last_octave": 3,
+   "envelope": "adsr 15 4 0 0",
+   "env_class": "percussive",
+   "modal_note": "d3",
+   "samples": 640
+  },
+  {
+   "name": "fm_p57",
+   "pid": 57,
+   "wav": "instruments/fm_p57.wav",
+   "freq": 500.0,
+   "loop_offset": 640,
+   "first_octave": 3,
+   "last_octave": 5,
+   "envelope": "gain F127",
+   "env_class": "sustained",
+   "modal_note": "g+5",
+   "samples": 1152
+  }
+ ],
+ "bindings": [
+  {
+   "track": "01 Attract Mode",
+   "fm_voice": 0,
+   "pid": 0,
+   "instrument": "fm_p00"
+  },
+  {
+   "track": "01 Attract Mode",
+   "fm_voice": 1,
+   "pid": 6,
+   "instrument": "fm_p06"
+  },
+  {
+   "track": "01 Attract Mode",
+   "fm_voice": 2,
+   "pid": 1,
+   "instrument": "fm_p01"
+  },
+  {
+   "track": "01 Attract Mode",
+   "fm_voice": 3,
+   "pid": 2,
+   "instrument": "fm_p02"
+  },
+  {
+   "track": "02 Coin",
+   "fm_voice": 0,
+   "pid": 7,
+   "instrument": "fm_p07"
+  },
+  {
+   "track": "02 Coin",
+   "fm_voice": 1,
+   "pid": 9,
+   "instrument": "fm_p09"
+  },
+  {
+   "track": "02 Coin",
+   "fm_voice": 2,
+   "pid": 9,
+   "instrument": "fm_p09"
+  },
+  {
+   "track": "02 Coin",
+   "fm_voice": 3,
+   "pid": 9,
+   "instrument": "fm_p09"
+  },
+  {
+   "track": "03 Main BGM 1",
+   "fm_voice": 0,
+   "pid": 10,
+   "instrument": "fm_p10"
+  },
+  {
+   "track": "03 Main BGM 1",
+   "fm_voice": 1,
+   "pid": 21,
+   "instrument": "fm_p21"
+  },
+  {
+   "track": "03 Main BGM 1",
+   "fm_voice": 2,
+   "pid": 15,
+   "instrument": "fm_p15"
+  },
+  {
+   "track": "03 Main BGM 1",
+   "fm_voice": 3,
+   "pid": 11,
+   "instrument": "fm_p11"
+  },
+  {
+   "track": "04 Boss BGM 1",
+   "fm_voice": 0,
+   "pid": 6,
+   "instrument": "fm_p06"
+  },
+  {
+   "track": "04 Boss BGM 1",
+   "fm_voice": 1,
+   "pid": 25,
+   "instrument": "fm_p25"
+  },
+  {
+   "track": "04 Boss BGM 1",
+   "fm_voice": 2,
+   "pid": 26,
+   "instrument": "fm_p26"
+  },
+  {
+   "track": "04 Boss BGM 1",
+   "fm_voice": 3,
+   "pid": 26,
+   "instrument": "fm_p26"
+  },
+  {
+   "track": "05 Main BGM 2",
+   "fm_voice": 0,
+   "pid": 28,
+   "instrument": "fm_p28"
+  },
+  {
+   "track": "05 Main BGM 2",
+   "fm_voice": 1,
+   "pid": 29,
+   "instrument": "fm_p29"
+  },
+  {
+   "track": "05 Main BGM 2",
+   "fm_voice": 2,
+   "pid": 31,
+   "instrument": "fm_p31"
+  },
+  {
+   "track": "05 Main BGM 2",
+   "fm_voice": 3,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "06 Boss BGM 2",
+   "fm_voice": 0,
+   "pid": 32,
+   "instrument": "fm_p32"
+  },
+  {
+   "track": "06 Boss BGM 2",
+   "fm_voice": 1,
+   "pid": 33,
+   "instrument": "fm_p33"
+  },
+  {
+   "track": "06 Boss BGM 2",
+   "fm_voice": 2,
+   "pid": 36,
+   "instrument": "fm_p36"
+  },
+  {
+   "track": "06 Boss BGM 2",
+   "fm_voice": 3,
+   "pid": 36,
+   "instrument": "fm_p36"
+  },
+  {
+   "track": "07 Round Clear",
+   "fm_voice": 0,
+   "pid": 10,
+   "instrument": "fm_p10"
+  },
+  {
+   "track": "07 Round Clear",
+   "fm_voice": 1,
+   "pid": 37,
+   "instrument": "fm_p37"
+  },
+  {
+   "track": "07 Round Clear",
+   "fm_voice": 2,
+   "pid": 37,
+   "instrument": "fm_p37"
+  },
+  {
+   "track": "07 Round Clear",
+   "fm_voice": 3,
+   "pid": 33,
+   "instrument": "fm_p33"
+  },
+  {
+   "track": "08 Main BGM 3",
+   "fm_voice": 0,
+   "pid": 17,
+   "instrument": "fm_p17"
+  },
+  {
+   "track": "08 Main BGM 3",
+   "fm_voice": 1,
+   "pid": 21,
+   "instrument": "fm_p21"
+  },
+  {
+   "track": "08 Main BGM 3",
+   "fm_voice": 2,
+   "pid": 15,
+   "instrument": "fm_p15"
+  },
+  {
+   "track": "08 Main BGM 3",
+   "fm_voice": 3,
+   "pid": 20,
+   "instrument": "fm_p20"
+  },
+  {
+   "track": "09 Boss BGM 3",
+   "fm_voice": 0,
+   "pid": 7,
+   "instrument": "fm_p07"
+  },
+  {
+   "track": "09 Boss BGM 3",
+   "fm_voice": 1,
+   "pid": 38,
+   "instrument": "fm_p38"
+  },
+  {
+   "track": "09 Boss BGM 3",
+   "fm_voice": 2,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "09 Boss BGM 3",
+   "fm_voice": 3,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "10 Boss BGM 4",
+   "fm_voice": 0,
+   "pid": 40,
+   "instrument": "fm_p40"
+  },
+  {
+   "track": "10 Boss BGM 4",
+   "fm_voice": 1,
+   "pid": 25,
+   "instrument": "fm_p25"
+  },
+  {
+   "track": "10 Boss BGM 4",
+   "fm_voice": 2,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "10 Boss BGM 4",
+   "fm_voice": 3,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "11 Boss BGM 5",
+   "fm_voice": 0,
+   "pid": 6,
+   "instrument": "fm_p06"
+  },
+  {
+   "track": "11 Boss BGM 5",
+   "fm_voice": 1,
+   "pid": 39,
+   "instrument": "fm_p39"
+  },
+  {
+   "track": "11 Boss BGM 5",
+   "fm_voice": 2,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "11 Boss BGM 5",
+   "fm_voice": 3,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "12 Continue",
+   "fm_voice": 0,
+   "pid": 40,
+   "instrument": "fm_p40"
+  },
+  {
+   "track": "12 Continue",
+   "fm_voice": 1,
+   "pid": 8,
+   "instrument": "fm_p08"
+  },
+  {
+   "track": "12 Continue",
+   "fm_voice": 2,
+   "pid": 8,
+   "instrument": "fm_p08"
+  },
+  {
+   "track": "12 Continue",
+   "fm_voice": 3,
+   "pid": 42,
+   "instrument": "fm_p42"
+  },
+  {
+   "track": "13 Round 5-1",
+   "fm_voice": 0,
+   "pid": 41,
+   "instrument": "fm_p41"
+  },
+  {
+   "track": "13 Round 5-1",
+   "fm_voice": 1,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "13 Round 5-1",
+   "fm_voice": 2,
+   "pid": 41,
+   "instrument": "fm_p41"
+  },
+  {
+   "track": "13 Round 5-1",
+   "fm_voice": 3,
+   "pid": 44,
+   "instrument": "fm_p44"
+  },
+  {
+   "track": "14 Round 5-2",
+   "fm_voice": 0,
+   "pid": 25,
+   "instrument": "fm_p25"
+  },
+  {
+   "track": "14 Round 5-2",
+   "fm_voice": 1,
+   "pid": 6,
+   "instrument": "fm_p06"
+  },
+  {
+   "track": "14 Round 5-2",
+   "fm_voice": 2,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "14 Round 5-2",
+   "fm_voice": 3,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "15 Round 5-3",
+   "fm_voice": 0,
+   "pid": 28,
+   "instrument": "fm_p28"
+  },
+  {
+   "track": "15 Round 5-3",
+   "fm_voice": 1,
+   "pid": 35,
+   "instrument": "fm_p35"
+  },
+  {
+   "track": "15 Round 5-3",
+   "fm_voice": 2,
+   "pid": 46,
+   "instrument": "fm_p46"
+  },
+  {
+   "track": "15 Round 5-3",
+   "fm_voice": 3,
+   "pid": 35,
+   "instrument": "fm_p35"
+  },
+  {
+   "track": "16 Round 5-4",
+   "fm_voice": 0,
+   "pid": 47,
+   "instrument": "fm_p47"
+  },
+  {
+   "track": "16 Round 5-4",
+   "fm_voice": 1,
+   "pid": 41,
+   "instrument": "fm_p41"
+  },
+  {
+   "track": "16 Round 5-4",
+   "fm_voice": 2,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "16 Round 5-4",
+   "fm_voice": 3,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "17 Boss BGM 6",
+   "fm_voice": 0,
+   "pid": 40,
+   "instrument": "fm_p40"
+  },
+  {
+   "track": "17 Boss BGM 6",
+   "fm_voice": 1,
+   "pid": 39,
+   "instrument": "fm_p39"
+  },
+  {
+   "track": "17 Boss BGM 6",
+   "fm_voice": 2,
+   "pid": 39,
+   "instrument": "fm_p39"
+  },
+  {
+   "track": "17 Boss BGM 6",
+   "fm_voice": 3,
+   "pid": 48,
+   "instrument": "fm_p48"
+  },
+  {
+   "track": "18 Boss BGM 7",
+   "fm_voice": 0,
+   "pid": 47,
+   "instrument": "fm_p47"
+  },
+  {
+   "track": "18 Boss BGM 7",
+   "fm_voice": 1,
+   "pid": 35,
+   "instrument": "fm_p35"
+  },
+  {
+   "track": "18 Boss BGM 7",
+   "fm_voice": 2,
+   "pid": 41,
+   "instrument": "fm_p41"
+  },
+  {
+   "track": "18 Boss BGM 7",
+   "fm_voice": 3,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "19 Ending",
+   "fm_voice": 0,
+   "pid": 6,
+   "instrument": "fm_p06"
+  },
+  {
+   "track": "19 Ending",
+   "fm_voice": 1,
+   "pid": 8,
+   "instrument": "fm_p08"
+  },
+  {
+   "track": "19 Ending",
+   "fm_voice": 2,
+   "pid": 8,
+   "instrument": "fm_p08"
+  },
+  {
+   "track": "19 Ending",
+   "fm_voice": 3,
+   "pid": 15,
+   "instrument": "fm_p15"
+  },
+  {
+   "track": "20 Name Entry",
+   "fm_voice": 0,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "20 Name Entry",
+   "fm_voice": 1,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "20 Name Entry",
+   "fm_voice": 2,
+   "pid": 30,
+   "instrument": "fm_p30"
+  },
+  {
+   "track": "20 Name Entry",
+   "fm_voice": 3,
+   "pid": 56,
+   "instrument": "fm_p56"
+  },
+  {
+   "track": "21 Game Over",
+   "fm_voice": 0,
+   "pid": 6,
+   "instrument": "fm_p06"
+  },
+  {
+   "track": "21 Game Over",
+   "fm_voice": 1,
+   "pid": 57,
+   "instrument": "fm_p57"
+  },
+  {
+   "track": "21 Game Over",
+   "fm_voice": 2,
+   "pid": 57,
+   "instrument": "fm_p57"
+  },
+  {
+   "track": "21 Game Over",
+   "fm_voice": 3,
+   "pid": 57,
+   "instrument": "fm_p57"
+  }
+ ],
+ "total_brr_estimate": 16758
+}
