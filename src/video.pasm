@@ -1767,7 +1767,12 @@ sv_cp:
     bcs sv_armed
     lda #$0001
     sta $0768            ; latch first (never re-enter)
-    sta $072E            ; LOOP FAST-PATH on (gameplay loops; boot self-test is past)
+    ; NOTE loop_hook ($072E) is NOT armed — DELIBERATELY. Sustained armed free-run
+    ; bisect (2026-07-10): lh-only and lh+esc runs both crash deterministically
+    ; minutes into gameplay ($DEAD halt, 68K PC derailed to $080100 = past ROM end,
+    ; game tick $A005 both times); escapes-only ran 36000f clean. Same guilty party
+    ; as the boot RAM-test failure. lh stays OFF everywhere until a lockstep-vs-MAME
+    ; root-cause; the $0818 idle-collapse speed loss is the price of correctness.
     sta $071A            ; ESC   on
     sta $073A            ; CHOKE on
     lda #$A55A
