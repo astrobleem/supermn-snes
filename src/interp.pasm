@@ -105,19 +105,20 @@ ccramclr:                ; else random power-on values break the start handshake
     sta $000200          ; clear the virtual-controller test-injection word (A=0 here).
                          ; $00:0200 = interp-private WRAM (not 68K $7F / not video $7E).
     ; ---- TEST-MODE entry (optest.py differential harness) ----
-    ; If ROM TESTFLAG ($00:F600) != 0 (baked into a test .sfc), enter single-step
+    ; If ROM TESTFLAG ($00:F7E0) != 0 (baked into a test .sfc), enter single-step
     ; poll-idle. The harness pokes DP regs ($00-$3F), PC ($40/$42), flags
     ; (Z$60 C$6E N$70 V$72 X$A2), SR mask $7C and the work-RAM operand directly
     ; via write_memory after boot, then sets the go-flag $A0; test_idle then runs
     ; exactly one op (op baked in the ROM image) and returns. Production = TESTFLAG 0.
-    ; NOTE: the flag lives at $00:F600, NOT the historical $F400. $F400 fell inside
-    ; the entry_20e8 escape body ($F307-$F442) once that escape was deployed, so the
-    ; SA-1's $00:F400 (LoROM -> file $7400) read escape code (always != 0) and the
-    ; production notest path was UNREACHABLE -> the interp never cold-booted. $F600
-    ; is in the free gap after the escape and is ZERO in BOTH ROM views (SA-1 file
-    ; $7600 / 5A22 file $F600), so production reads 0 and optest can bake a 1 there.
-    lda $F600
-    beq notest
+    ; NOTE: the flag has moved TWICE for the same reason — code growth covering the
+    ; byte makes it permanently nonzero and the production notest path silently
+    ; UNREACHABLE. $F400 fell inside the entry_20e8 escape body; $F600 was covered
+    ; by loop_hook growth (read $64 = lh code, found 2026-07-09 — every Mesen cold
+    ; boot had been dropping into test mode). Now an org-pinned, labeled byte at
+    ; $00:F7E0 (RESP1 tail slack; see the TESTFLAG declaration) — zero in BOTH ROM
+    ; views (SA-1 file $77E0 / 5A22 file $F7E0); optest/opsweep bake file $77E0.
+    lda $F7E0            ; TESTFLAG (LITERAL, not the symbol: Poppy forward-refs can
+    beq notest           ;  mis-size operands and ANY shift here is fatal)
     stz $AA              ; no pending IRQ (countdown/pending moved off $88/$8A; see iloop)
     lda #$7FFF
     sta $AC              ; huge countdown: no IRQ during the single step
@@ -18504,7 +18505,9 @@ _20e8_t67:
 
 ; =============================================================================
 ; loop_hook — LOOP FAST-PATH dispatcher (boot acceleration). Lives in the free
-; $F442 gap (MUST stay below the $F600 TESTFLAG). Called per-instruction from the
+; $F442 gap (MUST stay below the $F7E0 TESTFLAG — this constraint WAS violated at
+; the old $F600 spot: lh growth covered it and silently killed cold boot). Called
+; per-instruction from the
 ; fetch sled when $072E!=0, with the 68K PC in $40/$42. If $40 matches a known hot
 ; boot-loop entry it applies the loop's NET effect natively, sets $40 to the loop
 ; exit, and returns CARRY SET (caller re-fetches the new PC). No match -> CARRY
@@ -18727,8 +18730,9 @@ gmc_nohi:
 ; subq.l #1,Dm  /  bne -8 (back to the cmp).  In the boot every verify immediately
 ; follows a clear/fill of the SAME region with the SAME value, so it necessarily matches
 ; -> collapse it: An += count*size, Dm = 0, PC past the 4-instr body (8 bytes). Guarded:
-; Dm.hi16 must be 0 (else the loop is huge -> let the interp run it). Lives at $F602, after
-; the $F600 TESTFLAG, in the last bank-0 gap. Scratch $0740 size, $0742 subq-opcode.
+; Dm.hi16 must be 0 (else the loop is huge -> let the interp run it). Lives at $F602 in the
+; last bank-0 gap (the code just BEFORE this .org grew over $F600 — the old TESTFLAG spot,
+; which is why the flag moved to $F7E0). Scratch $0740 size, $0742 subq-opcode.
 .org $F602
 gm_verify:
     lda $44
@@ -18824,6 +18828,22 @@ ors_pre_97:
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
 
+; TESTFLAG — relocated AGAIN ($F400 -> $F600 -> $F7E0, 2026-07-09): loop_hook code
+; growth covered $F600 in both ROM views (the byte read $64 = mid-instruction of
+; lh code before gm_verify), so `lda $F600 / beq notest` was never zero and the
+; production cold-boot (notest) path was SILENTLY UNREACHABLE — the exact failure
+; class the $F400 note below warns about.
+; HONEST CAVEAT: bank $00 has NO free byte (fully packed) — $F7E0 OVERLAPS the
+; tail of the 256-byte RESP1 block above (RESP1[$E0], zero in the real C-Chip
+; capture). This is safe by construction: PRODUCTION needs TESTFLAG==0, which
+; equals the real data (the .db below re-asserts it); TEST ROMs bake it nonzero
+; (optest/opsweep poke SA-1 file view $77E0) but then enter test mode and never
+; boot the game, so the corrupted RESP1 tail is never downloaded. Do NOT bake
+; TESTFLAG and expect a production boot from the same image.
+.org $F7E0
+TESTFLAG:
+    .db $00              ; == RESP1[$E0] (must stay 0 in production)
+
 ; =============================================================================
 ; VIDEO PLUMBING routines, placed in free bank space ($F800+) so adding them does
 ; NOT shift the main code (a mid-file insertion can push a relative branch out of
@@ -18886,7 +18906,8 @@ ms_shadow:
 ; --- video subsystem relocated to bank $E9 (src/video.pasm). map_snes stays here
 ;     (hot store path). These 3 entries are reached via jsl/jml VID_*. ---
 test_or_vid:
-    lda $F600            ; TESTFLAG (relocated from $F400; see reset note)
+    lda $F7E0            ; TESTFLAG ($00:F7E0 — relocated twice; see the reset note.
+                         ;  LITERAL for the same no-shift reason as the boot read)
     cmp #$0002
     bne tov_idle
     jml VIDTEST          ; $E98008 -> vidtest_init (no return)

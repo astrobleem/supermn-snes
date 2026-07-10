@@ -77,6 +77,33 @@ the polish stage this is nearly full; `check` is the gate when tuning `--extra-b
 drum caps. Remaining by-ear items: echo/vibrato taste, FM pitch-bends (`MP`), long drum
 tails capped (in-game hits retrigger gate-style, masking this).
 
+## Concurrent live-gameplay validation (P3 close-out, 2026-07-10)
+
+Everything above was first validated with the SA-1 idle. Validating with the game actually
+RUNNING (Mesen cold boot — restored by the TESTFLAG relocation in interp.pasm) surfaced,
+in order:
+
+- **Boot accelerators corrupt the walking-bit RAM test** (`$3FE6-$3FFE`): with loop-hook +
+  escapes armed the boot fails its RAM check and parks in the error display at `$1B90-$1D46`
+  (MAME never visits it). OPEN interp-side bug (`gm_memset` collapse suspected); workaround:
+  disarm `$072E/$071A/$073A` during boot, re-arm at the main loop.
+- **The 5A22 sound layer now runs from the `$7F` WRAM mirror** (rc_copy window widened to
+  `$1B00`, TAD internal `jsl`s forced `|$7F0000` via `regen.sh`), matching the pt.20/21
+  "concurrent 5A22 code lives in WRAM" rule.
+- **Instrumentation self-clobber lesson**: sound_tick's 16-bit W-debug store at `$7E:1F19`
+  also wrote `$1F1A` — which was the call counter, so the counter read 0 forever and
+  produced a long false "sound_tick never runs / stores vanish under concurrency"
+  diagnosis (fixed: counter moved to `$1F1C`). Verify instrument addresses don't overlap
+  16-bit stores before trusting them.
+- **The transport is CLEAN under full concurrency**: a continuous 5A22 sampler of the
+  `$41:0120` mailbox (250×/frame, game + escapes running) always read the true value —
+  the P2-era "stale `$41` reads" do not reproduce on the live path. Attract music plays
+  audibly while the game boots and runs (peak ~7.5k with SA-1 hot).
+- **Attract Mode (track 01) is a 17 s one-shot** (the rip has no loop data) — recordings
+  taken minutes into a run are silent because the song ENDED, not because audio broke.
+  The arcade re-triggers `$05` each attract cycle (with a `$00` between), so in-game
+  behavior is correct.
+
 ## Typical iterative loop (one track)
 
 ```bash

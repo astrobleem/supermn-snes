@@ -53,12 +53,12 @@ STACK = 0xF03F00
 DP_SPACE   = "Sa1Memory"
 OPND_SPACE = "snesMemory"
 OPND_ADDR  = 0x400000 | (OPND & 0xFFFF)        # $F03800 work RAM -> BW-RAM $40:3800
-MBOX = 0x7600                         # ROM file offset of the TESTFLAG. The interp runs on the SA-1,
+MBOX = 0x77E0                         # ROM file offset of the TESTFLAG. The interp runs on the SA-1,
                                       # which sees bank-$00 $8000-$FFFF LoROM-style (file = CPU-$8000),
-                                      # so CPU $00:F600 -> file $7600. (The old $F400 only "worked"
-                                      # because $00:F400 -> file $7400 was escape code, permanently
-                                      # nonzero => test mode was always-on by accident; relocating the
-                                      # flag to a genuinely-zero byte exposed that.)
+                                      # so CPU $00:F7E0 -> file $77E0. (Relocated twice: $F400 and later $F600 each got
+                                      # covered by code growth and read permanently
+                                      # nonzero => test mode was always-on by accident; the flag now has an
+                                      # org-pinned declaration in interp.pasm at $00:F7E0.)
 
 REGNAMES = ["D0","D1","D2","D3","D4","D5","D6","D7",
             "A0","A1","A2","A3","A4","A5","A6","A7"]

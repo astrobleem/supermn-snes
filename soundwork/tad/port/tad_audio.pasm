@@ -1090,7 +1090,7 @@ TadPrivate_Process_WaitingForLoader:
         beq TadPrivate_Process_WaitingForLoader__UseBlankSong
 
 TadPrivate_Process_WaitingForLoader__LoadData:
-    jsl.l LoadAudioData|$E90000
+    jsl.l LoadAudioData|$7F0000
     bcs __anon10
         ; LoadAudioData returned false
     TadPrivate_Process_WaitingForLoader__UseBlankSong:
@@ -1186,7 +1186,7 @@ Tad_FinishLoadingData:
     and #$7f
     cmp #TAD__FIRST_LOADING_STATE
         bcc Tad_FinishLoadingData__EndLoop
-            jsl.l TadPrivate_Process_Loading|$E90000
+            jsl.l TadPrivate_Process_Loading|$7F0000
         bra Tad_FinishLoadingData__Loop
     Tad_FinishLoadingData__EndLoop:
 

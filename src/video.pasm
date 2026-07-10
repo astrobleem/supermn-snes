@@ -1518,7 +1518,9 @@ wl_dly:
     bne wl_novb
     lda #$01
     sta $1F10            ; mark this vblank handled (edge -> one call per frame = 60Hz)
-    jsl.l Tad_Process|$E90000   ; A8/X16 already set; bank $E9 (ROM), bank-explicit from WRAM
+    jsl.l Tad_Process|$7F0000   ; A8/X16 already set; the $7F WRAM copy (NOT $E9 ROM - 5A22
+                                ;   ROM-hosted execution loses stores once the SA-1 runs its
+                                ;   per-frame $E9 hook; see the rc_copy P3 CONCURRENT FIX note)
     bra wl_novb
 wl_notvb:
     stz $1F10            ; out of vblank -> re-arm
@@ -1528,10 +1530,13 @@ wl_novb:
     cmp $3302            ; FRAME_ACK
     beq wl_poll          ; no new tick -> keep idling in WRAM
     sta $3302            ; ack this tick
-    jsl.l $E99800        ; P2: drain the 68K sound-command ring -> TAD (sound_tick, @ $E9:9800).
+    jsl.l $7F9800        ; P2: drain the 68K sound-command ring -> TAD (sound_tick, $7F WRAM
+                         ;   copy of $E9:9800 - see the rc_copy P3 CONCURRENT FIX note).
                          ;   LITERAL vector (not a symbol) per the $7F8918 rule; sound_tick php/plp's
                          ;   its own width so no state juggling here. Runs once per game tick.
-    jsl VFT_VEC          ; $E98004 -> vf_tick ($7F WRAM copy): joy + render, once per game tick
+    jsl.l $7F8918        ; vf_tick ($7F WRAM copy, pinned $8918): joy + render, once per game
+                         ;   tick. Direct (was jsl VFT_VEC=$E98004, whose 4-byte jml wrapper
+                         ;   executed from ROM $E9 - eliminated for the same ROM-exec hazard)
     bra wl_poll          ; back to the throttle
 
 ; ---- rc_copy — pt.21: mirror the render code into WRAM bank $7F ------------------------
@@ -1552,11 +1557,21 @@ rc_copy:
     rep #$30
     ldx #$0000
 rc_l:
-    lda $E98000,x        ; long,X src: render bank ROM ($E9:8000-$8FFE; +X never crosses bank)
-    sta $7F8000,x        ; long,X dst: WRAM mirror ($7F:8000-$8FFE)
+    lda $E98000,x        ; long,X src: render bank ROM ($E9:8000-$9AFE; +X never crosses bank)
+    sta $7F8000,x        ; long,X dst: WRAM mirror ($7F:8000-$9AFE)
     inx
     inx
-    cpx #$1000           ; 4KB window (code tops out ~$8944; the tail is harmless padding)
+    cpx #$1B00           ; 6.75KB window: render ($8000-$8FFF) + THE WHOLE 5A22 SOUND LAYER
+                         ; (TAD glue+port $9000-$93xx, sound_tick $9800, snd_map+snd_tbl
+                         ; $9A00-$9AC6; snd_vframe $9900 rides along harmlessly - the SA-1
+                         ; keeps running the $E9 original). P3 CONCURRENT FIX: once the SA-1
+                         ; starts executing its per-game-frame $E9 hook (snd_vframe), 5A22
+                         ; code EXECUTED from ROM $E9 loses its effect (stores never land;
+                         ; measured: sound_tick jsl round-trips but its counters/W-reads stay
+                         ; zero, while the SAME instructions hosted in WRAM work) - the same
+                         ; class of hazard as the pt.20/21 "idle 5A22 must execute from WRAM"
+                         ; latch rule. So ALL per-tick 5A22 sound code runs from the $7F copy
+                         ; (TAD internal jsl's forced |$7F0000 via regen.sh TAD_CODE_BANK).
     bne rc_l
     plp
     jsr vid_init         ; exactly the action cpu5a22_video's `jsr` originally performed
@@ -1583,7 +1598,13 @@ tad_bssclr:
     sta $7e1f16          ; drained-count ($1F16) + last-cmd ($1F17) debug bytes -> 0
     sep #$20             ; A8
     rep #$10             ; X16  (TAD ABI)
-    jsl.l Tad_Init|$E90000       ; upload loader.bin -> audio-driver.bin (blocking IPL handshake)
+    jsl.l Tad_Init|$7F0000       ; upload loader.bin -> audio-driver.bin (blocking IPL handshake;
+                                 ;   the $7F copy exists - rc_copy ran above). BOOT-PHASE NOTE:
+                                 ;   ROM-hosted 5A22 exec is still safe HERE (the hazard begins
+                                 ;   when the SA-1 reaches its per-frame $E9 hook, seconds later),
+                                 ;   but the $7F copy is used for consistency; the near `jsr
+                                 ;   Tad_LoadSong` below still executes this rc_copy tail's own
+                                 ;   bank and is boot-phase-only.
     lda #$01             ; Song id 1 = 01 Attract Mode (arcade boots into attract)
     jsr Tad_LoadSong     ; the poll loop's steady 60Hz Tad_Process finishes the load + starts playback
     rts
@@ -1617,6 +1638,8 @@ tad_bssclr:
 ;   $7E:1F16 = drained-command count (debug, 8-bit, wraps)
 ;   $7E:1F17 = last command byte (debug)
 ;   $7E:1F18 = scratch (W)
+;   $7E:1F19 = W-as-read debug (16-bit store; $1F1A = its always-zero high byte)
+;   $7E:1F1C = call counter (16-bit; moved off $1F1A — see the note at the inc)
 ; Called via `jsl.l $E99800` from wl_blob once per game tick. php/plp-bracketed so the
 ; caller needs no width juggling. Tad_LoadSong/QueueSoundEffect are near (same bank $E9).
 ; ============================================================================
@@ -1624,9 +1647,14 @@ tad_bssclr:
 sound_tick:
     php
     rep #$30             ; 16-bit A/X
-    lda $7e1f1a
+    lda $7e1f1c
     inc a
-    sta $7e1f1a          ; DEBUG: sound_tick call counter (proves it runs)
+    sta $7e1f1c          ; DEBUG: sound_tick call counter (proves it runs). At $1F1C, NOT
+                         ;   $1F1A: the W-debug `sta $7e1f19` below runs in 16-BIT A, so it
+                         ;   also writes $1F1A (W's high byte, always 0) — the counter lived
+                         ;   there originally and was SELF-ZEROED every call, which cost a
+                         ;   long false "sound_tick never runs" diagnosis (P3 concurrent
+                         ;   validation). $1F1A is now documented as the Wdbg high byte.
     lda.l $410120        ; W = write position from the $41 shadow copy (snd_vframe mirrors $40:1c43
     and #$00ff           ;   here). $41 is the proven 5A22-readable channel (the render reads it);
                          ;   force long (.l) so DBR is irrelevant.

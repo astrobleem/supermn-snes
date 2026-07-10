@@ -6,8 +6,9 @@
 # Hand-fixes (anon labels, ABI, integration) come after, guided by assembly errors.
 import re, os
 
-SRC = "/home/chad/supermn-snes/soundwork/tad/port/tad-audio.converted.pasm"
-DST = "/home/chad/supermn-snes/soundwork/tad/port/tad_audio.pasm"
+import pathlib
+SRC = str(pathlib.Path(__file__).resolve().parent / "tad-audio.converted.pasm")
+DST = str(pathlib.Path(__file__).resolve().parent / "tad_audio.pasm")
 DEFINES = {"HIROM"}          # LOROM + TAD_CUSTOM_DEFAULTS deliberately unset
 
 BSS_BASE = int(os.environ.get("TAD_BSS_BASE", "0x7EF100"), 0)   # WRAM state block [integration default]

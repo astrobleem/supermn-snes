@@ -126,6 +126,16 @@ ROM[H+0x18] = 0x07      # SRAM size = 128 KB: for SA-1 this IS the BW-RAM (the s
 ROM[H+0x19] = 0x01      # country
 ROM[H+0x1A] = 0x33      # licensee
 ROM[H+0x1B] = 0x00      # version
+# --- TESTFLAG guard (see interp.pasm TESTFLAG declaration) ---
+# The production cold-boot path requires $00:F7E0 == 0 in BOTH ROM views (SA-1
+# LoROM mirror file $77E0 / 5A22 HiROM file $F7E0). This byte has been silently
+# covered by code growth TWICE ($F400, then $F600), each time making cold boot
+# unreachable; fail the build loudly instead of shipping a third regression.
+assert ROM[0x77E0] == 0 and ROM[0xF7E0] == 0, (
+    "TESTFLAG ($00:F7E0) nonzero in a ROM view (sa1 file $77E0=%02X, 5a22 file "
+    "$F7E0=%02X): code growth covered it AGAIN — relocate the flag (interp.pasm)"
+    % (ROM[0x77E0], ROM[0xF7E0]))
+
 # checksum (zero the fields, sum, write complement+checksum)
 for i in range(H+0x1C, H+0x20):
     ROM[i] = 0x00
