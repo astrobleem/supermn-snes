@@ -126,6 +126,27 @@ ROM[H+0x18] = 0x07      # SRAM size = 128 KB: for SA-1 this IS the BW-RAM (the s
 ROM[H+0x19] = 0x01      # country
 ROM[H+0x1A] = 0x33      # licensee
 ROM[H+0x1B] = 0x00      # version
+# --- bank-$00 org-overlap guards (the loop_hook overgrowth class, 2026-07-10) ---
+# Poppy silently lets a later .org assemble OVER earlier flowed code (last org wins
+# per byte). That buried the $F600 TESTFLAG, truncated lh_3fea's sec/rts (boot
+# RAM-test failure) and buried lh_adbe/gm_memclr under gm_verify (the $080100
+# gameplay derail). Guard the two seams: the loop-hook flow chain (.org $F442)
+# must leave slack before the $F602 section, and gm_memclr's rehomed body must
+# leave slack before the $F6EA section. Slack bytes assemble as zero fill; code
+# growing into them fails HERE instead of silently misexecuting.
+# (the flow chain legitimately ends at $F5FB after the 2026-07-10 lh_0818 streak
+# gate — only 6 slack bytes remain; the NEXT lh growth must relocate to escbank5
+# like lh_3fea/lh_adbe/gm_verify did)
+for a, b, what in [(0xF5FC, 0xF602, "loop-hook flow chain vs .org $F602"),
+                   (0xF6E4, 0xF6EA, "gm_memclr region vs .org $F6EA")]:
+    for fo in (a - 0x8000, a):        # file offsets: SA-1 view (addr-$8000), 5A22 view (addr)
+        chunk = bytes(ROM[fo:fo + (b - a)])
+        assert chunk == bytes(b - a), (
+            "bank-$00 org-overlap guard tripped (%s): bytes $%04X-$%04X not zero "
+            "(file +0x%X): %s — code grew into the slack; RELOCATE it (see the "
+            "loop_hook root-cause notes in interp.pasm/escbank5.pasm)"
+            % (what, a, b - 1, fo, chunk.hex()))
+
 # --- TESTFLAG guard (see interp.pasm TESTFLAG declaration) ---
 # The production cold-boot path requires $00:F7E0 == 0 in BOTH ROM views (SA-1
 # LoROM mirror file $77E0 / 5A22 HiROM file $F7E0). This byte has been silently

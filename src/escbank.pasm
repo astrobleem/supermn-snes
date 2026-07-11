@@ -28,7 +28,7 @@ bhp_after=$00E454
 ors_pre=$00D16F
 lh_sched=$00F9B2
 op_rte=$00B3B8
-lh_nofire=$00F5B9
+lh_nofire=$00F5B1
 irq_none=$0080CB
 entry_c9f8=$948039
 entry_d5a0=$94849E
@@ -72,7 +72,7 @@ entry_d232=$99EB00   ; pt.22 P3b: --bank5 $99 body, .org-fixed (gen_escbank_syms
 escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jmp = 3 bytes)
     jmp entry_d96                ; slot 0  ($928000)  <- $000D96
     jmp entry_fb8                ; slot 1  ($928003)  <- $000FB8
-    jmp gm_memset                ; slot 2  ($928006)  <- generic memset (loop fast-path)
+    jmp gms_tramp                ; slot 2  ($928006)  <- generic memset -> escbank5 body (2026-07-10)
     jmp entry_28d4               ; slot 3  ($928009)  <- $0028D4 (gameplay ~2.4%)
     jmp entry_26a0               ; slot 4  ($92800C)  <- $0026A0 (sprite-ctrl, $D0 shadow)
     jmp entry_26fa               ; slot 5  ($92800F)  <- $0026FA (hot leaf, jsr.l from $00CE5E)
@@ -15005,3 +15005,13 @@ Lfceb6_6:
     sta $42
     jml.l ojmp_hook
 
+
+
+; gm_memset -> escbank5 tramp (loop_hook root-cause, 2026-07-10): the $92 gm_memset body
+; below predates the exit-CCR fix and the count==0 guard; slot 2 bounces here to the
+; corrected gm_memset_far ($99:F5C0). The old body stays as dead code — escbank addresses
+; are referenced ABSOLUTELY by the xlat dispatch tables, so nothing here may shift.
+.org $FFC0
+gms_tramp:
+    jsl $99F5C0
+    rtl

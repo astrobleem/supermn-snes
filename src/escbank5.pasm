@@ -9276,3 +9276,367 @@ brd232_2:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; ============================================================================
+; lh_3fea_far / lh_adbe_far / gm_verify_far — loop_hook bodies RELOCATED from
+; interp.pasm (ROOT-CAUSE, 2026-07-10): the bank-$00 loop-hook flow chain
+; (.org $F442) grew past $F601 and the LATER `.org $F602` gm_verify section
+; silently assembled OVER its tail (Poppy has no overlap detection; last org
+; wins per byte). Casualties: lh_3fea lost its `sec/rts` (fell through into
+; gm_verify -> returned carry-CLEAR -> the sled re-executed the stale opcode
+; against the collapsed PC -> PC desync into the RAM-test FAIL block = the
+; boot self-test "failure"); lh_adbe and gm_memclr were buried entirely (the
+; dispatch jmps landed mid-gm_verify -> garbage decode = the deterministic
+; gameplay derail to $080100 at tick $A005). The same overgrowth had earlier
+; buried the $F600 TESTFLAG. Bank $00 now holds 5-byte jsl stubs; these bodies
+; are bank-independent (DP regfile + abs-long stores + [$56] indirect-long
+; peeks; carry returns through rtl exactly like gm_memset). gm_memclr stays in
+; bank $00 (it jsr's the interp's region-aware writeword/writelong) in the
+; space gm_verify vacated.
+; ============================================================================
+.org $F400
+lh_3fea_far:             ; $3FEA walking-bit BYTE RAM test -> net memset 0 (see interp.pasm stub)
+    lda $26
+    cmp #$00F0
+    bne lhf_no
+    lda $0A
+    bne lhf_no           ; D2 >= 65536 -> interp runs the real test
+    lda $24
+    clc
+    adc $08
+    bcs lhf_no           ; bank wrap -> interp
+    ldx $24
+    ldy $08
+    beq l3f_tail
+    sep #$20
+    lda #$00
+l3f_lp:
+    sta $400000,x
+    inx
+    dey
+    bne l3f_lp
+    rep #$30
+l3f_tail:
+    stx $24              ; A1 += D2 (X marched base -> base+count in the fill;
+                         ;   count==0 path: X still = old A1 -> unchanged)
+    stz $08
+    stz $0A              ; D2 = 0
+    stz $04              ; D1 = 0
+    lda #$0001
+    sta $60              ; exit CCR: the closing subq left 0 -> Z=1, N=0, V=0, C=0, X=0
+    stz $6E              ;   (stale-CCR collapses = the documented dbra-fallthrough gap
+    stz $70              ;   class; a following Bcc must see the loop's real exit flags)
+    stz $72
+    stz $A2
+    lda #$3FFE
+    sta $40              ; resume at the test-passed branch (bra $4008)
+    stz $42
+    sec
+    rtl
+lhf_no:
+    clc
+    rtl
+
+.org $F450
+lh_adbe_far:             ; $ADBE walking-bit WORD RAM test -> net memset 0
+    lda $26
+    cmp #$00F0
+    bne lhf_no
+    lda $0A
+    bne lhf_no           ; D2 >= 65536 words -> interp
+    lda $08
+    asl a                ; A = D2*2 (byte span)
+    bcs lhf_no           ; span > 64K -> interp
+    clc
+    adc $24
+    bcs lhf_no           ; A1.lo16 + span wraps bank -> interp
+    ldx $24
+    ldy $08
+    beq lad_tail
+    sep #$20
+    lda #$00
+lad_lp:
+    sta $400000,x        ; word = 0 (both bytes)
+    sta $400001,x
+    inx
+    inx
+    dey
+    bne lad_lp
+    rep #$30
+lad_tail:
+    stx $24              ; A1 += D2*2 (X marched by 2 per word; count==0 -> unchanged)
+    stz $08
+    stz $0A              ; D2 = 0
+    stz $04              ; D1 = 0
+    lda #$0001
+    sta $60              ; exit CCR: the closing subq left 0 -> Z=1, N=0, V=0, C=0, X=0
+    stz $6E              ;   (stale-CCR collapses = the documented dbra-fallthrough gap
+    stz $70              ;   class; a following Bcc must see the loop's real exit flags)
+    stz $72
+    stz $A2
+    lda #$ADD2
+    sta $40              ; resume at move #0,CCR ; rts
+    stz $42
+    sec
+    rtl
+
+.org $F4A0
+gm_verify_far:           ; read-back verify idiom: cmp.b/w (An)+,Dn / bne <err> / subq.l #1,Dm
+                         ; / bne -8. GAMEPLAY-CORRECTNESS REWRITE (2026-07-10): the old
+                         ; collapse ASSUMED every compare matches — true for the boot's
+                         ; fill-then-verify pairs, WRONG for gameplay compare/search loops
+                         ; whose early mismatch exit carries meaning (collapsing those as
+                         ; "all matched" corrupted game logic -> the deterministic $080100
+                         ; derail). Now work-RAM-only and every element is ACTUALLY
+                         ; compared; ANY mismatch -> no-fire, the interp runs the real loop
+                         ; and takes the genuine error/early exit. Scratch $0740 size,
+                         ; $0742 value, $0744 count, $0746 Dm*4, $0748 An off, $074A span.
+    lda $44
+    and #$F1F8
+    cmp #$B018           ; cmp.b (An)+,Dn
+    beq gvf_match
+    cmp #$B058           ; cmp.w (An)+,Dn
+    beq gvf_match
+gvf_no:                  ; no verify idiom -> the generic memset matcher
+    jsl $928006          ; slot 2 -> gms_tramp -> gm_memset_far; carry propagates
+    rtl
+gvf_match:
+    ldy #$0002           ; PC+2 must be bne (the mismatch->error branch)
+    lda [$56],y
+    xba
+    and #$FF00
+    cmp #$6600
+    bne gvf_no
+    ldy #$0004           ; PC+4 must be subq.l #1,Dm
+    lda [$56],y
+    xba
+    sta $0742
+    and #$FFF8
+    cmp #$5380
+    bne gvf_no
+    ldy #$0006           ; PC+6 must be bne -8 (loop back to the cmp)
+    lda [$56],y
+    xba
+    cmp #$66F8
+    bne gvf_no
+    lda $0742            ; Dm*4 ; require Dm.hi16 == 0 and count != 0
+    and #$0007
+    asl a
+    asl a
+    sta $0746
+    tay
+    lda $02,y
+    bne gvf_no           ; count >= 65536 -> interp
+    lda $00,y
+    beq gvf_no           ; count == 0 -> real loop underflows through 64K -> interp
+    sta $0744            ; count (elements)
+    lda $44              ; size: cmp.b opmode bit6=0, cmp.w bit6=1
+    and #$0040
+    beq gvf_byte
+    lda #$0002
+    bra gvf_havesz
+gvf_byte:
+    lda #$0001
+gvf_havesz:
+    sta $0740
+    lda $0744            ; span = count*size
+    ldx $0740
+    cpx #$0002
+    bne gvf_sp1
+    asl a
+gvf_sp1:
+    sta $074A
+    lda $44              ; An regfile off = $20 + An*4 ; An must be work RAM $00F0
+    and #$0007
+    asl a
+    asl a
+    ora #$0020
+    sta $0748
+    tax
+    lda $02,x
+    cmp #$00F0
+    bne gvf_no
+    lda $44              ; Dn (compared register) = opcode bits 11-9
+    and #$0E00
+    xba
+    lsr a
+    asl a
+    asl a
+    tay
+    lda $00,y
+    sta $0742            ; Dn.w (byte compares use its low byte)
+    ldx $0748
+    lda $00,x
+    tax                  ; X = An.lo16 walk pointer
+gvf_lp:
+    lda $0740
+    cmp #$0002
+    beq gvf_w
+    sep #$20
+    lda $400000,x        ; memory byte
+    cmp $0742            ; vs Dn.b
+    rep #$30
+    bne gvf_fail         ; mismatch -> interp (correct early/error path)
+    inx
+    bra gvf_nx
+gvf_w:
+    lda $400000,x        ; LE 16-bit read = mem[x] | mem[x+1]<<8
+    xba                  ; -> 68K big-endian word (mem[x]<<8 | mem[x+1])
+    cmp $0742
+    bne gvf_fail
+    inx
+    inx
+gvf_nx:
+    dec $0744
+    bne gvf_lp
+    ldx $0746            ; ALL matched -> commit the collapse: Dm = 0
+    stz $00,x
+    stz $02,x
+    ldx $0748
+    lda $074A
+    clc
+    adc $00,x
+    sta $00,x            ; An.lo16 += span
+    bcc gvf_nohi
+    inc $02,x
+gvf_nohi:
+    lda #$0001
+    sta $60              ; exit CCR: the closing subq left 0 -> Z=1, N=0, V=0, C=0, X=0
+    stz $6E              ;   (stale-CCR collapses = the documented dbra-fallthrough gap
+    stz $70              ;   class; a following Bcc must see the loop's real exit flags)
+    stz $72
+    stz $A2
+    lda $40
+    clc
+    adc #$0008
+    sta $40              ; PC past the 4-instruction verify body
+    sec
+    rtl
+gvf_fail:                ; data mismatch (idiom matched, contents differ): no-fire so the
+    clc                  ; interp runs the real loop and takes its genuine error path
+    rtl
+
+.org $F5C0
+gm_memset_far:           ; move.b/w Dn,(An)+ / subq.l #1,Dm / bne -6 — relocated from the
+                         ; $92 body (slot 2 now bounces via gms_tramp): adds the exit-CCR
+                         ; fix and a count==0 guard the original lacked (real 68K with
+                         ; Dm.l==0 underflows through 64K+ iterations; the old collapse
+                         ; filled 0 -> divergence). Work-RAM ($00F0) only, like before.
+    lda $44
+    and #$F1F8
+    cmp #$10C0           ; move.b Dn,(An)+
+    beq gms_byte
+    cmp #$30C0           ; move.w Dn,(An)+
+    beq gms_word
+gms_no:
+    clc
+    rtl
+gms_byte:
+    lda #$0001
+    bra gms_havesz
+gms_word:
+    lda #$0002
+gms_havesz:
+    sta $0740
+    ldy #$0002           ; PC+2 must be subq.l #1,Dm
+    lda [$56],y
+    xba
+    sta $0742
+    and #$FFF8
+    cmp #$5380
+    bne gms_no
+    ldy #$0004           ; PC+4 must be bne -6
+    lda [$56],y
+    xba
+    cmp #$66FA
+    bne gms_no
+    lda $0742            ; Dm*4 ; hi16 must be 0, count must be nonzero
+    and #$0007
+    asl a
+    asl a
+    tay
+    lda $02,y
+    bne gms_no
+    lda $00,y
+    beq gms_no           ; count == 0 -> interp (real loop underflows)
+    sta $0746
+    lda $44              ; An regfile off = $20 + An*4 ; must be work RAM $00F0
+    and #$0E00
+    xba
+    lsr a
+    asl a
+    asl a
+    ora #$0020
+    sta $0748
+    tax
+    lda $02,x
+    cmp #$00F0
+    bne gms_no
+    lda $44              ; Dn value (opcode bits 2-0)
+    and #$0007
+    asl a
+    asl a
+    tay
+    lda $00,y
+    sta $0744
+    ldx $0748
+    lda $00,x
+    tax
+    ldy $0746
+    lda $0740
+    cmp #$0002
+    beq gms_fw
+    sep #$20
+    lda $0744
+gms_fb:
+    sta $400000,x
+    inx
+    dey
+    bne gms_fb
+    rep #$30
+    bra gms_tail
+gms_fw:
+    sep #$20
+gms_fwlp:
+    lda $0745
+    sta $400000,x
+    inx
+    lda $0744
+    sta $400000,x
+    inx
+    dey
+    bne gms_fwlp
+    rep #$30
+gms_tail:
+    lda $0746
+    ldx $0740
+    cpx #$0002
+    bne gms_t1
+    asl a
+gms_t1:
+    ldx $0748
+    clc
+    adc $00,x
+    sta $00,x
+    bcc gms_t2
+    inc $02,x
+gms_t2:
+    lda $0742
+    and #$0007
+    asl a
+    asl a
+    tax
+    stz $00,x
+    stz $02,x            ; Dm = 0
+    lda #$0001
+    sta $60              ; exit CCR: the closing subq left 0 -> Z=1, N=0, V=0, C=0, X=0
+    stz $6E              ;   (stale-CCR collapses = the documented dbra-fallthrough gap
+    stz $70              ;   class; a following Bcc must see the loop's real exit flags)
+    stz $72
+    stz $A2
+    lda $40
+    clc
+    adc #$0006
+    sta $40
+    sec
+    rtl

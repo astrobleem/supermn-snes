@@ -83,13 +83,21 @@ Everything above was first validated with the SA-1 idle. Validating with the gam
 RUNNING (Mesen cold boot — restored by the TESTFLAG relocation in interp.pasm) surfaced,
 in order:
 
-- **loop_hook is UNSOUND outside its validated window** — two independent failures, both
-  bisected to lh (escapes innocent): (a) the boot's walking-bit RAM test (`$3F60-$4008`)
-  fails armed and parks in the `$1B90-$1D46` error display (MAME never visits it); (b)
-  sustained armed gameplay crashes deterministically minutes in (`$DEAD` halt, 68K PC
-  derailed to `$080100` past ROM end, tick `$A005`). SHIPPED FIX: nothing arms at reset;
-  `snd_vframe` arms ESCAPES ONLY (never lh) when the 68K sound-ring pointer signature
-  (`$00F01C2x`) appears post-self-test. Root-causing lh needs lockstep-vs-MAME work.
+- **loop_hook failures ROOT-CAUSED and fixed** (flight-recorder + freeze-point + bisect,
+  2026-07-10, no MAME lockstep needed — the interp's built-in PC ring at IRAM `$0400` and
+  the `$0710` PC-freeze did it): (a) the boot RAM-test failure was an **`.org` overlap**
+  — the lh flow chain grew past `$F601` and the later `.org $F602` gm_verify silently
+  assembled over it (truncating lh_3fea's `sec/rts` and burying lh_adbe + gm_memclr;
+  same overgrowth once buried the TESTFLAG). lh_3fea/lh_adbe/gm_verify now live in
+  escbank5 behind stubs, gm_memclr in the vacated space, with build-time slack guards.
+  (b) The generics also got correctness fixes: gm_verify now ACTUALLY verifies (a
+  gameplay compare loop's early-mismatch exit matters — mismatch → interp runs the real
+  loop), all collapses set exit CCR (dbra-fallthrough class) and guard `count==0`.
+  (c) The `$080100` gameplay derail bisected to the **`$0818` idle-spin collapse alone**
+  (forced-IRQ vs escape-inflated `$AC` pacing corrupts a coroutine entry — identical
+  with a streak gate, so the arm is disabled with the repro documented in loop_hook).
+  SHIP CONFIG: `snd_vframe` arms lh (minus `$0818`) + all escapes at ring-init; boots
+  instantly and soaks 36000f clean.
 - **The 5A22 sound layer now runs from the `$7F` WRAM mirror** (rc_copy window widened to
   `$1B00`, TAD internal `jsl`s forced `|$7F0000` via `regen.sh`), matching the pt.20/21
   "concurrent 5A22 code lives in WRAM" rule.

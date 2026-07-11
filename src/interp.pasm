@@ -18524,15 +18524,17 @@ loop_hook:
     lda $40
     cmp #$0818
     bne lh_chk_3b84
-    ; $0818: the gameplay MAIN-LOOP IDLE SPIN (`bra $818`), the 68K waiting for the vblank
-    ; IRQ. MAME hardware-paces it (~10.7K spins/frame); interpreting all of them is ~95% of
-    ; the per-game-frame cost (the real work is only ~2.4K instr). Collapse it: fire the IRQ
-    ; NOW by forcing the $AC countdown to underflow next iloop -> GAME_TICK runs immediately.
-    ; The real 60Hz pacing comes from the 5A22-side vblank (VID_FRAME), not this dead wait.
-    inc $0760            ; game-frame counter (fps instrumentation; $0760 = free IRAM)
-    lda #$0001
-    sta $AC              ; AC=1 -> next iloop top underflows -> raise $AA -> vblank IRQ
-    clc                  ; C=0: let the bra execute once; the normal iloop path takes the IRQ
+    ; $0818 IDLE-SPIN COLLAPSE — DISABLED (root-cause bisect, 2026-07-10). Forcing
+    ; $AC=1 here (fire the vblank IRQ now) deterministically corrupts a coroutine
+    ; context entry minutes into gameplay: flight-recorder signature = a healthy
+    ; $0532/$0796 switch cascade dispatching to $080000 (= exactly 68K ROM end,
+    ; opcode $FFFF -> $DEAD halt) at game tick $A005, byte-identical with or
+    ; without a 64-visit same-frame streak gate; disabling ONLY this arm soaks
+    ; 36000f clean with every other lh arm + all escapes armed. The forced-IRQ
+    ; interaction with escape-inflated $AC pacing needs lockstep-vs-MAME analysis
+    ; of the coroutine slot table around entry creation before this returns.
+    ; The idle spin stays interpreted; natural $AC pacing fires in the spin anyway.
+    clc                  ; let the bra run — no collapse
     rts
 lh_chk_3b84:
     cmp #$3B84
@@ -18553,6 +18555,12 @@ lh_nofire:
     rts
 lh_delay:
     stz $00              ; D0.w = 0 (the loop's only net effect; D0 high word unchanged)
+    lda #$0001
+    sta $60              ; exit CCR: the closing subq.w left 0 -> Z=1 N=0 V=0 C=0 X=0
+    stz $6E
+    stz $70
+    stz $72
+    stz $A2
     lda #$3B8A
     sta $40              ; resume right after the delay loop
     stz $42
@@ -18567,82 +18575,39 @@ lh_delay:
 lh_nofire2:              ; local no-fire exit (the big handlers are too far from lh_nofire
     clc                  ; for an 8-bit branch); same semantics: carry clear -> decode normally
     rts
+; ROOT-CAUSE FIX (2026-07-10): lh_3fea/lh_adbe are now 5-byte FAR STUBS; the bodies
+; live in escbank5 ($99:F400/$99:F450, carry via rtl like gm_memset). This flow chain
+; (.org $F442) had silently grown past $F601, and the LATER `.org $F602` gm_verify
+; section assembled OVER its tail (Poppy: last org wins per byte, no overlap error):
+; lh_3fea lost its closing `sec/rts` (fell through into gm_verify -> carry-CLEAR
+; return -> the sled re-executed the stale opcode against the collapsed PC -> PC
+; desync into the RAM-test FAIL block = the boot self-test failure), and lh_adbe +
+; gm_memclr were buried entirely (their dispatch jmps landed mid-gm_verify ->
+; garbage decode = the deterministic gameplay derail to $080100 at tick $A005).
+; The same overgrowth had earlier buried the $F600 TESTFLAG. This chain MUST end
+; at or below $F601 (build_interp_rom.py asserts the slack bytes stay zero).
 lh_3fea:
-    lda $26
-    cmp #$00F0
-    bne lh_nofire2
-    lda $0A
-    bne lh_nofire2       ; D2 >= 65536 -> interp
-    lda $24
-    clc
-    adc $08
-    bcs lh_nofire2       ; bank wrap -> interp
-    ldx $24
-    ldy $08
-    beq lh_3fea_tail
-    sep #$20
-    lda #$00
-lh_3fea_lp:
-    sta $400000,x
-    inx
-    dey
-    bne lh_3fea_lp
-    rep #$30
-lh_3fea_tail:
-    lda $24
-    clc
-    adc $08
-    sta $24              ; A1 += D2
-    stz $08
-    stz $0A              ; D2 = 0
-    stz $04              ; D1 = 0
-    lda #$3FFE
-    sta $40              ; resume at the test-passed branch (bra $4008)
-    stz $42
-    sec
+    jsl $99F400          ; lh_3fea_far (escbank5); carry propagates rtl -> rts
+    rts
+lh_adbe:
+    jsl $99F450          ; lh_adbe_far (escbank5)
     rts
 
-; $ADBE walking-bit WORD RAM test: same idea, words. Net (writable RAM): memset 0,
-; A1+=D2*2, D2=0, D1=0. Work-RAM-only; guards against word-count or byte-span overflow.
-lh_adbe:
-    lda $26
-    cmp #$00F0
-    bne lh_nofire2
-    lda $0A
-    bne lh_nofire2       ; D2 >= 65536 words -> interp
-    lda $08
-    asl a                ; A = D2*2 (byte span)
-    bcs lh_nofire2       ; span > 64K -> interp
-    clc
-    adc $24
-    bcs lh_nofire2       ; A1.lo16 + span wraps bank -> interp
-    ldx $24
-    ldy $08
-    beq lh_adbe_tail
-    sep #$20
-    lda #$00
-lh_adbe_lp:
-    sta $400000,x        ; word = 0 (both bytes)
-    sta $400001,x
-    inx
-    inx
-    dey
-    bne lh_adbe_lp
-    rep #$30
-lh_adbe_tail:
-    lda $08
-    asl a
-    clc
-    adc $24
-    sta $24              ; A1 += D2*2
-    stz $08
-    stz $0A              ; D2 = 0
-    stz $04              ; D1 = 0
-    lda #$ADD2
-    sta $40              ; resume at move #0,CCR ; rts
-    stz $42
-    sec
-    rts
+
+
+; gm_verify — the read-back verify idiom anywhere:  cmp.b/w (An)+,Dn  /  bne <err>  /
+; subq.l #1,Dm  /  bne -8 (back to the cmp).  In the boot every verify immediately
+; follows a clear/fill of the SAME region with the SAME value, so it necessarily matches
+; -> collapse it: An += count*size, Dm = 0, PC past the 4-instr body (8 bytes). Guarded:
+; Dm.hi16 must be 0 (else the loop is huge -> let the interp run it). Lives at $F602 in the
+; last bank-0 gap (the code just BEFORE this .org grew over $F600 — the old TESTFLAG spot,
+; which is why the flag moved to $F7E0). Scratch $0740 size, $0742 subq-opcode.
+.org $F602
+gm_verify:
+    jsl $99F4A0          ; gm_verify_far (escbank5; body relocated 2026-07-10 — this org
+    rts                  ;   section is now a 5-byte stub + gm_memclr's new home below;
+                         ;   the vacated $F607-$F6E9 hosts gm_memclr, which must stay
+                         ;   bank-$00: it jsr's the region-aware writeword/writelong)
 
 ; ============================ GENERIC LOOP-IDIOM MATCHER ======================
 ; gm_memclr — recognize the memclr idiom anywhere:  clr.l/clr.w (An)+  then
@@ -18723,94 +18688,15 @@ gmc_nohi:
     ldy $0746
     lda #$FFFF
     sta $00,y            ; Dm.w = $FFFF (dbf leaves the counter at -1)
+    lda #$0001
+    sta $60              ; exit CCR: dbf preserves CCR; the last clr set Z=1, N=0,
+    stz $6E              ;   V=0, C=0 (X is UNTOUCHED by clr+dbf — do not clear $A2).
+    stz $70              ;   Stale-CCR collapses = the dbra-fallthrough gap class.
+    stz $72
     lda $40
     clc
     adc #$0006
     sta $40              ; PC past clr(2)+dbf(4)
-    sec
-    rts
-
-; gm_verify — the read-back verify idiom anywhere:  cmp.b/w (An)+,Dn  /  bne <err>  /
-; subq.l #1,Dm  /  bne -8 (back to the cmp).  In the boot every verify immediately
-; follows a clear/fill of the SAME region with the SAME value, so it necessarily matches
-; -> collapse it: An += count*size, Dm = 0, PC past the 4-instr body (8 bytes). Guarded:
-; Dm.hi16 must be 0 (else the loop is huge -> let the interp run it). Lives at $F602 in the
-; last bank-0 gap (the code just BEFORE this .org grew over $F600 — the old TESTFLAG spot,
-; which is why the flag moved to $F7E0). Scratch $0740 size, $0742 subq-opcode.
-.org $F602
-gm_verify:
-    lda $44
-    and #$F1F8
-    cmp #$B018           ; cmp.b (An)+,Dn
-    beq gv_match
-    cmp #$B058           ; cmp.w (An)+,Dn
-    beq gv_match
-gv_no:                   ; no verify match -> the generic memset matcher (escape bank slot 2).
-    jsl $928006          ; gm_memset: returns carry=fired via rtl; rts propagates it to the sled
-    rts
-gv_match:
-    ldy #$0002           ; PC+2 must be bne (the mismatch->error branch)
-    lda [$56],y
-    xba
-    and #$FF00
-    cmp #$6600
-    bne gv_no
-    ldy #$0004           ; PC+4 must be subq.l #1,Dm
-    lda [$56],y
-    xba
-    sta $0742
-    and #$FFF8
-    cmp #$5380
-    bne gv_no
-    ldy #$0006           ; PC+6 must be bne -8 (loop back to the cmp)
-    lda [$56],y
-    xba
-    cmp #$66F8
-    bne gv_no
-    lda $0742            ; Dm*4 ; require Dm.hi16 == 0
-    and #$0007
-    asl a
-    asl a
-    tay
-    lda $02,y
-    bne gv_no            ; count >= 65536 -> interp
-    lda $44              ; size: cmp.b opmode bit6=0, cmp.w bit6=1
-    and #$0040
-    beq gv_byte
-    lda #$0002
-    bra gv_havesz
-gv_byte:
-    lda #$0001
-gv_havesz:
-    sta $0740
-    lda $00,y            ; count = Dm.lo16
-    ldx $0740
-    cpx #$0002
-    bne gv_count1
-    asl a                ; *2 for word
-gv_count1:
-    pha                  ; byte span = count*size (saved)
-    tya
-    tax                  ; X = Dm*4 (stz has abs,X but not abs,Y)
-    stz $00,x            ; Dm.lo16 = 0
-    stz $02,x            ; Dm.hi16 = 0
-    lda $44              ; An regfile off = $20 + An*4
-    and #$0007
-    asl a
-    asl a
-    ora #$0020
-    tax
-    pla
-    clc
-    adc $00,x
-    sta $00,x            ; An.lo16 += span
-    bcc gv_nohi
-    inc $02,x
-gv_nohi:
-    lda $40
-    clc
-    adc #$0008
-    sta $40              ; PC past the 4-instruction verify body
     sec
     rts
 
