@@ -18524,17 +18524,27 @@ loop_hook:
     lda $40
     cmp #$0818
     bne lh_chk_3b84
-    ; $0818 IDLE-SPIN COLLAPSE — DISABLED (root-cause bisect, 2026-07-10). Forcing
-    ; $AC=1 here (fire the vblank IRQ now) deterministically corrupts a coroutine
-    ; context entry minutes into gameplay: flight-recorder signature = a healthy
-    ; $0532/$0796 switch cascade dispatching to $080000 (= exactly 68K ROM end,
-    ; opcode $FFFF -> $DEAD halt) at game tick $A005, byte-identical with or
-    ; without a 64-visit same-frame streak gate; disabling ONLY this arm soaks
-    ; 36000f clean with every other lh arm + all escapes armed. The forced-IRQ
-    ; interaction with escape-inflated $AC pacing needs lockstep-vs-MAME analysis
-    ; of the coroutine slot table around entry creation before this returns.
-    ; The idle spin stays interpreted; natural $AC pacing fires in the spin anyway.
-    clc                  ; let the bra run — no collapse
+    ; $0818 IDLE-SPIN COLLAPSE — CLAMP form (root-caused 2026-07-10). The original
+    ; "$AC=1, fire the IRQ NOW" deterministically corrupted a coroutine context entry
+    ; minutes into gameplay (ring: healthy $0532/$0796 switch cascade dispatching to
+    ; $080000 = 68K ROM end; identical with a same-frame streak gate; bisected to this
+    ; arm alone). Clamp sweeps in a live-pokeable lab: $AC forced to 1 or clamped to
+    ; <= $0800 hits the same fatal event (~game tick $9E00-A000); clamped to $2000
+    ; is stable — the game needs IRQ spacing of some thousands of instructions around
+    ; that event (coroutine creation window). So: CLAMP the countdown DOWN to $2000
+    ; (never up — the spin hits this arm every iteration and an unconditional store
+    ; would refill faster than iloop drains it = IRQ never fires). Effect: at most
+    ; ~8K interpreted spin instructions per idle wait instead of ~26K (natural $7000
+    ; reload), preserving a hardware-plausible minimum slice. The full "fire NOW"
+    ; lever stays retired until lockstep-vs-MAME explains the $2000 boundary.
+    lda $AC
+    cmp #$2000
+    bcc lh818_pass       ; countdown already below the clamp -> let it drain
+    lda #$2000
+    sta $AC              ; clamp DOWN: IRQ due within ~8K instructions
+    inc $0760            ; game-frame counter (fps instrumentation; counts clamps)
+lh818_pass:
+    clc                  ; let the bra run; iloop fires the IRQ at the clamped boundary
     rts
 lh_chk_3b84:
     cmp #$3B84
