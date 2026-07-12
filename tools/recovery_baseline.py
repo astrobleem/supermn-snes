@@ -68,6 +68,31 @@ def modular_delta(now: int, before: int, bits: int) -> int:
     return (now - before) & ((1 << bits) - 1)
 
 
+def adaptive_wall_chunk_seconds(
+    maximum: float,
+    observed_ticks_per_second: float | None,
+    ticks_to_boundary: int | None,
+) -> float:
+    """Keep wall-time sampling responsive near an input/hook boundary.
+
+    A fixed 30-second sample is useful on slow Nexen, but legacy Mesen can
+    advance more than twenty game ticks in that interval.  Halving the
+    projected time to the next boundary preserves throughput when far away
+    while preventing an 8-tick button pulse from becoming a 20+-tick pulse.
+    """
+
+    if (
+        maximum <= 0
+        or observed_ticks_per_second is None
+        or observed_ticks_per_second <= 0
+        or ticks_to_boundary is None
+        or ticks_to_boundary <= 0
+    ):
+        return maximum
+    projected_half = 0.5 * ticks_to_boundary / observed_ticks_per_second
+    return max(1.0, min(maximum, projected_half))
+
+
 class Recorder:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +121,7 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Resume for this many host seconds per sample instead of run_frames().",
     )
-    parser.add_argument("--max-video-frames", type=int, default=18000)
+    parser.add_argument("--max-video-frames", type=int, default=22000)
     parser.add_argument(
         "--hook-validation-ticks",
         type=int,
@@ -115,7 +140,12 @@ def parse_args() -> argparse.Namespace:
         "--prestart-gap-ticks", type=int, default=12, help="Second coin to Start."
     )
     parser.add_argument("--start-hold-ticks", type=int, default=10)
-    parser.add_argument("--settle-ticks", type=int, default=12)
+    parser.add_argument(
+        "--settle-ticks",
+        type=int,
+        default=90,
+        help="Post-gameplay ticks to observe; 90 clears the level palette fade.",
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -193,6 +223,8 @@ def main() -> int:
         wall_chunk_seconds=args.wall_chunk_seconds,
         max_video_frames=args.max_video_frames,
         hook_validation_ticks=args.hook_validation_ticks,
+        adaptive_wall_chunks=True,
+        minimum_wall_chunk_seconds=1.0,
         input_schedule={
             "preinput_ticks": args.preinput_ticks,
             "coin_hold_ticks": args.hold_ticks,
@@ -219,6 +251,7 @@ def main() -> int:
     hook_validation_match: bool | None = None
     last_frame = 0
     input_word = 0
+    observed_ticks_per_second: float | None = None
 
     def copy_screenshot(m: McpSession, label: str) -> dict[str, Any]:
         shot = m.take_screenshot(format="path")
@@ -327,14 +360,45 @@ def main() -> int:
 
             stagnant_chunks = 0
             while last_frame - first_snapshot["frame"] < args.max_video_frames:
+                ticks_before_run = total_ticks
                 run_wall = time.monotonic()
                 if args.wall_chunk_seconds > 0:
+                    remaining_candidates: list[int] = []
+                    if tick_hook is not None and hook_counter_start_total is not None:
+                        remaining_candidates.append(
+                            args.hook_validation_ticks
+                            - (total_ticks - hook_counter_start_total)
+                        )
+                    stage_limits = {
+                        "preinput": args.preinput_ticks,
+                        "coin1_hold": args.hold_ticks,
+                        "coin1_gap": args.gap_ticks,
+                        "coin2_hold": args.hold_ticks,
+                        "coin2_gap": args.prestart_gap_ticks,
+                        "start_hold": args.start_hold_ticks,
+                        "gameplay_settle": args.settle_ticks,
+                    }
+                    if stage in stage_limits:
+                        remaining_candidates.append(
+                            stage_limits[stage] - (total_ticks - stage_tick)
+                        )
+                    positive_remaining = [
+                        remaining for remaining in remaining_candidates if remaining > 0
+                    ]
+                    ticks_to_boundary = (
+                        min(positive_remaining) if positive_remaining else None
+                    )
+                    run_target_seconds = adaptive_wall_chunk_seconds(
+                        args.wall_chunk_seconds,
+                        observed_ticks_per_second,
+                        ticks_to_boundary,
+                    )
                     resume_result = m.resume()
-                    time.sleep(args.wall_chunk_seconds)
+                    time.sleep(run_target_seconds)
                     pause_result = m.pause()
                     run_result = {
                         "mode": "wall_time",
-                        "targetSeconds": args.wall_chunk_seconds,
+                        "targetSeconds": run_target_seconds,
                         "resume": resume_result,
                         "pause": pause_result,
                     }
@@ -356,6 +420,9 @@ def main() -> int:
                         if note.get("params", {}).get("handle") == tick_hook
                     )
                 snap = snapshot()
+                tick_delta = total_ticks - ticks_before_run
+                if tick_delta > 0 and run_seconds > 0:
+                    observed_ticks_per_second = tick_delta / run_seconds
                 frame_delta = snap["frame"] - last_frame
                 last_frame = snap["frame"]
                 stagnant_chunks = stagnant_chunks + 1 if frame_delta <= 0 else 0
@@ -363,6 +430,7 @@ def main() -> int:
                 if args.wall_chunk_seconds <= 0:
                     snap["run_frames_requested"] = args.chunk
                 snap["run_frame_delta"] = frame_delta
+                snap["run_tick_delta"] = tick_delta
                 snap["run_wall_seconds"] = run_seconds
                 snap["run_result"] = run_result
                 log.emit("sample", **snap)
