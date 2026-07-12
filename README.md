@@ -7,7 +7,16 @@ The strategy is a **interpret-cold / transpile-hot hybrid**: a hand-written 6800
 interpreter (in 65816 assembly) boots and runs the original game logic on real SNES
 hardware, while hot paths are migrated to native 65816 over time. Every component is
 validated **differentially against ground truth** — MAME for the arcade side, a real
-SNES PPU (via Mesen) for the target side.
+SNES PPU (via Nexen) for the target side.
+
+> ## Recovery status (July 12, 2026)
+>
+> This project is **not currently playable or shippable**. Earlier status text promoted
+> partial injected-tick measurements and isolated subsystem validations into project-level
+> claims. Read [CONFESSION.md](CONFESSION.md) first; it supersedes optimistic statements in
+> older status and planning sections. The recovery campaign is re-establishing one canonical
+> build, a faithful cold-boot speed measurement with accelerators proven armed, reproducible
+> gameplay rendering, and an actual listening pass.
 
 > ⚠️ **No copyrighted ROM data is included.** This repository contains only original
 > source, tooling, and documentation. You must supply your own legally-obtained
@@ -18,21 +27,22 @@ SNES PPU (via Mesen) for the target side.
 | Area | State |
 |---|---|
 | **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Correctness gates **opsweep 782/782 + optest 154/154**. |
-| Graphics pipeline | ✅ validated on real SNES PPU vs MAME (palette + both X1-001 draw paths); dual-CPU render on the SA-1 |
+| Graphics pipeline | ⚠️ conversion/render paths have isolated validation, but a correct level background is not currently reproducible from a settled cold boot |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **Realtime budget** | ⬆ **measured** — real game logic is only **~2,400 68K-instr/frame** (the rest is the idle spin, now collapsed); at full native coverage the SA-1 budget closes with ~4× headroom (60fps fits). Currently ~0.4 game-fps; path to 99% coverage mapped |
+| **Realtime budget** | ❌ **not solved** — the only honest end-to-end observation was roughly **0.5 game-fps**; older cycle-window projections exclude important work and require reconciliation |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
-| Audio (YM2610 → SNES TAD) | 🔬 analyzed; `vgm-to-tad-mml` skill exists |
+| Audio (YM2610 → SNES TAD) | ⚠️ integrated and byte/oracle-validated, but never completed as a by-ear arcade comparison; most SFX and expression remain incomplete |
 
-See **[STATUS.md](STATUS.md)** for the authoritative, detailed state and
-**[ROADMAP.md](ROADMAP.md)** for where we're heading next.
+See **[CONFESSION.md](CONFESSION.md)** for the authoritative correction and
+**[RECOVERY.md](RECOVERY.md)** for the active recovery campaign. `STATUS.md` and
+`ROADMAP.md` retain useful historical evidence but are not authoritative where they conflict.
 
 ## The 68000 interpreter
 
 `src/interp.pasm` is a hand-written 65816 interpreter that executes real 68000
-opcodes on a real SNES (validated in Mesen against MAME as the arcade oracle).
+opcodes on a real SNES (validated in Nexen against MAME as the arcade oracle).
 It now implements the **complete legal MC68000 instruction set** — not just the
 subset Superman happens to use — so it is reusable for future arcade→SNES ports.
 
@@ -55,7 +65,9 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 
 ## Key documents
 
-- **[STATUS.md](STATUS.md)** — single source of "where we're at"
+- **[CONFESSION.md](CONFESSION.md)** — highest-authority correction to project status
+- **[RECOVERY.md](RECOVERY.md)** — active consolidation and baseline campaign
+- **[STATUS.md](STATUS.md)** — detailed historical state (superseded where noted)
 - **[ROADMAP.md](ROADMAP.md)** — next steps and milestones
 - **[BUILD.md](BUILD.md)** — toolchain (the "Game Garden" suite: Poppy/Peony), dependencies, and **migration guide**
 - **[METHODOLOGY.md](METHODOLOGY.md)** — the reusable arcade→SNES recipe
@@ -71,13 +83,13 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 
 1. Place the ROM set where the tools expect it (extract the 68K image to
    `data/superman_m68k.bin`; see `tools/build_interp_rom.py`).
-2. Toolchain: the [Poppy](https://example.invalid) 65816 assembler, Python 3, MAME
-   0.287 (arcade oracle), and Mesen with its Python MCP (SNES PPU validation).
+2. Toolchain: Poppy, Python 3, MAME 0.287 (arcade oracle), and the MCP-enabled Nexen
+   fork with the shared `mesen_mcp` Python client (SNES/SA-1/PPU validation).
 3. Build the interpreter ROM:
    ```sh
    bash tools/build_interp.sh      # assembles src/interp.pasm -> build/interp.sfc
    ```
-4. Run the interpreter regression gates (need MAME + Mesen MCP running):
+4. Run the interpreter regression gates (need MAME + Nexen MCP running):
    ```sh
    python3 tools/opsweep.py        # SA-1-aware op×addressing-mode grid vs MAME (782/782)
    python3 tools/optest.py         # curated per-opcode vectors vs MAME (154/154)

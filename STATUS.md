@@ -3,7 +3,16 @@
 Last updated: July 11, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md).**
 
-> ## ✅ SOUND PORT — COMPLETE (P1–P3 + trigger backfill + concurrent validation; branch `sound-p3`, PR #15)
+> ## ⚠️ RECOVERY OVERRIDE — July 12, 2026
+>
+> [CONFESSION.md](CONFESSION.md) supersedes the optimistic banners below. The port is
+> interactive in controlled tests but not playable or shippable; end-to-end performance is
+> unreconciled and was roughly 0.5 game-fps in the only honest cold-boot observation; correct
+> gameplay background rendering is not currently reproducible; and sound has automated byte/oracle
+> evidence but no completed listening pass. See [RECOVERY.md](RECOVERY.md) for the active campaign.
+> The remainder of this file is retained as engineering history and partial evidence.
+
+> ## ⚠️ SOUND PORT — INTEGRATED, AUTOMATED GATES GREEN, MUSICAL VALIDATION INCOMPLETE
 > The full TAD/YM2610 sound port is done and verified end to end: real FM instruments
 > (ymfm-rendered patches, per-note switches + carrier-TL velocities) + arcade-verified
 > ADPCM-A drums; ONE consolidated 21-song project (62.0/64KB ARAM, 3.5KB SFX headroom);

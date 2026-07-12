@@ -1,5 +1,12 @@
 # MAIN_PLANNING_HANDOFF.md
 
+> ## RECOVERY OVERRIDE (2026-07-12)
+>
+> Do not start the historical "CURRENT TASK" below. Read `CONFESSION.md`, `AGENTS.md`, and
+> `RECOVERY.md`. The immediate task is to establish a trustworthy production cold-boot baseline,
+> reconcile end-to-end performance, reproduce gameplay rendering, and audition audio. Historical
+> campaign sections remain useful for mechanisms and failed approaches, not current priority.
+
 > ## ⭐ CURRENT STATE (2026-07-11): SOUND PORT COMPLETE — see STATUS.md's top banners
 > The TAD/YM2610 sound port (the second half of the 2026-07-04 strategic fork) is DONE:
 > P1 plumbing → P2 capture+wiring → P3 real audio + per-note polish + the GROUND-TRUTH
