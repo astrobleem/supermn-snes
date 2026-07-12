@@ -375,7 +375,14 @@ def main() -> int:
                     stage_tick = total_ticks
                     set_virtual_input(0)
 
-                in_gameplay = (snap["task_mask"] >> 8) == 0x3B
+                # The boot RAM test writes patterns through $40:0002, including
+                # transient values that can resemble a gameplay task mask.  A
+                # $3Bxx mask is meaningful only after this same run delivered
+                # and released Start.
+                in_gameplay = (
+                    stage in ("post_start", "gameplay_settle")
+                    and (snap["task_mask"] >> 8) == 0x3B
+                )
                 if gameplay_tick_total is None and in_gameplay:
                     gameplay_tick_total = total_ticks
                     stage = "gameplay_settle"
