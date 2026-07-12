@@ -90,6 +90,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nexen", type=Path, default=DEFAULT_NEXEN)
     parser.add_argument("--port", type=int, default=7467)
     parser.add_argument("--chunk", type=int, default=150)
+    parser.add_argument(
+        "--wall-chunk-seconds",
+        type=float,
+        default=0.0,
+        help="Resume for this many host seconds per sample instead of run_frames().",
+    )
     parser.add_argument("--max-video-frames", type=int, default=18000)
     parser.add_argument(
         "--preinput-ticks",
@@ -114,6 +120,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.wall_chunk_seconds < 0 or args.wall_chunk_seconds > 60:
+        raise SystemExit("--wall-chunk-seconds must be between 0 and 60")
     args.output.mkdir(parents=True, exist_ok=True)
     if any(args.output.iterdir()):
         raise SystemExit(f"refusing to overwrite non-empty evidence directory: {args.output}")
@@ -174,6 +182,7 @@ def main() -> int:
         nexen_sha256=sha256(nexen),
         dotnet_root=dotnet_root,
         chunk=args.chunk,
+        wall_chunk_seconds=args.wall_chunk_seconds,
         max_video_frames=args.max_video_frames,
         input_schedule={
             "preinput_ticks": args.preinput_ticks,
@@ -306,8 +315,26 @@ def main() -> int:
             stagnant_chunks = 0
             while last_frame - first_snapshot["frame"] < args.max_video_frames:
                 run_wall = time.monotonic()
-                run_result = m.run_frames(args.chunk)
+                if args.wall_chunk_seconds > 0:
+                    resume_result = m.resume()
+                    time.sleep(args.wall_chunk_seconds)
+                    pause_result = m.pause()
+                    run_result = {
+                        "mode": "wall_time",
+                        "targetSeconds": args.wall_chunk_seconds,
+                        "resume": resume_result,
+                        "pause": pause_result,
+                    }
+                else:
+                    run_result = m.run_frames(args.chunk)
                 run_seconds = time.monotonic() - run_wall
+                pause_ok = (
+                    bool(run_result["pause"].get("paused", False))
+                    if args.wall_chunk_seconds > 0
+                    else bool(run_result.get("isPaused", False))
+                )
+                if not pause_ok:
+                    raise RuntimeError(f"emulator did not pause coherently: {run_result}")
                 notifications = m.drain_notifications(timeout=0.05)
                 hook_ticks_total += sum(
                     1
@@ -318,7 +345,9 @@ def main() -> int:
                 frame_delta = snap["frame"] - last_frame
                 last_frame = snap["frame"]
                 stagnant_chunks = stagnant_chunks + 1 if frame_delta <= 0 else 0
-                snap["run_frames_requested"] = args.chunk
+                snap["run_mode"] = run_result.get("mode", "run_frames")
+                if args.wall_chunk_seconds <= 0:
+                    snap["run_frames_requested"] = args.chunk
                 snap["run_frame_delta"] = frame_delta
                 snap["run_wall_seconds"] = run_seconds
                 snap["run_result"] = run_result
