@@ -1,7 +1,37 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: July 5, 2026. Per-area detail lives in the linked docs.
-**Start any new session at [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md) (pt.21 banner → CURRENT TASK is pt.22).**
+Last updated: July 11, 2026. Per-area detail lives in the linked docs.
+**Start any new session at [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md).**
+
+> ## ✅ SOUND PORT — COMPLETE (P1–P3 + trigger backfill + concurrent validation; branch `sound-p3`, PR #15)
+> The full TAD/YM2610 sound port is done and verified end to end: real FM instruments
+> (ymfm-rendered patches, per-note switches + carrier-TL velocities) + arcade-verified
+> ADPCM-A drums; ONE consolidated 21-song project (62.0/64KB ARAM, 3.5KB SFX headroom);
+> multi-bank blob at `$ED:002B` (unskewed; glue symbols generated); the GROUND-TRUTH
+> arcade command map for all 21 tracks (music ids = the contiguous `$05-$19` block —
+> obtained by stimulating every byte on the arcade machine and fingerprint-matching the
+> YM2610 output; corrected two P2 correlation guesses) wired through a 128-entry
+> `snd_map` table via `Tad_LoadSongIfChanged`. Verified with independent oracles: ARAM
+> uploads byte-perfect vs `tad-compiler`'s own exports (incl. the bank-`$EE` DataTable
+> carry path), 8/8 random-power-on boots, live trigger-injection chains, and audio
+> playing WHILE the game runs. Docs: `tools/sound/README.md` (pipeline + close-out),
+> `docs/SOUND_COMMAND_MAP.md` (byte map + method). Remaining (non-blocking): the by-ear
+> listening pass, real SFX authoring, rights review (tracks 3/8/19 = John Williams).
+
+> ## ✅ COLD BOOT RESTORED + LOOP_HOOK ROOT-CAUSED (2026-07-10/11, `sound-p3`)
+> Production cold boot had been silently dead for months (code growth covered the
+> `$F600` TESTFLAG — the second occurrence of that failure class; relocated to `$F7E0`
+> with a build-time assert). That exposed and led to root-causing the whole loop_hook
+> failure family via the interp's BUILT-IN debug plumbing (the always-on 68K PC ring at
+> IRAM `$0400` + the `$0710` PC-freeze — no MAME lockstep needed): (1) an `.org` overlap
+> had truncated/buried three lh handlers under gm_verify (bodies relocated to escbank5
+> behind stubs; slack seams now build-asserted); (2) the generic matchers were unsound
+> in gameplay (gm_verify now actually verifies; exit-CCR set everywhere; count==0
+> guards); (3) the `$0818` idle-collapse's "fire the IRQ now" corrupted a coroutine
+> context at a fixed game event — re-shipped as a CLAMP (`$AC` lowered to `$2000`,
+> never raised), keeping ~18x game speed, soak-verified through the event repeatedly.
+> Accelerators (lh + all escapes) now arm via `snd_vframe` AFTER the boot self-test
+> (ring-init signature `$00F01C2x`). Full regression suite green on the ship config.
 **Repo consolidated 2026-07-05: PRs #1–#13 ALL MERGED — `main` is the single source of truth; branch off `main` for pt.22.**
 
 > ## ⭐ DIRECTION SET (user decision 2026-07-04): 30fps retarget + SOUND — realtime-60 abandoned

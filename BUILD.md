@@ -53,7 +53,11 @@ repo; on migration, re-register them pointing at the new paths.
 
 ```sh
 # 1. Assemble interp + video + pack the 4MB SA-1 ROM (the main build):
-bash tools/build_interp.sh        # -> build/interp.sfc (32KB interp + 68K image + gfx + video)
+bash tools/build_interp.sh        # -> build/interp.sfc (32KB interp + 68K image + gfx + video
+                                  #    + the TAD audio blob: soundwork/tad/build_blob.sh runs
+                                  #    automatically if build/audio-data.bin is missing — needs
+                                  #    tad-compiler + the consolidated project; regen the real
+                                  #    samples first per tools/sound/README.md §P3 pipeline)
 #    internally: dotnet $POPPY ... interp.pasm/video.pasm ; python3 tools/build_interp_rom.py
 
 # 2. Correctness sweep (needs MAME + Mesen MCP running):

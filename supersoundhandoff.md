@@ -1,5 +1,14 @@
 # Superman Sound — Bootstrapping the Terrific Audio Driver (TAD)
 
+> **STATUS (2026-07-11): THIS RUNBOOK HAS BEEN EXECUTED TO COMPLETION.** The sound port
+> is integrated and verified (branch `sound-p3`, PR #15): TAD vendored + ported to Poppy,
+> all 21 tracks with REAL FM/drum samples in one consolidated project, the arcade
+> trigger map ground-truthed and wired, and the whole chain validated under concurrent
+> gameplay. For current facts use `tools/sound/README.md` (pipeline + close-out notes)
+> and `docs/SOUND_COMMAND_MAP.md` (command map + method); this file remains as the
+> original planning/reference document. Items still open: by-ear listening pass, real
+> SFX authoring beyond punch/kick, rights review (tracks 3/8/19).
+
 > Audience: the agent/engineer who will add music + SFX to **SUPERMN-SNES**.
 > Superman has **no audio implemented yet** (`audio/songs`, `audio/samples`, `src/sound`
 > are empty). This doc is the runbook to go from the arcade VGM rips to SNES music.

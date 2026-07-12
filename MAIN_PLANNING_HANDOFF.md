@@ -1,5 +1,18 @@
 # MAIN_PLANNING_HANDOFF.md
 
+> ## ⭐ CURRENT STATE (2026-07-11): SOUND PORT COMPLETE — see STATUS.md's top banners
+> The TAD/YM2610 sound port (the second half of the 2026-07-04 strategic fork) is DONE:
+> P1 plumbing → P2 capture+wiring → P3 real audio + per-note polish + the GROUND-TRUTH
+> trigger map for all 21 tracks + concurrent live-gameplay validation. Along the way,
+> production COLD BOOT was restored (TESTFLAG relocation + build guard) and the whole
+> loop_hook failure family was root-caused and fixed (org-overlap relocations, sound
+> generic-matcher corrections, the $0818 idle-collapse re-shipped as a $2000 clamp);
+> accelerators now self-arm after the boot self-test. Branch `sound-p3` / PR #15.
+> Docs: `tools/sound/README.md`, `docs/SOUND_COMMAND_MAP.md`; memory `sound-p3-progress`.
+> Remaining sound items (non-blocking): by-ear listening pass, real SFX authoring,
+> rights review (tracks 3/8/19 = John Williams theme).
+> The pt.22 material below is the PRIOR campaign state, kept for context.
+
 Last updated: 2026-07-06 (**pt.22 P3a DONE**: ceb6 + d6b0 STATIC-RESOLVED via `--jtstatic` — all 4 sprite-build
 coroutine leaf dispatchers (ceb6/d6b0 + d226/d522) now dispatch DIRECT, 8 ojmp_hook round-trips/tick eliminated;
 GREEN both-class bit-exact, same-bank $92 relocation (ceb6 @ .org $FEB0 tail, d6b0 @ .org $F600 jah2_ext_bsr tail),

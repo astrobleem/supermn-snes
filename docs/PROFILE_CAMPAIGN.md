@@ -825,3 +825,37 @@ PROVES the contiguous mechanism: the derailing dispatchers ARE escapable via sta
 **REMAINING (approved plan): P2** mechanize the `jmp(An)` static-switch in `tools/transpile.py` (regen
 `$D522`/`$D226`); **P3** scale the whole `ce58` subtree (keep the 11 indirect `$1cXX(a5)` draws dynamic);
 **P4** measure the `CYCLES=1` cyc/tick win. Honest ceiling stands (narrows heavy combat, sub-30fps).
+
+
+---
+
+## §sound-era addendum (2026-07-10/11): loop_hook root-cause + the $0818 clamp
+
+Restoring production cold boot for the sound port's concurrent validation exposed and
+closed a loop_hook failure family (full detail: memory `sound-p3-progress`; commits on
+`sound-p3`):
+
+- **`.org` overlap** — the lh flow chain (`.org $F442`) grew past `$F601` and the later
+  `.org $F602` gm_verify section silently assembled over it (Poppy: last org wins per
+  byte). lh_3fea lost its `sec/rts` (fall-through → carry-clear → stale-opcode re-execute
+  → the boot RAM-test "failure"); lh_adbe + gm_memclr were buried whole (dispatch jmps →
+  mid-gm_verify garbage). Bodies now in escbank5 (`$99:F400/F450/F4A0` + gm_memset via a
+  `$92:FFC0` tramp); gm_memclr rehomed at the `$F602` section; `build_interp_rom.py`
+  asserts the slack seams. The same overgrowth had covered the `$F600` TESTFLAG.
+- **Generic matchers made gameplay-sound** — gm_verify now ACTUALLY verifies (mismatch →
+  no-fire → the interp takes the genuine early/error path; the old assume-match collapse
+  corrupted compare/search loops); all collapses set exit CCR (the dbra-fallthrough
+  stale-flags class; cells `$60/$6E/$70/$72/$A2`, nonzero=set) and guard `count==0`.
+- **`$0818` idle-collapse** — "fire the IRQ now" (`$AC=1`) deterministically corrupted a
+  coroutine context ~24 game-seconds into gameplay (flight-recorder signature: healthy
+  `$0532/$0796` cascade dispatching to `$080000` = 68K ROM end). A runtime-pokeable lab
+  (arm redirected to an IRAM handler) swept the boundary: spacing ≤ `$0800` fails,
+  `$2000` is stable. Shipped as a clamp (`$AC` lowered to `$2000` at the spin, NEVER
+  raised — an unconditional store refills faster than iloop drains and starves the IRQ).
+  ~18x game speed retained; soaked through the fatal event repeatedly.
+- **Arming** — nothing arms at reset (the boot self-test must run pure); `snd_vframe`
+  arms lh + all escapes when the 68K sound-ring pointer signature (`$00F01C2x`) appears.
+- **Diagnosis toolkit** (no MAME lockstep needed; first-reach tools next time): the
+  interp's always-on 68K PC ring (IRAM `$0400-$05FF`, ptr `$48`, last 128 PCs) + the
+  `$0710/$0716` PC-freeze (`$0712` frozen-marker, `$0714` release, `$0730=$5A5A`
+  re-firing mode) + deterministic per-arm poke-bisects on ROM copies.
