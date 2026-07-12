@@ -10,9 +10,21 @@ from overlapping optimistic handoffs into one evidence-backed engineering line.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
-- The old `sound-p3` worktree remains locked and untouched until all unique content is proven
-  preserved. Its tracked tip is already an ancestor of `origin/main`; its only unique untracked
-  file was `CONFESSION.md`, now copied byte-for-byte to the root.
+- The old `sound-p3` worktree remains locked and untouched as a safety archive. Its tracked tip is
+  already an ancestor of `origin/main`; its only unique visible
+  untracked file was `CONFESSION.md`, now copied byte-for-byte to the root. Its gitignored final
+  sound assets were also unique and have now been recovered into the canonical checkout.
+
+### Worktree policy during recovery
+
+- Do all new work in `/home/chad/supermn-snes` on `recovery/canonicalize-20260712`.
+- Treat `.claude/worktrees/sound-p3` as a frozen source archive. Do not build, edit, merge, or
+  launch emulators from it.
+- The worktree's tracked commits need no merge: `sound-p3` is already an ancestor of
+  `origin/main`. Archive refs preserve its tip and the other pre-recovery tips independently.
+- Keep the worktree locked as a safety archive through the recovery baseline. Its recorded Claude
+  lock owner is no longer running, but removal is cleanup, not recovery work, and is unnecessary
+  while the archive refs and recovered artifacts are intact.
 
 ## Evidence grades
 
@@ -58,15 +70,49 @@ but new baseline evidence uses Nexen unless a documented emulator comparison is 
 - [x] Preserve prior refs and unique stash.
 - [x] Recover `CONFESSION.md` and add `AGENTS.md`.
 - [x] Identify Nexen as the current project oracle and validate its MCP handshake/SA-1 cycle state.
-- [ ] Back up stale generated artifacts before regeneration.
-- [ ] Rebuild the merged 21-song TAD blob and ROM from the canonical source.
-- [ ] Record hashes, sizes, tool versions, source commit, and build log.
+- [x] Back up stale generated artifacts before regeneration.
+- [x] Rebuild the merged 21-song TAD blob and ROM from the canonical source.
+- [x] Record hashes, sizes, tool versions, source commit, and build log.
+
+July 12 recovery evidence:
+
+- Pre-regeneration outputs are preserved under `build/recovery-20260712/prebuild/`.
+- A self-contained local snapshot of the recovered `soundwork/` tree is preserved as
+  `build/recovery-20260712/soundwork-recovered.tar.gz` (5,093,199 bytes, SHA-256
+  `60b6dcc3b4e0dc02caa08b2f08f914aeef6552d1ec8631533658d0e548574757`).
+- The recovered 93,515-byte TAD blob rebuilt to SHA-256
+  `a149d476371161993d70427c9c0f3148355df0ff7a4e20aad23915e9688e0f31`, byte-identical to
+  the final `sound-p3` artifact. Its generated symbol file is also byte-identical.
+- The canonical 4 MiB ROM rebuilt to SHA-256
+  `183c53f6ae100a6ad7faec324f4f6c58c872292b3088b5e2b0d74ea798b69673`, byte-identical to
+  the final `sound-p3` ROM. The stale pre-recovery main ROM was preserved separately and hashes
+  to `1897699a4aa347e2d6b3d9ce642a404f77e5da63ab95a40346b80674d36b7806`.
+- The final reproducibility build ran at recovery commit `9671faf`; no assembly source differed
+  from the `origin/main` merge tree. Raw sound/build logs are
+  `build/recovery-20260712/sound-build.log` and
+  `build/recovery-20260712/build-9671faf.log`.
+- Host tool versions: .NET `8.0.422` and `10.0.301`, Poppy `0.1.0`, Peony
+  `1.0.0+aa8c392`, MAME `0.287`, TAD compiler `0.3.0`, Python `3.12.3`, and Capstone `5.0.7`.
+  Nexen source is `177e8d567` and the tested binary SHA-256 is
+  `476e3f60533575f2c9d835f0a3b59adce2f7efe383ff9e71b791020f8198776c`.
 
 ### R1 — Static and interpreter correctness
 
-- [ ] Run bank/layout assertions during the canonical build.
-- [ ] Run opsweep and optest against MAME 0.287.
-- [ ] Run the production gameplay smoke on the freshly built ROM.
+- [x] Run bank/layout assertions during the canonical build.
+- [x] Run opsweep and optest against MAME 0.287.
+- [x] Run the production gameplay smoke on the freshly built ROM.
+
+The hardened Nexen run is green: `optest.py` passed 154/154 groups and `opsweep.py` passed
+782/782 coverage cells (1,564 concrete vectors). Raw logs are `optest.log` and `opsweep.log` under
+`build/recovery-20260712/`. An initial 144/154 optest run was retained too: it exposed two harness
+defects, not opcode mismatches. A fixed shared MAME result path allowed concurrent-run contamination,
+and `run_frames(1)` sometimes paused a value-dependent instruction mid-flight. Per-run result files
+plus a fresh, bounded done-marker wait eliminated both failure modes; the previously failing signed
+multiply case also passes under legacy Mesen as a compatibility check.
+
+`tools/smoke_gameplay.py` also passed on the rebuilt ROM: its build-specific injected state ran one
+`GAME_TICK` and returned to `$00070E`. This is a local execution-path gate only; it does not count as
+a cold-boot, rendering, stability, or performance result.
 
 ### R2 — Honest cold-boot performance
 
