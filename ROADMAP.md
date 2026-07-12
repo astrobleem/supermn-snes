@@ -3,6 +3,11 @@
 Last updated: July 4, 2026. Companion to [STATUS.md](STATUS.md) (current state)
 and [METHODOLOGY.md](METHODOLOGY.md) (the reusable recipe).
 
+> **RECOVERY OVERRIDE — July 12, 2026:** this is a historical roadmap. The production baseline
+> measures 1.3237 game-fps / ~8.10M SA-1 cycles per tick, not the projected rates below. Do not
+> resume its ranked escape list. [RECOVERY.md](RECOVERY.md) R5 is the active roadmap: attribute the
+> continuous-run cost, then make a measured architecture decision against the 358K-cycle target.
+
 > **UPDATE 2026-07-04 — THE DESTINATION CHANGED: 30fps retarget + sound (user decision; CP0
 > STOP-rule fired — realtime-60 is below the ISA floor and is abandoned).** The roadmap's goal
 > line is now: **smooth 30Hz game logic on a 60Hz display (budget 358K cyc/tick) with the

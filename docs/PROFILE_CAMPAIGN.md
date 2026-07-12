@@ -1,5 +1,10 @@
 # PROFILE_CAMPAIGN.md — coverage-campaign steering table (Phase 0)
 
+> **RECOVERY OVERRIDE — July 12, 2026:** retain this as the injected-window measurement ledger,
+> but do not infer project fps or resume its last ranked escape. The production continuous run is
+> ~8.10M SA-1 cycles/tick at 1.3237 game-fps; `RECOVERY.md` R5 must reconcile that with these smaller
+> windows before this ledger can steer more implementation.
+
 Created 2026-07-02 (Phase 0 of the plan in `~/.claude/plans/enchanted-booping-summit.md`).
 All numbers SPIN-FREE (`tools/hle_span.py tick` — df_spin/dfg_rff exec-hook method; the old
 `CYCLES=1 B1PC` tick numbers carry up to ~4 frames of spin pollution and are OBSOLETE).

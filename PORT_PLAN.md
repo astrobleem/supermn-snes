@@ -6,8 +6,8 @@
 > interpret-cold/transpile-hot approach proved out. **Do not follow the architecture,
 > CPU-responsibility, game-logic-phase, or memory-map sections below** — they describe a
 > design that was never built. Authoritative current docs:
-> **[README.md](README.md)** (entry point) · **[STATUS.md](STATUS.md)** (authoritative state) ·
-> **[ROADMAP.md](ROADMAP.md)** (next) · **[METHODOLOGY.md](METHODOLOGY.md)** (the reusable recipe).
+> **[README.md](README.md)** (entry point) · **[RECOVERY.md](RECOVERY.md)** (authoritative state/next) ·
+> **[STATUS.md](STATUS.md)** (historical detail) · **[METHODOLOGY.md](METHODOLOGY.md)** (the reusable recipe).
 >
 > **What actually changed (this plan → reality):**
 > | This plan said | What was actually built |

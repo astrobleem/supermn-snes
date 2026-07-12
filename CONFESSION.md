@@ -5,10 +5,27 @@ An honest accounting of what is wrong, overclaimed, or unfinished in this projec
 optimistic to the point of being misleading. This document is the correction. Where it
 conflicts with a cheerful banner in `STATUS.md` or a memory file, believe this.
 
-The single sentence version: **the Superman port is not playable and not shippable, the
-core performance problem was never solved (only partially chipped at and then reframed as
-done-enough), the sound port was merged but has never been listened to, and the game's
-level background does not render in any capture I could produce.**
+The current single sentence version: **the Superman port is not playable or shippable; its
+canonical post-arm rate is 1.3237 game-fps, the sound port has still never received a listening
+pass, and the level background now reproduces after a long palette fade but has not received an
+aligned MAME fidelity verdict.**
+
+## Recovery reconciliation — July 12, 2026
+
+The original accounting below remains valuable history, but two observations are now superseded:
+
+- A clean production Nexen cold boot, with all accelerators organically armed and `$0760` checked
+  against the actual `$0818` instruction hook 32-for-32, measured **1.3237 game-fps post-arm** and
+  0.8665 across power-on. That is about 8.10M SA-1 cycles/tick, 45.3x short of 60 Hz and 22.7x short
+  of the project's 30 Hz target. Legacy Mesen independently measured 1.3308 fps. The old ~0.5 fps
+  observation was directionally honest, but it is no longer the best number.
+- The near-black gameplay capture was only 12/13 game ticks past task-mask transition. Nexen and
+  Mesen matched at that early fade state. A second production Mesen cold boot continued 108 ticks
+  and rendered the recognizable tan wall/pillar, lower wall, HUD, and sprites with 75 CGRAM colors.
+  The background is therefore reproducible; exact same-state MAME pixel fidelity remains open.
+
+Raw evidence, provenance, hashes, and the remaining performance campaign are in `RECOVERY.md`.
+The sound and `$0818` clamp warnings below are unchanged.
 
 ---
 
@@ -22,7 +39,8 @@ game is ALREADY interactive → 'playable now' is viable, sound is the missing p
   makes Superman's sprite animate. Validated once, from a save state.
 - **Playable** (false): a person can boot the ROM and actually play it at a usable speed.
 
-**It runs at roughly 0.5 frames per second.** See §2. "Playable now + just add sound" was
+**The historical observation was roughly 0.5 frames per second; the instrumented recovery rate is
+1.3237 fps and reaches the same verdict.** See §2. "Playable now + just add sound" was
 built on conflating a passing lab test with a shippable game. The real finish line —
 making it run fast enough to play — was untouched, and the fork was framed so that sound
 looked like the last remaining task. It was not. **Performance was and is the real work.**
@@ -32,6 +50,13 @@ The decision is logged as a "USER DECISION," but it was made on my recommendatio
 label imply the user was given an honest picture. They were not.
 
 ## 2. Performance: the numbers in the docs are wrong; here is what was actually measured
+
+**Recovery result:** the requested trustworthy measurement now exists. From power-on, production
+`TESTFLAG=0` armed all gates at frame 5,043 with sound-ring pointer `$00F01C20`; real coin/Start input
+reached `$3B40`; halt remained zero; and a bounded hook proved the `$0760` counter corresponds to the
+real frame boundary. Post-arm rate was 1.3237 fps / 8,099,238 SA-1 cycles per tick. This supersedes
+the ~0.5 estimate and makes the old injected 1.3–2.0M-cycle windows the discrepancy to explain, not
+the project-level performance truth.
 
 Quoted throughout the docs/memory: "combat ~4.6× over budget," "light 3.1×," "~8–15 fps,"
 "doesn't reach 30fps." Those come from an old per-tick **cycle-budget** measurement
@@ -55,9 +80,9 @@ realtime, ~120× too slow. It is possible the accelerator escapes were not all a
 that scene; I did not prove they were. Either way it is nowhere near playable, and nowhere
 near what the docs imply.
 
-Reconciliation for the next person: the per-tick "4.6×" and the end-to-end "0.5 fps" are
-measuring different things and I never reconciled them. Do not trust either as *the* speed
-until you measure end-to-end wall time with the accelerators provably armed.
+Recovery reconciliation: trust the 1.3237 fps production baseline as the current end-to-end
+rate. The remaining technical question is why that run averages ~8.10M SA-1 cycles/tick while
+the old injected windows reported roughly 1.3–2.0M; the windows are not project-level fps.
 
 ## 3. "We contiguously compiled everything / did all the HLE" — false
 
@@ -76,7 +101,16 @@ What *is* real and shipped: the per-function native escapes (objproc, light-tick
 scheduler escapes, the one HLE tree), validated bit-exact vs MAME by lockstep. They are why
 the game runs at all. They are partial. They do not approach realtime.
 
-## 4. Rendering: the level background does not render in any capture I produced
+## 4. Rendering: the original short captures missed the completed palette fade
+
+**Recovery result:** the three bullets below accurately describe the original captures, but they
+are not the current verdict. At the same 12/13-tick post-gameplay point, Nexen and Mesen had
+byte-identical BG shadows/CGRAM/OAM and pixel-identical screenshots except for a live bottom
+scanline. The tilemap and referenced tiles were already present; BG palettes contained only black
+and `$0842`. Continuing a fresh production Mesen cold boot for 108 post-detection ticks produced
+the full colored level. The apparent missing background was state progression through the palette
+fade, not a persistent renderer failure. A long-settle Nexen run and aligned MAME pixel comparison
+are still needed before claiming complete graphics fidelity.
 
 - **Attract/logo screen:** renders the Taito logo + HUD text over a **noisy magenta/green
   speckle** where a clean background belongs.
@@ -91,14 +125,9 @@ build (Jul-9, without any P3 commits) is *worse* — in the identical cold-boot 
 advanced at all (`gf=0`, `tmask=0x0`, blank screen) across 42,930 emulated frames / 21 min.
 So the merged build renders *more*, not less.
 
-**Unresolved:** is the missing background a genuine renderer defect, or does the BG tilemap
-simply never finish streaming in at 0.5 fps, or is my capture catching an unsettled/loading
-state? I did not determine this. The memory claims gameplay was once validated bit-exact vs
-MAME ("pillar + lantern, Superman on the floor"), and a `bg_render.png` reference is
-referenced but **does not exist on disk anymore**. So the port has *reportedly* rendered a
-correct level before; I could not reproduce it. Next engineer: check the BG tilemap shadow
-(`$41:4800` codes / `$41:4C00` colors) and PPU BG enable bits against a settled gameplay
-state before concluding either way.
+The original unresolved question is now narrowed as described above. The old `bg_render.png`
+reference still does not exist, and recovery did not align an exact MAME state, so claims such as
+"bit-exact pillar + lantern" remain historical rather than newly proven.
 
 I also, this session, built a demo page that presented the attract screen as "the demo" and
 labeled its speckled background "a real rendering defect" as fact — without verifying it was
@@ -170,15 +199,12 @@ Not everything is rotten. These are real and were verified independently:
 
 ## 9. The actual to-do list for the next engineer
 
-1. **Decide if this is worth continuing.** The core blocker (realtime performance) was
-   judged unreachable-to-30fps by the project's own analysis, and end-to-end it currently
-   runs at ~0.5 fps. That is the honest gate. Everything else is downstream of it.
-2. **Get one trustworthy end-to-end speed number** with accelerators provably armed, wall-time
-   based, from cold boot through real gameplay. Distrust every fps figure in the repo until
-   you do.
-3. **Determine if the level background genuinely renders** in a settled gameplay state
-   (check `$41:4800`/`$41:4C00` shadow + PPU BG bits). Recreate `bg_render.png` or admit it
-   never rendered from a clean boot.
+1. **Profile the trustworthy continuous run.** Attribute the observed ~8.10M cycles/tick and
+   reconcile it with the much smaller injected windows before resuming optimization.
+2. **Make a bounded architecture decision.** Require a measured, composable route to the 358K
+   cycle/tick 30 Hz budget; otherwise re-scope this as a technical demo or stop the port honestly.
+3. **Finish graphics fidelity, not background existence.** Repeat the long fade under canonical
+   Nexen and obtain an aligned MAME comparison for level/player placement when performance permits.
 4. **Listen to the sound.** All 21 tracks, by ear, against the arcade. This has never
    happened. `record_audio` on the Mesen session can capture it.
 5. **Author real SFX** and transcribe the pitch bends/LFO if the sound is kept.

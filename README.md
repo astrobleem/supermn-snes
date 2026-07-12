@@ -14,9 +14,10 @@ SNES PPU (via Nexen) for the target side.
 > This project is **not currently playable or shippable**. Earlier status text promoted
 > partial injected-tick measurements and isolated subsystem validations into project-level
 > claims. Read [CONFESSION.md](CONFESSION.md) first; it supersedes optimistic statements in
-> older status and planning sections. The recovery campaign is re-establishing one canonical
-> build, a faithful cold-boot speed measurement with accelerators proven armed, reproducible
-> gameplay rendering, and an actual listening pass.
+> older status and planning sections. Recovery established one canonical build and measured a
+> faithful production cold boot at **1.3237 game-fps after arming** (22.7x short of the 30 Hz
+> target). A long same-boot observation also reproduced the level background after its palette
+> fade. The active gate is now end-to-end performance architecture; audio still needs listening.
 
 > ⚠️ **No copyrighted ROM data is included.** This repository contains only original
 > source, tooling, and documentation. You must supply your own legally-obtained
@@ -27,10 +28,10 @@ SNES PPU (via Nexen) for the target side.
 | Area | State |
 |---|---|
 | **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Correctness gates **opsweep 782/782 + optest 154/154**. |
-| Graphics pipeline | ⚠️ conversion/render paths have isolated validation, but a correct level background is not currently reproducible from a settled cold boot |
+| Graphics pipeline | ⚠️ level background now reproduces after a long production fade; early Nexen/Mesen states match, but exact same-state MAME fidelity and a long-settle canonical Nexen capture remain open |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **Realtime budget** | ❌ **not solved** — the only honest end-to-end observation was roughly **0.5 game-fps**; older cycle-window projections exclude important work and require reconciliation |
+| **Realtime budget** | ❌ **not solved** — canonical post-arm rate is **1.3237 game-fps**, about **45.3x short of 60 Hz / 22.7x short of 30 Hz**; the observed ~8.10M cycles/tick must be reconciled with older injected windows before more optimization |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
 | Audio (YM2610 → SNES TAD) | ⚠️ integrated and byte/oracle-validated, but never completed as a by-ear arcade comparison; most SFX and expression remain incomplete |

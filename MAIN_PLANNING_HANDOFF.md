@@ -3,9 +3,12 @@
 > ## RECOVERY OVERRIDE (2026-07-12)
 >
 > Do not start the historical "CURRENT TASK" below. Read `CONFESSION.md`, `AGENTS.md`, and
-> `RECOVERY.md`. The immediate task is to establish a trustworthy production cold-boot baseline,
-> reconcile end-to-end performance, reproduce gameplay rendering, and audition audio. Historical
-> campaign sections remain useful for mechanisms and failed approaches, not current priority.
+> `RECOVERY.md`. The production cold-boot baseline is complete: 1.3237 game-fps post-arm, about
+> 8.10M SA-1 cycles/tick, with a 32/32 real-boundary hook check. The level background also reproduces
+> after a long same-boot palette fade. The immediate task is R5: attribute the continuous-run cycle
+> cost and require a measured path to the 30 Hz budget before resuming per-function escapes, sound
+> polish, or rendering polish. Historical campaign sections remain useful for mechanisms and failed
+> approaches, not current priority.
 
 > ## ⭐ CURRENT STATE (2026-07-11): SOUND PORT COMPLETE — see STATUS.md's top banners
 > The TAD/YM2610 sound port (the second half of the 2026-07-04 strategic fork) is DONE:

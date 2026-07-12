@@ -1,15 +1,16 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: July 11, 2026. Per-area detail lives in the linked docs.
-**Start any new session at [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md).**
+Last updated: July 12, 2026. Per-area detail lives in the linked docs.
+**Start any new session at [RECOVERY.md](RECOVERY.md).**
 
 > ## ⚠️ RECOVERY OVERRIDE — July 12, 2026
 >
 > [CONFESSION.md](CONFESSION.md) supersedes the optimistic banners below. The port is
-> interactive in controlled tests but not playable or shippable; end-to-end performance is
-> unreconciled and was roughly 0.5 game-fps in the only honest cold-boot observation; correct
-> gameplay background rendering is not currently reproducible; and sound has automated byte/oracle
-> evidence but no completed listening pass. See [RECOVERY.md](RECOVERY.md) for the active campaign.
+> interactive but not playable or shippable. A clean production cold boot now measures **1.3237
+> game-fps after arming** (22.7x short of the 30 Hz target), with the game counter validated against
+> its real frame boundary. The level background is reproducible after a sufficiently long same-boot
+> palette fade; exact MAME pixel fidelity is still open. Sound has automated byte/oracle evidence but
+> no completed listening pass. See [RECOVERY.md](RECOVERY.md) for the evidence and active campaign.
 > The remainder of this file is retained as engineering history and partial evidence.
 
 > ## ⚠️ SOUND PORT — INTEGRATED, AUTOMATED GATES GREEN, MUSICAL VALIDATION INCOMPLETE

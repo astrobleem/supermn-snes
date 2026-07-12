@@ -1,6 +1,10 @@
 # Superman Arcade → SNES Port
 ## Project Plan: Porting Taito's Superman (1996) to Super Nintendo
 
+> **RECOVERY OVERRIDE — July 12, 2026:** this is the original project-plan snapshot, not current
+> status. Start at [`RECOVERY.md`](RECOVERY.md). The canonical build runs at 1.3237 game-fps
+> post-arm; performance architecture is the active gate.
+
 > **Current status: see [`STATUS.md`](STATUS.md).** Snapshot (June 17, 2026):
 > graphics path validated on real SNES PPU (`PALETTE_VERDICT.md`); transpiler
 > design settled (`TRANSPILER_DESIGN.md`) and gate **G2 green** — two 68K leaves

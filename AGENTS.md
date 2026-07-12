@@ -29,15 +29,18 @@ merge, rebase, delete branches, or switch away from user work without explicit i
 ## Honest project state
 
 - The port is interactive in controlled tests, but it is not playable or shippable.
-- The only honest cold-boot, end-to-end measurement in the confession was about 0.5 game-fps.
-  Older 3–10x or 8–15 fps claims measure partial injected tick windows and exclude important
-  end-to-end work. Do not quote a speed until accelerators are proven armed and wall-time progress
-  is measured from a faithful cold boot.
+- The canonical recovery cold boot measures **1.3237 game-fps after production arming** and 0.8665
+  across power-on, about 8.10M SA-1 cycles per tick (45.3x short of 60 Hz; 22.7x short of 30 Hz).
+  Its `$0760` counter matched the real `$0818` boundary hook 32-for-32, and legacy Mesen reproduced
+  the rate within 1%. Older 3–10x or 8–15 fps claims measure partial injected windows and exclude
+  important end-to-end work. Use `RECOVERY.md` and the raw baseline, not those projections.
 - The legal MC68000 interpreter and shipped per-function native escapes have strong differential
   evidence: opsweep 782/782 and MAME lockstep work are real. The performance problem is not solved.
-- Correct level-background rendering is not currently reproducible. Existing captures range from
-  noisy attract backgrounds to HUD/sprite on black gameplay. Check `$41:4800`, `$41:4C00`, and PPU
-  BG enables in a settled cold-boot gameplay state before making a renderer verdict.
+- The level background is now reproducible from a production cold boot after its palette fade. A
+  12/13-tick post-detection state is legitimately near-black, byte/pixel-matches across Nexen and
+  Mesen, and must not be called a persistent renderer defect. A Mesen same-boot run continued 108
+  ticks and rendered the tan wall/pillar with 75 CGRAM colors. Exact MAME pixel fidelity and a
+  long-settle canonical Nexen capture remain unproven; see `RECOVERY.md` R3.
 - The TAD sound port is merged upstream and its data/blob/trigger paths are byte- and
   oracle-validated, but it has never received a by-ear listening pass. Most SFX are placeholders;
   pitch bends/LFO/portamento remain untranscribed; organic trigger firing is not fully proven.

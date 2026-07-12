@@ -46,7 +46,7 @@ from overlapping optimistic handoffs into one evidence-backed engineering line.
 ### Unproven or contradicted
 
 - Playability or a credible 30/60 fps landing point.
-- Correct level-background rendering in current production cold boot.
+- Exact same-state MAME graphics fidelity and a long-settle canonical Nexen capture.
 - Complete/faithful sound by ear.
 - Organic firing of every mapped music/SFX trigger.
 
@@ -116,22 +116,78 @@ a cold-boot, rendering, stability, or performance result.
 
 ### R2 — Honest cold-boot performance
 
-- [ ] Start from power-on with production `TESTFLAG=0`; do not load a save state or force gates.
-- [ ] Log when `$072E/$071A/$073A` arm and record the sound-ring signature that caused it.
-- [ ] Drive coin and Start through the real input mailbox.
-- [ ] Measure emulator video frames, wall time, SA-1 cycles, `$0760` game-tick count, instruction
+- [x] Start from power-on with production `TESTFLAG=0`; do not load a save state or force gates.
+- [x] Log when `$072E/$071A/$073A` arm and record the sound-ring signature that caused it.
+- [x] Drive coin and Start through the real input mailbox.
+- [x] Measure emulator video frames, wall time, SA-1 cycles, `$0760` game-tick count, instruction
   counter, task mask, halt state, and final PC in the same continuous run.
-- [ ] Cross-check that `$0760` is monotonic and corresponds to the `$0818` game-frame boundary.
-- [ ] Publish raw logs and separate emulated-game rate from host throughput.
+- [x] Cross-check that `$0760` is monotonic and corresponds to the `$0818` game-frame boundary.
+- [x] Publish raw logs and separate emulated-game rate from host throughput.
+
+The canonical Nexen run is under `build/recovery-20260712/baseline-nexen/`; its JSONL and runner
+log both hash to SHA-256
+`133cd8fb111a8b35814f66acb0ba02a0291f37e48e4cb198f8ee7da9f21c724c`. It started from a clean
+checkout at recovery commit `e3b6420`, production ROM SHA-256 `183c53f6...`, `TESTFLAG=0`, and no
+save state or state/gate poke. Production armed at video frame 5,043 with sound-ring pointer
+`$00F01C20`; all six observed gates had their exact production values. An execution hook at the
+actual `INC $0760` instruction (`$00:F5A3`) then matched 32 consecutive counter ticks 32-for-32
+before being removed. The counter remained monotonic, and halt stayed zero through the final read.
+
+Real input-mailbox events were: coin 1 at tick 106, release 115; coin 2 at 124, release 133; Start
+at 146, release 156. The same run reached task mask `$3B40` at tick 197 and ended after the requested
+post-detection window at frame 14,562 / tick 210. Final state included 2,601,985,631 SA-1 cycles,
+3,054,765 interpreted-instruction counter units, 68K PC `$000818`, and SA-1 PC `$00811E`.
+
+| Metric | Canonical Nexen | Legacy Mesen compatibility |
+|---|---:|---:|
+| Production arm frame | 5,043 | 5,111 |
+| Gameplay detection tick | 197 | 198 |
+| Final video frame / game tick | 14,562 / 210 | 14,579 / 210 |
+| Post-arm game rate | **1.3237 fps** | **1.3308 fps** |
+| Full power-on observed rate | 0.8665 fps | 0.8736 fps |
+| Post-arm SA-1 cycles per tick | 8,099,238 | 8,055,299 |
+| Host video throughput | 2.8446 fps | 13.0040 fps |
+| Host wall time | 5,118.23 s | 1,115.18 s |
+
+The host-throughput row measures emulator/debugger speed, not port speed; the two emulator builds
+and hook lifetimes differ. The game-rate rows use game ticks per emulated SNES video time. The
+canonical post-arm result is one game tick per 45.33 video frames: **45.3x short of 60 Hz and 22.7x
+short of the project's 30 Hz retarget**. The confession's inherited ~0.5 fps observation was
+directionally honest, but this instrumented two-emulator result supersedes it.
 
 ### R3 — Gameplay rendering truth
 
-- [ ] Reach a settled gameplay state from the same cold boot.
-- [ ] Capture `$41:4800` tile codes, `$41:4C00` colors, CGRAM, VRAM, OAM, PPU layer enables,
+- [x] Reach a gameplay state and observe it past the level-palette fade from the same cold boot.
+- [x] Capture `$41:4800` tile codes, `$41:4C00` colors, CGRAM, VRAM, OAM, PPU layer enables,
   and screenshot together.
-- [ ] Compare with a same-state MAME reference or state why exact state alignment is unavailable.
-- [ ] Decide whether the missing background is state progression, shadow generation, transfer,
+- [x] Compare with a same-state MAME reference or state why exact state alignment is unavailable.
+- [x] Decide whether the missing background is state progression, shadow generation, transfer,
   PPU configuration, or renderer logic.
+
+The 12/13-tick post-detection Nexen and Mesen captures are the same early fade state. Their BG code
+shadow, BG color shadow, CGRAM, OAM, 4 KiB BG tilemap, and every tile graphic referenced by that
+tilemap are byte-identical. Relevant PPU configuration also agrees: mode 1, brightness 15, BG1+OBJ
+enabled, BG1 map at word `$0000`, and BG characters at word `$1000`. Their screenshots are
+pixel-identical except for 192 pixels on the live bottom scanline. Full-VRAM differences are confined
+to unreferenced/uninitialized ranges `$1000-$1FFF` and `$8000-$FFFF`.
+
+At that early point the tile geometry is already present, but BG palettes 0 and 1 contain only black
+and 27 copies of dark gray `$0842`; the other BG palettes are zero. That explains the near-black
+image without invoking an emulator renderer failure. A second production cold boot under legacy
+Mesen continued for 108 ticks after gameplay detection (`baseline-mesen-extended/`). Its unchanged
+BG shadows rendered as the recognizable tan wall/pillar and lower wall once the palette fade
+completed; CGRAM grew from 15 to 75 unique colors and the screenshot contains 37 RGB colors. The
+extended JSONL hashes to `319f0dddbfcff1303c703a3c9d263c2791ed33384ed41af1b4485f93bf96cddb`;
+the final screenshot hashes to
+`cb16122f763a20c6113b2fa7e5ae0fdf8e4e368b029299b29744a352c67210de`.
+
+Therefore the short capture's missing background was **state progression through the palette
+fade**, not absent shadows, failed transfer, disabled layers, or Nexen renderer logic. The extended
+run used coarse input pulses and is rendering evidence only; its timing fields do not replace the
+canonical Nexen performance result. A same-state MAME comparison is unavailable because no aligned
+cold-boot MAME state/reference capture was preserved, so arcade pixel fidelity and player placement
+remain separate, open validation questions. A 90-tick post-gameplay window is now the harness
+default to prevent this early-fade misclassification.
 
 ### R4 — Sound truth
 
@@ -140,11 +196,24 @@ a cold-boot, rendering, stability, or performance result.
 - [ ] Listen to all 21 tracks against arcade references and log musical defects.
 - [ ] Reclassify sound as data-correct, transport-correct, or musically accepted per track.
 
+### R5 — Bounded performance-architecture decision
+
+- [ ] Profile a representative continuous, production gameplay interval and attribute the observed
+  ~8.10 million SA-1 cycles per tick across interpreted work, native/HLE bodies, bridges/scheduler,
+  5A22 rendering/contention, frame pacing, and idle time.
+- [ ] Reconcile that continuous-run cost with the inherited 1.3–2.0 million-cycle injected windows;
+  do not optimize from the old windows until the missing factor is measured.
+- [ ] Prototype the highest-leverage architectural change and require a measured, composable path
+  to the 358K-cycle 30 Hz budget. Per-function escape work remains frozen meanwhile.
+- [ ] Choose explicitly among a semantic/full-AOT campaign, an honestly scoped technical demo, or
+  stopping the port while preserving the interpreter/toolchain work.
+
 ## Decision rule after the baseline
 
-Performance is the project gate. If a faithful, accelerators-armed cold boot is still orders of
-magnitude below a usable game rate, do not spend the next campaign polishing sound or adding more
-isolated escapes. Profile the true end-to-end run and choose explicitly among:
+Performance is the project gate, and R2 fired it decisively. Do not spend the next campaign polishing
+sound, palette timing, or isolated escapes. R5 is the active campaign: first explain the full-run
+8.10M-cycle tick, then require measured architectural leverage before committing to a rewrite.
+Choose explicitly among:
 
 1. a larger semantic/HLE rewrite with a measured path to the target rate;
 2. a reduced-scope technical demo with honest acceptance criteria; or

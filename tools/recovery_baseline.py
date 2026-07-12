@@ -144,7 +144,7 @@ def parse_args() -> argparse.Namespace:
         "--settle-ticks",
         type=int,
         default=90,
-        help="Post-gameplay ticks to observe; 90 clears the level palette fade.",
+        help="Post-gameplay ticks to observe; 90 avoids a short early-fade capture.",
     )
     parser.add_argument(
         "--output",
