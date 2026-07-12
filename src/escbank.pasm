@@ -28,25 +28,31 @@ bhp_after=$00E454
 ors_pre=$00D16F
 lh_sched=$00F9B2
 op_rte=$00B3B8
-lh_nofire=$00F5B9
+lh_nofire=$00F5C0
 irq_none=$0080CB
 entry_c9f8=$948039
 entry_d5a0=$94849E
 entry_1008=$94855B
 entry_d01a=$948AC0
-entry_d05e=$948C3D
-entry_d0bc=$948CD7
-entry_d07a=$948D79
-entry_ce4t=$948F7F
-entry_d718=$9494F2
-entry_d3f6=$94980E
-entry_c172=$949D81
-entry_295at=$94A372
-entry_29b6t=$94A49A
-entry_13bet=$94A953
-entry_8fat=$94ABE7
-entry_fd2t=$94AE58
-entry_c9a6=$94AF1A
+entry_d05e=$948C3C
+entry_d0bc=$948CD5
+entry_d07a=$948D76
+entry_ce4t=$948F7C
+entry_d718=$9494EF
+entry_d3f6=$94980B
+entry_c172=$949D7E
+entry_295at=$94A36F
+entry_29b6t=$94A497
+entry_13bet=$94A950
+entry_8fat=$94ABE4
+entry_fd2t=$94AE55
+entry_c9a6=$94AF17
+entry_d6e6=$94E299
+entry_d64a=$94E305
+entry_d3de=$94E5CF
+entry_cfa4=$94E65F
+entry_cec2=$94E96B
+entry_d52e=$94EE0C
 entry_25110=$978000
 entry_12e56=$97A000
 entry_129c6=$97A800
@@ -60,12 +66,13 @@ entry_caf6=$97D800
 entry_cb9e=$97E800
 entry_1d5f0=$97EC00
 ; <<< ESCBANK_SYMS <<<
+entry_d232=$99EB00   ; pt.22 P3b: --bank5 $99 body, .org-fixed (gen_escbank_syms doesn't harvest $99; hand const)
 
     .org $8000
 escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jmp = 3 bytes)
     jmp entry_d96                ; slot 0  ($928000)  <- $000D96
     jmp entry_fb8                ; slot 1  ($928003)  <- $000FB8
-    jmp gm_memset                ; slot 2  ($928006)  <- generic memset (loop fast-path)
+    jmp gms_tramp                ; slot 2  ($928006)  <- generic memset -> escbank5 body (2026-07-10)
     jmp entry_28d4               ; slot 3  ($928009)  <- $0028D4 (gameplay ~2.4%)
     jmp entry_26a0               ; slot 4  ($92800C)  <- $0026A0 (sprite-ctrl, $D0 shadow)
     jmp entry_26fa               ; slot 5  ($92800F)  <- $0026FA (hot leaf, jsr.l from $00CE5E)
@@ -12571,17 +12578,12 @@ brce58_2:
     lda #$0001
     sta $18
 Lce58_ce6a:
-    ; CALL-BRIDGE bsr.w $d522 -> interpret callee, resume brce58_3
+    ; CALL-BRIDGE bsr.w $d522 -> entry_d522 (NATIVE, pt.22 P2, @.org $FE00 free $92 tail), resume brce58_3
     lda #brce58_3
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$D522
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_d522
 brce58_3:
     lda #$0010
     sta $9A
@@ -12608,17 +12610,12 @@ Lfce58_1:
     lda #$0005
     sta $18
 Lce58_ce7a:
-    ; CALL-BRIDGE bsr.w $ceb6 -> interpret callee, resume brce58_4
+    ; CALL-BRIDGE bsr.w $ceb6 -> entry_ceb6 (NATIVE escape, pt.22 Lever B), resume brce58_4
     lda #brce58_4
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$CEB6
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_ceb6
 brce58_4:
     lda #$0010
     sta $9A
@@ -12645,17 +12642,12 @@ Lfce58_2:
     lda #$0001
     sta $18
 Lce58_ce8a:
-    ; CALL-BRIDGE bsr.w $d6b0 -> interpret callee, resume brce58_5
+    ; CALL-BRIDGE bsr.w $d6b0 -> entry_d6b0 (NATIVE escape, pt.22 Lever B), resume brce58_5
     lda #brce58_5
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$D6B0
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_d6b0
 brce58_5:
     lda #$0010
     sta $9A
@@ -12682,17 +12674,12 @@ Lfce58_3:
     lda #$0001
     sta $18
 Lce58_ce9a:
-    ; CALL-BRIDGE bsr.w $d226 -> interpret callee, resume brce58_6
+    ; CALL-BRIDGE bsr.w $d226 -> entry_d226 (NATIVE escape, pt.22 P1 static-switch), resume brce58_6
     lda #brce58_6
-    sta $54
-    lda #$00FE
-    sta $56
-    jsl.l push32_l
-    lda #$D226
     sta $40
-    lda #$0000
+    lda #$00FE
     sta $42
-    jml.l inext
+    jmp entry_d226
 brce58_6:
     lda #$0020
     sta $9A
@@ -12955,7 +12942,7 @@ Lfd0d0_3:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_cfa4       ; pt.22 P3b COVERAGE: d0d0 tail -> NATIVE $CFA4 (was jml.l inext); $94
 Ld0d0_d11a:
     lda $34
     clc
@@ -13160,7 +13147,7 @@ Lfd0d0_6:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_cfa4       ; pt.22 P3b COVERAGE: d0d0 tail -> NATIVE $CFA4 (was jml.l inext); $94
 Ld0d0_d166:
     lda #$CF8A
     sta $40
@@ -13364,7 +13351,7 @@ Ld5c4_d5fe:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_d52e       ; pt.22 P3b COVERAGE: -> NATIVE $D52E (was jml.l inext); cross-bank $94
 
 ; --- $00D6FC jmp-table state handler ---
 ; --- transpiled from $00D6FC (9 instrs) by tools/transpile.py [bank1] ---
@@ -13574,7 +13561,7 @@ Ld386_d3ac:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l entry_d232       ; pt.22 P3b COVERAGE: -> NATIVE $D232 (was jml.l inext); cross-bank $99 (--bank5)
 
 ; --- $00D3B0 jmp-table state handler ---
 ; --- transpiled from $00D3B0 (14 instrs) by tools/transpile.py [bank1] ---
@@ -13762,6 +13749,111 @@ brd3b0_1:
     lda #$0000
     sta $42
     jml.l inext
+
+
+
+; --- $00D226 jmp-table state handler (pt.22 P2: MECHANIZED via transpile.py --jtstatic=D376:4;
+; --- regenerated, instruction-identical to the P1 hand-authored body daf2e97). ---
+entry_d226:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; JTSTATIC $00D376(a0 jmp-table, 4 cases): static index switch, movea/ojmp_hook default
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    cmp #$0000
+    bne Lfd226_1
+    lda #$D3F6
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d3f6
+Lfd226_1:
+    cmp #$0004
+    bne Lfd226_2
+    lda #$D386
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d386
+Lfd226_2:
+    cmp #$0008
+    bne Lfd226_3
+    lda #$D3DE
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d3de       ; pt.22 P3b COVERAGE: d226 -> NATIVE $D3DE (was jml.l inext); $94
+Lfd226_3:
+    cmp #$000C
+    bne Lfd226_4
+    lda #$D3B0
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d3b0
+Lfd226_4:
+    lda #$D376
+    sta $20
+    lda #$0000
+    sta $22
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
 
 ; >>> ESCBANK_BODIES_END — deploy_escape inserts new escape bodies before this line <<<
 
@@ -14035,6 +14127,103 @@ jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40
     jml bhp_after        ; -> bank-$00 push32r/rts (must run in bank $00)
+
+; --- $00D6B0 jmp-table state handler (pt.22 P3a: STATIC-SWITCH, relocated to the free
+;     jah2_ext_bsr tail .org $F600 -- was $F291 in the $8000 overflow chain w/ jml.l ojmp_hook.
+;     Kills the ojmp_hook round-trip: d718/d6fc -> direct jmp/jml.l, $D6E6 -> jml.l inext.
+;     Reached same-bank via brce58_5 `jmp entry_d6b0`. NOTE: below the .org $F800 cors_disp;
+;     ~126B remains between jxb_real and here for future bsr-scan growth. ---
+    .org $F600
+entry_d6b0:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; JTSTATIC $00D6DA(a0 jmp-table, 3 cases): static index switch, movea/ojmp_hook default
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    cmp #$0000
+    bne Lfd6b0_1
+    lda #$D718
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d718
+Lfd6b0_1:
+    cmp #$0004
+    bne Lfd6b0_2
+    lda #$D6E6
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d6e6       ; pt.22 P3b COVERAGE: d6b0 state1 -> NATIVE $D6E6 (was jml.l inext); cross-bank $94
+Lfd6b0_2:
+    cmp #$0008
+    bne Lfd6b0_3
+    lda #$D6FC
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d6fc
+Lfd6b0_3:
+    lda #$D6DA
+    sta $20
+    lda #$0000
+    sta $22
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
 
 ; ===================== COROUTINE RESUME DISPATCH ($92:F800) =====================
 ; Reached from bank-$00 op_rte via `ors_rte -> jml $92F800`. PC ($40/$42) = the task resume-PC (the
@@ -14605,3 +14794,224 @@ lsel_set:
     stz $42
     pla                  ; drop the jsr loop_hook return
     jml.l irq_none       ; re-fetch $40 (no $AC dec, matching the original lhs_found handoff)
+
+; --- $00D522 jmp-table state handler (pt.22 P2 MECHANIZED; .org $FE00 = free $92 tail,
+; --- ESCBANK_BODIES_END overflows into the .org $F400 jah2_ext_bsr region -> corruption). ---
+.org $FE00
+entry_d522:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; JTSTATIC $00D5BC(a0 jmp-table, 2 cases): static index switch, movea/ojmp_hook default
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    cmp #$0000
+    bne Lfd522_1
+    lda #$D5C4
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d5c4
+Lfd522_1:
+    cmp #$0004
+    bne Lfd522_2
+    lda #$D64A
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d64a       ; pt.22 P3b COVERAGE: d522 s1 -> NATIVE $D64A (was jml.l inext); $94
+Lfd522_2:
+    lda #$D5BC
+    sta $20
+    lda #$0000
+    sta $22
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+
+; --- $00CEB6 sprite-build jump-table state handler (pt.22 P3a: STATIC-SWITCH, relocated to the
+;     free $92 tail .org $FEB0 -- was $F291 in the $8000 overflow chain w/ jml.l ojmp_hook.
+;     Kills the ojmp_hook round-trip: 5 escaped states -> direct jmp/jml.l, $CFA4 -> jml.l inext,
+;     default preserves movea+ojmp_hook. Reached same-bank via brce58_4 `jmp entry_ceb6`. ---
+    .org $FEB0
+entry_ceb6:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; JTSTATIC $00CF8C(a0 jmp-table, 6 cases): static index switch, movea/ojmp_hook default
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    cmp #$0000
+    bne Lfceb6_1
+    lda #$D0D0
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jmp entry_d0d0
+Lfceb6_1:
+    cmp #$0004
+    bne Lfceb6_2
+    lda #$D01A
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d01a
+Lfceb6_2:
+    cmp #$0008
+    bne Lfceb6_3
+    lda #$D05E
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d05e
+Lfceb6_3:
+    cmp #$000C
+    bne Lfceb6_4
+    lda #$D0BC
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d0bc
+Lfceb6_4:
+    cmp #$0010
+    bne Lfceb6_5
+    lda #$D07A
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_d07a
+Lfceb6_5:
+    cmp #$0014
+    bne Lfceb6_6
+    lda #$CFA4
+    sta $20
+    sta $40
+    lda #$0000
+    sta $22
+    sta $42
+    jml.l entry_cfa4       ; pt.22 P3b COVERAGE: ceb6 s5 -> NATIVE $CFA4 (was jml.l inext); $94
+Lfceb6_6:
+    lda #$CF8C
+    sta $20
+    lda #$0000
+    sta $22
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    lda $9E
+    sta $22
+    lda $20
+    sta $40
+    lda $22
+    sta $42
+    jml.l ojmp_hook
+
+
+
+; gm_memset -> escbank5 tramp (loop_hook root-cause, 2026-07-10): the $92 gm_memset body
+; below predates the exit-CCR fix and the count==0 guard; slot 2 bounces here to the
+; corrected gm_memset_far ($99:F5C0). The old body stays as dead code — escbank addresses
+; are referenced ABSOLUTELY by the xlat dispatch tables, so nothing here may shift.
+.org $FFC0
+gms_tramp:
+    jsl $99F5C0
+    rtl

@@ -776,3 +776,86 @@ entry_ce58 bridge interpret→native** exactly like `brce58_1`→`jmp entry_26fa
 sub-handlers (like the `$d01a/$d05e/$d0bc/$d07a` set). Gate + bit-exact (ON-vs-OFF `$40`/`$41` diff=0,
 `val_frame_diff.py`) + **`$92` HOOKTEST-fire** + smoke each. Full plan: the pt.22 approved plan file.
 Related: [[scheduler-switchin-shipped]], [[bulk-transpile-phase]], [[escape-deploy-shift-safe]].
+
+### pt.22 BATCH RESULTS (branch `pt22-lever-b-handlers`) — the "mechanical repeat" premise is INVALIDATED
+
+Executed the lever handler-by-handler with per-handler empirical validation (combat + light bit-exact
+diff vs MAME, `$92` HOOKTEST fire, smoke). Outcome split cleanly and **not** the way the plan assumed:
+
+| handler | bridge | result | Δ interp/tick | commit |
+|---|---|---|---|---|
+| `$ceb6` | brce58_4 | ✅ **SHIPPED** bit-exact both-class | −24 | `1bef4cb` (pilot) |
+| `$d6b0` | brce58_5 | ✅ **SHIPPED** bit-exact both-class | −8 | `375198e` |
+| `$d522` | brce58_3 | ❌ **DERAILS** (reverted) — 62B RED | — | — |
+| `$d226` | brce58_6 | ❌ **DERAILS** (reverted) — 65B RED, **`trap=False`** | — | — |
+| `$cd1a` | brce58_1 | ⏸️ untested (harder: 30 instrs, 4× indirect `jsr`/`ibridge`) | — | — |
+
+**The derail (`d522`/`d226`):** the naive interpret→native bridge flip breaks the WHOLE tick — the
+coroutine spine's rts chain corrupts so `entry_ce58` never returns (`trap=False`; the tick runs to the
+`WN=65536` instr budget → the lockstep diff HANGS >2min). `swin` drops 11→6; both share the exact same
+divergence signature (`$F00005/09/4D/29F/2E9/30A-F…`). **It is NOT any static predicate** we can screen on:
+- `d6b0`'s OWN targets `$D6FC/$D718` have escapes (`entry_d6fc`/`entry_d718`) and it's GREEN → not "escaped target".
+- ALL targets (incl. d6b0's) are `; coroutine task body: NO return-push` → not "coroutine-convention target".
+- `entry_d5c4` (d522's index-0 target) **fires 2× AND is GREEN in the baseline** (interpreted `jmp(a0)` →
+  `op_jmp_idx` → `ojmp_hook` → xlat → `entry_d5c4`) → the target is not dormant/broken.
+- `ojmp_hook` is STATELESS (interp.pasm:11128 — gate `$071A` + `$40/$42` only); the native prologue sets
+  `$40/$42`=target identically; the two prologues are BYTE-IDENTICAL modulo the table-base immediate.
+
+Root cause = a non-obvious native-prologue ↔ dispatched-coroutine-escape runtime interaction (needs
+FETCH-STREAM tracing, GPPROF good-vs-broken — not static analysis). **DISCIPLINE: validate every
+coroutine-bridge retarget EMPIRICALLY; a derail shows as `trap=False` / a >2min diff hang, NOT a small
+byte delta.** See [[coroutine-bridge-retarget-derails]].
+
+**USER DECISION (2026-07-05): ship the 2 clean wins (PR #14), then RE-RANK the levers toward the
+playable-game goal.** The re-rank (`pt22-lever-rerank-verdict`) surfaced an honest fork; **the user chose
+(a) CONTIGUOUS-COMPILE** the sprite-build coroutine subtree. Approved plan:
+`/home/chad/.claude/plans/mutable-coalescing-hippo.md`.
+
+### pt.22 CONTIGUOUS-COMPILE — P1 DONE + PROVEN (commit `daf2e97`)
+The d522/d226 derail root cause = the transpiler's `jmp(a0)→jml ojmp_hook` lowering: its runtime
+`movea.l (a0),a0` computes a WRONG a0 → `ojmp_hook`/xlat HITs a wrong native escape → coroutine never
+returns (`trap=False`). **FIX (P1): resolve the jump table STATICALLY** — replace `movea.l+jml ojmp_hook`
+with a `bne`-to-next compare-chain on the runtime index (`memory[a4-2]`), one case per ROM-table entry →
+direct `jml.l entry_X` (escaped) / `jml inext` (interpreted); default = the original `movea.l+ojmp_hook`.
+`entry_d226` (hand-authored, `escbank.pasm`) = **combat 4B / light 8B GREEN, `trap=True`, −8 interp/tick
+both classes, fires 2×, smoke OK.** **KEY codegen requirement: each case MUST set a0 (`$20/$22`)=target
+AND 68K PC (`$40/$42`)=target** (the `movea.l+jmp(a0)` side-effects; omitting a0 leaked d6b0's stale
+`$D718` into `$0DFE` → a 2-byte divergence IDENTICAL in combat+light, i.e. logic not `$AC` timing). This
+PROVES the contiguous mechanism: the derailing dispatchers ARE escapable via static resolution.
+**REMAINING (approved plan): P2** mechanize the `jmp(An)` static-switch in `tools/transpile.py` (regen
+`$D522`/`$D226`); **P3** scale the whole `ce58` subtree (keep the 11 indirect `$1cXX(a5)` draws dynamic);
+**P4** measure the `CYCLES=1` cyc/tick win. Honest ceiling stands (narrows heavy combat, sub-30fps).
+
+
+---
+
+## §sound-era addendum (2026-07-10/11): loop_hook root-cause + the $0818 clamp
+
+Restoring production cold boot for the sound port's concurrent validation exposed and
+closed a loop_hook failure family (full detail: memory `sound-p3-progress`; commits on
+`sound-p3`):
+
+- **`.org` overlap** — the lh flow chain (`.org $F442`) grew past `$F601` and the later
+  `.org $F602` gm_verify section silently assembled over it (Poppy: last org wins per
+  byte). lh_3fea lost its `sec/rts` (fall-through → carry-clear → stale-opcode re-execute
+  → the boot RAM-test "failure"); lh_adbe + gm_memclr were buried whole (dispatch jmps →
+  mid-gm_verify garbage). Bodies now in escbank5 (`$99:F400/F450/F4A0` + gm_memset via a
+  `$92:FFC0` tramp); gm_memclr rehomed at the `$F602` section; `build_interp_rom.py`
+  asserts the slack seams. The same overgrowth had covered the `$F600` TESTFLAG.
+- **Generic matchers made gameplay-sound** — gm_verify now ACTUALLY verifies (mismatch →
+  no-fire → the interp takes the genuine early/error path; the old assume-match collapse
+  corrupted compare/search loops); all collapses set exit CCR (the dbra-fallthrough
+  stale-flags class; cells `$60/$6E/$70/$72/$A2`, nonzero=set) and guard `count==0`.
+- **`$0818` idle-collapse** — "fire the IRQ now" (`$AC=1`) deterministically corrupted a
+  coroutine context ~24 game-seconds into gameplay (flight-recorder signature: healthy
+  `$0532/$0796` cascade dispatching to `$080000` = 68K ROM end). A runtime-pokeable lab
+  (arm redirected to an IRAM handler) swept the boundary: spacing ≤ `$0800` fails,
+  `$2000` is stable. Shipped as a clamp (`$AC` lowered to `$2000` at the spin, NEVER
+  raised — an unconditional store refills faster than iloop drains and starves the IRQ).
+  ~18x game speed retained; soaked through the fatal event repeatedly.
+- **Arming** — nothing arms at reset (the boot self-test must run pure); `snd_vframe`
+  arms lh + all escapes when the 68K sound-ring pointer signature (`$00F01C2x`) appears.
+- **Diagnosis toolkit** (no MAME lockstep needed; first-reach tools next time): the
+  interp's always-on 68K PC ring (IRAM `$0400-$05FF`, ptr `$48`, last 128 PCs) + the
+  `$0710/$0716` PC-freeze (`$0712` frozen-marker, `$0714` release, `$0730=$5A5A`
+  re-firing mode) + deterministic per-arm poke-bisects on ROM copies.

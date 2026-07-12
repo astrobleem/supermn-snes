@@ -1,8 +1,29 @@
 # MAIN_PLANNING_HANDOFF.md
 
-Last updated: 2026-07-04 (pt.21). **THE STRATEGIC FORK IS SETTLED (user, 2026-07-04): 30fps
-retarget (budget 358K/tick, tick = 2 display frames) + the TAD/YM2610 sound port; realtime-60
-abandoned (ISA-floor verdict). Don't re-litigate.**
+> ## ⭐ CURRENT STATE (2026-07-11): SOUND PORT COMPLETE — see STATUS.md's top banners
+> The TAD/YM2610 sound port (the second half of the 2026-07-04 strategic fork) is DONE:
+> P1 plumbing → P2 capture+wiring → P3 real audio + per-note polish + the GROUND-TRUTH
+> trigger map for all 21 tracks + concurrent live-gameplay validation. Along the way,
+> production COLD BOOT was restored (TESTFLAG relocation + build guard) and the whole
+> loop_hook failure family was root-caused and fixed (org-overlap relocations, sound
+> generic-matcher corrections, the $0818 idle-collapse re-shipped as a $2000 clamp);
+> accelerators now self-arm after the boot self-test. Branch `sound-p3` / PR #15.
+> Docs: `tools/sound/README.md`, `docs/SOUND_COMMAND_MAP.md`; memory `sound-p3-progress`.
+> Remaining sound items (non-blocking): by-ear listening pass, real SFX authoring,
+> rights review (tracks 3/8/19 = John Williams theme).
+> The pt.22 material below is the PRIOR campaign state, kept for context.
+
+Last updated: 2026-07-06 (**pt.22 P3a DONE**: ceb6 + d6b0 STATIC-RESOLVED via `--jtstatic` — all 4 sprite-build
+coroutine leaf dispatchers (ceb6/d6b0 + d226/d522) now dispatch DIRECT, 8 ojmp_hook round-trips/tick eliminated;
+GREEN both-class bit-exact, same-bank $92 relocation (ceb6 @ .org $FEB0 tail, d6b0 @ .org $F600 jah2_ext_bsr tail),
+smoke OK. **MEASURED (deterministic instr-counts): P3a cycle win is small (~500 cyc/tick, <0.15% budget — the
+ojmp_hook round-trip is the CHEAP native→native bridge). P3b sub-handler ceiling directly measured SMALL (~4 interp
+PCs/tick of 165); the interp mass is the SCHEDULER ROOT ~42% + the cd1a spine $CD40 x18 (~25 PCs, harder shape).**
+USER (2026-07-06) chose: commit P3a + do the 9 sub-handlers (P3b) despite the low ceiling — finish the subtree.
+HARNESS: regen /tmp/b0_native.mss via dump_b0_native.py after EVERY rebuild or lockstep gives false trap=False/instr=0.)
+**THE STRATEGIC FORK IS
+SETTLED (user, 2026-07-04): 30fps retarget (budget 358K/tick, tick = 2 display frames) + the
+TAD/YM2610 sound port; realtime-60 abandoned (ISA-floor verdict). Don't re-litigate.**
 
 **pt.21 DONE (render-to-WRAM SHIPPED + VALIDATED, DRAFT PR #13, commits `50dfc62`+`3c79000`):**
 relocated the 5A22 render to WRAM `$7F` via a VERBATIM SAME-OFFSET COPY (video.pasm `rc_copy`
@@ -20,22 +41,55 @@ are render-DEAD; set_cpu_state('Snes') won't force it back). This is why pt.20's
 "doesn't engage" fresh — those combat contention numbers are NOT reproducible from the NAT.
 MEASURE render/5A22 changes on a FRESH boot (`tools/measure_render_wram.py`).
 
-**CURRENT TASK (pt.22): user picked the CONTIGUOUS-COMPILE lever (make the 335K combat interp
-residual native). Re-profile DONE (2026-07-05) — see docs/PROFILE_CAMPAIGN.md §pt.22 + the approved
-plan.** Fresh injected profiles (address-independent, correct): combat 204 interp fetches/tick, light
-133. Dominant BOTH-class residual = the **sprite-build coroutine system** ($00CE58 + its jump-table
-handlers $ceb6/$d522/$d6b0/$d226). **⚠️ CORRECTION: an intermediate finding "all 3 op_rte coroutine
-escapes fire 0× / dispatch systemically dead" was WRONG — a HOOKTEST bank-addressing artifact. escbank
-bodies execute at `$92:xxxx`, not `$00:xxxx`; hooking bare `$00` addresses gave false 0×. entry_ce58
-FIRES 1×/tick (proof: `entry_swin @ $92FB00`=11 matches its counter; `entry_ce58 @ $92E889`=1; and the
-fetch-stream shows the coroutine spine running NATIVE). The pt.22 profiles stand; only that exec-hook
-conclusion was wrong.** **RULE BANKED: HOOKTEST escbank bodies at their `$92:xxxx` execution address;
-calibrate every HOOKTEST against a known-firing escape at `$92` (`entry_swin @ $92FB00 == 11`), never a
-bank-$00 control.** LEVER (approved) = **escape the leaf handlers `entry_ce58` bridges to INTERPRET**
-($ceb6/$d522/$d6b0/$d226/$cd1a): transpile each (all clean) + retarget the entry_ce58 bridge
-interpret→native (like its existing `brce58_1`→entry_26fa / `brce58_7`→entry_d18a native bridges); same
-class as shipped siblings d5c4/d386/d3b0/d18a. Low-risk, both-class. Sound runs in parallel sessions
-(21/21 tracks converted; needs the musical pass + TAD engine integration — see `strategic-fork-30fps-sound`).
+**pt.22 DONE (leaf-handler escape lever EXECUTED, 2026-07-05, PR #14 on branch `pt22-lever-b-handlers`):**
+re-profile confirmed the dominant BOTH-class residual = the sprite-build coroutine ($00CE58 + its
+jump-table leaf handlers), combat 204 interp fetches/tick, light 133. Escaped the leaf handlers by
+retargeting `entry_ce58`'s `brce58_N` call-bridges interpret→native. **Outcome split — the "mechanical
+repeat" premise was INVALIDATED:** ✅ `ceb6` (−24 interp/tick) + `d6b0` (−8) SHIPPED bit-exact both-class;
+❌ `d522`+`d226` **DERAIL the whole tick** (trap=False, tick never returns, diff hangs — not any static
+predicate; see `coroutine-bridge-retarget-derails`), reverted; `cd1a` untested. **RULE BANKED (cost real
+time): HOOKTEST escbank bodies at their `$92:xxxx` execution address, calibrate vs `entry_swin @ $92FB00
+== 11`, never a bank-$00 control** (`hooktest-escbank-92-addressing`).
+
+**⚠️ CURRENT STATE = LEVER RE-RANK, USER DECISION PENDING (`pt22-lever-rerank-verdict`).** The interp-escape
+lever is de-prioritized: the MEASURED economics say interpretation is NOT the wall (~0.42× budget at full
+coverage); the wall is dispatch+bridge overhead (~86%). **HONEST CEILING: no lever on the board reaches
+true-30fps HEAVY combat** — contiguous compilation (measured 4.85× on LEAF subtrees) narrows the gap but
+STALLS at the scheduler root, exactly where the sprite-build coroutine lives, and the d522/d226 derail is
+at that same boundary. **USER CHOSE (a) contiguous-compile (2026-07-05); P1 DONE + PROVEN (commit
+`daf2e97`, branch `pt22-lever-b-handlers`).** The d522/d226 derail is FIXED via STATIC jump-table
+resolution — `cmp` the runtime index (`memory[a4-2]`) against each ROM-table entry → direct `jml.l
+entry_X` (escaped) / `jml inext` (interpreted), default = the original `movea.l+ojmp_hook` — instead of
+the transpiler's derailing `jmp(a0)→ojmp_hook` lowering. `entry_d226` (hand-authored) is now native +
+bit-exact both-class (combat 4B / light 8B GREEN, `trap=True`, −8 interp/tick, fires 2×). **KEY codegen
+requirement (learned the hard way): each switch case MUST set a0 (`$20/$22`)=target AND 68K PC
+(`$40/$42`)=target** — the `movea.l+jmp(a0)` side-effects the sub-handler depends on; omitting a0 leaks
+the prior handler's stale a0 → a 2-byte divergence (identical combat+light = logic, not `$AC` timing).
+**✅ P2 DONE + PROVEN (2026-07-06, branch `pt22-lever-b-handlers`):** the static switch is now a transpiler
+lowering — `tools/transpile.py --jtstatic=BASE:COUNT` + `gen_jtstatic` (fused 4-instr matcher on the
+`lea/adda/movea/jmp(An)` idiom; per-case sets a0+PC=target then jumps direct; default = original
+movea+ojmp_hook). Regenerated `$D226` is **INSTRUCTION-IDENTICAL to the P1 hand body (`daf2e97`)**. Two codegen fixes: (1)
+**same-bank target MUST use `jmp entry_X`, not `jml.l`** — Poppy resolves a same-FILE `entry_X` to its
+file-local `$00` origin so `jml.l` jumps to bank $00 (a DERAIL); cross-bank keeps `jml.l` (24-bit const);
+added `escbank_bank_of` (BANK_OF_SYM lookup). (2) the a0+PC per-case set (the P1 lesson). **BOTH d226 AND
+d522 ship GREEN (combat 4B / light 8B, both-class).**
+
+**✅ d522 FIXED — the "derail" was ESCBANK $92 SPACE EXHAUSTION, NOT a logic bug (I first WRONGLY deferred it
+as a "scheduler-boundary wall"; it is DETERMINISTIC).** `deploy` inserts bodies at `ESCBANK_BODIES_END`, but
+the $92 body region already overflows past the `.org $F000` ceiling (entry_d386@$F020, d3b0@$F0FD, d226@$F395
+survive only because their reached code fits the pre-`.org` gaps). Adding entry_d522 pushed it to **`$F471` —
+INSIDE the `.org $F400 jah2_ext_bsr` dispatch region** → Poppy assembles the body then `.org $F400` **silently
+OVERWRITES entry_d522's bytes** → `jmp entry_d522` runs garbage → derail (surfaces at `$CD1A`'s rts → `$92:$00FE`).
+**FIX (shipped): place `entry_d522` at `.org $FE00`** (free $92 tail past `lsel_set@$FDCA`, ~512B) + `jmp
+entry_d522`. **How found (after wrongly chasing $AC-timing / coroutine-stack / "wall"): DP ($00-$FF) AND full
+work-RAM were BYTE-IDENTICAL native-vs-interp at `$CD1A` entry, yet native derailed → the divergence is NOT 68K
+state → it's the ROM LAYOUT → the sym showed entry_d522@$F471 in the `.org $F400` region.** **LESSON FOR P3:
+the binding constraint is ESCBANK $92 SPACE, NOT a coroutine wall — every new ce58 sub-handler must go in FREE
+space (a $92 `.org` gap or cross-bank $94 via --bank2), never blindly at `ESCBANK_BODIES_END`; a body landing
+in a `.org`-pinned region corrupts with NO build error.** This RETRACTS the earlier "wall confirmed" claim.
+P3/P4 NOT started. Refs: `coroutine-bridge-retarget-derails` (full P2 grind + the escbank-space root cause),
+`escape-deploy-shift-safe` / `escbank-overflow-second-bank` (the .org-overlap hazard),
+`pt22-lever-rerank-verdict` (fork), plan `/home/chad/.claude/plans/mutable-coalescing-hippo.md`.
 
 **Branch topology (CONSOLIDATED 2026-07-05): `main` is the single source of truth.** PRs #12
 (pt.20) and #13 (pt.21) were validated + fast-forward-merged into `main` (tip `108ecce`); PRs

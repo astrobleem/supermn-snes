@@ -10,10 +10,10 @@
 
 | MML | Source | Notes/Hits | Octaves | Instrument stub |
 |----|--------|-----------:|---------|-----------------|
-| A | FM0 | 22 | 2-4 | sm_fm0 |
-| B | FM1 | 20 | 4-6 | sm_fm1 |
-| C | FM2 | 20 | 4-5 | sm_fm2 |
-| D | FM3 | 20 | 3-5 | sm_fm3 |
+| A | FM0 | 22 | 2-4 | fm_p07 |
+| B | FM1 | 20 | 4-6 | fm_p09 |
+| C | FM2 | 20 | 4-5 | fm_p09 |
+| D | FM3 | 20 | 3-5 | fm_p09 |
 | E | ADPCM-A ch3 | 15 | 4-4 | (drum kit, see below) |
 | F | ADPCM-A ch5 | 6 | 4-4 | (drum kit, see below) |
 

@@ -10,18 +10,17 @@
 #EchoVolume 24
 #FirFilter 64 0 0 0 0 0 0 0
 
-; --- instrument bindings (STUBS — replace sources in the .terrificaudio) ---
-@0 sm_fm0
-@1 sm_fm1
-@2 sm_fm2
-@3 sm_fm3
+; --- instrument bindings (real FM patches; per-note @ switches in the body) ---
+@0 fm_p38
+@1 fm_p06
+@2 fm_p25
+@3 fm_p26
 @10 sm_drum_062a00
 @11 sm_drum_067800
 
 ; ===== Voice A: FM0  (octaves 1-5) =====
-A @0 v10
 ; bar 0
-A r8.^32 o5 c4.^32 r32 L o2 d32 r16. d16 r8^32
+A r8.^32 @0 v14 o5 c4.^32 r32 L @1 v8 o2 d32 r16. d16 r8^32
 ; bar 1
 A r8. g16 a32 r32 o3 c32 o2 a16 o3 d32 o2 d16 r16. d16 r3^96
 ; bar 2
@@ -35,31 +34,29 @@ A r4 g32 a16 g+32 g16 f32 r32 d32 r16. d16 r4^16
 ; bar 6
 A r32 g16 a32 r32 o3 c32 o2 a16 o3 d32 o2 d16 r16. d16 r4^16 o1 g32 g+16 a32 o2 c16
 ; bar 7
-A o1 a16 o2 c32 d32
+A o1 a16 v10 o2 c32 v8 d32
 
 ; ===== Voice B: FM1  (octaves 3-5) =====
-B @1 v10
 ; bar 0
-B r8.^32 o5 c4.^32 r32 L o3 d32 r16 a32 g+8.^32
+B r8.^32 @0 v14 o5 c4.^32 r32 L @2 o3 d32 r16 v7 a32 g+8.^32
 ; bar 1
-B ^16. r16. f16 g32 r32 g+32 g16 f32 d2^32 r32
+B ^16. r16. v9 f16 g32 r32 g+32 g16 f32 d2^32 r32
 ; bar 2
-B r4 d16 r32 a16 g+4.^32 f32 r32 g32 g+16 g32
+B r4 v12 d16 r32 v7 a16 g+4.^32 f32 r32 g32 g+16 g32
 ; bar 3
-B r32 f32 a2 r4^16 o4 d16 r32 a32
+B r32 f32 a2 r4^16 v14 o4 d16 r32 v8 a32
 ; bar 4
 B ^32 g+4.^32 f32 g16 g+32 r32 g32 f16 d4^16
 ; bar 5
-B ^4 r16. o3 a32 o4 c16 c+32 r32 d32 r16 a32 r32 g+3^96
+B ^4 r16. v9 o3 a32 o4 c16 c+32 r32 v14 d32 r16 v8 a32 r32 g+3^96
 ; bar 6
 B ^32 a16 o5 c32 r32 o4 a32 g16 f32 r32 o5 d2^8.
 ; bar 7
-B ^16. o3 d32
+B ^16. v14 o3 d32
 
 ; ===== Voice C: FM2  (octaves 4-5) =====
-C @2 v10
 ; bar 0
-C r4 o5 d4. r32 L c32 r16 c32 r16 c16 r32 c16
+C r4 @0 v14 o5 d4. r32 L @3 c32 r16 c32 r16 c16 r32 c16
 ; bar 1
 C r16 c32 r16 c32 r16 c16 r32 c16 r32 o4 b16 r16 b32 r16 b16 r32 b16 r32 b16 r16 b32
 ; bar 2
@@ -76,9 +73,8 @@ C e32 r16 e16 r32 e16 r16 a32 r16 a32 r16 a16 r32 a16 r32 a16 r16 a32 r16 a16 r3
 C a16 a32 o5 c32
 
 ; ===== Voice D: FM3  (octaves 5-5) =====
-D @3 v10
 ; bar 0
-D r4 o5 d4.^32 L d32 r16 d16 r32 d16 r32 d16
+D r4 @0 v14 o5 d4.^32 L @3 d32 r16 d16 r32 d16 r32 d16
 ; bar 1
 D r16 d32 r16 d16 r32 d16 r32 d16 r16 d32 r16 d32 r16 d16 r32 d16 r16 d32 r16 d32
 ; bar 2

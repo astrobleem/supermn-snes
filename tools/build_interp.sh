@@ -7,7 +7,21 @@ export PATH="$DOTNET_ROOT:$PATH"
 POPPY=/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll
 cd "$(dirname "$0")/.."
 dotnet "$POPPY" -t snes -I . -o src/interp.bin -s src/interp.sym src/interp.pasm
-dotnet "$POPPY" -t snes -I . -o src/video.bin src/video.pasm
+# video subsystem + TAD sound module. Poppy has no .include, so concatenate: video.pasm (supervisor)
+# + tad_glue.pasm (LoadAudioData + blob symbols + `.org $9000`) + tad_audio.pasm (byte-verified port of
+# TAD's ca65 host API; regen with soundwork/tad/port/regen.sh). The TAD code occupies the bank-$E9 tail
+# past all pinned resume PCs; internal jsl calls are pre-forced to bank $E9.
+mkdir -p build
+if [ -f soundwork/tad/port/tad_audio.pasm ]; then
+  # ensure the TAD audio-data blob + its generated symbol equates exist (both gitignored; regen
+  # from the vendored tad-compiler + the consolidated project). build_interp_rom.py .incbin's the
+  # blob at $ED:002B (segment offset 43 — see tad_glue.pasm).
+  [ -f soundwork/tad/build/audio-data.bin ] && [ -f soundwork/tad/build/tad_blob_syms.pasm ] || soundwork/tad/build_blob.sh
+  cat src/video.pasm soundwork/tad/build/tad_blob_syms.pasm soundwork/tad/port/tad_glue.pasm soundwork/tad/port/tad_audio.pasm > build/video_full.pasm
+  dotnet "$POPPY" -t snes -I . -o src/video.bin build/video_full.pasm
+else
+  dotnet "$POPPY" -t snes -I . -o src/video.bin src/video.pasm
+fi
 # SECOND escape bank ($94:8000, file $2A0000) — assembled FIRST so its entry_X addresses can be fed
 # into escbank.pasm below for cross-bank `jml entry_X` dispatch (escbank2 references only bank-$00
 # targets -> no circular dependency). Skipped if src/escbank2.pasm is absent.

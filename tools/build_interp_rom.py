@@ -79,6 +79,18 @@ if _osp.exists("src/escbank5.bin"):
     assert len(ESC5) <= 0x8000, ("escbank5 %d bytes overflows the $2C8000..$2D0000 bank" % len(ESC5))
     ROM[0x2C8000:0x2C8000+len(ESC5)] = ESC5          # @ SA-1 $99:8000 (file $2C8000)
 
+# --- TAD audio-data blob (sound port P3: 21 songs + real samples, multi-bank) ---
+# Self-contained: [loader.bin(116)][audio-driver.bin(3218)][DataTable][common+21 songs]. Placed at
+# file $2D002B = 5A22 HiROM $ED:002B — segment offset 43, mirroring stock ca65's
+# [43-byte LoadAudioData proc][blob] layout so the DataTable's segment-relative u24 entries resolve
+# UNSKEWED (far addr = $ED:0000 + entry; map mode $31 keeps $C0-$FF file-linear across banks
+# $ED/$EE/...). The ported LoadAudioData/Tad_Init upload it to the SPC700. Regen with
+# soundwork/tad/build_blob.sh (also generates build/tad_blob_syms.pasm for tad_glue.pasm).
+if _osp.exists("soundwork/tad/build/audio-data.bin"):
+    TADBLOB = Path("soundwork/tad/build/audio-data.bin").read_bytes()
+    assert 0x2D002B + len(TADBLOB) <= 0x400000, ("TAD blob %d bytes overflows the ROM" % len(TADBLOB))
+    ROM[0x2D002B:0x2D002B+len(TADBLOB)] = TADBLOB     # @ 5A22 $ED:002B (file $2D002B)
+
 # --- SA-1 LoROM mirror of the interpreter ---
 # Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style
 # (32KB/bank): $00:8000-FFFF -> FILE $0-$7FFF, so $00:FFFC (reset) -> FILE $7FFC and the
@@ -114,6 +126,37 @@ ROM[H+0x18] = 0x07      # SRAM size = 128 KB: for SA-1 this IS the BW-RAM (the s
 ROM[H+0x19] = 0x01      # country
 ROM[H+0x1A] = 0x33      # licensee
 ROM[H+0x1B] = 0x00      # version
+# --- bank-$00 org-overlap guards (the loop_hook overgrowth class, 2026-07-10) ---
+# Poppy silently lets a later .org assemble OVER earlier flowed code (last org wins
+# per byte). That buried the $F600 TESTFLAG, truncated lh_3fea's sec/rts (boot
+# RAM-test failure) and buried lh_adbe/gm_memclr under gm_verify (the $080100
+# gameplay derail). Guard the two seams: the loop-hook flow chain (.org $F442)
+# must leave slack before the $F602 section, and gm_memclr's rehomed body must
+# leave slack before the $F6EA section. Slack bytes assemble as zero fill; code
+# growing into them fails HERE instead of silently misexecuting.
+# (the flow chain legitimately ends at $F5FB after the 2026-07-10 lh_0818 streak
+# gate — only 6 slack bytes remain; the NEXT lh growth must relocate to escbank5
+# like lh_3fea/lh_adbe/gm_verify did)
+for a, b, what in [(0xF5FC, 0xF602, "loop-hook flow chain vs .org $F602"),
+                   (0xF6E4, 0xF6EA, "gm_memclr region vs .org $F6EA")]:
+    for fo in (a - 0x8000, a):        # file offsets: SA-1 view (addr-$8000), 5A22 view (addr)
+        chunk = bytes(ROM[fo:fo + (b - a)])
+        assert chunk == bytes(b - a), (
+            "bank-$00 org-overlap guard tripped (%s): bytes $%04X-$%04X not zero "
+            "(file +0x%X): %s — code grew into the slack; RELOCATE it (see the "
+            "loop_hook root-cause notes in interp.pasm/escbank5.pasm)"
+            % (what, a, b - 1, fo, chunk.hex()))
+
+# --- TESTFLAG guard (see interp.pasm TESTFLAG declaration) ---
+# The production cold-boot path requires $00:F7E0 == 0 in BOTH ROM views (SA-1
+# LoROM mirror file $77E0 / 5A22 HiROM file $F7E0). This byte has been silently
+# covered by code growth TWICE ($F400, then $F600), each time making cold boot
+# unreachable; fail the build loudly instead of shipping a third regression.
+assert ROM[0x77E0] == 0 and ROM[0xF7E0] == 0, (
+    "TESTFLAG ($00:F7E0) nonzero in a ROM view (sa1 file $77E0=%02X, 5a22 file "
+    "$F7E0=%02X): code growth covered it AGAIN — relocate the flag (interp.pasm)"
+    % (ROM[0x77E0], ROM[0xF7E0]))
+
 # checksum (zero the fields, sum, write complement+checksum)
 for i in range(H+0x1C, H+0x20):
     ROM[i] = 0x00

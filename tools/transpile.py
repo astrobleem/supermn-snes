@@ -40,6 +40,8 @@ def reg_dp(name):
 TMP = 0x9E                                      # transpiler compare/store scratch (avoids rdw_ea $90)
 VIDEO = False                                   # --video: route non-frame stores via writeword/writebyte
                                                 # (IO-aware: video $B0/$D0/$E0 -> $41 shadow). For $002xxx.
+BANK5 = False                                   # --bank5: body lives in escbank5 ($99:8000); host resume
+                                                # sentinel = $00FA (ors_pre -> ors_99chk -> ors_pre_99).
 BANK2 = False                                   # --bank2: body lives in the 2nd escape bank ($94:8000,
                                                 # file $2A0000). ibridge ($92) is unreachable + its $00FE
                                                 # resume lands in $92, so INLINE the interpret-bridge with
@@ -52,6 +54,16 @@ JT = {}                                         # --jt=BASE:MIN:MAX,..: pc-rel j
                                                 # `move.w BASE(pc,dI.w),dT ; jmp BASE(pc,dT.w)` ->
                                                 # native switch on dI + BAIL default (gen_jumptable).
                                                 # JT[base] = {off: (word, target24)}
+JTSTATIC = {}                                    # --jtstatic=BASE:COUNT,..: register-indirect jmp-table
+                                                # dispatchers `lea BASE(pc),An; adda.w idx,An;
+                                                # movea.l (An),An; jmp(An)` (the coroutine leaf state-
+                                                # handlers) STATICALLY resolved: COUNT 32-bit BE absolute
+                                                # entries at BASE -> switch on the runtime index, each case
+                                                # jumps DIRECT to the target (jml.l entry_X escaped / jml
+                                                # inext interpreted), bypassing the movea read AND the
+                                                # ojmp_hook/xlat round-trip = the d522/d226 derail.
+                                                # JTSTATIC[base] = {off: target24}. See gen_jtstatic +
+                                                # [[coroutine-bridge-retarget-derails]] (proven daf2e97).
 
 # ---- EA parse: capstone op_str token -> structured operand ----
 def parse_ea(tok, pc=None):
@@ -373,14 +385,29 @@ def branch_label(e, tgt):
     e.tailjumps.add(tgt)
     return 'Ltj%s_%x' % (e.pfx, tgt)
 
+def emit_tailjump(e, tgt):
+    """Tail-jump to tgt (out-of-function jmp/bra): set 68K PC ($40/$42)=tgt, then jump. If tgt is
+    ESCAPED, jump DIRECT to its native body -- jmp entry_X (same bank -> stay in PBR) / jml.l entry_X
+    (cross bank -> the 24-bit const carries it) -- for CONTIGUOUS linking with NO interp round-trip
+    (the sprite-build shared TAIL bodies $CEC2/$D6BC/... a state reaches by a tail-jmp). Else jmp
+    inext (interpret; bank1_transform -> jml.l inext). PC is set unconditionally = the faithful
+    side-effect (the escaped body may read $40/$42; mirrors the interp set-PC-then-fetch). Same
+    jmp/jml.l bank rule + escbank_bank_of as gen_jtstatic (a same-bank jml.l wrong-banks to $00)."""
+    tgt &= 0xFFFFFF
+    e('lda %s' % imm16(tgt & 0xFFFF)); e('sta $40')
+    e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
+    if tgt in ESCAPED:
+        nm = 'entry_%x' % tgt; home = (0x99 if BANK5 else 0x94 if BANK2 else 0x92)
+        if (escbank_bank_of(nm) or home) == home: e('jmp %s' % nm)
+        else: e('jml.l %s' % nm)
+    else:
+        e('jmp inext')
+
 def emit_tailjump_stubs(e):
     """Emit the out-of-function tail-jump stubs collected by branch_label. Placed after the body
-    (only reached via jmp): set 68K PC=tgt and jmp inext. bank1_transform -> jml.l inext."""
+    (only reached via jmp). ESCAPED target -> direct native jump (contiguous); else jmp inext."""
     for tgt in sorted(getattr(e, 'tailjumps', ())):
-        e.lbl('Ltj%s_%x' % (e.pfx, tgt))
-        e('lda %s' % imm16(tgt & 0xFFFF)); e('sta $40')
-        e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
-        e('jmp inext')
+        e.lbl('Ltj%s_%x' % (e.pfx, tgt)); emit_tailjump(e, tgt)
 
 def emit_ccr_native(e, fsrc):
     """Materialize the 68K CCR MEMORY ($60=Z $6E=C $70=N $72=V $A2=X) that the interp-CALLER's
@@ -684,6 +711,23 @@ def gen(e, ins, nxt):
         if mm and mj and mm.group(1) == mj.group(1) and mm.group(3) == mj.group(2) \
            and int(mm.group(1), 16) in JT:
             return gen_jumptable(e, ins, mm.group(2), mm.group(3), int(mm.group(1), 16))
+    if base == 'lea' and JTSTATIC:
+        # STATIC jump-table dispatch: `lea BASE(pc),An ; adda.w idx,An ; movea.l (An),An ; jmp (An)`
+        # with BASE enumerated via --jtstatic -> resolve the whole 4-instr idiom statically (gen_jtstatic).
+        src, dst = operands(ins)
+        insns = getattr(e, '_insns', None); i = getattr(e, '_i', None)
+        if src[0] == 'abs' and (src[1] & 0xFFFFFF) in JTSTATIC and dst[0] == 'An' \
+           and insns is not None and i is not None and i + 3 < len(insns) \
+           and not any(insns[i + k].address in e._labels for k in (1, 2, 3)):   # idiom must be atomic (no join)
+            an = dst[1]
+            i1, i2, i3 = insns[i + 1], insns[i + 2], insns[i + 3]
+            b1, s1 = split_mn(i1); b2, s2 = split_mn(i2); b3, _ = split_mn(i3)
+            if b1 == 'adda' and s1 == 'w' and b2 == 'movea' and s2 == 'l' and b3 == 'jmp':
+                o1, o2, o3 = operands(i1), operands(i2), operands(i3)
+                if o1[1] == ('An', an) and o2[0] == ('(An)', an) and o2[1] == ('An', an) \
+                   and o3[0] == ('(An)', an):
+                    gen_jtstatic(e, src[1] & 0xFFFFFF, an, o1[0])
+                    return 4
     ops = operands(ins)
 
     # ---- frame / structural ----
@@ -1107,10 +1151,8 @@ def gen(e, ins, nxt):
             e('lda $%02X' % dp); e('sta $40')            # interpret) exactly like the interp's op_jmp_idx hook.
             e('lda $%02X' % (dp+2)); e('sta $42')
             e('jmp ojmp_hook'); return 1
-        if ea[0] == 'abs':                               # jmp $XXXX: tail-jump (interpret the target)
-            e('lda %s' % imm16(ea[1] & 0xFFFF)); e('sta $40')
-            e('lda %s' % imm16((ea[1] >> 16) & 0xFFFF)); e('sta $42')
-            e('jmp inext'); return 1
+        if ea[0] == 'abs':                               # jmp $XXXX: tail-jump (interpret, or DIRECT if escaped)
+            emit_tailjump(e, ea[1]); return 1
         raise Unsupported('jmp %r' % (ea,))
     # ---- branches ----
     if base == 'bra':
@@ -1118,10 +1160,8 @@ def gen(e, ins, nxt):
         if getattr(e, 'entry', None) is not None and not (e.entry <= t < e.end):
             # TAIL-JUMP: bra to another function (e.g. GAME_TICK -> $2e6a). Set PC=t and jmp inext;
             # the target runs interpreted and rts's to OUR caller (the return we re-pushed in the
-            # prologue). No sentinel (it's a tail, not a call). bank1_transform -> jml.l inext.
-            e('lda %s' % imm16(t & 0xFFFF)); e('sta $40')
-            e('lda %s' % imm16((t >> 16) & 0xFFFF)); e('sta $42')
-            e('jmp inext'); return 1
+            # prologue). No sentinel (it's a tail, not a call). ESCAPED -> direct native (contiguous).
+            emit_tailjump(e, t); return 1
         emit_branch(e, 'bra', t, None); return 1
     if base in ('dbra', 'dbf'):
         dp = reg_dp(ops[0][1]); tgt = branch_target(ins)
@@ -1280,6 +1320,69 @@ def gen_jumptable(e, ins, dI, dT, base):
     e('jmp inext')
     return 2
 
+# entry_X -> home bank, read from the escbank .sym files (mirrors gen_xlat_table's BANK_OF_SYM). The
+# `00:` prefix in each .sym is FILE-LOCAL; the real execute bank is forced per file. gen_jtstatic uses
+# this to pick `jmp entry_X` (same bank -> stays in PBR) vs `jml.l entry_X` (cross bank -> the 24-bit
+# constant carries the real bank). A same-bank `jml.l` would resolve the file-local $00 origin and jump
+# to bank $00 = the WRONG bank (the P2 d226/d522 same-bank-jml.l derail, root-caused 2026-07-06).
+_ESCBANK_SYM_BANK = {'src/escbank.sym': 0x92, 'src/escbank2.sym': 0x94, 'src/escbank3.sym': 0x97,
+                     'src/escbank4.sym': 0x98, 'src/escbank5.sym': 0x99}
+_ESCBANK_BANKS = None
+def escbank_bank_of(name):
+    global _ESCBANK_BANKS
+    if _ESCBANK_BANKS is None:
+        _ESCBANK_BANKS = {}
+        for sym, bank in _ESCBANK_SYM_BANK.items():
+            try: lines = open(sym).read().splitlines()
+            except OSError: continue
+            for ln in lines:
+                m = re.match(r'\s*[0-9A-Fa-f]{2}:[0-9A-Fa-f]{4}\s+(entry_[0-9a-z]+)', ln)
+                if m: _ESCBANK_BANKS[m.group(1)] = bank
+    return _ESCBANK_BANKS.get(name)
+
+def gen_jtstatic(e, base, an, idx_ea):
+    """STATIC resolution of the register-indirect jump-table dispatch
+        `lea BASE(pc),An ; adda.w idx,An ; movea.l (An),An ; jmp (An)`
+    (the entry_ce58 coroutine leaf state-handlers -- $D226/$D522/... -- enumerated via
+    --jtstatic=BASE:COUNT). Emits a `bne`-to-next switch on the runtime index memory[idx_ea]
+    over the COUNT enumerated 32-bit-BE table targets: each case jumps DIRECT to the target --
+    same-bank escaped sub-handler -> `jmp entry_X` (stays in PBR); cross-bank -> `jml.l entry_X`
+    (the 24-bit constant carries the bank). Either bypasses BOTH the `movea.l (a0),a0` read AND the
+    `ojmp_hook`/xlat round-trip -- the two candidate Stage-A/Stage-B causes of the d522/d226 derail.
+    An interpreted target -> `jmp inext` (-> jml.l inext). An un-enumerated index falls to the
+    DEFAULT = the ORIGINAL lea+adda+movea.l+jmp ojmp_hook, verbatim (faithful for any index).
+    CRITICAL 1: a same-bank target MUST use `jmp` not `jml.l` -- Poppy resolves a same-file entry_X
+    to its FILE-LOCAL $00 origin, so `jml.l entry_X` jumps to bank $00 (the P2 derail); `jmp` stays
+    in the running PBR = the escape's own bank. (escbank_bank_of + the reference's jmp/jml.l split.)
+    CRITICAL 2: each case reproduces the `movea.l (a0),a0 ; jmp (a0)` SIDE EFFECTS the sub-handler
+    reads deeper in its body -- a0 ($20/$22) = target AND 68K PC ($40/$42) = target. Omitting the
+    a0 set leaked the prior handler's stale a0 -> a 2-byte divergence (proven both-class GREEN as
+    the hand-authored entry_d226, commit daf2e97; see [[coroutine-bridge-retarget-derails]])."""
+    tgts = JTSTATIC[base]
+    home = (0x99 if BANK5 else 0x94 if BANK2 else 0x92)                          # the escape's own execute bank (--bank1=$92, --bank2=$94)
+    e.cmt('JTSTATIC $%06X(%s jmp-table, %d cases): static index switch, movea/ojmp_hook default' % (base, an, len(tgts)))
+    ea_load_A(e, idx_ea, 'w'); e('sta $9A')                 # A = $9A = runtime dispatch index memory[idx_ea]
+    for off in sorted(tgts):
+        tgt = tgts[off] & 0xFFFFFF; nx = e.fresh()
+        e('cmp #$%04X' % (off & 0xFFFF)); e('bne %s' % nx)   # A survives the bne chain (clobbering lda is on the taken path)
+        e('lda #%s' % hx(tgt & 0xFFFF)); e('sta $20'); e('sta $40')          # a0.lo = PC.lo = target (movea+jmp side effect)
+        e('lda #%s' % hx((tgt >> 16) & 0xFFFF)); e('sta $22'); e('sta $42')  # a0.hi = PC.hi = target
+        if tgt in ESCAPED:                                  # escaped sub-handler: DIRECT native (no round-trip)
+            nm = 'entry_%x' % tgt
+            if (escbank_bank_of(nm) or home) == home: e('jmp %s' % nm)   # same bank -> stay in PBR
+            else: e('jml.l %s' % nm)                                     # cross bank -> 24-bit constant carries it
+        else: e('jmp inext')                                # interpreted target: bank1_transform -> jml.l inext
+        e.lbl(nx)
+    # DEFAULT (un-enumerated index; never a valid game state): the ORIGINAL lea+adda.w+movea.l (a0),a0
+    # + jmp ojmp_hook, verbatim -> correctness preserved for any index.
+    e('lda #%s' % hx(base & 0xFFFF)); e('sta $20'); e('lda #%s' % hx((base >> 16) & 0xFFFF)); e('sta $22')   # a0 = BASE (lea)
+    sext_hi(e, 0x9A)                                         # $9C = sext16(index)  (index still in $9A)
+    e('lda $20'); e('clc'); e('adc $9A'); e('sta $20')       # a0 += index (adda.w sign-extended)
+    e('lda $22'); e('adc $9C'); e('sta $22')
+    load_long_to(e, ('(An)', an), 0x20)                     # movea.l (a0),a0  (aliasing-safe, TMP $9E)
+    e('lda $20'); e('sta $40'); e('lda $22'); e('sta $42')   # jmp (a0): PC = a0
+    e('jmp ojmp_hook')                                      # bank1_transform -> jml.l ojmp_hook
+
 def gen_call(e, ins):
     """CALL-BRIDGE (CALL_BRIDGE_DESIGN.md): push a $00FF:cont sentinel return, set PC=callee,
     jmp inext (interpreter runs the callee). The callee's rts pops the sentinel -> op_rts_sentinel
@@ -1301,7 +1404,7 @@ def gen_call(e, ins):
         e.cmt('CALL-BRIDGE %s %s -> entry_%x (NATIVE escape), resume %s' % (ins.mnemonic, t, a, cont))
         # sentinel = the HOST bank so the callee's rts (pops $42:$40) resumes cont IN THE HOST bank:
         # $00FE -> ors_pre_92 ($92); $00FD -> ors_94chk ($94). Was hardcoded $00FE (bank-$92 only).
-        esc_sent = '$00FD' if BANK2 else '$00FE'
+        esc_sent = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')
         e('lda #%s' % cont); e('sta $40'); e('lda #%s' % esc_sent); e('sta $42')
         e('jmp entry_%x' % a)
         e.lbl(cont)
@@ -1324,7 +1427,7 @@ def gen_call(e, ins):
             # callee re-simulating the push; a --table callee doesn't, and a standard-convention
             # OLD body like the $92 entry_d96 exits via popped-PC jml inext, which would fetch the
             # sentinel as a 68K address. The A2 deploy hang taught this.) Miss -> generic bridge.
-            esc_sent = '$00FD' if BANK2 else '$00FE'
+            esc_sent = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')
             for a in sorted(ESCAPED):
                 nxtl = e.fresh()
                 e.cmt('GUARDED DIRECT-LINK %s %s: An==$%06X -> entry_%xt native (pushed-sentinel return), resume %s' % (ins.mnemonic, t, a, a, cont))
@@ -1333,8 +1436,8 @@ def gen_call(e, ins):
                 e('lda #%s' % cont); e('sta $54'); e('lda #%s' % esc_sent); e('sta $56'); e('jsr push32')
                 e('jmp entry_%xt' % a)
                 e.lbl(nxtl)
-        if BANK2:
-            # ibridge is a $92 label (unreachable from $94) and its ib_miss resumes in bank $92. INLINE
+        if BANK2 or BANK5:
+            # ibridge is a $92 label (unreachable from $94/$99) and its ib_miss resumes in bank $92. INLINE
             # the interpret-bridge: push the $00FD sentinel:cont, set PC=An, jml inext. The callee's rts
             # pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont. (No native draw dispatch
             # in $94 -- the callee always interprets; the per-jsr(An) native-draw win is forgone here.)
@@ -1342,8 +1445,9 @@ def gen_call(e, ins):
             # via jml.l): xlat HIT -> dispatch the callee's --table native escape (the per-jsr(An) native-
             # draw win, e.g. c172's $295A/$29B6 renderers); MISS/gate-off -> jml inext (interpret, as before).
             # Either way the callee's rts pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont.
-            e.cmt('INDIRECT-BRIDGE %s %s -> ojmp_hook (a0 --table escape, else interpret); $00FD sentinel, resume %s' % (ins.mnemonic, t, cont))
-            e('lda #%s' % cont); e('sta $54'); e('lda #$00FD'); e('sta $56'); e('jsr push32')
+            ib_sent = '$00FA' if BANK5 else '$00FD'  # bank-correct sentinel: bank5:$00FA($99) else $00FD($94)
+            e.cmt('INDIRECT-BRIDGE %s %s -> ojmp_hook (a0 --table escape, else interpret); %s sentinel, resume %s' % (ins.mnemonic, t, ib_sent, cont))
+            e('lda #%s' % cont); e('sta $54'); e('lda #%s' % ib_sent); e('sta $56'); e('jsr push32')
             e('lda $%02X' % dp); e('sta $40'); e('lda $%02X' % (dp+2)); e('sta $42')
             e('jmp ojmp_hook')
             e.lbl(cont)
@@ -1359,7 +1463,7 @@ def gen_call(e, ins):
     # jml inext (interpret, as before). Same size as `jmp inext` -> safe in-place swap for bank-$00
     # escapes. The pushed $00FF/$00FD sentinel + faithful-rts callee resume cont either way.
     e.cmt('CALL-BRIDGE %s %s -> ojmp_hook (callee --table escape, else interpret), resume %s' % (ins.mnemonic, t, cont))
-    sentinel = '$00FD' if BANK2 else '$00FF'         # bank2: $00FD resumes in $94 (not $00 via $00FF)
+    sentinel = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FF')  # bank5:$00FA($99) bank2:$00FD($94) else $00FF
     e('lda #%s' % cont); e('sta $54'); e('lda #%s' % sentinel); e('sta $56'); e('jsr push32')
     a = int(m.group(1), 16)                              # jsr.l absolute / bsr (capstone resolves PC-rel)
     e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
@@ -1583,10 +1687,11 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED, BANK2, WORKRAM, XFLAG, FNFRAG, STOPAT
+    global VIDEO, ESCAPED, BANK2, BANK5, WORKRAM, XFLAG, FNFRAG, STOPAT
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     BANK2 = '--bank2' in sys.argv
-    bank1 = '--bank1' in sys.argv or BANK2            # bank2 reuses all of bank1's jsl.l/jml.l transforms
+    BANK5 = '--bank5' in sys.argv                     # body -> escbank5 ($99); host sentinel $00FA
+    bank1 = '--bank1' in sys.argv or BANK2 or BANK5   # bank2/5 reuse all of bank1's jsl.l/jml.l transforms
     VIDEO = '--video' in sys.argv
     XFLAG = '--xflag' in sys.argv
     FNFRAG = '--fnfrag' in sys.argv
@@ -1616,6 +1721,16 @@ def main():
                 for off in range(int(mn), int(mx) + 1, 2):
                     w = s16((ROM[IMG + b + off] << 8) | ROM[IMG + b + off + 1])
                     JT[b][off] = (w, (b + w) & 0xFFFFFF)
+    for a in sys.argv:                                   # --jtstatic=BASE:COUNT,..: register-indirect jmp tables
+        if a.startswith('--jtstatic='):
+            for spec in a.split('=', 1)[1].split(','):
+                if not spec: continue
+                b, cnt = spec.split(':')
+                b = int(b, 16) & 0xFFFFFF
+                JTSTATIC[b] = {}
+                for k in range(int(cnt)):                # COUNT 32-bit BE ABSOLUTE targets, 4 bytes apart
+                    off = k * 4; o = IMG + b + off
+                    JTSTATIC[b][off] = ((ROM[o] << 24) | (ROM[o+1] << 16) | (ROM[o+2] << 8) | ROM[o+3]) & 0xFFFFFF
     entry = int(args[0], 16)
     insns, (labels, fn_lo, fn_hi) = decode(entry)
     name = 'entry_%x' % entry

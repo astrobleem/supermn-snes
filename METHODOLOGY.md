@@ -15,6 +15,13 @@ two traps of a naive port: a pure interpreter is ~2,000× too slow, and a full s
 512KB ROM (with computed jumps, self-modifying tables, protection) is infeasible *and* unverifiable.
 The interpreter and the transpiler are the two big reusable assets — both are largely game-agnostic.
 
+## 0a. Before debugging anything: the tribal-knowledge reference
+`docs/INTERP_DEBUG_AND_GOTCHAS.md` — the interpreter's built-in debug interface (PC-ring
+flight recorder, PC-freeze, halt codes, register-file map), the Poppy assembler traps
+(silent `.org` overlap, A8 mode-inference resets, cross-file symbol landmines), emulator-
+harness operational gotchas, and the coroutine-scheduler IRQ contract. Every item there
+cost real time to learn; all of it transfers to the next port.
+
 ## 0. The one rule: ground-truth validation
 Never validate a decode against the same code path that produced it (that "proves"
 self-consistency, not correctness — it's what made an early palette proof

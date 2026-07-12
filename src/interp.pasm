@@ -105,19 +105,20 @@ ccramclr:                ; else random power-on values break the start handshake
     sta $000200          ; clear the virtual-controller test-injection word (A=0 here).
                          ; $00:0200 = interp-private WRAM (not 68K $7F / not video $7E).
     ; ---- TEST-MODE entry (optest.py differential harness) ----
-    ; If ROM TESTFLAG ($00:F600) != 0 (baked into a test .sfc), enter single-step
+    ; If ROM TESTFLAG ($00:F7E0) != 0 (baked into a test .sfc), enter single-step
     ; poll-idle. The harness pokes DP regs ($00-$3F), PC ($40/$42), flags
     ; (Z$60 C$6E N$70 V$72 X$A2), SR mask $7C and the work-RAM operand directly
     ; via write_memory after boot, then sets the go-flag $A0; test_idle then runs
     ; exactly one op (op baked in the ROM image) and returns. Production = TESTFLAG 0.
-    ; NOTE: the flag lives at $00:F600, NOT the historical $F400. $F400 fell inside
-    ; the entry_20e8 escape body ($F307-$F442) once that escape was deployed, so the
-    ; SA-1's $00:F400 (LoROM -> file $7400) read escape code (always != 0) and the
-    ; production notest path was UNREACHABLE -> the interp never cold-booted. $F600
-    ; is in the free gap after the escape and is ZERO in BOTH ROM views (SA-1 file
-    ; $7600 / 5A22 file $F600), so production reads 0 and optest can bake a 1 there.
-    lda $F600
-    beq notest
+    ; NOTE: the flag has moved TWICE for the same reason — code growth covering the
+    ; byte makes it permanently nonzero and the production notest path silently
+    ; UNREACHABLE. $F400 fell inside the entry_20e8 escape body; $F600 was covered
+    ; by loop_hook growth (read $64 = lh code, found 2026-07-09 — every Mesen cold
+    ; boot had been dropping into test mode). Now an org-pinned, labeled byte at
+    ; $00:F7E0 (RESP1 tail slack; see the TESTFLAG declaration) — zero in BOTH ROM
+    ; views (SA-1 file $77E0 / 5A22 file $F7E0); optest/opsweep bake file $77E0.
+    lda $F7E0            ; TESTFLAG (LITERAL, not the symbol: Poppy forward-refs can
+    beq notest           ;  mis-size operands and ANY shift here is fatal)
     stz $AA              ; no pending IRQ (countdown/pending moved off $88/$8A; see iloop)
     lda #$7FFF
     sta $AC              ; huge countdown: no IRQ during the single step
@@ -152,8 +153,12 @@ rclr:
     stz $4A
     stz $4C
     stz $4E
-    lda #$0001
-    sta $072E            ; enable the LOOP FAST-PATH (boot accel); test mode leaves it 0
+    lda #$0000
+    sta $072E            ; LOOP FAST-PATH stays OFF through boot (2026-07-10): the boot's
+                         ; walking-bit RAM test FAILS under lh (parks in the $1B90 error
+                         ; display; open bug). snd_vframe (video.pasm) arms lh + escapes
+                         ; ONCE the 68K sound ring initializes (= self-test passed, game
+                         ; code begins). Same-size immediate edit: ZERO code shift.
     stz $7E              ; single-step test flag OFF in production
     stz $A2              ; X flag = 0
     stz $A4              ; USP low16  (Batch 8 MOVE USP)
@@ -18504,7 +18509,9 @@ _20e8_t67:
 
 ; =============================================================================
 ; loop_hook — LOOP FAST-PATH dispatcher (boot acceleration). Lives in the free
-; $F442 gap (MUST stay below the $F600 TESTFLAG). Called per-instruction from the
+; $F442 gap (MUST stay below the $F7E0 TESTFLAG — this constraint WAS violated at
+; the old $F600 spot: lh growth covered it and silently killed cold boot). Called
+; per-instruction from the
 ; fetch sled when $072E!=0, with the 68K PC in $40/$42. If $40 matches a known hot
 ; boot-loop entry it applies the loop's NET effect natively, sets $40 to the loop
 ; exit, and returns CARRY SET (caller re-fetches the new PC). No match -> CARRY
@@ -18517,15 +18524,27 @@ loop_hook:
     lda $40
     cmp #$0818
     bne lh_chk_3b84
-    ; $0818: the gameplay MAIN-LOOP IDLE SPIN (`bra $818`), the 68K waiting for the vblank
-    ; IRQ. MAME hardware-paces it (~10.7K spins/frame); interpreting all of them is ~95% of
-    ; the per-game-frame cost (the real work is only ~2.4K instr). Collapse it: fire the IRQ
-    ; NOW by forcing the $AC countdown to underflow next iloop -> GAME_TICK runs immediately.
-    ; The real 60Hz pacing comes from the 5A22-side vblank (VID_FRAME), not this dead wait.
-    inc $0760            ; game-frame counter (fps instrumentation; $0760 = free IRAM)
-    lda #$0001
-    sta $AC              ; AC=1 -> next iloop top underflows -> raise $AA -> vblank IRQ
-    clc                  ; C=0: let the bra execute once; the normal iloop path takes the IRQ
+    ; $0818 IDLE-SPIN COLLAPSE — CLAMP form (root-caused 2026-07-10). The original
+    ; "$AC=1, fire the IRQ NOW" deterministically corrupted a coroutine context entry
+    ; minutes into gameplay (ring: healthy $0532/$0796 switch cascade dispatching to
+    ; $080000 = 68K ROM end; identical with a same-frame streak gate; bisected to this
+    ; arm alone). Clamp sweeps in a live-pokeable lab: $AC forced to 1 or clamped to
+    ; <= $0800 hits the same fatal event (~game tick $9E00-A000); clamped to $2000
+    ; is stable — the game needs IRQ spacing of some thousands of instructions around
+    ; that event (coroutine creation window). So: CLAMP the countdown DOWN to $2000
+    ; (never up — the spin hits this arm every iteration and an unconditional store
+    ; would refill faster than iloop drains it = IRQ never fires). Effect: at most
+    ; ~8K interpreted spin instructions per idle wait instead of ~26K (natural $7000
+    ; reload), preserving a hardware-plausible minimum slice. The full "fire NOW"
+    ; lever stays retired until lockstep-vs-MAME explains the $2000 boundary.
+    lda $AC
+    cmp #$2000
+    bcc lh818_pass       ; countdown already below the clamp -> let it drain
+    lda #$2000
+    sta $AC              ; clamp DOWN: IRQ due within ~8K instructions
+    inc $0760            ; game-frame counter (fps instrumentation; counts clamps)
+lh818_pass:
+    clc                  ; let the bra run; iloop fires the IRQ at the clamped boundary
     rts
 lh_chk_3b84:
     cmp #$3B84
@@ -18546,6 +18565,12 @@ lh_nofire:
     rts
 lh_delay:
     stz $00              ; D0.w = 0 (the loop's only net effect; D0 high word unchanged)
+    lda #$0001
+    sta $60              ; exit CCR: the closing subq.w left 0 -> Z=1 N=0 V=0 C=0 X=0
+    stz $6E
+    stz $70
+    stz $72
+    stz $A2
     lda #$3B8A
     sta $40              ; resume right after the delay loop
     stz $42
@@ -18560,82 +18585,39 @@ lh_delay:
 lh_nofire2:              ; local no-fire exit (the big handlers are too far from lh_nofire
     clc                  ; for an 8-bit branch); same semantics: carry clear -> decode normally
     rts
+; ROOT-CAUSE FIX (2026-07-10): lh_3fea/lh_adbe are now 5-byte FAR STUBS; the bodies
+; live in escbank5 ($99:F400/$99:F450, carry via rtl like gm_memset). This flow chain
+; (.org $F442) had silently grown past $F601, and the LATER `.org $F602` gm_verify
+; section assembled OVER its tail (Poppy: last org wins per byte, no overlap error):
+; lh_3fea lost its closing `sec/rts` (fell through into gm_verify -> carry-CLEAR
+; return -> the sled re-executed the stale opcode against the collapsed PC -> PC
+; desync into the RAM-test FAIL block = the boot self-test failure), and lh_adbe +
+; gm_memclr were buried entirely (their dispatch jmps landed mid-gm_verify ->
+; garbage decode = the deterministic gameplay derail to $080100 at tick $A005).
+; The same overgrowth had earlier buried the $F600 TESTFLAG. This chain MUST end
+; at or below $F601 (build_interp_rom.py asserts the slack bytes stay zero).
 lh_3fea:
-    lda $26
-    cmp #$00F0
-    bne lh_nofire2
-    lda $0A
-    bne lh_nofire2       ; D2 >= 65536 -> interp
-    lda $24
-    clc
-    adc $08
-    bcs lh_nofire2       ; bank wrap -> interp
-    ldx $24
-    ldy $08
-    beq lh_3fea_tail
-    sep #$20
-    lda #$00
-lh_3fea_lp:
-    sta $400000,x
-    inx
-    dey
-    bne lh_3fea_lp
-    rep #$30
-lh_3fea_tail:
-    lda $24
-    clc
-    adc $08
-    sta $24              ; A1 += D2
-    stz $08
-    stz $0A              ; D2 = 0
-    stz $04              ; D1 = 0
-    lda #$3FFE
-    sta $40              ; resume at the test-passed branch (bra $4008)
-    stz $42
-    sec
+    jsl $99F400          ; lh_3fea_far (escbank5); carry propagates rtl -> rts
+    rts
+lh_adbe:
+    jsl $99F450          ; lh_adbe_far (escbank5)
     rts
 
-; $ADBE walking-bit WORD RAM test: same idea, words. Net (writable RAM): memset 0,
-; A1+=D2*2, D2=0, D1=0. Work-RAM-only; guards against word-count or byte-span overflow.
-lh_adbe:
-    lda $26
-    cmp #$00F0
-    bne lh_nofire2
-    lda $0A
-    bne lh_nofire2       ; D2 >= 65536 words -> interp
-    lda $08
-    asl a                ; A = D2*2 (byte span)
-    bcs lh_nofire2       ; span > 64K -> interp
-    clc
-    adc $24
-    bcs lh_nofire2       ; A1.lo16 + span wraps bank -> interp
-    ldx $24
-    ldy $08
-    beq lh_adbe_tail
-    sep #$20
-    lda #$00
-lh_adbe_lp:
-    sta $400000,x        ; word = 0 (both bytes)
-    sta $400001,x
-    inx
-    inx
-    dey
-    bne lh_adbe_lp
-    rep #$30
-lh_adbe_tail:
-    lda $08
-    asl a
-    clc
-    adc $24
-    sta $24              ; A1 += D2*2
-    stz $08
-    stz $0A              ; D2 = 0
-    stz $04              ; D1 = 0
-    lda #$ADD2
-    sta $40              ; resume at move #0,CCR ; rts
-    stz $42
-    sec
-    rts
+
+
+; gm_verify — the read-back verify idiom anywhere:  cmp.b/w (An)+,Dn  /  bne <err>  /
+; subq.l #1,Dm  /  bne -8 (back to the cmp).  In the boot every verify immediately
+; follows a clear/fill of the SAME region with the SAME value, so it necessarily matches
+; -> collapse it: An += count*size, Dm = 0, PC past the 4-instr body (8 bytes). Guarded:
+; Dm.hi16 must be 0 (else the loop is huge -> let the interp run it). Lives at $F602 in the
+; last bank-0 gap (the code just BEFORE this .org grew over $F600 — the old TESTFLAG spot,
+; which is why the flag moved to $F7E0). Scratch $0740 size, $0742 subq-opcode.
+.org $F602
+gm_verify:
+    jsl $99F4A0          ; gm_verify_far (escbank5; body relocated 2026-07-10 — this org
+    rts                  ;   section is now a 5-byte stub + gm_memclr's new home below;
+                         ;   the vacated $F607-$F6E9 hosts gm_memclr, which must stay
+                         ;   bank-$00: it jsr's the region-aware writeword/writelong)
 
 ; ============================ GENERIC LOOP-IDIOM MATCHER ======================
 ; gm_memclr — recognize the memclr idiom anywhere:  clr.l/clr.w (An)+  then
@@ -18716,93 +18698,15 @@ gmc_nohi:
     ldy $0746
     lda #$FFFF
     sta $00,y            ; Dm.w = $FFFF (dbf leaves the counter at -1)
+    lda #$0001
+    sta $60              ; exit CCR: dbf preserves CCR; the last clr set Z=1, N=0,
+    stz $6E              ;   V=0, C=0 (X is UNTOUCHED by clr+dbf — do not clear $A2).
+    stz $70              ;   Stale-CCR collapses = the dbra-fallthrough gap class.
+    stz $72
     lda $40
     clc
     adc #$0006
     sta $40              ; PC past clr(2)+dbf(4)
-    sec
-    rts
-
-; gm_verify — the read-back verify idiom anywhere:  cmp.b/w (An)+,Dn  /  bne <err>  /
-; subq.l #1,Dm  /  bne -8 (back to the cmp).  In the boot every verify immediately
-; follows a clear/fill of the SAME region with the SAME value, so it necessarily matches
-; -> collapse it: An += count*size, Dm = 0, PC past the 4-instr body (8 bytes). Guarded:
-; Dm.hi16 must be 0 (else the loop is huge -> let the interp run it). Lives at $F602, after
-; the $F600 TESTFLAG, in the last bank-0 gap. Scratch $0740 size, $0742 subq-opcode.
-.org $F602
-gm_verify:
-    lda $44
-    and #$F1F8
-    cmp #$B018           ; cmp.b (An)+,Dn
-    beq gv_match
-    cmp #$B058           ; cmp.w (An)+,Dn
-    beq gv_match
-gv_no:                   ; no verify match -> the generic memset matcher (escape bank slot 2).
-    jsl $928006          ; gm_memset: returns carry=fired via rtl; rts propagates it to the sled
-    rts
-gv_match:
-    ldy #$0002           ; PC+2 must be bne (the mismatch->error branch)
-    lda [$56],y
-    xba
-    and #$FF00
-    cmp #$6600
-    bne gv_no
-    ldy #$0004           ; PC+4 must be subq.l #1,Dm
-    lda [$56],y
-    xba
-    sta $0742
-    and #$FFF8
-    cmp #$5380
-    bne gv_no
-    ldy #$0006           ; PC+6 must be bne -8 (loop back to the cmp)
-    lda [$56],y
-    xba
-    cmp #$66F8
-    bne gv_no
-    lda $0742            ; Dm*4 ; require Dm.hi16 == 0
-    and #$0007
-    asl a
-    asl a
-    tay
-    lda $02,y
-    bne gv_no            ; count >= 65536 -> interp
-    lda $44              ; size: cmp.b opmode bit6=0, cmp.w bit6=1
-    and #$0040
-    beq gv_byte
-    lda #$0002
-    bra gv_havesz
-gv_byte:
-    lda #$0001
-gv_havesz:
-    sta $0740
-    lda $00,y            ; count = Dm.lo16
-    ldx $0740
-    cpx #$0002
-    bne gv_count1
-    asl a                ; *2 for word
-gv_count1:
-    pha                  ; byte span = count*size (saved)
-    tya
-    tax                  ; X = Dm*4 (stz has abs,X but not abs,Y)
-    stz $00,x            ; Dm.lo16 = 0
-    stz $02,x            ; Dm.hi16 = 0
-    lda $44              ; An regfile off = $20 + An*4
-    and #$0007
-    asl a
-    asl a
-    ora #$0020
-    tax
-    pla
-    clc
-    adc $00,x
-    sta $00,x            ; An.lo16 += span
-    bcc gv_nohi
-    inc $02,x
-gv_nohi:
-    lda $40
-    clc
-    adc #$0008
-    sta $40              ; PC past the 4-instruction verify body
     sec
     rts
 
@@ -18823,6 +18727,22 @@ ors_pre_97:
 .org $F700
 RESP1:
 .incbin "../data/cchip_boot_response.bin"
+
+; TESTFLAG — relocated AGAIN ($F400 -> $F600 -> $F7E0, 2026-07-09): loop_hook code
+; growth covered $F600 in both ROM views (the byte read $64 = mid-instruction of
+; lh code before gm_verify), so `lda $F600 / beq notest` was never zero and the
+; production cold-boot (notest) path was SILENTLY UNREACHABLE — the exact failure
+; class the $F400 note below warns about.
+; HONEST CAVEAT: bank $00 has NO free byte (fully packed) — $F7E0 OVERLAPS the
+; tail of the 256-byte RESP1 block above (RESP1[$E0], zero in the real C-Chip
+; capture). This is safe by construction: PRODUCTION needs TESTFLAG==0, which
+; equals the real data (the .db below re-asserts it); TEST ROMs bake it nonzero
+; (optest/opsweep poke SA-1 file view $77E0) but then enter test mode and never
+; boot the game, so the corrupted RESP1 tail is never downloaded. Do NOT bake
+; TESTFLAG and expect a production boot from the same image.
+.org $F7E0
+TESTFLAG:
+    .db $00              ; == RESP1[$E0] (must stay 0 in production)
 
 ; =============================================================================
 ; VIDEO PLUMBING routines, placed in free bank space ($F800+) so adding them does
@@ -18886,7 +18806,8 @@ ms_shadow:
 ; --- video subsystem relocated to bank $E9 (src/video.pasm). map_snes stays here
 ;     (hot store path). These 3 entries are reached via jsl/jml VID_*. ---
 test_or_vid:
-    lda $F600            ; TESTFLAG (relocated from $F400; see reset note)
+    lda $F7E0            ; TESTFLAG ($00:F7E0 — relocated twice; see the reset note.
+                         ;  LITERAL for the same no-shift reason as the boot read)
     cmp #$0002
     bne tov_idle
     jml VIDTEST          ; $E98008 -> vidtest_init (no return)

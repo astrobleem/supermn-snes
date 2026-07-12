@@ -119,6 +119,8 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   `reset_emulator`, screenshots, etc.
 
 ## Notes
+- **Debugging the interp / Poppy / harness traps: see `../docs/INTERP_DEBUG_AND_GOTCHAS.md`**
+  (flight recorder, PC-freeze, `$07xx`-counter rule, `.org` overlap guards, MAME/Mesen gotchas).
 - 68K is big-endian: read words (`read_u16`), not byte lanes.
 - MAME 0.287 Lua: keep taps/notifier subscriptions in GLOBALS (else GC'd);
   `register_frame_done` not `add_machine_frame_notifier`; `-debug -debugger none`

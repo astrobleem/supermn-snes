@@ -5,19 +5,31 @@
   },
   "instruments": [
     {
-      "name": "sm_fm0",
+      "name": "fm_p38",
       "source": "instruments/placeholder.wav",
       "freq": 523.252,
       "loop": "none",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
+      "first_octave": 5,
       "last_octave": 5,
       "envelope": "adsr 12 2 6 8",
       "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
     },
     {
-      "name": "sm_fm1",
+      "name": "fm_p06",
+      "source": "instruments/placeholder.wav",
+      "freq": 130.813,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 1,
+      "last_octave": 3,
+      "envelope": "adsr 12 2 6 8",
+      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
+    },
+    {
+      "name": "fm_p25",
       "source": "instruments/placeholder.wav",
       "freq": 523.252,
       "loop": "none",
@@ -29,25 +41,13 @@
       "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
     },
     {
-      "name": "sm_fm2",
+      "name": "fm_p26",
       "source": "instruments/placeholder.wav",
       "freq": 523.252,
       "loop": "none",
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
       "first_octave": 4,
-      "last_octave": 5,
-      "envelope": "adsr 12 2 6 8",
-      "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
-    },
-    {
-      "name": "sm_fm3",
-      "source": "instruments/placeholder.wav",
-      "freq": 523.252,
-      "loop": "none",
-      "evaluator": "default",
-      "ignore_gaussian_overflow": false,
-      "first_octave": 5,
       "last_octave": 5,
       "envelope": "adsr 12 2 6 8",
       "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
