@@ -6,9 +6,9 @@ optimistic to the point of being misleading. This document is the correction. Wh
 conflicts with a cheerful banner in `STATUS.md` or a memory file, believe this.
 
 The current single sentence version: **the Superman port is not playable or shippable; its
-canonical post-arm rate is 1.3237 game-fps, the sound port has still never received a listening
-pass, and the level background now reproduces after a long palette fade but has not received an
-aligned MAME fidelity verdict.**
+canonical post-arm rate is 1.3237 game-fps, R5's fast NMI/WAI pacing experiment reproduced the
+known `$080100` derail, the sound port has still never received a listening pass, and the level
+background has not received an aligned MAME fidelity verdict.**
 
 ## Recovery reconciliation — July 12, 2026
 
@@ -23,9 +23,14 @@ The original accounting below remains valuable history, but two observations are
   Mesen matched at that early fade state. A second production Mesen cold boot continued 108 ticks
   and rendered the recognizable tan wall/pillar, lower wall, HUD, and sprites with 75 CGRAM colors.
   The background is therefore reproducible; exact same-state MAME pixel fidelity remains open.
+- A non-pausing, cycle-stamped production trace resolves the performance-measurement discrepancy:
+  the shipped `$AC=$2000` wait consumes 6.46M of a 7.36M-cycle settled gameplay tick (87.7%; the
+  light-attract result is 6.47M/7.26M). An isolated NMI/WAI lab cut the short interval to 0.927M,
+  then failed the real behavioral gate at tick 767 with halt `$DEAD`, PC `$080100`, and positive
+  task-stack margins. It is unsafe and retired.
 
-Raw evidence, provenance, hashes, and the remaining performance campaign are in `RECOVERY.md`.
-The sound and `$0818` clamp warnings below are unchanged.
+Raw evidence, provenance, hashes, and the performance-architecture verdict are in `RECOVERY.md`
+and `docs/R5_PERFORMANCE_ARCHITECTURE.md`. The sound and production-clamp warnings below remain.
 
 ---
 
@@ -165,6 +170,15 @@ It is a clamp that keeps the hazard out of reach at normal boot phases, not a re
 repro ever surfaces, revert the arm (`clc/rts` at ROM file offset `0x7597`, source
 `interp.pasm` `lh_0818`).
 
+R5 tried to make the fast form structurally safer by sleeping only after the SA-1 reached the main
+idle context, waking from a WRAM-resident 5A22 NMI, and masking the hardware IRQ so the existing
+virtual path delivered it after wake. The theory was still wrong. A same-ROM input-driven run
+entered gameplay and halted `$DEAD` at tick 767 with PC `$080100`; the minimum sampled saved-stack
+margin was 150 bytes. A separate supervisor-poll wake waited until rendering returned and still
+failed identically at tick 765. Therefore this is not just NMI-vs-renderer ordering; the removed
+minimum delay is itself part of the effective coroutine timing contract. Do not resurrect either
+variant from its attractive 0.927M/2.17M-cycle short profile.
+
 ## 7. Process sins this session (2026-07-12)
 
 - **I merged PR #15 into `main`** (after retargeting it off its stacked base
@@ -199,10 +213,11 @@ Not everything is rotten. These are real and were verified independently:
 
 ## 9. The actual to-do list for the next engineer
 
-1. **Profile the trustworthy continuous run.** Attribute the observed ~8.10M cycles/tick and
-   reconcile it with the much smaller injected windows before resuming optimization.
-2. **Make a bounded architecture decision.** Require a measured, composable route to the 358K
-   cycle/tick 30 Hz budget; otherwise re-scope this as a technical demo or stop the port honestly.
+1. **Keep production canonical.** The continuous profile is complete and the tempting NMI/WAI
+   shortcut is behavioral RED. Do not merge a pacing change from short cycle evidence.
+2. **Treat this as a technical demo unless a whole-system architecture clears both gates:** survive
+   the producer-ordering event and measure a representative gameplay tick at or below the 358K
+   cycle budget with renderer/pacing included.
 3. **Finish graphics fidelity, not background existence.** Repeat the long fade under canonical
    Nexen and obtain an aligned MAME comparison for level/player placement when performance permits.
 4. **Listen to the sound.** All 21 tracks, by ear, against the arcade. This has never

@@ -17,7 +17,10 @@ SNES PPU (via Nexen) for the target side.
 > older status and planning sections. Recovery established one canonical build and measured a
 > faithful production cold boot at **1.3237 game-fps after arming** (22.7x short of the 30 Hz
 > target). A long same-boot observation also reproduced the level background after its palette
-> fade. The active gate is now end-to-end performance architecture; audio still needs listening.
+> fade. R5 found that 87.7% of a settled gameplay tick is the shipped idle clamp, but its fast
+> NMI/WAI replacement reproduced the known `$080100`/`$DEAD` ordering failure in gameplay. The
+> project is therefore scoped as a technical demo unless a safe whole-system design measures at
+> 358K cycles/tick or below. Audio still needs listening.
 
 > ⚠️ **No copyrighted ROM data is included.** This repository contains only original
 > source, tooling, and documentation. You must supply your own legally-obtained
@@ -31,7 +34,7 @@ SNES PPU (via Nexen) for the target side.
 | Graphics pipeline | ⚠️ level background now reproduces after a long production fade; early Nexen/Mesen states match, but exact same-state MAME fidelity and a long-settle canonical Nexen capture remain open |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **Realtime budget** | ❌ **not solved** — canonical post-arm rate is **1.3237 game-fps**, about **45.3x short of 60 Hz / 22.7x short of 30 Hz**; the observed ~8.10M cycles/tick must be reconciled with older injected windows before more optimization |
+| **Realtime budget** | ❌ **not solved** — canonical post-arm rate is **1.3237 game-fps**, about **45.3x short of 60 Hz / 22.7x short of 30 Hz**; R5 reconciled the missing cost as the `$0818` wait, but the 0.927M-cycle NMI and conservative 2.17M-cycle supervisor labs both failed with `$080100` in gameplay |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
 | Audio (YM2610 → SNES TAD) | ⚠️ integrated and byte/oracle-validated, but never completed as a by-ear arcade comparison; most SFX and expression remain incomplete |
@@ -68,6 +71,8 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 
 - **[CONFESSION.md](CONFESSION.md)** — highest-authority correction to project status
 - **[RECOVERY.md](RECOVERY.md)** — active consolidation and baseline campaign
+- **[docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md)** — continuous
+  production profile, rejected pacing labs, and technical-demo decision
 - **[STATUS.md](STATUS.md)** — detailed historical state (superseded where noted)
 - **[ROADMAP.md](ROADMAP.md)** — next steps and milestones
 - **[BUILD.md](BUILD.md)** — toolchain (the "Game Garden" suite: Poppy/Peony), dependencies, and **migration guide**

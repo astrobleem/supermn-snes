@@ -1,6 +1,6 @@
 # BUILD — toolchain, dependencies, and migration guide
 
-Last updated: June 25, 2026. **Read this before migrating to a new machine/workspace.**
+Last updated: July 12, 2026. **Read this before migrating to a new machine/workspace.**
 
 > ⚠️ **Honest status:** the git repo carries only *source* (the 65816 interpreter/video, the
 > Python tools, docs). The **build toolchain, the arcade ROM + everything derived from it, and the
@@ -40,7 +40,7 @@ Last updated: June 25, 2026. **Read this before migrating to a new machine/works
 | **.NET 10** runtime/SDK | `/home/chad/.dotnet10` | 10.x | runs/builds Nexen and the Game Garden suite | install SDK 10 |
 | **Poppy** (65816 assembler) [Game Garden] | `/home/chad/poppy` → `src/Poppy.CLI/bin/Release/net10.0/poppy.dll` | source build | assembles `interp.pasm`/`video.pasm`; emits `.pansy` symbols; SNES target, `.sa1_enabled` | clone `TheAnsarya/poppy`, `dotnet build -c Release` (.NET 10) |
 | **Peony** (68K disassembler) [Game Garden] | `/home/chad/peony` | source build, .NET 10 | recursive-descent disassembly (G1 coverage) | clone `TheAnsarya/peony`, `dotnet build Peony.Cli` — single-threaded, slow on big output |
-| **Nexen** (SNES emulator, primary oracle) | `/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen` | `mcp-server` source build | real-PPU + SA-1 cycle/debug oracle used by the newest harnesses | build `/home/chad/Nexen` from its `mcp-server` branch |
+| **Nexen** (SNES emulator, primary oracle) | `/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen` | recovery branch `6365acc39` on upstream `mcp-server` `ed2e70e94` | real-PPU + SA-1 cycle/debug oracle; R5 adds exact hook-event cycle stamps | clone `astrobleem/Mesen2`, branch `mcp-server`, then build/publish with .NET 10 |
 | **Mesen2** (legacy compatibility checkout) | `/home/chad/Mesen2/bin/linux-x64/Release/Mesen` | source build | older MCP-compatible PPU oracle used by historical scripts | build Mesen2 from source (linux-x64 Release) |
 | **mesen_mcp** (Python pkg) | `/home/chad/Mesen2/python` (`mesen_mcp/`) | editable install | shared Python client/stdio transport for Nexen and Mesen | `pip install -e /home/chad/Mesen2/python` |
 | **MAME** | `/snap/bin/mame` (snap) | **0.287 (pinned)** | arcade ground-truth oracle; trace/playback determinism needs THIS version | snap/build mame0287 |
@@ -49,7 +49,15 @@ Last updated: June 25, 2026. **Read this before migrating to a new machine/works
 
 The two **MCP servers** (`mame`, `nexen-inproc`) are registered in the agent config, not in the
 repo. Nexen uses `tools/nexen_mcp_bridge.py` because the upstream Python package's validator only
-recognizes Mesen's split-file layout, while Nexen is a self-contained publish.
+recognizes Mesen's split-file layout, while Nexen is a self-contained publish. The active global
+registration points at the healthy-volume path above. That binary hashes to
+`17d243c404b8ef32bbb1754a5b026584f2ae24cb047f54b9f250a6f4b721650a`.
+
+The original `/home/chad/Nexen` checkout must be treated as a damaged archive: the failing system
+drive produced an unrecoverable read in a generated object and one git pack/object path. A clean
+clone was created at `/mnt/sdc1/Nexen-r5-20260712`; do not use the old tree as a build source. The
+project source, private-derived inputs, recovery evidence, and critical hashes were copied to
+`/mnt/sdc1/supermn-host-recovery-20260712/`.
 
 ## Build commands
 
@@ -77,10 +85,11 @@ python3 tools/flyval.py 7000
 `tools/build_interp.sh` hardcodes: `DOTNET_ROOT=/home/chad/.dotnet10`, the Poppy dll path, and
 `cd "$(dirname "$0")/.."`. `tools/build_interp_rom.py` reads `data/superman_m68k.bin`,
 `tools/mame-trace/gfx1.bin`, `src/interp.bin`, `src/video.bin` (relative paths — OK if you keep
-the repo layout). Python harnesses are historically mixed: current cycle/lockstep tools generally
-launch `/home/chad/Nexen`, while older rendering and compatibility scripts launch
-`/home/chad/Mesen2`; both import the client from `/home/chad/Mesen2/python`. Check the chosen
-harness before interpreting a result.
+the repo layout). Python harnesses are historically mixed: current recovery cycle tools launch the
+healthy-volume Nexen path above, older cycle/lockstep tools may still hardcode `/home/chad/Nexen`,
+and historical rendering/compatibility scripts launch `/home/chad/Mesen2`; both import the client
+from `/home/chad/Mesen2/python`. Check the chosen harness before interpreting a result, and
+override/repair old Nexen defaults before running it.
 
 ## Re-deriving the gitignored assets from the arcade ROM
 
@@ -95,7 +104,8 @@ Supply your own legal Superman (Taito X) ROM set (the `b61-*` files), then:
 
 ## Migration checklist
 
-When moving off this (failing) drive:
+When moving off this failing drive (the July 12 recovery copy is already under
+`/mnt/sdc1/supermn-host-recovery-20260712/`):
 
 1. **`git clone`** the repo (carries all source + docs). Build outputs regenerate.
 2. **Copy, don't lose** (NOT in git): the arcade ROM set (`/home/chad/superman-arcade/`), and the

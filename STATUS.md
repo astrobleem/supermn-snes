@@ -10,7 +10,12 @@ Last updated: July 12, 2026. Per-area detail lives in the linked docs.
 > game-fps after arming** (22.7x short of the 30 Hz target), with the game counter validated against
 > its real frame boundary. The level background is reproducible after a sufficiently long same-boot
 > palette fade; exact MAME pixel fidelity is still open. Sound has automated byte/oracle evidence but
-> no completed listening pass. See [RECOVERY.md](RECOVERY.md) for the evidence and active campaign.
+> no completed listening pass. R5 found that the shipped idle wait is 87.7% of a settled gameplay
+> tick, but a fast 0.927M-cycle NMI/WAI lab reproduced the exact `$080100`/`$DEAD` ordering derail at
+> gameplay tick 767; a conservative 2.17M-cycle supervisor wake failed identically at tick 765.
+> Both are rejected; the production clamp remains canonical, and the project is now honestly
+> technical-demo scoped absent a safe whole-system 358K-cycle result. See
+> [RECOVERY.md](RECOVERY.md) and [the R5 verdict](docs/R5_PERFORMANCE_ARCHITECTURE.md).
 > The remainder of this file is retained as engineering history and partial evidence.
 
 > ## ⚠️ SOUND PORT — INTEGRATED, AUTOMATED GATES GREEN, MUSICAL VALIDATION INCOMPLETE

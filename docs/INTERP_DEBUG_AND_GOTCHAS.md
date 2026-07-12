@@ -105,8 +105,9 @@ The game's per-frame tail is a cooperative coroutine scheduler (switch-out `$053
 switch-in `$0796`, select `$075C`, idle spin `$0818`). Decoding it revealed a hard
 design contract, and any speed lever that increases IRQ density must respect it:
 
-- Per-task stacks are TINY (256-512 bytes; floor table in ROM at `$087E`, one entry per
-  slot). Every IRQ context save costs 66 bytes (6-byte exception frame + 60-byte
+- Per-task stacks are TINY (256-512 bytes; `$087E` is the preceding `lea` base and the actual
+  one-entry-per-slot floor table begins at ROM `$0882`). Every IRQ context save costs 66 bytes
+  (6-byte exception frame + 60-byte
   `movem.l d0-d7/a0-a6`). The game even ships its own switch-in floor check with a
   "---Task Stack Error---" string — whose error handler jumps OFF-ROM (`$1000AE`,
   a dev-board address) and derails.
@@ -124,3 +125,8 @@ design contract, and any speed lever that increases IRQ density must respect it:
   longer than the longest task activation. Empirical boundary: ≤`$0800` fails at the
   first mass-coroutine-creation event; `$2000` is stable. Full narrative:
   `docs/PROFILE_CAMPAIGN.md` §sound-era addendum.
+- R5 also ruled out replacing that drain with real-vblank `WAI`. A masked NMI wake from main idle
+  and a more conservative post-render supervisor wake both reproduced `$080100`/`$DEAD` at gameplay
+  ticks 767/765 while sampled stack margins remained positive. The delay protects inter-tick
+  producer/consumer ordering, not only against interrupting a deep task. See
+  `docs/R5_PERFORMANCE_ARCHITECTURE.md`.

@@ -34,6 +34,13 @@ merge, rebase, delete branches, or switch away from user work without explicit i
   Its `$0760` counter matched the real `$0818` boundary hook 32-for-32, and legacy Mesen reproduced
   the rate within 1%. Older 3–10x or 8–15 fps claims measure partial injected windows and exclude
   important end-to-end work. Use `RECOVERY.md` and the raw baseline, not those projections.
+- R5's uninterrupted cycle-stamped trace explains the excluded work: the `$AC=$2000` wait consumes
+  6.46M of a 7.36M settled gameplay tick (87.7%; attract is 6.47M/7.26M, 89.1%). An isolated
+  NMI/WAI lab reduced the same *short* interval to 0.927M cycles, but it reproduced the exact
+  `$080100`/`$DEAD` producer-ordering derail at gameplay tick 767 despite positive task-stack
+  margins. A conservative 5A22-supervisor wake measured 2.17M in a short window and failed
+  identically at tick 765. Both are rejected, not architectural proofs or production rates. See
+  `docs/R5_PERFORMANCE_ARCHITECTURE.md`.
 - The legal MC68000 interpreter and shipped per-function native escapes have strong differential
   evidence: opsweep 782/782 and MAME lockstep work are real. The performance problem is not solved.
 - The level background is now reproducible from a production cold boot after its palette fade. A
@@ -77,8 +84,8 @@ Generated outputs and captures may be valuable evidence. Do not delete or overwr
 - Poppy: `/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll`
 - Peony: `/home/chad/peony/src/Peony.Cli/bin/Release/net10.0/Peony.Cli.dll`
 - Pansy source: `/home/chad/pansy`
-- Nexen MCP fork (project oracle):
-  `/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen`
+- Nexen MCP fork (project oracle, healthy-volume R5 build):
+  `/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen`
 - Older Mesen MCP checkout (legacy/compatibility): `/home/chad/Mesen2/bin/linux-x64/Release/Mesen`
 - `mesen_mcp`: `/home/chad/Mesen2/python`
 - MAME: `/snap/bin/mame`, pinned to 0.287
@@ -89,7 +96,8 @@ Generated outputs and captures may be valuable evidence. Do not delete or overwr
 The global Codex MCP registrations should be `mame` and `nexen-inproc`. Nexen uses the project
 shim `tools/nexen_mcp_bridge.py`; its transport still reads the historical `MESEN_*` environment
 variable names. Legacy Mesen needs `DOTNET_ROOT=/home/chad/.dotnet8`; Nexen harnesses use .NET 10
-or the self-contained publish above.
+or the self-contained publish above. The original `/home/chad/Nexen` checkout is preserved but
+has a damaged git pack/source object from the failing system drive; do not build or profile from it.
 
 ## Working rules
 

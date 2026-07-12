@@ -53,14 +53,16 @@ from overlapping optimistic handoffs into one evidence-backed engineering line.
 ## Canonical tools
 
 - Arcade oracle: MAME 0.287 at `/snap/bin/mame`.
-- SNES/SA-1/PPU oracle: MCP-enabled Nexen at
-  `/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen`.
+- SNES/SA-1/PPU oracle: cycle-stamped MCP-enabled Nexen at
+  `/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen`.
 - Shared Python transport/client: `/home/chad/Mesen2/python`.
 - Agent stdio shim: `tools/nexen_mcp_bridge.py`.
 - Global MCP registrations: `mame` and `nexen-inproc`.
 
 The older `/home/chad/Mesen2` emulator remains available for compatibility with historical scripts,
 but new baseline evidence uses Nexen unless a documented emulator comparison is the purpose.
+The original `/home/chad/Nexen` tree is a preserved damaged archive after an unrecoverable system-
+drive read; the clean source/build above and the host recovery copy live on `/mnt/sdc1`.
 
 ## Recovery gates
 
@@ -198,25 +200,74 @@ default to prevent this early-fade misclassification.
 
 ### R5 — Bounded performance-architecture decision
 
-- [ ] Profile a representative continuous, production gameplay interval and attribute the observed
-  ~8.10 million SA-1 cycles per tick across interpreted work, native/HLE bodies, bridges/scheduler,
-  5A22 rendering/contention, frame pacing, and idle time.
-- [ ] Reconcile that continuous-run cost with the inherited 1.3–2.0 million-cycle injected windows;
-  do not optimize from the old windows until the missing factor is measured.
-- [ ] Prototype the highest-leverage architectural change and require a measured, composable path
-  to the 358K-cycle 30 Hz budget. Per-function escape work remains frozen meanwhile.
-- [ ] Choose explicitly among a semantic/full-AOT campaign, an honestly scoped technical demo, or
-  stopping the port while preserving the interpreter/toolchain work.
+- [x] Profile continuous production attract and settled gameplay intervals with exact cycle-stamped,
+  simultaneous hooks and no phase-boundary pauses.
+- [x] Reconcile the canonical post-arm average with the inherited partial injected windows.
+- [x] Prototype both supervisor-poll and WRAM-NMI real-vblank wake architectures in marked,
+  off-production lab ROMs.
+- [x] Drive both prototypes through real coin/start input and require gates, ring, halt, progress,
+  task-mask, and saved-task-stack-floor health.
+- [x] Choose explicitly among full-AOT, technical-demo, and stop outcomes.
+
+R5 required a small Nexen instrumentation fix: recovery commit `6365acc39` adds the source SA-1's
+exact 64-bit `cycleCount` to hook notifications. Its healthy-volume binary hashes to
+`17d243c404b8ef32bbb1754a5b026584f2ae24cb047f54b9f250a6f4b721650a`. The profiler installs the
+exact `$00:F5A3` clamp, `$00:B404` virtual-IRQ, and `$92:DC3B` game-entry hooks together and never
+pauses between them.
+
+The settled production gameplay result is 7,359,718 cycles/tick: 6,456,498 waiting from clamp to
+virtual IRQ (87.73%), 7,163 in IRQ-to-entry dispatch (0.10%), and 896,057 from `$3A92` entry to the
+next clamp (12.18%). Sixteen intervals range only from 7,359,190 to 7,360,482 cycles and occupy
+41-42 SNES video frames, about 1.457 game ticks/s. The comparable attract result is 7,256,419 total
+with a 6,467,122-cycle wait. This resolves the old 1.3-2.0M injected-window disagreement: those
+windows stopped before the next wait completed. The 8,099,238-cycle/1.3237 fps R2 value remains the
+canonical end-to-end post-arm average because it also includes initial post-arm and state-transition
+cost.
+
+Verified gameplay profile:
+`build/recovery-20260712/r5-continuous-profile-gameplay-verified/profile.jsonl`, SHA-256
+`83125a216f6cfb3d5ab9dd7fd1078e183eecefc09466fd6cdd7b97380f7b285f`. Its same-ROM, pre-hook
+gameplay checkpoint hashes to
+`0076df64b7902eb05ca6a29c1e38742a0cb4e3fb76722153e779cf3cbec08247`.
+
+The isolated architecture result is decisively red:
+
+| Lab variant | Short attract cycles/tick | Steady video frames/tick | Input-driven verdict |
+|---|---:|---:|---|
+| 5A22 supervisor-poll wake | 2,166,590 | 13 | `$080100` / `$DEAD` at tick 765 |
+| WRAM-resident NMI wake | 926,918 | 5 | `$080100` / `$DEAD` at tick 767 |
+
+Both failures preserved the six production gates and sound ring, initialized twelve task contexts,
+and retained a minimum sampled saved-stack margin of 150 bytes while the task mask corrupted to
+`$FFC1`. Waiting until the SA-1 reaches main idle is insufficient; waiting until the 5A22 supervisor
+returns is also insufficient. The `$2000` delay is part of the effective coroutine producer/consumer
+timing contract, not disposable spin. The NMI and poll JSONL evidence hashes are respectively
+`536764a9696b9631e7bd987eafef86dad4c0188979c3786b4d43de9e6658a626` and
+`986a40921361007116e70fbad85e6f22e032e5de0f1e6b173e6ff754c20ac288`.
+
+The production ROM and canonical objects were never changed. Their SHA-256 values remain:
+
+- `build/interp.sfc`: `183c53f6ae100a6ad7faec324f4f6c58c872292b3088b5e2b0d74ea798b69673`;
+- `src/interp.bin`: `4be096af5abb16fd155da0bdb84df40f597e4815205bfde2e4931d45cf4b53bd`;
+- `src/video.bin`: `01ef077ff426740b2f7fedc9fef83d65ce2f4a26657802d1edc7ed8b71b76132`;
+- `src/escbank5.bin`: `52fdf25e67912ae478149cac8d208067e297670a7483b718cff8e984041229f3`.
+
+The marked NMI lab ROM also rebuilt byte-identically to
+`982131563e4d6fafc07d726adc0205d7293f6bdc6e188e190602910e54354e33`.
+
+**Decision: honestly scoped technical demo.** There is no measured composable path to the 358K
+30 Hz budget. Both whole-tick pacing prototypes are unsafe, and even a hypothetical safe zero-cost
+wait leaves 896K active gameplay cycles (2.50x the entire budget). A future full-port campaign must
+first survive the tick-765/767 ordering gate and measure a representative whole gameplay tick at or
+below 358K with renderer/pacing included. Until then, the production clamp stays canonical and
+per-function performance sprints remain frozen. Full evidence and negative iterations are in
+`docs/R5_PERFORMANCE_ARCHITECTURE.md`.
 
 ## Decision rule after the baseline
 
-Performance is the project gate, and R2 fired it decisively. Do not spend the next campaign polishing
-sound, palette timing, or isolated escapes. R5 is the active campaign: first explain the full-run
-8.10M-cycle tick, then require measured architectural leverage before committing to a rewrite.
-Choose explicitly among:
-
-1. a larger semantic/HLE rewrite with a measured path to the target rate;
-2. a reduced-scope technical demo with honest acceptance criteria; or
-3. stopping the port while preserving the reusable interpreter/toolchain work.
-
-No option will be framed as success until its observable user experience meets its stated target.
+Performance remains the project gate, and R5 has now fired the no-go rule for a playable 30 Hz port
+on the measured architecture. Preserve the project as an interactive technical demo and a reusable
+MC68000 interpreter/transpiler/differential toolchain. Graphics fidelity and the unfinished audio
+listening pass may be pursued only under that honest scope; they do not change the playability
+verdict. Reopening a full-port campaign requires new whole-system evidence that clears both the
+ordering and 358K-cycle gates above, not a projection from partial functions.

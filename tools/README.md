@@ -107,6 +107,27 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   MAME diff. X1-001-specific; the decode/diff *approach* is general.
 - **`optimize_palettes.py`** — SUPERSEDED for sprites (per-bank dynamic model).
 
+## Recovery profiling and architecture labs
+
+- **`recovery_baseline.py`** [S] — production `TESTFLAG=0` cold boot, exact accelerator-arm
+  observation, real virtual-mailbox coin/start inputs, counter-vs-hook validation, and honest
+  separation of SNES video frames, Superman ticks, SA-1 cycles, and host throughput.
+- **`profile_continuous.py`** [P/S] — simultaneous, non-pausing phase hooks using the R5 Nexen
+  `cycleCount` notification stamp. Profiles clamp -> virtual IRQ -> `$3A92` -> next clamp without
+  the stop-at-each-hook distortion that invalidated older phase accounting. It rejects cross-loads
+  that do not preserve the production gate block; `--drive-gameplay` reaches and settles gameplay
+  through the documented mailbox before installing hooks.
+- **`build_idle_vsync_lab.py`** [S] — builds a marked, isolated `$0818` pacing experiment without
+  touching canonical assembly, objects, or ROM. `--nmi-wake` uses a WRAM-resident 5A22 NMI to wake
+  a masked SA-1 `WAI` only after active coroutine work reaches the main idle context.
+- **`soak_idle_vsync_lab.py`** [S] — no-hook long soak for the marked poll/NMI labs. Drives the normal
+  coin/start mailbox, checks all production gates/ring/halt/progress, and compares each initialized
+  task's saved SP against the actual 68K ROM floor table at `$0882`. The default target passes the
+  historical `$9F05`/`$A005` coroutine-corruption window.
+
+The results and negative iterations are in `../docs/R5_PERFORMANCE_ARCHITECTURE.md`. These lab
+tools are evidence harnesses, not a production build path.
+
 ## MCP servers (the two oracles — the most reusable thing here)
 - **`mame`** (`/home/chad/mame-mcp`): **25 tools** in two families — *stateless* one-shot
   (`ping`/`config_check`/`audit_romset`/`get_ioports`/`trace_memory_access`/`capture_leaf_io`/
@@ -115,8 +136,10 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   `mame_save/load_state`, `mame_send_input`, `mame_capture_game_tick`, `mame_drive_to_gameplay`,
   `mame_exec_lua_live`, …). Full table in `mame-mcp/README.md`. Point `MAME_SYSTEM`/`MAME_ROMPATH`
   at any game.
-- **`mesen`**: real SNES PPU/CPU — `read/write_memory`, `run_frames`,
-  `reset_emulator`, screenshots, etc.
+- **`nexen-inproc`**: SNES PPU/CPU + SA-1 oracle through `nexen_mcp_bridge.py` —
+  `read/write_memory`, `run_frames`, hooks, CPU state/cycle count, screenshots, etc. The active
+  recovery binary lives on the healthy volume; see `../BUILD.md` rather than assuming the old
+  `/home/chad/Nexen` checkout is usable.
 
 ## Notes
 - **Debugging the interp / Poppy / harness traps: see `../docs/INTERP_DEBUG_AND_GOTCHAS.md`**
