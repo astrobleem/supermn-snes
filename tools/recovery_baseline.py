@@ -98,6 +98,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-video-frames", type=int, default=18000)
     parser.add_argument(
+        "--hook-validation-ticks",
+        type=int,
+        default=32,
+        help="Consecutive post-arm counter ticks to cross-check with an exec hook.",
+    )
+    parser.add_argument(
         "--preinput-ticks",
         type=int,
         default=105,
@@ -122,6 +128,8 @@ def main() -> int:
     args = parse_args()
     if args.wall_chunk_seconds < 0 or args.wall_chunk_seconds > 60:
         raise SystemExit("--wall-chunk-seconds must be between 0 and 60")
+    if args.hook_validation_ticks <= 0:
+        raise SystemExit("--hook-validation-ticks must be positive")
     args.output.mkdir(parents=True, exist_ok=True)
     if any(args.output.iterdir()):
         raise SystemExit(f"refusing to overwrite non-empty evidence directory: {args.output}")
@@ -184,6 +192,7 @@ def main() -> int:
         chunk=args.chunk,
         wall_chunk_seconds=args.wall_chunk_seconds,
         max_video_frames=args.max_video_frames,
+        hook_validation_ticks=args.hook_validation_ticks,
         input_schedule={
             "preinput_ticks": args.preinput_ticks,
             "coin_hold_ticks": args.hold_ticks,
@@ -205,6 +214,9 @@ def main() -> int:
     last_tick16 = 0
     total_ticks = 0
     hook_ticks_total = 0
+    hook_counter_start_total: int | None = None
+    hook_counter_end_total: int | None = None
+    hook_validation_match: bool | None = None
     last_frame = 0
     input_word = 0
 
@@ -238,10 +250,11 @@ def main() -> int:
                 pause=pause_result,
             )
 
-            # $00:F5A3 is the assembled ``inc $0760`` instruction in lh_0818.
-            # This independent execution hook cross-checks that the purpose-built
-            # counter advances exactly once per observed frame-boundary clamp.
-            tick_hook = m.add_exec_hook(0x00F5A3, cpu_type="Sa1")
+            # Installing a debugger hook roughly halves Nexen's throughput even
+            # while its gate is off.  Arm the exact $00:F5A3 hook only after the
+            # production gates turn on, validate a bounded consecutive window,
+            # then remove it.  The counter continues for the full run.
+            tick_hook: int | None = None
 
             def r16(addr: int, memory_type: str = "Sa1Memory") -> int:
                 return le16(m.read_memory(memory_type, addr, 2))
@@ -336,11 +349,12 @@ def main() -> int:
                 if not pause_ok:
                     raise RuntimeError(f"emulator did not pause coherently: {run_result}")
                 notifications = m.drain_notifications(timeout=0.05)
-                hook_ticks_total += sum(
-                    1
-                    for note in notifications
-                    if note.get("params", {}).get("handle") == tick_hook
-                )
+                if tick_hook is not None:
+                    hook_ticks_total += sum(
+                        1
+                        for note in notifications
+                        if note.get("params", {}).get("handle") == tick_hook
+                    )
                 snap = snapshot()
                 frame_delta = snap["frame"] - last_frame
                 last_frame = snap["frame"]
@@ -374,6 +388,39 @@ def main() -> int:
                     stage = "preinput"
                     log.emit("accelerators_armed", **snap)
                     copy_screenshot(m, "armed")
+                    tick_hook = m.add_exec_hook(0x00F5A3, cpu_type="Sa1")
+                    hook_counter_start_total = total_ticks
+                    log.emit(
+                        "hook_validation_started",
+                        handle=tick_hook,
+                        tick_total=total_ticks,
+                        target_ticks=args.hook_validation_ticks,
+                    )
+
+                if tick_hook is not None and hook_counter_start_total is not None:
+                    hook_counter_ticks = total_ticks - hook_counter_start_total
+                    if hook_counter_ticks >= args.hook_validation_ticks:
+                        hook_counter_end_total = total_ticks
+                        hook_validation_match = hook_counter_ticks == hook_ticks_total
+                        removed = m.remove_hook(tick_hook)
+                        log.emit(
+                            "hook_validation_finished",
+                            counter_ticks=hook_counter_ticks,
+                            hook_events=hook_ticks_total,
+                            match=hook_validation_match,
+                            removed=removed,
+                            target_ticks=args.hook_validation_ticks,
+                        )
+                        tick_hook = None
+                        if not removed:
+                            hook_validation_match = False
+                            result = "hook_remove_failed"
+                            copy_screenshot(m, "hook_remove_failed")
+                            break
+                        if not hook_validation_match:
+                            result = "counter_hook_mismatch"
+                            copy_screenshot(m, "counter_hook_mismatch")
+                            break
 
                 relative = total_ticks - stage_tick
                 if stage == "preinput" and relative >= args.preinput_ticks:
@@ -479,8 +526,21 @@ def main() -> int:
                     "host_video_fps": arm_video / arm_wall,
                     "wall_seconds": arm_wall,
                 }
-            counter_hook_match = total_ticks == hook_ticks_total
-            counter_hook_validated = hook_ticks_total > 0 and counter_hook_match
+            hook_counter_stop = (
+                hook_counter_end_total
+                if hook_counter_end_total is not None
+                else total_ticks
+            )
+            hook_counter_ticks = (
+                hook_counter_stop - hook_counter_start_total
+                if hook_counter_start_total is not None
+                else 0
+            )
+            counter_hook_match = hook_validation_match is True
+            counter_hook_validated = (
+                counter_hook_match
+                and hook_counter_ticks >= args.hook_validation_ticks
+            )
             log.emit(
                 "final",
                 result=result,
@@ -494,6 +554,8 @@ def main() -> int:
                 measured_video_frames=video_delta,
                 measured_game_ticks=total_ticks,
                 measured_tick_hook_events=hook_ticks_total,
+                measured_hook_counter_ticks=hook_counter_ticks,
+                hook_validation_target=args.hook_validation_ticks,
                 counter_hook_match=counter_hook_match,
                 counter_hook_validated=counter_hook_validated,
                 overall_observed_tick_rate=game_fps,
