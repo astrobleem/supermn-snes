@@ -11,11 +11,11 @@ MAME side : launch MAME headless with a generated Lua autoboot script that
             redirects PC into work RAM, runs the op followed by `bra *`, masks
             IRQs (SR=$27xx), and reads the frozen post-op state. All vectors are
             batched into one MAME launch.
-Interp side: drive build/interp.sfc via the Mesen Python client. The vector is
-            written into the ROM mailbox at CPU $F400 (TESTFLAG + regs + flags +
-            operand); reset_emulator() runs the test-mode reset stub which loads
-            the mailbox into the (just-cleared) work RAM and single-steps one op
-            via the $7E hook; then read back DP regs / flags / operand.
+Interp side: drive build/interp.sfc via the shared MCP Python client. TESTFLAG at
+            CPU $F7E0 enters a polling single-step loop; each vector is poked into
+            SA-1 IRAM/BW-RAM and its opcode is baked at 68K $07C000. The harness
+            waits for a fresh done marker before reading back registers, flags,
+            and the operand.
 
 Scratch (68K addresses, shared logical space):
   MAME code   $F03000  (work RAM, executable)
@@ -37,7 +37,10 @@ ROMPATH = os.path.join(REPO, "tools/mame-trace/roms")
 NVRAM = os.path.join(REPO, ".mame_mcp/nvram")
 CFG = os.path.join(REPO, ".mame_mcp/cfg")
 INTERP_SFC = os.path.join(REPO, "build/interp.sfc")
-MESEN = "/home/chad/Mesen2/bin/linux-x64/Release/Mesen"
+MESEN = os.environ.get(
+    "SNES_ORACLE_EXE",
+    "/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen",
+)
 
 # scratch
 MAME_CODE = 0xF03000
@@ -59,6 +62,7 @@ MBOX = 0x77E0                         # ROM file offset of the TESTFLAG. The int
                                       # covered by code growth and read permanently
                                       # nonzero => test mode was always-on by accident; the flag now has an
                                       # org-pinned declaration in interp.pasm at $00:F7E0.)
+MAX_STEP_FRAMES = int(os.environ.get("OPTEST_MAX_STEP_FRAMES", "16"))
 
 REGNAMES = ["D0","D1","D2","D3","D4","D5","D6","D7",
             "A0","A1","A2","A3","A4","A5","A6","A7"]
@@ -98,12 +102,18 @@ def mame_run(opwords, oplen, vecs):
         f"prog:write_u16(0x{MAME_CODE+2*i:X},0x{w:04X})" for i,w in enumerate(opwords))
     brasel_addr = MAME_CODE + oplen
     vec_tbl = ",\n".join(lua_vecs)
+    with tempfile.NamedTemporaryFile(
+        "w", prefix=".optest_mame_", suffix=".txt", delete=False, dir=REPO
+    ) as out_file:
+        outpath = out_file.name
+    os.remove(outpath)
+    lua_outpath = outpath.replace("\\", "\\\\").replace('"', '\\"')
     lua = f"""
 KEEP={{}}
 local cpu=manager.machine.devices[":maincpu"]
 local prog=cpu.spaces["program"]
 local st=cpu.state
-local out=io.open("optest_mame.txt","w")
+local out=io.open("{lua_outpath}","w")
 local vecs={{
 {vec_tbl}
 }}
@@ -140,8 +150,6 @@ end)
 """
     with tempfile.NamedTemporaryFile("w", suffix=".lua", delete=False, dir=REPO) as f:
         f.write(lua); script=f.name
-    outpath = os.path.join(REPO, "optest_mame.txt")
-    if os.path.exists(outpath): os.remove(outpath)
     nframes = 60 + 5*len(vecs) + 20
     secs = max(8, nframes//60 + 4)
     cmd=[MAME,"superman","-rompath",ROMPATH,"-video","none","-sound","none",
@@ -150,21 +158,25 @@ end)
          "-nvram_directory",NVRAM,"-cfg_directory",CFG]
     env=os.environ.copy()
     env.setdefault("SDL_VIDEODRIVER","dummy"); env.setdefault("SDL_AUDIODRIVER","dummy")
-    subprocess.run(cmd, cwd=REPO, capture_output=True, timeout=secs+30, env=env)
-    os.remove(script)
-    res={}
-    if os.path.exists(outpath):
-        for line in open(outpath):
-            m=re.match(r"VEC (\d+) (.*)", line.strip())
-            if not m: continue
-            idx=int(m.group(1))-1
-            d={}
-            for tok in m.group(2).split():
-                k,_,vv=tok.partition("=")
-                if k=="OPND": d["OPND"]=bytes.fromhex(vv)
-                elif k=="CCR": d["CCR"]=int(vv,16)
-                else: d[k]=int(vv,16)
-            res[idx]=d
+    try:
+        subprocess.run(cmd, cwd=REPO, capture_output=True, timeout=secs+30, env=env)
+        res={}
+        if os.path.exists(outpath):
+            with open(outpath) as output:
+                for line in output:
+                    m=re.match(r"VEC (\d+) (.*)", line.strip())
+                    if not m: continue
+                    idx=int(m.group(1))-1
+                    d={}
+                    for tok in m.group(2).split():
+                        k,_,vv=tok.partition("=")
+                        if k=="OPND": d["OPND"]=bytes.fromhex(vv)
+                        elif k=="CCR": d["CCR"]=int(vv,16)
+                        else: d[k]=int(vv,16)
+                    res[idx]=d
+    finally:
+        if os.path.exists(script): os.remove(script)
+        if os.path.exists(outpath): os.remove(outpath)
     return [res.get(i) for i in range(len(vecs))]
 
 # ---------------------------------------------------------------------------
@@ -190,17 +202,59 @@ def _make_test_sfc(opwords):
     f.write(data); f.close()
     return f.name
 
+def _prepare_interp_session(m):
+    """Pause coherently and wait until the TESTFLAG reset path reaches test mode."""
+    m.pause()
+    for _ in range(MAX_STEP_FRAMES):
+        mode=m.read_memory(DP_SPACE, 0x7E, 1)[0]
+        if mode==1:
+            return
+        m.run_frames(1)
+    raise RuntimeError("interpreter did not enter TESTFLAG single-step mode")
+
+def _run_single_step(m):
+    """Run through the done marker, even when an op straddles a video frame.
+
+    A single run_frames(1) is not a completion primitive: a value-dependent op
+    can begin near a frame boundary and finish in the next frame.  Reading and
+    rewriting its state at that boundary corrupts the in-flight instruction and
+    commonly turns the following vector into $DEAD.  Clear the stale marker,
+    submit one request, and wait a bounded number of frames for a fresh marker.
+    """
+    m.write_memory(DP_SPACE, 0x4E, "0000")
+    m.write_memory(DP_SPACE, 0xA0, "0100")
+    for frames in range(1, MAX_STEP_FRAMES+1):
+        m.run_frames(1)
+        stop=m.read_memory(DP_SPACE, 0x4E, 2)
+        value=stop[0]|(stop[1]<<8)
+        if value:
+            return value, frames
+    raise RuntimeError(
+        f"single step exceeded {MAX_STEP_FRAMES} video frames; session state is unsafe"
+    )
+
+def _configure_oracle_environment():
+    is_nexen=os.path.basename(MESEN)=="Nexen"
+    root="/home/chad/.dotnet10" if is_nexen else "/home/chad/.dotnet8"
+    other="/home/chad/.dotnet8" if is_nexen else "/home/chad/.dotnet10"
+    os.environ["DOTNET_ROOT"]=root
+    path=[p for p in os.environ.get("PATH","").split(":") if p and p not in (root,other)]
+    os.environ["PATH"]=":".join([root,other,*path])
+    if is_nexen:
+        import mesen_mcp.session as _session
+        _session.validate_mesen_build = lambda *_args, **_kwargs: None
+
 def interp_run(opwords, oplen, vecs):
     sys.path.insert(0,"/home/chad/Mesen2/python")
-    os.environ.setdefault("DOTNET_ROOT","/home/chad/.dotnet8")
-    os.environ["PATH"]="/home/chad/.dotnet8:/home/chad/.dotnet10:"+os.environ.get("PATH","")
+    _configure_oracle_environment()
     from mesen_mcp import McpSession
     sfc=_make_test_sfc(opwords)
     out=[]
     try:
         with McpSession(rom=sfc, mesen=MESEN, port=7339, boot_wait=3.0) as m:
+            _prepare_interp_session(m)
             for v in vecs:
-                # poke vector state directly into the (running, idle) interpreter
+                # Poke vector state directly into the paused test-idle interpreter.
                 m.write_memory(DP_SPACE, 0x00, _regblk(v).hex())
                 pc=INTERP_CODE_68K
                 m.write_memory(DP_SPACE, 0x40,
@@ -210,13 +264,11 @@ def interp_run(opwords, oplen, vecs):
                     m.write_memory(DP_SPACE, addr, bytes([val,0]).hex())
                 m.write_memory(DP_SPACE, 0x7C, bytes([0x07,0]).hex())   # SR mask
                 m.write_memory(OPND_SPACE, OPND_ADDR, v.opnd.hex())
-                m.write_memory(DP_SPACE, 0xA0, bytes([0x01,0]).hex())   # go-flag
-                m.run_frames(1)
+                stop_value, step_frames = _run_single_step(m)
                 regblk=m.read_memory(DP_SPACE, 0x00, 0x40)
                 flagblk=m.read_memory(DP_SPACE, 0x60, 0x20)   # $60..$7F
                 xbyte=m.read_memory(DP_SPACE, 0xA2, 1)        # X flag
                 opnd=m.read_memory(OPND_SPACE, OPND_ADDR, 16)
-                stopf=m.read_memory(DP_SPACE, 0x4E, 2)
                 pcblk=m.read_memory(DP_SPACE, 0x40, 4)
                 uspblk=m.read_memory(DP_SPACE, 0xA4, 4)       # USP slot ($A4/$A6)
                 d={}
@@ -234,7 +286,8 @@ def interp_run(opwords, oplen, vecs):
                 X=1 if xbyte[0] else 0
                 d["CCR"]=ccr_bits(X,N,Z,V,C)
                 d["OPND"]=bytes(opnd)
-                d["_stopped"]=(stopf[0]|(stopf[1]<<8))
+                d["_stopped"]=stop_value
+                d["_step_frames"]=step_frames
                 out.append(d)
     finally:
         os.remove(sfc)

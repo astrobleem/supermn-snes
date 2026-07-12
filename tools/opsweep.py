@@ -13,7 +13,7 @@ Output:
 
 Both engines run in a SINGLE launch each: every "shot" (op+vector) is baked into
 its own ROM slot for the interpreter and re-written at $F03000 per-vector for
-MAME, so the whole sweep is one MAME process + one Mesen session.
+MAME, so the whole sweep is one MAME process + one Nexen session.
 
 Excluded by construction (documented limitations, NOT silent gaps):
   * A7/USP: MAME's readback is unreliable -> A7 is not diffed. EA registers use
@@ -79,12 +79,18 @@ def mame_run_shots(shots):
         lua_vecs.append(f"{{sr=0x{0x2700|v.ccr:04X}, "
                         f"setup=function() {regset}; {opw}; {spin}; {opnd_writes} end}}")
     vec_tbl=",\n".join(lua_vecs)
+    with tempfile.NamedTemporaryFile(
+        "w", prefix=".opsweep_mame_", suffix=".txt", delete=False, dir=OT.REPO
+    ) as out_file:
+        outpath=out_file.name
+    os.remove(outpath)
+    lua_outpath=outpath.replace("\\", "\\\\").replace('"', '\\"')
     lua=f"""
 KEEP={{}}
 local cpu=manager.machine.devices[":maincpu"]
 local prog=cpu.spaces["program"]
 local st=cpu.state
-local out=io.open("opsweep_mame.txt","w")
+local out=io.open("{lua_outpath}","w")
 local vecs={{
 {vec_tbl}
 }}
@@ -116,8 +122,6 @@ end)
 """
     with tempfile.NamedTemporaryFile("w", suffix=".lua", delete=False, dir=OT.REPO) as f:
         f.write(lua); script=f.name
-    outpath=os.path.join(OT.REPO,"opsweep_mame.txt")
-    if os.path.exists(outpath): os.remove(outpath)
     nframes=30+4*len(shots)+20
     secs=max(8, nframes//60 + 6)
     cmd=[MAME,"superman","-rompath",ROMPATH,"-video","none","-sound","none",
@@ -126,24 +130,28 @@ end)
          "-nvram_directory",NVRAM,"-cfg_directory",CFG]
     env=os.environ.copy()
     env.setdefault("SDL_VIDEODRIVER","dummy"); env.setdefault("SDL_AUDIODRIVER","dummy")
-    subprocess.run(cmd, cwd=OT.REPO, capture_output=True, timeout=secs+40, env=env)
-    os.remove(script)
-    res={}
-    if os.path.exists(outpath):
-        for line in open(outpath):
-            m=re.match(r"VEC (\d+) (.*)", line.strip())
-            if not m: continue
-            idx=int(m.group(1))-1; d={}
-            for tok in m.group(2).split():
-                k,_,vv=tok.partition("=")
-                if k=="OPND": d["OPND"]=bytes.fromhex(vv)
-                elif k=="CCR": d["CCR"]=int(vv,16)
-                else: d[k]=int(vv,16)
-            res[idx]=d
+    try:
+        subprocess.run(cmd, cwd=OT.REPO, capture_output=True, timeout=secs+40, env=env)
+        res={}
+        if os.path.exists(outpath):
+            with open(outpath) as output:
+                for line in output:
+                    m=re.match(r"VEC (\d+) (.*)", line.strip())
+                    if not m: continue
+                    idx=int(m.group(1))-1; d={}
+                    for tok in m.group(2).split():
+                        k,_,vv=tok.partition("=")
+                        if k=="OPND": d["OPND"]=bytes.fromhex(vv)
+                        elif k=="CCR": d["CCR"]=int(vv,16)
+                        else: d[k]=int(vv,16)
+                    res[idx]=d
+    finally:
+        if os.path.exists(script): os.remove(script)
+        if os.path.exists(outpath): os.remove(outpath)
     return [res.get(i) for i in range(len(shots))]
 
 # ---------------------------------------------------------------------------
-# Interpreter — bake every distinct shot at its own ROM slot, one Mesen session.
+# Interpreter — bake every distinct shot at its own ROM slot, one Nexen session.
 def _regblk(v):
     b=bytearray(0x40)
     for i,n in enumerate(REGNAMES):
@@ -153,13 +161,10 @@ def _regblk(v):
 
 def _make_sweep_sfc(shots):
     data=bytearray(open(INTERP_SFC,"rb").read())
-    data[OT.MBOX]=0x01; data[OT.MBOX+1]=0x00            # TESTFLAG=1; OT.MBOX is the SA-1 file view ($77E0)
-    # The interp runs on the SA-1, which reads the TESTFLAG ($00:F600) via the LoROM mirror
-    # -> file $7600. The flag was relocated from $00:F400 (= file $7400) because that byte fell
-    # inside the entry_20e8 escape body and was permanently nonzero, which forced test mode on
-    # and made the production cold-boot (notest) path unreachable. Without setting file $7600 the
-    # SA-1 never sees TESTFLAG and just free-runs the game.
-    data[0x77E0]=0x01; data[0x77E1]=0x00
+    # TESTFLAG moved twice after code growth covered the older $F400/$F600
+    # locations.  Its pinned SA-1 file view is now $77E0; setting any older
+    # location silently free-runs the production game instead of the test loop.
+    data[OT.MBOX]=0x01; data[OT.MBOX+1]=0x00
     for k,s in enumerate(shots):
         s.slot=k
         off=SLOT_BASE_ROMOFF + k*SLOT_STRIDE
@@ -171,14 +176,15 @@ def _make_sweep_sfc(shots):
 
 def interp_run_shots(shots):
     sys.path.insert(0,"/home/chad/Mesen2/python")
-    os.environ.setdefault("DOTNET_ROOT","/home/chad/.dotnet8")
-    os.environ["PATH"]="/home/chad/.dotnet8:/home/chad/.dotnet10:"+os.environ.get("PATH","")
+    OT._configure_oracle_environment()
     from mesen_mcp import McpSession
     sfc=_make_sweep_sfc(shots)
     out=[]
+    wait_counts={}
     try:
         with McpSession(rom=sfc, mesen=MESEN, port=7341, boot_wait=3.0) as m:
-            for s in shots:
+            OT._prepare_interp_session(m)
+            for shot_index,s in enumerate(shots,1):
                 v=s.vec
                 pc=SLOT_BASE_68K + s.slot*SLOT_STRIDE
                 m.write_memory(DP_SPACE, 0x00, _regblk(v).hex())
@@ -189,13 +195,12 @@ def interp_run_shots(shots):
                     m.write_memory(DP_SPACE, addr, bytes([val,0]).hex())
                 m.write_memory(DP_SPACE, 0x7C, bytes([0x07,0]).hex())
                 m.write_memory(OPND_SPACE, OPND_ADDR, v.opnd.hex())
-                m.write_memory(DP_SPACE, 0xA0, bytes([0x01,0]).hex())
-                m.run_frames(1)
+                stop_value, step_frames=OT._run_single_step(m)
+                wait_counts[step_frames]=wait_counts.get(step_frames,0)+1
                 regblk=m.read_memory(DP_SPACE, 0x00, 0x40)
                 flagblk=m.read_memory(DP_SPACE, 0x60, 0x20)
                 xbyte=m.read_memory(DP_SPACE, 0xA2, 1)
                 opnd=m.read_memory(OPND_SPACE, OPND_ADDR, 16)
-                stopf=m.read_memory(DP_SPACE, 0x4E, 2)
                 pcblk=m.read_memory(DP_SPACE, 0x40, 4)
                 d={"PC":pcblk[0]|(pcblk[1]<<8)|(pcblk[2]<<16)|(pcblk[3]<<24)}
                 for i,n in enumerate(REGNAMES):
@@ -204,10 +209,15 @@ def interp_run_shots(shots):
                 Z=1 if flagblk[0] else 0; C=1 if flagblk[0xE] else 0
                 N=1 if flagblk[0x10] else 0; V=1 if flagblk[0x12] else 0; X=1 if xbyte[0] else 0
                 d["CCR"]=ccr_bits(X,N,Z,V,C); d["OPND"]=bytes(opnd)
-                d["_stopped"]=(stopf[0]|(stopf[1]<<8))
+                d["_stopped"]=stop_value
+                d["_step_frames"]=step_frames
                 out.append(d)
+                if shot_index%100==0 or shot_index==len(shots):
+                    print(f"  Nexen: {shot_index}/{len(shots)} vectors",flush=True)
     finally:
         os.remove(sfc)
+    waits=", ".join(f"{frames}f={count}" for frames,count in sorted(wait_counts.items()))
+    print(f"  Nexen step waits: {waits}",flush=True)
     return out
 
 # ---------------------------------------------------------------------------
