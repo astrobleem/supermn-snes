@@ -2,7 +2,7 @@
 
 This repository ports Taito's 68000-based Superman arcade game to SNES/SA-1 with an
 interpret-cold / native-hot architecture. Treat it as a reverse-engineering project with two
-independent oracles: MAME 0.287 for arcade truth and the MCP-enabled Mesen fork for SNES truth.
+independent oracles: MAME 0.287 for arcade truth and the MCP-enabled Nexen fork for SNES truth.
 
 ## Read this first
 
@@ -69,34 +69,38 @@ Generated outputs and captures may be valuable evidence. Do not delete or overwr
 
 ## Toolchain on this host
 
-- .NET 8: `/home/chad/.dotnet8` (Mesen and its Python harness)
-- .NET 10: `/home/chad/.dotnet10` (Poppy, Peony, Pansy)
+- .NET 8: `/home/chad/.dotnet8` (legacy Mesen build and the Python client package)
+- .NET 10: `/home/chad/.dotnet10` (Nexen, Poppy, Peony, Pansy)
 - Poppy: `/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll`
 - Peony: `/home/chad/peony/src/Peony.Cli/bin/Release/net10.0/Peony.Cli.dll`
 - Pansy source: `/home/chad/pansy`
-- Mesen fork: `/home/chad/Mesen2/bin/linux-x64/Release/Mesen`
+- Nexen MCP fork (project oracle):
+  `/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen`
+- Older Mesen MCP checkout (legacy/compatibility): `/home/chad/Mesen2/bin/linux-x64/Release/Mesen`
 - `mesen_mcp`: `/home/chad/Mesen2/python`
 - MAME: `/snap/bin/mame`, pinned to 0.287
 - MAME MCP: `/home/chad/mame-mcp`
 - TAD compiler: `/home/chad/terrific-audio-driver/target/release/tad-compiler`
 - Python 3 with Capstone M68K support
 
-The global Codex MCP registrations are `mame` and `mesen-inproc`. Mesen must run with
-`DOTNET_ROOT=/home/chad/.dotnet8` and that directory first in `PATH`.
+The global Codex MCP registrations should be `mame` and `nexen-inproc`. Nexen uses the project
+shim `tools/nexen_mcp_bridge.py`; its transport still reads the historical `MESEN_*` environment
+variable names. Legacy Mesen needs `DOTNET_ROOT=/home/chad/.dotnet8`; Nexen harnesses use .NET 10
+or the self-contained publish above.
 
 ## Working rules
 
 - Do not build just to orient or inspect. Building rewrites gitignored binaries and ROM outputs.
 - When implementation is requested, use the documented build path (`bash tools/build_interp.sh`)
   and validate in proportion to the touched risk. Never claim success from assembly alone.
-- MAME is the 68000/game-behavior oracle; Mesen is the SNES/SA-1/PPU oracle. Prefer differential
+- MAME is the 68000/game-behavior oracle; Nexen is the SNES/SA-1/PPU oracle. Prefer differential
   evidence over visual plausibility or emulator-only reasoning.
 - Measure native escape firing with SA-1 execution hooks at the actual execution bank. Escape-bank
   bodies execute at `$92+`; a bare bank-$00 HOOKTEST can falsely report zero. Calibrate with a
   known-firing same-bank hook.
 - Do not trust `$07xx` IRAM counters unless their ownership was proven; game state can overwrite
   them. The always-on PC ring is at IRAM `$0400-$05FF`, pointer `$48`.
-- Pause Mesen before coherent multi-read inspection. Use fresh ports after wedged runs. Long scripts
+- Pause Nexen before coherent multi-read inspection. Use fresh ports after wedged runs. Long scripts
   may need `socket_timeout=120` and background execution with output polling.
 - MAME Lua taps must be retained in globals. Snap MAME cannot read `.claude` paths; keep runnable
   trace scripts/artifacts under the project. Use `SDL_VIDEODRIVER=dummy` for headless MAME.

@@ -36,18 +36,20 @@ Last updated: June 25, 2026. **Read this before migrating to a new machine/works
 
 | Tool | Path (current) | Version | Purpose | Rebuild |
 |---|---|---|---|---|
-| **.NET 8** runtime | `/home/chad/.dotnet8` | 8.x | runs the Mesen Python harness | install SDK 8 |
-| **.NET 10** runtime/SDK | `/home/chad/.dotnet10` | 10.x | runs/builds the Game Garden suite | install SDK 10 |
+| **.NET 8** runtime | `/home/chad/.dotnet8` | 8.x | runs the legacy Mesen build / Python client environment | install SDK 8 |
+| **.NET 10** runtime/SDK | `/home/chad/.dotnet10` | 10.x | runs/builds Nexen and the Game Garden suite | install SDK 10 |
 | **Poppy** (65816 assembler) [Game Garden] | `/home/chad/poppy` → `src/Poppy.CLI/bin/Release/net10.0/poppy.dll` | source build | assembles `interp.pasm`/`video.pasm`; emits `.pansy` symbols; SNES target, `.sa1_enabled` | clone `TheAnsarya/poppy`, `dotnet build -c Release` (.NET 10) |
 | **Peony** (68K disassembler) [Game Garden] | `/home/chad/peony` | source build, .NET 10 | recursive-descent disassembly (G1 coverage) | clone `TheAnsarya/peony`, `dotnet build Peony.Cli` — single-threaded, slow on big output |
-| **Mesen2** (SNES emulator) | `/home/chad/Mesen2/bin/linux-x64/Release/Mesen` | source build | real-PPU SNES validation oracle | build Mesen2 from source (linux-x64 Release) |
-| **mesen_mcp** (Python pkg) | `/home/chad/Mesen2/python` (`mesen_mcp/`) | egg-installed | drives Mesen headless from Python | `pip install -e /home/chad/Mesen2/python` |
+| **Nexen** (SNES emulator, primary oracle) | `/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen` | `mcp-server` source build | real-PPU + SA-1 cycle/debug oracle used by the newest harnesses | build `/home/chad/Nexen` from its `mcp-server` branch |
+| **Mesen2** (legacy compatibility checkout) | `/home/chad/Mesen2/bin/linux-x64/Release/Mesen` | source build | older MCP-compatible PPU oracle used by historical scripts | build Mesen2 from source (linux-x64 Release) |
+| **mesen_mcp** (Python pkg) | `/home/chad/Mesen2/python` (`mesen_mcp/`) | editable install | shared Python client/stdio transport for Nexen and Mesen | `pip install -e /home/chad/Mesen2/python` |
 | **MAME** | `/snap/bin/mame` (snap) | **0.287 (pinned)** | arcade ground-truth oracle; trace/playback determinism needs THIS version | snap/build mame0287 |
 | **mame-mcp** (server) | `/home/chad/mame-mcp` | — | MAME MCP server (`mame` tool) | per its own README |
 | **Python 3 + capstone** | system | capstone m68k | `tools/transpile.py` (68K decode) | `pip install capstone` |
 
-The two **MCP servers** (`mame`, `mesen`) are registered in the Claude/agent config, not in the
-repo; on migration, re-register them pointing at the new paths.
+The two **MCP servers** (`mame`, `nexen-inproc`) are registered in the agent config, not in the
+repo. Nexen uses `tools/nexen_mcp_bridge.py` because the upstream Python package's validator only
+recognizes Mesen's split-file layout, while Nexen is a self-contained publish.
 
 ## Build commands
 
@@ -60,14 +62,14 @@ bash tools/build_interp.sh        # -> build/interp.sfc (32KB interp + 68K image
                                   #    samples first per tools/sound/README.md §P3 pipeline)
 #    internally: dotnet $POPPY ... interp.pasm/video.pasm ; python3 tools/build_interp_rom.py
 
-# 2. Correctness sweep (needs MAME + Mesen MCP running):
+# 2. Correctness sweep (needs MAME + Nexen MCP running):
 python3 tools/opsweep.py          # SA-1-aware op x mode sweep vs MAME (gate: 782/782)
 
 # 3. Transpile a hot 68K function to a native escape (needs build/interp.sfc + capstone):
 python3 tools/transpile.py 025110            # -> entry_25110 (.pasm fragment on stdout)
 python3 tools/transpile.py 0020e8 --video    # video function (shadow stores)
 
-# 4. Validate an escape (lock-step vs MAME; needs Mesen MCP + a captured flytick):
+# 4. Validate an escape (lock-step vs MAME; needs Nexen MCP + a captured flytick):
 export SUPERMN_SCRATCH=<scratch-dir-with-flytick/>
 python3 tools/flyval.py 7000
 ```
@@ -75,8 +77,10 @@ python3 tools/flyval.py 7000
 `tools/build_interp.sh` hardcodes: `DOTNET_ROOT=/home/chad/.dotnet10`, the Poppy dll path, and
 `cd "$(dirname "$0")/.."`. `tools/build_interp_rom.py` reads `data/superman_m68k.bin`,
 `tools/mame-trace/gfx1.bin`, `src/interp.bin`, `src/video.bin` (relative paths — OK if you keep
-the repo layout). The Python harnesses (`opsweep`/`flyval`/`stream_profile`) hardcode
-`/home/chad/.dotnet8`, the Mesen binary, and `sys.path.insert(0,'/home/chad/Mesen2/python')`.
+the repo layout). Python harnesses are historically mixed: current cycle/lockstep tools generally
+launch `/home/chad/Nexen`, while older rendering and compatibility scripts launch
+`/home/chad/Mesen2`; both import the client from `/home/chad/Mesen2/python`. Check the chosen
+harness before interpreting a result.
 
 ## Re-deriving the gitignored assets from the arcade ROM
 
@@ -101,16 +105,17 @@ When moving off this (failing) drive:
    playthrough recordings (`inp/superman_play.inp`, `inp/vplay.inp`) ARE in git now; old
    cross-version recordings (0.185/0.193) were deleted (won't replay on 0.287).
 3. **Recreate the toolchain** (table above): .NET 8 + 10; build the **Game Garden** suite (Poppy,
-   Peony, + others) from its upstream; build Mesen2 from source; `pip install -e Mesen2/python`;
+   Peony, + others) from its upstream; build Nexen's `mcp-server` branch (and Mesen2 only for legacy
+   script compatibility); `pip install -e Mesen2/python`;
    install MAME **0.287** (version-critical); `pip install capstone`.
 4. **Fix the hardcoded paths.** If the new home prefix differs from `/home/chad`, the tools break.
    Practical fix — repo-wide replace the prefixes:
    ```sh
    grep -rl '/home/chad' tools/ | xargs sed -i 's#/home/chad#<NEW_HOME>#g'
    ```
-   then re-point any tool whose subpath changed (`.dotnet8`/`.dotnet10`, `Mesen2`, `poppy`,
+   then re-point any tool whose subpath changed (`.dotnet8`/`.dotnet10`, `Nexen`, `Mesen2`, `poppy`,
    `mame-mcp`). **This is the migration's biggest hazard** — the paths are not parameterized.
-5. **Re-register the MCP servers** (`mame`, `mesen`) at the new paths.
+5. **Re-register the MCP servers** (`mame`, `nexen-inproc`) at the new paths.
 6. **Smoke test:** `bash tools/build_interp.sh` (should write `build/interp.sfc`, 4194304 bytes),
    then `python3 tools/opsweep.py` (expect 782/782).
 
@@ -119,10 +124,10 @@ When moving off this (failing) drive:
   scattered across `tools/*.py` + `tools/*.sh`. A worthwhile (deferred) hardening: route them
   through env vars (`DOTNET8_ROOT`, `MESEN_BIN`, `MESEN_PY`, `POPPY_DLL`, `MAME_BIN`) with the
   current paths as defaults. Until then, the find/replace in step 4 is the migration path.
-- **Two .NET versions** are required simultaneously (8 for Mesen's harness, 10 for Poppy/Peony) —
-  don't consolidate without testing.
+- **Two .NET versions** are required simultaneously (8 for legacy Mesen/client compatibility,
+  10 for Nexen and Poppy/Peony) — don't consolidate without testing.
 - **MAME 0.287 is pinned** — trace/`.inp`-playback determinism depends on it; a different MAME
   version desyncs recordings.
-- **Mesen runs need a display** (foreground, ~90 s/run); background/headless fails here. Use fresh
-  ports each run (they wedge). See the `mesen-mcp-validation` memory.
+- **Emulator runs need a display unless the selected Nexen headless path is proven for that
+  harness.** Use fresh ports each run (they wedge). See the `mesen-mcp-validation` memory.
 - Build outputs `src/*.bin` and `build/*.sfc` are gitignored — always rebuild after a clone.
