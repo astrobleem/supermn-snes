@@ -93,6 +93,13 @@ July 12 recovery evidence:
   from the `origin/main` merge tree. Raw sound/build logs are
   `build/recovery-20260712/sound-build.log` and
   `build/recovery-20260712/build-9671faf.log`.
+- **R4 re-record (2026-07-19):** after the F3 (`ea_extw`) and F4
+  (`op_cmpw_d16_dn`) interpreter fixes, the canonical 4 MiB ROM rebuilds
+  reproducibly at commit `4034f1e` to SHA-256
+  `31c5dff4e7364f1dfd867e284798c5af5688e90cbe22fa69bc29bba249eed438`
+  (build log `build/recovery-20260712/build-4034f1e.log`; supersedes
+  `183c53f6...` and the intermediate F3-only `a36c33e6...`). Tool versions
+  unchanged from the July 12 record.
 - Host tool versions: .NET `8.0.422` and `10.0.301`, Poppy `0.1.0`, Peony
   `1.0.0+aa8c392`, MAME `0.287`, TAD compiler `0.3.0`, Python `3.12.3`, and Capstone `5.0.7`.
   Nexen source is `177e8d567` and the tested binary SHA-256 is
