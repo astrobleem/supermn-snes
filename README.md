@@ -9,18 +9,25 @@ hardware, while hot paths are migrated to native 65816 over time. Every componen
 validated **differentially against ground truth** — MAME for the arcade side, a real
 SNES PPU (via Nexen) for the target side.
 
-> ## Recovery status (July 12, 2026)
+> ## Release status (July 19, 2026) — technical demo, final
 >
-> This project is **not currently playable or shippable**. Earlier status text promoted
-> partial injected-tick measurements and isolated subsystem validations into project-level
-> claims. Read [CONFESSION.md](CONFESSION.md) first; it supersedes optimistic statements in
-> older status and planning sections. Recovery established one canonical build and measured a
-> faithful production cold boot at **1.3237 game-fps after arming** (22.7x short of the 30 Hz
-> target). A long same-boot observation also reproduced the level background after its palette
-> fade. R5 found that 87.7% of a settled gameplay tick is the shipped idle clamp, but its fast
-> NMI/WAI replacement reproduced the known `$080100`/`$DEAD` ordering failure in gameplay. The
-> project is therefore scoped as a technical demo unless a safe whole-system design measures at
-> 358K cycles/tick or below. Audio still needs listening.
+> This project ships as an **honestly-scoped technical demo**: the full original game
+> logic runs on SNES/SA-1 hardware, with real graphics, input, and now a fully organic
+> music path — at **sub-realtime speed** (canonical post-arm rate 1.3237 game-fps,
+> ~22.7x short of the 30 Hz target). R5 closed the performance question: 87.7% of a
+> settled gameplay tick is the shipped idle clamp, and both faster pacing designs
+> reproduced the `$080100`/`$DEAD` coroutine-ordering failure. Details in
+> [docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md). Read
+> [CONFESSION.md](CONFESSION.md) for the July 12 status correction that led here.
+>
+> **R4 (sound truth) closed July 19**: two interpreter fast-path bank bugs — silently
+> killing *every* organic sound trigger since the beginning — were found and fixed
+> (`ea_extw` RAM-PC ext-word fetch; `op_cmpw_d16_dn` ROM-operand read). A single
+> no-injection production cold boot now produces the complete arcade organic command
+> chain: boot verbs, attract music at the arcade-correct moment, coin jingles, and the
+> round-start `$32`+`$06`×3 burst 51 ticks after START — arcade parity. Canonical ROM
+> SHA-256 `31c5dff4…` (reproducible at commit `4034f1e`). Full narrative:
+> `build/recovery-20260712/r4-sound-truth/R4_REPORT.md` (evidence dir is local-only).
 
 > ⚠️ **No copyrighted ROM data is included.** This repository contains only original
 > source, tooling, and documentation. You must supply your own legally-obtained
@@ -37,7 +44,7 @@ SNES PPU (via Nexen) for the target side.
 | **Realtime budget** | ❌ **not solved** — canonical post-arm rate is **1.3237 game-fps**, about **45.3x short of 60 Hz / 22.7x short of 30 Hz**; R5 reconciled the missing cost as the `$0818` wait, but the 0.927M-cycle NMI and conservative 2.17M-cycle supervisor labs both failed with `$080100` in gameplay |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
-| Audio (YM2610 → SNES TAD) | ⚠️ integrated and byte/oracle-validated, but never completed as a by-ear arcade comparison; most SFX and expression remain incomplete |
+| Audio (YM2610 → SNES TAD) | ✅ **music organic end-to-end** (R4, 2026-07-19): all 21 tracks byte/oracle-validated AND the real game triggers fire organically (boot/attract/coin/round-start, arcade parity); 21 side-by-side listening pairs recorded (by-ear sign-off pending). SFX remain placeholder (2 mapped; authoring never scoped) |
 
 See **[CONFESSION.md](CONFESSION.md)** for the authoritative correction and
 **[RECOVERY.md](RECOVERY.md)** for the active recovery campaign. `STATUS.md` and
@@ -116,6 +123,65 @@ data/       extracted assets (gitignored — derived from the arcade ROM)
 build/      build outputs (gitignored)
 *.md        design notes, risk docs, verdicts, status
 ```
+
+## Handoff (July 19, 2026)
+
+This section is the complete picture for anyone (including a future maintainer or
+agent) picking the project up.
+
+### What you have
+
+- **Canonical branch**: `main` (= the `recovery/canonicalize-20260712` line). Canonical
+  ROM: `build/interp.sfc`, SHA-256 `31c5dff4e7364f1dfd867e284798c5af5688e90cbe22fa69bc29bba249eed438`,
+  reproducible via `bash tools/build_interp.sh` at commit `4034f1e` (R0 provenance in
+  [RECOVERY.md](RECOVERY.md)). Pre-recovery tips are preserved as local `archive/*` refs.
+- **A complete, oracle-validated MC68000 interpreter** on the SA-1 (opsweep 782/782,
+  optest 154/154, lock-step differentials), ~25 validated native escapes, a working
+  transpiler, and the full validation harness suite (`tools/README.md`).
+- **Working demo**: boots the real game from the real 68K reset vector, renders, takes
+  input, plays music organically, runs gameplay — at ~1.3 game-fps.
+- **Oracles**: MAME 0.287 (arcade) and the MCP-enabled Nexen fork (SNES/SA-1/PPU).
+  Emulator-harness tribal knowledge: [docs/INTERP_DEBUG_AND_GOTCHAS.md](docs/INTERP_DEBUG_AND_GOTCHAS.md)
+  — read it first; every item in it cost hours-to-days.
+
+### What is settled (do not re-litigate without new evidence)
+
+- **30/60 fps is out of reach for this architecture** — R5's verdict
+  ([docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md)): the idle
+  clamp protects a real producer/consumer ordering contract; both faster pacing designs
+  derail deterministically. The credible (unproven) path to realtime is contiguous
+  AOT/HLE compilation of whole call trees, a ground-up campaign (~2.7× ISA floor).
+- **C-Chip**: solved via boot patch + input mailbox; no MCU emulation needed.
+- **Sound architecture**: 68K single-byte triggers → SA-1 ring copy → 5A22 TAD/SPC.
+  Organic path verified end-to-end on the canonical ROM (R4).
+
+### Open items, in priority order
+
+1. **By-ear music sign-off** (owner: Chad): listening pairs in
+   `build/recovery-20260712/r4-sound-truth/{arcade-ref,snes-tracks}/` and the organic
+   session WAV in `.../organic-fixed3/`. Classification table in `R4_REPORT.md` §4.
+2. **rc_copy boot-hardcode decision**: `src/video.pasm` still hardcodes
+   `Tad_LoadSong(1)` at power-on (predates the organic path; arcade is silent until
+   ~13 s). Removing it is a one-liner + rebuild + one organic re-check.
+3. **F4-class sibling audit**: `op_movb_d16_dn`, the cmpi-`(d16,An)` family, and any
+   other `$400000,x` fast-path READ whose An can hold a ROM pointer (two bugs of this
+   class each silently corrupted the game for months — see the gotchas doc, "FAST-PATH
+   DATA reads" section, which includes the forensic recipe that cracks them).
+4. **Crash-freedom soak**: the `$AC=$2000` clamp has long soak evidence but no proof;
+   an hours-long armed free-run on the release ROM would harden the demo claim.
+5. **Same-state MAME graphics fidelity**: still an open validation (the pre-recovery
+   reference capture was lost); needs a fresh MAME state transplant + pixel diff.
+6. **SFX authoring** (optional content phase): the arcade SFX vocabulary (`$1b–$7f`)
+   is mapped but unauthored; only 2 placeholder SFX exist.
+7. **Real-hardware test** (optional): the demo targets emulators; FXPak/SA-1 hardware
+   has never been tried.
+
+### The next port
+
+The toolchain (interpreter core, transpiler, harnesses, methodology) is deliberately
+game-agnostic. The pinned next target is **Gigandes** (Taito X, same 68K architecture) —
+see [METHODOLOGY.md](METHODOLOGY.md) for the reusable recipe and the gotchas doc for
+everything that transfers.
 
 ## License / legal
 
