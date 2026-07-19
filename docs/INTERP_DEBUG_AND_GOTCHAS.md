@@ -52,6 +52,50 @@ overlap means the game overwrites them (the "ce4t fires 63451×" artifact). Meas
 with SA-1 exec-hooks (HOOKTEST) or Mesen-side sampling. Purpose-placed counters in the
 `$0760+` range are fine ONLY if you verified nothing else writes there.
 
+### RAM-resident 68K code: THREE fetch paths must all be bank-aware
+The game copies helpers into work RAM and executes them (PC bank `$F0`, e.g. the
+sound enqueuer at `$f01b20` reached via `$2d8a: jmp $1b20(a5)`). The interp has
+THREE instruction-stream read paths, and each needs the `$F0 → SNES bank $40`
+special case, not the ROM `+$C1` mapping:
+1. the iloop opcode fetch (has it),
+2. `rdw2/rdw4/rdw6` via the `[$56]` fetch pointer (inherits it),
+3. **`ea_extw` — the EA engine's own ext-word fetch (MISSED it until 2026-07-18)**:
+   its unconditional `adc #$00C1` sent RAM-PC ext-word reads to open bus ($B1) —
+   garbage d16/immediates for every EA-engine instruction executed from RAM. This
+   silently killed ALL organic sound triggers for months (masked by the rc_copy
+   boot-hardcoded attract song). Fixed: byte-neutral stub at `ea_extw` ($00:B83F)
+   → bank-aware body `eaw5_fix` in escbank5 `$99:F700` (jml-back literal $00B843 —
+   regenerate if ea_extw ever moves). Lesson: when adding ANY new instruction-stream
+   read path, handle RAM PCs; when debugging "RAM code runs but does the wrong
+   thing", suspect ext-word/immediate fetches before the opcode decode.
+
+### FAST-PATH DATA reads must be bank-aware too (the F4 lesson, 2026-07-19)
+The sibling class of the ea_extw bug, on the DATA side: inline fast-path
+handlers (added for speed) that compute an EA and read `lda $400000,x`
+UNCONDITIONALLY assume the operand lives in 68K work RAM ($F0xxxx→$40:lo16).
+`op_cmpw_d16_dn` did exactly this — correct for the usual a5/a6-relative
+game state, WRONG when An holds a ROM pointer (the music engine compares
+against its ROM table at $6ab4 via a2): it read BW-RAM garbage, the compare
+false-matched, and the round-start music send silently skipped. Fixed with
+the same byte-neutral stub → escbank5 bank-aware body pattern (`cmpw5_fix`
+$99:F760; jml-back literal $009F5C — regenerate if the handler moves).
+Diagnostics that cracked it: PC-freeze at the BRANCH after the compare with
+a FULL DP dump — the EA scratch residue ($52=d16, stale $5A/$5C) fingerprints
+which read path ran. Lessons: (1) any new fast path must region-dispatch on
+EA.hi16, not assume $F0; (2) opsweep can't catch this class — its An vectors
+are work-RAM addresses; add ROM-pointer vectors when testing (d16,An) ops;
+(3) accelerator-gate bisects can mislead: gates change timing/state
+trajectories, so a state-dependent always-on bug can masquerade as an
+escape interaction (F4 burned ~8 sessions on that red herring).
+UNAUDITED siblings flagged: `op_movb_d16_dn`, the cmpi-(d16,An) family, and
+any other `$400000,x` fast-path READ whose An can be ROM.
+
+### PC-freeze arming gotchas (cost a session)
+- The interp's boot ZEROES `$0710+` — a freeze poked before ~frame 3000 is silently
+  wiped. Arm after interp init, before the target runs.
+- Without re-fire mode (`$0730=$5A5A`) a released freeze is DEAD — a retargeted
+  `$0710` after release never fires.
+
 ## 2. Poppy assembler gotchas (65816, `.pasm`)
 
 1. **`.org` overlap is SILENT — last org wins per byte, no error.** A section that grows

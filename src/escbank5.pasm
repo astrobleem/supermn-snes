@@ -9640,3 +9640,110 @@ gms_t2:
     sta $40
     sec
     rtl
+
+; ============================================================================
+; eaw5_fix — ea_extw's REAL body (interp.pasm ea_extw @ $00:B83F is a byte-
+; neutral jml stub to here; R4 fix 2026-07-18). Bank-aware EA-engine ext-word
+; fetch: the old inline body added #$00C1 to the PC bank UNCONDITIONALLY, so a
+; RAM-resident 68K PC ($F0xxxx) fetched its ext words from SNES bank $B1 (open
+; bus) — garbage d16/imm for every EA-engine instruction executed from work
+; RAM. That silently no-op'd the game's RAM-resident sound enqueuer ($f01b20):
+; the R4 "organic sound triggers never fire" root cause.
+; Contract (same as the old body): entry 16-bit A/X (EA engine is rep #$30),
+; $40/$42 = 68K PC, $46 = ext-word delta; returns A = big-endian ext word,
+; Y = 0, $46 += 2, $5A-$5C = the fetch pointer. Low16-carry folds into the
+; bank BEFORE the $F0 test (24-bit PC+delta, same math as the original).
+; Returns via jml to the interp-side rts at $00:B843 (LITERAL — regenerate if
+; ea_extw ever moves; see the stub comment in interp.pasm).
+; ============================================================================
+.org $F700
+eaw5_fix:
+    rep #$30
+    lda $40
+    clc
+    adc $46
+    sta $5A              ; ptr lo16
+    lda $42
+    adc #$0000           ; fold the low16 carry into the bank first
+    cmp #$00F0
+    bne eaw5_rom
+    lda #$0040           ; RAM PC -> BW-RAM bank $40 (work RAM image)
+    bra eaw5_st
+eaw5_rom:
+    clc
+    adc #$00C1           ; ROM PC -> $C1:0000+ (68K image)
+eaw5_st:
+    sta $5C              ; ptr bank
+    ldy #$0000
+    lda [$5A],y
+    xba                  ; big-endian word
+    inc $46
+    inc $46
+    jml $00B843          ; back to the interp-side rts (ea_extw stub +4)
+
+; ============================================================================
+; cmpw5_fix — R4-F4 (2026-07-19): bank-aware EA read for op_cmpw_d16_dn
+; (cmp.w (d16,An),Dn). The interp-side fast path read $40:(An.lo16+d16)
+; unconditionally; for a ROM-pointing An (music-table dedupe: a2=$6ab4) that
+; read BW-RAM garbage instead of ROM — the organic round-start $32/$06 killer.
+; Entry (from the $009F34 stub): 16-bit A/X, $52 = d16 (rdw2 already ran).
+; Exit: mem word in $51(hi)/$50(lo), 16-bit A, jml to the unchanged handler
+; tail at $009F5C (jsr regdst...). Regenerate both literals if either side
+; moves. Region rule mirrors eaw5_fix: EA.hi16==$00F0 -> SNES $40:lo16;
+; EA.hi16 in $0000-$0007 (68K ROM) -> SNES (hi16+$C1):lo16; anything else
+; keeps the OLD $40:lo16 behavior (no new semantics for unproven regions).
+; ============================================================================
+.org $F760
+cmpw5_fix:
+    rep #$30             ; caller is 16-bit already; this pins Poppy's sizing (gotcha #4)
+    lda $44
+    and #$0007
+    asl a
+    asl a
+    clc
+    adc #$0020
+    tax                  ; An regfile slot
+    lda $02,x            ; An.hi16
+    tay
+    lda $00,x            ; An.lo16
+    clc
+    adc $52              ; EA.lo16 = An.lo16 + d16 (16-bit, as the 68K low word)
+    tax                  ; X = EA.lo16 (carry live)
+    tya                  ; A = An.hi16
+    bcc cw5_nc
+    inc a                ; + carry from the low-word add
+cw5_nc:
+    tay                  ; Y = running hi16 (lda $52 clobbers A's copy)
+    lda $52
+    and #$8000
+    beq cw5_pos
+    dey                  ; d16 negative: + $FFFF sign-extension high word
+cw5_pos:
+    tya                  ; A = EA.hi16
+    cmp #$00F0
+    beq cw5_ram          ; work RAM
+    cmp #$0008
+    bcc cw5_rom          ; 68K ROM $000000-$07FFFF
+cw5_ram:
+    sep #$20
+    lda $400000,x        ; original behavior: SNES $40:lo16 (68K big-endian: hi first)
+    sta $51
+    inx
+    lda $400000,x
+    sta $50
+    rep #$20
+    jml $009F5C          ; handler tail: jsr regdst ...
+cw5_rom:
+    clc
+    adc #$00C1           ; SNES ROM bank = hi16 + $C1
+    sta $5C              ; long-pointer bank cell ($5A/$5B/$5C)
+    stx $5A              ; long-pointer lo16
+    ldy #$0000
+    sep #$20
+    lda [$5A],y
+    sta $51              ; high byte
+    iny
+    lda [$5A],y
+    sta $50              ; low byte
+    rep #$20
+    jml $009F5C

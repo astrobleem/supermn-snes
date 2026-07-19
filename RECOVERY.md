@@ -193,10 +193,61 @@ default to prevent this early-fade misclassification.
 
 ### R4 — Sound truth
 
-- [ ] Record audio from organic attract and gameplay triggers.
-- [ ] Verify which commands fired without injection.
+- [x] Record audio from organic attract and gameplay triggers.
+- [x] Verify which commands fired without injection.
 - [ ] Listen to all 21 tracks against arcade references and log musical defects.
 - [ ] Reclassify sound as data-correct, transport-correct, or musically accepted per track.
+
+July 18 R4 evidence (`build/recovery-20260712/r4-sound-truth/`, hashes in its
+`SHA256SUMS.txt`, full narrative in its `R4_REPORT.md`):
+
+- Arcade organic ground truth (MAME latch taps from power-on): boot verbs
+  `$ff/$00/$ef/$00`, first music `$05` at frame 805 (~13.4 s), demo SFX flood
+  from ~1516, coin → `$00`+`$19` within 22 frames, start → `$32`+`$06`×3.
+- **Port organic verdict was NEGATIVE — zero sound commands ever enqueued**
+  across cold-boot sessions crossing the attract-music point, coin, start,
+  gameplay, and a 40,709-tick soak. **ROOT CAUSE FOUND AND FIXED
+  (2026-07-18): an interpreter defect** — `ea_extw` (the EA engine's
+  extension-word fetch) added `#$00C1` to the PC bank unconditionally, so
+  RAM-resident 68K code (bank `$F0`, e.g. the game's sound enqueuer at
+  `$f01b20`) fetched its extension words from SNES bank `$B1` (open bus).
+  Every EA-engine instruction executed from work RAM read garbage
+  d16/immediates; the sound ring writes silently landed on junk addresses.
+  Fix: byte-neutral stub at `$00:B83F` → bank-aware body `eaw5_fix` in
+  escbank5 `$99:F700`. New production ROM SHA-256
+  `a36c33e6d836321818b1c3764ca2659cc989360228d54a464df59ad38ed386b5`
+  (supersedes `183c53f6...` — R0 provenance to be re-recorded at commit).
+  Verified: organic `$ef/$00` boot verbs now enqueue + drain end-to-end on a
+  production cold boot; the full organic session (`organic-fixed2/`) then
+  fired attract `$05` at tick 729 and coin `$00`/`$19`/`$19` — arcade
+  parity. The `rc_copy` boot-hardcoded attract song
+  (`src/video.pasm` `Tad_LoadSong(1)`) masked the defect since P2/P3; its
+  removal (arcade is silent until 13.4 s) is a pending cosmetic decision.
+- **SECOND interpreter defect (F4) FOUND AND FIXED (2026-07-19)**: the same
+  organic session exposed that round-start music (`$32`+`$06`×3) never
+  fired. Root cause (R4_REPORT.md §5): `op_cmpw_d16_dn` — the fast-path
+  handler for `cmp.w (d16,An),Dn` — read `$40:(An.lo16+d16)` (work RAM)
+  unconditionally; the music dedupe compares against the ROM table at
+  `$6ab4` via a2, read 0 instead of 6, false-matched, and skipped the send.
+  Fix: byte-neutral stub at `$00:9F34` → bank-aware body `cmpw5_fix` in
+  escbank5 `$99:F760`. New production ROM SHA-256
+  `31c5dff4e7364f1dfd867e284798c5af5688e90cbe22fa69bc29bba249eed438`
+  (supersedes `a36c33e6...`; R0 provenance to be re-recorded at commit).
+  Verified armed: the full guard walk `$8dea→$8e18` executes and the ring
+  receives the arcade-identical `$32 $06 $06 $06` burst. **FINAL organic
+  session (`organic-fixed3/`, audio recorded): one no-injection cold boot
+  produced the complete arcade chain — `$ef/$00` boot, `$05` attract (tick
+  731), coin `$00/$19/$19`, round-start `$32`+`$06`×3 at 51 ticks after the
+  start press (arcade parity). R4's organic-trigger gate is CLOSED.** Same-class
+  UNAUDITED siblings flagged in R4_REPORT.md §5 and the gotchas doc
+  (`op_movb_d16_dn`, cmpi-(d16,An) family). optest 154/154 and opsweep
+  782/782 were green on the F3 ROM; re-run on the F4 ROM recorded in
+  R4_REPORT.md (opsweep cannot catch this bug class — its An vectors are
+  work-RAM addresses; a ROM-pointer optest vector is a noted gap).
+- The 21-track listening pairs are recorded and pre-screened (arcade refs
+  via halted-68K latch stimulation; SNES side via frozen-interp mailbox
+  injection, every drain confirmed, all tracks play full length). The by-ear
+  pass and per-track classification remain open.
 
 ### R5 — Bounded performance-architecture decision
 

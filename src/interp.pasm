@@ -4052,26 +4052,48 @@ op_addib_d16:          ; addi.b #imm,(d16,An) : [An+d16]+=imm.b ; Z ; PC+=6
     jmp inext
 
 op_cmpw_d16_dn:        ; cmp.w (d16,An),Dn : Z=(Dn.lo == mem.w) ; PC+=4
+    ; R4-F4 FIX (2026-07-19): the old inline EA math read $40:(An.lo+d16)
+    ; UNCONDITIONALLY — wrong for ROM-pointing An (the round-start music
+    ; dedupe compares d6 against the ROM table at $6ab4 via a2 → read $40:6ABC
+    ; = 0 → false-equal → the $32/$06 send silently skipped). Byte-neutral
+    ; stub (same pattern as ea_extw/eaw5_fix): bank-aware body cmpw5_fix in
+    ; escbank5 $99:F760 reads $40:lo for work RAM ($F0) / $C1+hi for ROM,
+    ; then jml's back to the unchanged tail below ($009F5C — regenerate the
+    ; escbank5 literal if this handler EVER moves).
     jsr rdw2
     sta $52            ; d16
-    lda $44
-    and #$0007
-    asl a
-    asl a
-    clc
-    adc #$0020
-    tax                ; An slot (bits 2-0)
-    lda $00,x
-    clc
-    adc $52
-    tax                ; addr
-    sep #$20
-    lda $400000,x
-    sta $51            ; high byte
-    inx
-    lda $400000,x
-    sta $50            ; low byte
-    rep #$20
+    jml $99F760        ; cmpw5_fix (escbank5) -> returns to the jsr regdst tail
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     jsr regdst         ; Dn slot
     lda $00,x
     sta $74            ; dest = Dn.lo
@@ -7519,19 +7541,38 @@ asw_neg:
 
 ; ea_extw: read big-endian ext word at PC+delta ($46); advance delta by 2
 ea_extw:
-    lda $40
-    clc
-    adc $46
-    sta $5A              ; ptr lo16 ($5A/$5B)
-    lda $42
-    adc #$00C1
-    sta $5C              ; ptr bank ($5C)
-    ldy #$0000
-    lda [$5A],y
-    xba                  ; big-endian word
-    inc $46
-    inc $46
-    rts
+    ; R4 FIX (2026-07-18): the old in-place body did `lda $42 / adc #$00C1` UNCONDITIONALLY
+    ; -> for a RAM-resident PC (bank $F0) the ext-word fetch read SNES bank $F0+$C1=$B1
+    ; (open bus) -> garbage d16/imm for EVERY EA-engine instruction executed from work RAM.
+    ; This silently broke the game's RAM-resident sound enqueuer ($f01b20) = the R4
+    ; "organic sound triggers never fire" root cause. The iloop opcode fetch and rdw2 were
+    ; already bank-aware; this fetch path was missed. Fixed body (bank-aware, low16-carry
+    ; preserved) lives in escbank5 @ $99:F700 (eaw5_fix) behind this byte-neutral stub —
+    ; NEVER inline-grow interp.pasm (branch-wrap + literal cross-bank addr landmines).
+    ; eaw5_fix returns via jml to the rts below ($00:B843 — LITERAL in escbank5; if this
+    ; region EVER shifts, regenerate that literal (the lh_nofire $F5B1 lesson)).
+    jml $99F700          ; eaw5_fix (escbank5)
+    rts                  ; $00:B843 — eaw5_fix jml's back here; rts to the jsr caller
+    nop                  ; pad to the original 25-byte body (byte-neutral, zero shift)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 ; idx_pc: like idx_ea but base already in $52/$54 (PC-relative indexed). A=ext word.
 idx_pc:
