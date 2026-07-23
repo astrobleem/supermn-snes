@@ -59,6 +59,11 @@ RENDER_QUEUE_CAPACITY = 2
 # queue.  With two retained entries, the transaction-level request/ACK delta may
 # therefore reach three briefly without losing a renderable sequence.
 RENDER_TRANSACTION_DEBT_MAX = RENDER_QUEUE_CAPACITY + 1
+# A genuinely slow recovery baseline can still need roughly one video second
+# per game tick.  Three seconds leaves that historical case ample margin while
+# ensuring a BRK loop or dead renderer cannot coast to the end of a long
+# uninterrupted window on stale counters.
+RECENT_PROGRESS_FRAME_MAX = 180
 
 
 def sha256(path: Path) -> str:
@@ -576,6 +581,15 @@ def main() -> int:
                         SUPERVISOR_LOOP_LENGTH,
                     )
                 )
+                player_health = int.from_bytes(
+                    m.read_memory("snesMemory", 0x4012B4, 2), "big"
+                )
+                player_x = int.from_bytes(
+                    m.read_memory("snesMemory", 0x4012E4, 2), "big"
+                )
+                player_y = int.from_bytes(
+                    m.read_memory("snesMemory", 0x4012E0, 2), "big"
+                )
                 return {
                     "frame": frame,
                     "tick16": tick16,
@@ -645,6 +659,9 @@ def main() -> int:
                     "input_injection": f"{r16(0x410002, 'snesMemory'):04x}",
                     "input_real_cache": f"{r16(0x1F12, 'snesWorkRam'):04x}",
                     "controller_buttons": controller_buttons,
+                    "player_health": player_health,
+                    "player_x": player_x,
+                    "player_y": player_y,
                     "stack": stack,
                     "sa1_cycles": int(cpu.get("cycleCount", 0)),
                     "sa1_pc": (int(cpu.get("k", 0)) << 16) | int(cpu.get("pc", 0)),
@@ -947,6 +964,37 @@ def main() -> int:
                 render_hook_count = sum(
                     row["label"] == "render_complete" for row in hook_rows
                 )
+                last_tick_hook_frame = max(
+                    (
+                        int(row["frame"])
+                        for row in hook_rows
+                        if row["label"] == "tick"
+                    ),
+                    default=int(start["frame"]),
+                )
+                last_render_hook_frame = max(
+                    (
+                        int(row["frame"])
+                        for row in hook_rows
+                        if row["label"] == "render_complete"
+                    ),
+                    default=int(start["frame"]),
+                )
+                tick_progress_age_frames = (
+                    int(end["frame"]) - last_tick_hook_frame
+                )
+                render_progress_age_frames = (
+                    int(end["frame"]) - last_render_hook_frame
+                )
+                sa1_execution_not_derailed = int(end["sa1_pc"]) not in (0, 4)
+                recent_tick_progress = (
+                    tick_hook_count > 0
+                    and tick_progress_age_frames <= RECENT_PROGRESS_FRAME_MAX
+                )
+                recent_render_progress = (
+                    render_hook_count > 0
+                    and render_progress_age_frames <= RECENT_PROGRESS_FRAME_MAX
+                )
 
                 # Reconstruct both 16-bit doorbell words from the uninterrupted
                 # write stream.  The SA-1's 16-bit INC writes high then low, so
@@ -1067,8 +1115,16 @@ def main() -> int:
                         tick_delta > 0
                         and sa1_cycle_delta / tick_delta <= 358_000
                     ),
-                    "known_ordering_event_survived": end["tick_total"] >= 800,
+                    "known_ordering_event_survived": (
+                        end["tick_total"] >= 800
+                        and sa1_execution_not_derailed
+                        and recent_tick_progress
+                        and recent_render_progress
+                    ),
                     "sustained_ordering_window": tick_delta >= 530,
+                    "sa1_execution_not_derailed": sa1_execution_not_derailed,
+                    "recent_tick_progress": recent_tick_progress,
+                    "recent_render_progress": recent_render_progress,
                     "frame_request_per_tick": request_delta == tick_delta,
                     "frame_ack_conservation": (
                         ack_delta
@@ -1142,10 +1198,18 @@ def main() -> int:
                             and end["input_injection"] == "0000"
                         )
                     ),
+                    # The scheduler table has 16 slots, but production only
+                    # initializes the tasks the current scene uses.  Requiring
+                    # all 16 mislabeled healthy 14-task gameplay as a failure;
+                    # require a live contract and check every initialized stack
+                    # at both endpoints instead.
                     "task_stacks_above_floors": (
-                        not start["stack"]["below_floor"]
+                        start["stack"]["contract_active"]
+                        and end["stack"]["contract_active"]
+                        and start["stack"]["initialized"] > 0
+                        and end["stack"]["initialized"] > 0
+                        and not start["stack"]["below_floor"]
                         and not end["stack"]["below_floor"]
-                        and end["stack"]["initialized"] == 16
                     ),
                     "video_mirror_exact": end["video_mirror_matches_rom"],
                     "supervisor_loop_exact": (
@@ -1180,6 +1244,11 @@ def main() -> int:
                     "final_renderer_debt": end_renderer_debt,
                     "max_renderer_debt": max_renderer_debt,
                     "max_ack_silence_frames": max_ack_silence_frames,
+                    "recent_progress_frame_limit": RECENT_PROGRESS_FRAME_MAX,
+                    "last_tick_hook_frame": last_tick_hook_frame,
+                    "last_render_hook_frame": last_render_hook_frame,
+                    "tick_progress_age_frames": tick_progress_age_frames,
+                    "render_progress_age_frames": render_progress_age_frames,
                     "request_write_transactions": request_transactions,
                     "ack_write_transactions": ack_transactions,
                     "nonunit_ack_steps": nonunit_ack_steps,

@@ -1087,3 +1087,109 @@ It is not yet a shippable release: full-game path coverage, a completed playthro
 pixel comparison, real-hardware timing, audio listening/classification, and placeholder-SFX work
 remain open.  Because the cycle margin is only about 718 cycles/tick, any relevant source or layout
 change must earn a new verdict with another production cold-boot run.
+
+## 2026-07-22 user-playtest correction: v124 combat recovery, 30 Hz still open
+
+The final paragraph above is retained as the R6 conclusion, but the word **playable** is
+superseded. The first real v105 test eventually reached a visible, moving, coin/start-responsive
+round and recognizable music, then demonstrated that neither attack button worked, enemies did not
+damage Superman, and the music audibly lost continuity. Formal timing alone had not tested the
+actual game loop a person needs.
+
+### Combat diagnosis
+
+The `$012B6C` HLE had one hardcoded return PC, `$01177C`, despite 34 ordinary BSR caller returns in
+the arcade ROM. The wrong continuation stranded player and enemy combat state machines on most
+paths. The retained repair:
+
+- returns through the saved `$40/$42` PC for every ordinary HLE path;
+- preserves the historical `$99:B5B9` native entry by normalizing only that caller to `$01177C`;
+- adds native continuations for `$011BDC` and `$011C9A`; and
+- keeps the HLE's register, CCR, stack-residue, callback, and work-RAM contracts exact.
+
+Exact v124 ROM SHA-256:
+`777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352`.
+Final-hash evidence:
+
+| Gate | Result |
+|---|---:|
+| `$012B6C` MAME/Nexen caller-return differential | **35/35 green** |
+| `$0122A4` live full-work-RAM combat spine | **4/4 green** |
+| Visible Button 1 punch/fire / Button 2 jump | **both true** |
+| Idle enemy attack / player damage | **attack active; health 20→18** |
+| `$CAF6` / `$111A` focused MAME gates | **19/19 / 21/21** |
+| `$023A0C` / `$002BE2` live exact gates | **6/6 / 6/6** |
+| Order-preserving `$0026A0` exact gate | **10/10** |
+| Focused opcode suite | **160/160 ops** |
+| Full opcode sweep | **782/782 cells, 1,564/1,564 vectors** |
+
+Focused outputs are under `build/user-playtest-v105-investigation/`, including
+`12b6c-f8-sentinel-v124-final.jsonl`, `combat-spines-v124-final/`,
+`visible-actions-v124-final/`, and `idle-combat-v124-final/`.
+
+The controller contract is Select=coin, Start=start, B/Y=arcade Button 1 (punch/fire), and
+A/X=arcade Button 2 (jump). There is no distinct arcade kick input.
+
+### Retained performance work
+
+The retained safe performance set combines guarded `$CAF6`, `$111A`, `$023A0C/$023AE2/$023B52`,
+`$0122A4`, narrow `$002BE2`, and an internal order-preserving `$0026A0` body. The `$0026A0` body
+retains the callable entry's push/pop contract and the original two-pass observation order: all 16
+mask reads, mask publication, then record copies. Noncanonical A5 resumes the original loop.
+
+The exact 10-case differential compares all D/A registers, CCR/mask, direct page, full game RAM,
+full video shadow, and native X/Y. A 3,600-frame checkpoint continuation also reached 1,791 ticks
+with halt zero, 14 initialized stacks, and 138 bytes of minimum margin. These are local/checkpoint
+semantic and ordering evidence, not the production rate.
+
+### v124 formal production result
+
+The formal run started at power-on with `TESTFLAG=0`, armed every production gate organically,
+validated the real `$00:F5A3` hook against the game counter, drove the real controller mailbox,
+settled gameplay, and ran one uninterrupted emulated-video-time window:
+
+| Metric | v124 |
+|---|---:|
+| SNES video frames | 3,602 |
+| Game ticks / game-fps | 1,783 / **29.700167** |
+| SA-1 cycles / mean per tick | 643,645,462 / **360,990.164** |
+| Requests / ACKs / true draws | 1,783 / 1,782 / 1,782 |
+| Maximum renderer debt / ACK silence | 2 / 3 frames |
+| Final tick / halt / task mask | 2,210 / `$0000` / `$FFF1` |
+| Initialized stacks / minimum margin | 14 / 138 bytes |
+| Final tick/render progress age | 0 / 1 frames |
+
+All safety, ordering, input, sound-ring, ROM-mirror, renderer-sequencing, queue, and recent-progress
+checks passed. Only the two performance checks failed: 29.700167 is 0.299833 game-fps below 30,
+and 360,990.164 is 2,990.164 cycles/tick above 358K. Primary evidence:
+`build/user-playtest-v105-investigation/production-v124-26a0-ordered-coldboot-uninterrupted-3600f-v1/`.
+
+### Rejected `$0026A0` shortcuts and validator correction
+
+Two exact-but-unsafe variants were removed:
+
+- v125 directly returned from the new body. It passed 10/10 exact cases and a long checkpoint
+  soak, but the production cold boot halted `$DEAD` and made no tick progress for its final 1,753
+  frames.
+- v126 packed the mask through byte/ROR operations. It passed 10/10 and a 900-tick checkpoint
+  continuation, but the production cold boot halted `$DEAD` with 604 final frames of silence.
+
+The old `known_ordering_event_survived` check could accept a stale total after later execution
+stopped. `tools/recovery_baseline.py` now also requires recent tick progress, recent render
+progress, and a non-derailed SA-1 PC. v124 remains green under those checks; v125/v126 do not.
+
+### Audio classification
+
+The current organic gameplay capture remains on TAD song 3 with no stop/reload, command drop, or
+digital-silence interval of at least 200 ms. That does not contradict the listener. Enemy SFX IDs
+`$1D/$25/$5B/$27` were ignored/unmapped, most SFX are placeholders, pitch
+bends/LFO/portamento remain untranscribed, and multiple samples are trimmed to roughly 0.35-0.5
+seconds. Current sound is **recognizable but musically incomplete**; no audio-fidelity fix was made
+in this campaign.
+
+### Current verdict
+
+v124 is the retained combat-fixed ROM for user testing and is stable in the measured long window.
+It remains a **near-30 Hz interactive technical demo, not playable or shippable**. A future
+playable claim requires the same exact ROM to clear the cold-boot 30 Hz/cycle/ordering/renderer
+contract and then pass a real human combat/audio test.

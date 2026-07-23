@@ -771,7 +771,34 @@ if _osp.exists("src/escbank.bin"):
     assert ESC[h8_block_loop - 0x8000:h8_block_loop - 0x8000 + 6] == bytes.fromhex(
         "5c80e19e9005"
     ), "$8C2 zero-mask shortcut lost its size-neutral JML/BCC seam"
-
+    br3a92_1 = esc_off("br3a92_1")
+    assert ESC[0x5C2B:0x5C30] == (
+        bytes([0xA9])
+        + br3a92_1.to_bytes(2, "little")
+        + bytes.fromhex("8540")
+    ), (
+        "$3A92->$2BDA callable bridge changed in tightly packed bank $92"
+    )
+    br3a92_8 = esc_off("br3a92_8")
+    br3a92_9 = esc_off("br3a92_9")
+    assert br3a92_8 == 0xDF55, "$3A92->$26A0 callsite moved"
+    assert ESC[br3a92_8 - 0x8000:br3a92_8 - 0x8000 + 5] == (
+        bytes([0xA9])
+        + br3a92_9.to_bytes(2, "little")
+        + bytes.fromhex("8540")
+    ), (
+        "$3A92->$26A0 callable bridge changed in tightly packed bank $92"
+    )
+    h26_range_ok = esc_off("h26_range_ok")
+    h26_mask_resume = esc_off("h26_mask_generated_resume")
+    assert h26_range_ok == 0x8F19 and h26_mask_resume == h26_range_ok + 5, (
+        "$26A0 internal unrolled seam moved in tightly packed bank $92"
+    )
+    assert ESC[h26_range_ok - 0x8000:h26_mask_resume - 0x8000] == bytes.fromhex(
+        "5c00989dea"
+    ), (
+        "$26A0 internal seam lost its size-neutral JML/NOP redirect"
+    )
     entry_17b4 = esc_off("entry_17b4")
     entry_17b4_resume = esc_off("entry_17b4_generated_resume")
     assert entry_17b4 == 0xBA85 and entry_17b4_resume == 0xBA89, (
@@ -788,6 +815,14 @@ if _osp.exists("src/escbank.bin"):
     assert ESC[entry_2bda - 0x8000:entry_2bda_resume - 0x8000] == bytes.fromhex(
         "5c00aa9d"
     ), "entry_2bda lost its size-neutral JML $9D:AA00 wrapper"
+    entry_2be2 = esc_off("entry_2be2")
+    entry_2be2_resume = esc_off("entry_2be2_generated_resume")
+    assert entry_2be2 == 0xB794 and entry_2be2_resume == 0xB798, (
+        "$2BE2 redirect/resume moved in tightly packed bank $92"
+    )
+    assert ESC[entry_2be2 - 0x8000:entry_2be2_resume - 0x8000] == bytes.fromhex(
+        "5c00969d"
+    ), "entry_2be2 lost its size-neutral JML $9D:9600 wrapper"
     entry_3c36 = esc_off("entry_3c36")
     entry_3c36_resume = esc_off("entry_3c36_generated_resume")
     assert entry_3c36 == 0xD02A and entry_3c36_resume == 0xD02E, (
@@ -860,7 +895,7 @@ if _osp.exists("src/escbank2.bin"):
         and esc2_off("xlat_choke") == 0xF980
     ), "xlat direct/generic dispatcher crossed its fixed $94:F900-$F97F island"
     assert ESC2[0x7900:0x7931] == bytes.fromhex(
-        "c230a542c90200f024c90000d023a540eb29ff00c976009018c97800900f"
+        "c230a542f008c9030090228024eaa540eb29ff00c976009018c97800900f"
         "c9c000"
         "f00ac9d7009009c9dd00b0045c00da9d"
     ), "gameplay-entry/combat/task sparse direct xlat arms changed bytes"
@@ -951,6 +986,15 @@ if _osp.exists("src/escbank6.bin"):
     hcaf6_const_list_end = esc6_off("hcaf6_const_list_end")
     h25_predicates = esc6_off("h25_sgt")
     h25_predicates_end = esc6_off("h25_predicates_end")
+    entry_11bdc = esc6_off("entry_11bdc")
+    entry_11c9a = esc6_off("entry_11c9a")
+    landing_combat_continuations_end = esc6_off(
+        "landing_combat_continuations_end"
+    )
+    hcaf6_const_33208 = esc6_off("hcaf6_const_33208")
+    hcaf6_const_33208_end = esc6_off("hcaf6_const_33208_end")
+    hcaf6_const_332fe = esc6_off("hcaf6_const_332fe")
+    hcaf6_const_332fe_end = esc6_off("hcaf6_const_332fe_end")
     assert generated_end <= 0x9B00 and hle_17b4 == 0x9B00, (
         "escbank6 generated bodies crossed the pinned $95:9B00 hle_17b4 slot"
     )
@@ -1107,8 +1151,44 @@ if _osp.exists("src/escbank6.bin"):
     assert ESC6[hcaf6_const_list_end - 0x8000:0x7BE0] == bytes(
         0x7BE0 - (hcaf6_const_list_end - 0x8000)
     ), "$CAF6 constant-list island has nonzero overlap before $95:FBE0"
-    assert len(ESC6) == h25_predicates_end - 0x8000, (
-        "unexpected bank-$95 bytes follow the $25110 predicate tail island"
+    assert (
+        h25_predicates_end <= 0xFC20
+        == entry_11bdc
+        < entry_11c9a
+        < landing_combat_continuations_end
+        <= hcaf6_const_33208
+        == 0xFE20
+    ), "landing/combat continuations moved or overflowed their bank-$95 tail"
+    assert ESC6[h25_predicates_end - 0x8000:0x7C20] == bytes(
+        0x7C20 - (h25_predicates_end - 0x8000)
+    ), "$25110 predicate tail overlaps the $011B/$011C continuation island"
+    assert ESC6[entry_11bdc - 0x8000:entry_11bdc - 0x8000 + 2] == bytes.fromhex(
+        "c230"
+    ), "$011BDC continuation lost its explicit REP #$30 prologue"
+    assert ESC6[entry_11c9a - 0x8000:entry_11c9a - 0x8000 + 2] == bytes.fromhex(
+        "c230"
+    ), "$011C9A continuation lost its explicit REP #$30 prologue"
+    assert ESC6[
+        landing_combat_continuations_end - 0x8000:hcaf6_const_33208 - 0x8000
+    ] == bytes(hcaf6_const_33208 - landing_combat_continuations_end), (
+        "landing/combat continuations overlap the late CAF6 constant-list body"
+    )
+    assert hcaf6_const_33208 < hcaf6_const_33208_end <= 0xFF10, (
+        "$033208 CAF6 constant-list body crossed the $0332FE island"
+    )
+    assert hcaf6_const_332fe == 0xFF10, (
+        "$0332FE CAF6 constant-list body moved from fixed $95:FF10"
+    )
+    assert ESC6[
+        hcaf6_const_33208_end - 0x8000:hcaf6_const_332fe - 0x8000
+    ] == bytes(hcaf6_const_332fe - hcaf6_const_33208_end), (
+        "nonzero bank-$95 bytes overlap the two late CAF6 constant bodies"
+    )
+    assert hcaf6_const_332fe < hcaf6_const_332fe_end <= 0x10000, (
+        "$0332FE CAF6 constant-list body overflows bank $95"
+    )
+    assert len(ESC6) == hcaf6_const_332fe_end - 0x8000, (
+        "unexpected bank-$95 bytes follow the late CAF6 constant-list bodies"
     )
     ROM[0x2A8000:0x2A8000+len(ESC6)] = ESC6          # @ SA-1 $95:8000 (file $2A8000)
     c262_blob_offset = 0x2AB000                       # @ SA-1 $95:B000
@@ -1267,12 +1347,19 @@ if _osp.exists("src/escbank3.bin"):
     ] == bytes.fromhex("5c00829d"), (
         "$025110 stage-5 inactive-list redirect moved or changed size"
     )
-    # The generated CAF6 body ends at $DC6D; its guarded production helper is
-    # pinned at $DD00 and may use the remaining space before h1e7c0@$E000.
+    # The generated CAF6 body must end before its guarded production helper,
+    # which is pinned at $DD00 and may use the remaining space before
+    # h1e7c0@$E000.
     # Poppy accepts backward/overlapping .org sections, so make both gaps an
     # explicit ROM-pack invariant instead of trusting assembly success.
-    assert ESC3[0x5C6D:0x5D00] == bytes(0x93), (
-        "escbank3 CAF6 generated body grew into the $DC6D-$DCFF seam before "
+    caf6_generated_end = esc3_off("caf6_generated_end")
+    assert 0xDC00 < caf6_generated_end <= 0xDD00, (
+        "escbank3 CAF6 generated body crossed hcaf6_fast@$97:DD00"
+    )
+    assert ESC3[caf6_generated_end - 0x8000:0x5D00] == bytes(
+        0xDD00 - caf6_generated_end
+    ), (
+        "escbank3 CAF6 generated body has nonzero bytes in the seam before "
         "hcaf6_fast; relocate code instead of allowing .org overlap"
     )
     hcaf6_end = esc3_off("hcaf6_end")
@@ -1577,7 +1664,13 @@ if _osp.exists("src/escbank7.bin"):
     assert ESC7[0:4] == bytes.fromhex("c230a254"), (
         "$25110 stage-2 helper prologue changed unexpectedly"
     )
-    assert ESC7[0x650:0x7C0] == bytes(0x0170), (
+    hfast_rte_end = esc7_off("hfast_rte_end")
+    assert 0x8400 < hfast_rte_end <= 0x87C0, (
+        "scheduler fast-RTE body crossed the paced OBJ reset seam"
+    )
+    assert ESC7[hfast_rte_end - 0x8000:0x7C0] == bytes(
+        0x7C0 - (hfast_rte_end - 0x8000)
+    ), (
         "scheduler fast-RTE body grew into the paced OBJ reset seam"
     )
     assert ESC7[0x7C0:0x7C4] == bytes.fromhex("c230ad34"), (
@@ -1592,6 +1685,10 @@ if _osp.exists("src/escbank7.bin"):
     h158_end = None
     entry_2ad4ct_end = None
     entry_2a86et_end = None
+    h2be2_fast = None
+    h2be2_fast_end = None
+    h26_unrolled_ordered = None
+    h26_unrolled_ordered_end = None
     h3c36_fast = None
     h3c36_fast_end = None
     h2bda_fast = None
@@ -1620,6 +1717,16 @@ if _osp.exists("src/escbank7.bin"):
             entry_2ad4ct_end = int(fields[0].split(":", 1)[1], 16)
         elif len(fields) >= 2 and fields[1] == "entry_2a86et_end":
             entry_2a86et_end = int(fields[0].split(":", 1)[1], 16)
+        elif len(fields) >= 2 and fields[1] == "h2be2_fast":
+            h2be2_fast = int(fields[0].split(":", 1)[1], 16)
+        elif len(fields) >= 2 and fields[1] == "h2be2_fast_end":
+            h2be2_fast_end = int(fields[0].split(":", 1)[1], 16)
+        elif len(fields) >= 2 and fields[1] == "h26_unrolled_ordered":
+            h26_unrolled_ordered = int(fields[0].split(":", 1)[1], 16)
+        elif len(fields) >= 2 and fields[1] == "h26_unrolled_ordered_end":
+            h26_unrolled_ordered_end = int(
+                fields[0].split(":", 1)[1], 16
+            )
         elif len(fields) >= 2 and fields[1] == "h3c36_fast":
             h3c36_fast = int(fields[0].split(":", 1)[1], 16)
         elif len(fields) >= 2 and fields[1] == "h3c36_fast_end":
@@ -1666,24 +1773,54 @@ if _osp.exists("src/escbank7.bin"):
     assert ESC7[h158_end - 0x8000:0x0A00] == bytes(
         0x0A00 - (h158_end - 0x8000)
     ), "nonzero escbank7 bytes overlap the $02AD4C combat island"
-    assert entry_2ad4ct_end is not None and entry_2ad4ct_end <= 0x9000, (
-        "$02AD4C table body crossed its $9D:8A00-$8FFF island"
+    entry_122a4 = esc7_off("entry_122a4")
+    entry_122a4_end = esc7_off("entry_122a4_end")
+    assert entry_2ad4ct_end is not None and entry_2ad4ct_end <= 0x8D00, (
+        "$02AD4C table body crossed the $0122A4 coroutine island"
     )
-    assert ESC7[entry_2ad4ct_end - 0x8000:0x1000] == bytes(
-        0x1000 - (entry_2ad4ct_end - 0x8000)
+    assert ESC7[entry_2ad4ct_end - 0x8000:0x0D00] == bytes(
+        0x0D00 - (entry_2ad4ct_end - 0x8000)
+    ), "nonzero escbank7 bytes overlap entry_122a4@$9D:8D00"
+    assert entry_122a4 == 0x8D00 and entry_122a4 < entry_122a4_end <= 0x9000, (
+        "$0122A4 coroutine spine moved or crossed entry_2a86et@$9D:9000"
+    )
+    assert ESC7[entry_122a4 - 0x8000:entry_122a4 - 0x8000 + 4] == bytes.fromhex(
+        "c230a53a"
+    ), "$0122A4 coroutine spine lost its REP/A6-bank guard"
+    assert ESC7[entry_122a4_end - 0x8000:0x1000] == bytes(
+        0x1000 - (entry_122a4_end - 0x8000)
     ), "nonzero escbank7 bytes overlap the $02A86E combat island"
     assert ESC7[0x1000:0x1002] == bytes.fromhex("c230"), (
         "$02A86E table body lost its explicit REP #$30 prologue"
     )
-    assert entry_2a86et_end is not None and entry_2a86et_end <= 0xA800, (
-        "$02A86E table body crossed the fixed $3C36 island at $9D:A800"
+    assert entry_2a86et_end is not None and entry_2a86et_end <= 0x9600, (
+        "$02A86E table body crossed h2be2_fast@$9D:9600"
     )
+    assert ESC7[entry_2a86et_end - 0x8000:0x1600] == bytes(
+        0x1600 - (entry_2a86et_end - 0x8000)
+    ), "nonzero bank-$9D bytes overlap h2be2_fast@$9D:9600"
+    assert h2be2_fast == 0x9600 and h2be2_fast_end is not None, (
+        "$2BE2 canonical-work-RAM helper moved from its fixed $9D:9600 island"
+    )
+    assert h2be2_fast_end <= 0x9800, (
+        "$2BE2 canonical-work-RAM helper crossed the $26A0 ordered island"
+    )
+    assert ESC7[h2be2_fast_end - 0x8000:0x1800] == bytes(
+        0x1800 - (h2be2_fast_end - 0x8000)
+    ), "nonzero bank-$9D bytes overlap the $26A0 ordered island"
+    assert (
+        h26_unrolled_ordered == 0x9800
+        and h26_unrolled_ordered_end is not None
+        and h26_unrolled_ordered_end <= 0xA000
+    ), "$26A0 ordered helper moved or crossed h20e8@$9D:A000"
+    assert ESC7[
+        h26_unrolled_ordered_end - 0x8000:0x2000
+    ] == bytes(
+        0x2000 - (h26_unrolled_ordered_end - 0x8000)
+    ), "nonzero bank-$9D bytes overlap h20e8_fast@$9D:A003"
     assert h20e8_fast == 0xA003 and h20e8_fast_end is not None, (
         "$20E8 helper moved from its fixed $9D:A000 island"
     )
-    assert ESC7[entry_2a86et_end - 0x8000:0x2000] == bytes(
-        0x2000 - (entry_2a86et_end - 0x8000)
-    ), "$02A86E body has nonzero overlap before h20e8_fast@$9D:A000"
     assert h20e8_fast_end <= 0xA200, (
         "$20E8 helper crossed the fixed $CAF6/$032FCA island"
     )
@@ -1849,6 +1986,10 @@ if _osp.exists("src/escbank7.bin"):
     jah2_b0_ext_end = esc7_off("jah2_b0_ext_end")
     entry_29b6_fast = esc7_off("entry_29b6_fast")
     entry_29b6_fast_end = esc7_off("entry_29b6_fast_end")
+    hcaf6_generic_admit = esc7_off("hcaf6_generic_admit")
+    hcaf6_generic_admit_end = esc7_off("hcaf6_generic_admit_end")
+    hcaf6_late_selector = esc7_off("hcaf6_late_selector")
+    hcaf6_late_selector_end = esc7_off("hcaf6_late_selector_end")
     esc7_end = esc7_off("escbank7_end")
     assert xdd == 0xDA00 and xdd < xdd_end <= 0xDB00, (
         "sparse $D7-$DC direct dispatcher moved or overflowed its $9D:DA00 island"
@@ -1866,6 +2007,12 @@ if _osp.exists("src/escbank7.bin"):
     assert xdd_bytes.count(bytes.fromhex("5c60b695")) == 1, (
         "sparse dispatcher lost its sole $95:B660 entry_2a190 target"
     )
+    assert xdd_bytes.count(bytes.fromhex("5c20fc95")) == 1, (
+        "sparse dispatcher lost its sole $95:FC20 entry_11bdc target"
+    )
+    assert xdd_bytes.count(bytes.fromhex("5c39fd95")) == 1, (
+        "sparse dispatcher lost its sole $95:FD39 entry_11c9a target"
+    )
     assert xdd_bytes.count(bytes.fromhex("5c00d89e")) == 1, (
         "sparse dispatcher lost its sole $9E:D800 entry_d7be target"
     )
@@ -1876,6 +2023,7 @@ if _osp.exists("src/escbank7.bin"):
         ("xdd_2ad4c", "entry_2ad4ct"),
         ("xdd_24aa8", "entry_24aa8t"),
         ("xdd_28f92", "entry_28f92t"),
+        ("xdd_122a4", "entry_122a4"),
         ("xdd_91e", "entry_91et"),
         ("xdd_c0bc", "entry_c0bc"),
         ("xdd_da72", "entry_da72"),
@@ -1960,14 +2108,39 @@ if _osp.exists("src/escbank7.bin"):
     assert ESC7[jah2_b0_ext_end - 0x8000:0x7C00] == bytes(
         0x7C00 - (jah2_b0_ext_end - 0x8000)
     ), "nonzero JAH2 bytes overlap entry_29b6_fast@$9D:FC00"
-    assert entry_29b6_fast == 0xFC00 and entry_29b6_fast_end <= 0x10000, (
-        "$29B6 fast wrapper moved or overflowed bank $9D"
+    assert entry_29b6_fast == 0xFC00 and entry_29b6_fast_end <= 0xFE40, (
+        "$29B6 fast wrapper moved or crossed the $CAF6 admission island"
     )
     assert ESC7[entry_c0bc - 0x8000:entry_c0bc_end - 0x8000].count(
         bytes.fromhex("5c00fc9d")
     ) == 1, "$C0BC no longer direct-links its organic $29B6 callback to $9D:FC00"
-    assert esc7_end == entry_29b6_fast_end and len(ESC7) == esc7_end - 0x8000, (
-        "unexpected bank-$9D bytes follow the $29B6 fast wrapper"
+    assert hcaf6_generic_admit == 0xFE40, (
+        "$CAF6 general-loop admission moved from fixed $9D:FE40"
+    )
+    assert entry_29b6_fast_end <= hcaf6_generic_admit, (
+        "$29B6 fast wrapper overlaps the $CAF6 general-loop admission"
+    )
+    assert ESC7[
+        entry_29b6_fast_end - 0x8000:hcaf6_generic_admit - 0x8000
+    ] == bytes(hcaf6_generic_admit - entry_29b6_fast_end), (
+        "nonzero bank-$9D bytes overlap the $29B6/$CAF6 seam"
+    )
+    assert hcaf6_generic_admit < hcaf6_generic_admit_end <= 0xFED0, (
+        "$CAF6 general-loop admission crossed the late-selector adapter"
+    )
+    assert hcaf6_late_selector == 0xFED0, (
+        "$CAF6 late-selector adapter moved from fixed $9D:FED0"
+    )
+    assert ESC7[
+        hcaf6_generic_admit_end - 0x8000:hcaf6_late_selector - 0x8000
+    ] == bytes(hcaf6_late_selector - hcaf6_generic_admit_end), (
+        "nonzero bank-$9D bytes overlap the CAF6 admission/selector seam"
+    )
+    assert hcaf6_late_selector < hcaf6_late_selector_end <= 0x10000, (
+        "$CAF6 late-selector adapter overflows bank $9D"
+    )
+    assert esc7_end == hcaf6_late_selector_end and len(ESC7) == esc7_end - 0x8000, (
+        "unexpected bank-$9D bytes follow the CAF6 late-selector adapter"
     )
     ROM[0x2E8000:0x2E8000+len(ESC7)] = ESC7          # @ SA-1 $9D:8000 (file $2E8000)
 

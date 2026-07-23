@@ -3950,6 +3950,30 @@ entry_23a0c:
     lda $42
     sta $56
     jsl.l push32_l
+    ; A1 is fixed at A5+$3592 for four $20-byte records.  Prove the
+    ; canonical work-RAM base before using the direct bank-$40 helpers.
+    lda $34
+    beq h23a0c_guard_a5lo
+    jmp h23a0c_guard_fallback
+h23a0c_guard_a5lo:
+    lda $36
+    cmp #$00F0
+    bne h23a0c_guard_fallback
+    ; The compact word-push helper below deliberately omits high-word carry
+    ; work.  Prove a canonical, comfortably bounded task stack first.
+    lda $3E
+    cmp #$00F0
+    bne h23a0c_guard_fallback
+    lda $3C
+    cmp #$0020
+    bcs h23a0c_guard_done
+h23a0c_guard_fallback:
+    lda #$3A0C
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l inext
+h23a0c_guard_done:
     lda $34
     clc
     adc #$3592
@@ -3963,46 +3987,27 @@ L23a0c_23a14:
     lda $24
     clc
     adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     bne Lf23a0c_1
     jmp L23a0c_23ad6
 Lf23a0c_1:
     lda #$0003
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
+    jsr h23a0c_push_word
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $9E
     lda $24
     clc
     adc #$0010
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $20
     lda $9E
     sta $22
@@ -4017,84 +4022,26 @@ Lf23a0c_1:
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
     tax
-    pla
-    xba
-    sta $400000,x
-    xba
+    jsl.l rdw40_l
+    ora #$0000
+    jsr h23a0c_push_word
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
     tax
-    pla
-    xba
-    sta $400000,x
-    xba
+    jsl.l rdw40_l
+    ora #$0000
+    jsr h23a0c_push_word
     lda #$1800
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
+    jsr h23a0c_push_word
     lda $24
     clc
     adc #$000A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
     tax
-    pla
-    xba
-    sta $400000,x
-    xba
+    jsl.l rdw40_l
+    ora #$0000
+    jsr h23a0c_push_word
     lda $34
     clc
     adc #$1C8A
@@ -4129,20 +4076,16 @@ br23a0c_1:
     lda $24
     clc
     adc #$0016
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $9E
     lda $24
     clc
     adc #$0018
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $9A
     lda $9E
     sta $9C
@@ -4153,20 +4096,16 @@ br23a0c_1:
     lda $24
     clc
     adc #$001A
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $9E
     lda $24
     clc
     adc #$001C
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $9A
     lda $9E
     sta $9C
@@ -4183,17 +4122,11 @@ br23a0c_1:
     sta $08
     lda #$0010
     sta $0C
-    lda $0C
-    and #$003F
-    tax
-Lf23a0c_2:
-    cpx #$0000
-    beq Lf23a0c_3
-    asl $08
-    rol $0A
-    dex
-    bra Lf23a0c_2
-Lf23a0c_3:
+    ; LSL.L #16: the low word becomes zero and the old low word becomes
+    ; the high word.  The following SUB.L replaces the shift's CCR.
+    lda $08
+    sta $0A
+    stz $08
     lda $00
     sec
     sbc $08
@@ -4250,11 +4183,9 @@ Lf23a0c_3:
     lda $24
     clc
     adc #$001E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     beq Lf23a0c_4
     jmp L23a0c_23a98
 Lf23a0c_4:
@@ -4267,11 +4198,9 @@ Lf23a0c_4:
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $00
     lda $00
     sec
@@ -4289,11 +4218,9 @@ Lf23a0c_7:
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $04
     lda $04
     sec
@@ -4308,20 +4235,7 @@ Lf23a0c_9:
     jmp L23a0c_23a98
 Lf23a0c_10:
     lda #$005B
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
+    jsr h23a0c_push_word
     ; CALL-BRIDGE jsr $2d8a.l -> ojmp_hook (callee --table escape, else interpret), resume br23a0c_2
     lda #br23a0c_2
     sta $54
@@ -4346,31 +4260,23 @@ br23a0c_2:
     lda $24
     clc
     adc #$001E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    tax
+    lda $80
+    jsl.l wrw40_l
 L23a0c_23a98:
     lda $24
     clc
     adc #$000D
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    jsl.l rdb40_l
     beq Lf23a0c_11
     jmp L23a0c_23ace
 Lf23a0c_11:
     lda $24
     clc
     adc #$000C
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    jsl.l rdb40_l
     clc
     adc #$0001
     sep #$20
@@ -4379,19 +4285,14 @@ Lf23a0c_11:
     lda $24
     clc
     adc #$000C
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writebyte_l
+    tax
+    lda $80
+    jsl.l wrb40_l
     lda $24
     clc
     adc #$000C
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    jsl.l rdb40_l
     sec
     sbc #$0004
     beq Lf23a0c_12
@@ -4404,11 +4305,9 @@ Lf23a0c_12:
     lda $24
     clc
     adc #$000C
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writebyte_l
+    tax
+    lda $80
+    jsl.l wrb40_l
 L23a0c_23ab4:
     lda #$3E24
     sta $28
@@ -4417,11 +4316,8 @@ L23a0c_23ab4:
     lda $24
     clc
     adc #$000C
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    jsl.l rdb40_l
     sep #$20
     sta $08
     rep #$20
@@ -4450,6 +4346,30 @@ L23a0c_23ab4:
     lda $2A
     adc $9C
     sta $2A
+    ; The animation table is immutable arcade ROM at $023E24.  Production
+    ; indexes its four longwords.  Keep a generic address-space fallback for
+    ; any unexpected signed byte or pointer carry.
+    lda $2A
+    cmp #$0002
+    bne h23a0c_anim_generic
+    lda $28
+    cmp #$3E24
+    bcc h23a0c_anim_generic
+    cmp #$3E31
+    bcs h23a0c_anim_generic
+    and #$0003
+    bne h23a0c_anim_generic
+    ldx $28
+    lda $C30000,x
+    xba
+    sta $9E
+    inx
+    inx
+    lda $C30000,x
+    xba
+    sta $9A
+    jmp h23a0c_anim_ready
+h23a0c_anim_generic:
     lda $28
     clc
     adc #$0000
@@ -4468,6 +4388,7 @@ L23a0c_23ab4:
     sta $52
     jsl.l rdw_ea_l
     sta $9A
+h23a0c_anim_ready:
     lda $9E
     sta $9C
     lda $9C
@@ -4475,21 +4396,17 @@ L23a0c_23ab4:
     lda $24
     clc
     adc #$000E
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    tax
+    lda $80
+    jsl.l wrw40_l
     lda $9A
     sta $80
     lda $24
     clc
     adc #$0010
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    tax
+    lda $80
+    jsl.l wrw40_l
     lda #$0005
     sep #$20
     sta $80
@@ -4497,20 +4414,15 @@ L23a0c_23ab4:
     lda $24
     clc
     adc #$000D
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writebyte_l
+    tax
+    lda $80
+    jsl.l wrb40_l
 L23a0c_23ace:
     lda $24
     clc
     adc #$000D
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
+    tax
+    jsl.l rdb40_l
     sec
     sbc #$0001
     sep #$20
@@ -4519,11 +4431,9 @@ L23a0c_23ace:
     lda $24
     clc
     adc #$000D
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writebyte_l
+    tax
+    lda $80
+    jsl.l wrb40_l
     ; CALL-BRIDGE bsr.w $23ae2 -> entry_23ae2 (NATIVE escape), resume br23a0c_3
     lda #br23a0c_3
     sta $40
@@ -4562,6 +4472,21 @@ Lf23a0c_13:
     sta $3C
     jml.l ors_pre
 
+; Guarded production-only 68K word push.  The entry guard proves A7 is
+; F0 work RAM with enough low-word room for the deepest callback frame.
+h23a0c_push_word:
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    rts
+
     .org $A900
 ; --- transpiled from $023AE2 (9 instrs) by tools/transpile.py [bank1] ---
 entry_23ae2:
@@ -4572,6 +4497,22 @@ entry_23ae2:
     lda $42
     sta $56
     jsl.l push32_l
+    ; The parent walks F0:3592..F0:35F2 in production.  Keep this entry
+    ; independently safe: a non-work-RAM or wrapping A1 resumes the legal
+    ; interpreter after the skipped JSR frame has been materialized.
+    lda $26
+    cmp #$00F0
+    bne h23ae2_guard_fallback
+    lda $24
+    cmp #$FFF9
+    bcc h23ae2_guard_done
+h23ae2_guard_fallback:
+    lda #$3AE2
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l inext
+h23ae2_guard_done:
     lda #$0000
     sta $00
     sta $02
@@ -4581,11 +4522,9 @@ entry_23ae2:
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $00
     lda $00
     sec
@@ -4602,11 +4541,9 @@ Lf23ae2_3:
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $04
     lda $04
     sec
@@ -4652,6 +4589,20 @@ entry_23b52:
     lda $42
     sta $56
     jsl.l push32_l
+    ; This four-record pass is fixed at A5+$3592.  Guard the canonical
+    ; production work-RAM base before replacing its generic record reads.
+    lda $34
+    bne h23b52_guard_fallback
+    lda $36
+    cmp #$00F0
+    beq h23b52_guard_done
+h23b52_guard_fallback:
+    lda #$3B52
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l inext
+h23b52_guard_done:
     lda $34
     clc
     adc #$3592
@@ -4665,61 +4616,44 @@ L23b52_23b5a:
     lda $24
     clc
     adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     bne Lf23b52_1
     jmp L23b52_23b98
 Lf23b52_1:
     lda $24
     clc
     adc #$0012
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $9E
     lda $24
     clc
     adc #$0014
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $28
     lda $9E
     sta $2A
     lda #$0001
-    sta $80
-    lda $28
-    clc
-    adc #$0000
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    ldy #$0000
+    jsr h23b52_write_a2
     lda $24
     clc
     adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $00
     lda $24
     clc
     adc #$0006
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    jsl.l rdw40_l
+    ora #$0000
     sta $04
     lda $00
     clc
@@ -4730,25 +4664,11 @@ Lf23b52_1:
     adc #$0008
     sta $04
     lda $00
-    sta $80
-    lda $28
-    clc
-    adc #$0002
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    ldy #$0002
+    jsr h23b52_write_a2
     lda $04
-    sta $80
-    lda $28
-    clc
-    adc #$0006
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    ldy #$0006
+    jsr h23b52_write_a2
     lda $00
     clc
     adc #$0010
@@ -4758,35 +4678,14 @@ Lf23b52_1:
     adc #$0010
     sta $04
     lda $00
-    sta $80
-    lda $28
-    clc
-    adc #$0004
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    ldy #$0004
+    jsr h23b52_write_a2
     lda $04
-    sta $80
-    lda $28
-    clc
-    adc #$0008
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    ldy #$0008
+    jsr h23b52_write_a2
     lda #$0000
-    sta $80
-    lda $28
-    clc
-    adc #$000E
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    ldy #$000E
+    jsr h23b52_write_a2
 L23b52_23b98:
     lda $24
     clc
@@ -4817,6 +4716,35 @@ Lf23b52_2:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; Store A to [A2+Y] while preserving the original generic address-space
+; behavior on an unexpected pointer.  Production A2 records are bounded
+; F0 work RAM; the low-bound check prevents a +$0E word from crossing banks.
+h23b52_write_a2:
+    sta $80
+    lda $2A
+    cmp #$00F0
+    bne h23b52_write_a2_generic
+    lda $28
+    cmp #$FFF1
+    bcs h23b52_write_a2_generic
+    tya
+    clc
+    adc $28
+    tax
+    lda $80
+    jsl.l wrw40_l
+    rts
+h23b52_write_a2_generic:
+    tya
+    clc
+    adc $28
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    rts
 
 ; --- objproc RENDER visit (coroutine resume $01E7C0, docs/OBJPROC_SPEC.md) — Phase-2.1 A2 main body.
 ; xlat bank-$01 dispatch like entry_1d5f0. --jt=1EE6C:-16:0 (anim-op DOWNWARD table, ops 0..-8) +

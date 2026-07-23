@@ -3,7 +3,24 @@
 Last updated: July 22, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
-> ## ✅ R6 PLAYABILITY OVERRIDE — July 22, 2026
+> ## ⚠️ R7 USER-PLAYTEST CORRECTION — July 22, 2026
+>
+> The first real v105 playtest disproved the **playable** label below. It eventually booted and
+> accepted coin/Start, rendered movement/enemies/backgrounds, and played recognizable music, but
+> player attacks did nothing, enemies did not damage Superman, and the soundtrack audibly cut out.
+> The combat root cause was `$012B6C` returning every one of its 34 BSR callers to `$01177C`.
+>
+> Retained v124 (ROM SHA-256 `777507c9…`) propagates the real return PC. It is green for 35/35
+> focused MAME cases and 4/4 live combat-spine differentials; attack/jump visibly respond, and an
+> 800-frame idle window activates enemy attacks and changes health 20→18. Its formal power-on result
+> is stable through tick 2,210 but measures **29.7002 game-fps / 360,990.164 cycles/tick**, missing
+> both explicit 30 Hz thresholds. Current verdict: **combat-fixed near-30 Hz technical demo, not
+> playable or shippable**. Audio transport remains organic, but ignored/placeholder SFX, trimmed
+> samples, and incomplete pitch/LFO/portamento transcription make the music musically unvalidated.
+> Final-v124 interpreter gates are optest 160/160 and opsweep 782/782. See
+> [CONFESSION.md](CONFESSION.md) and [RECOVERY.md](RECOVERY.md) R7.
+
+> ## HISTORICAL R6 PERFORMANCE RESULT — July 22, 2026
 >
 > [CONFESSION.md](CONFESSION.md) and [RECOVERY.md](RECOVERY.md) R6 supersede the old performance
 > banners below. Exact production candidate v105 (ROM SHA-256 `72d925ac…`) now clears the defined
@@ -12,10 +29,9 @@ Last updated: July 22, 2026. Per-area detail lives in the linked docs.
 > 1,802 requests, 1,802 unit ACKs, and 1,802 true draws with zero queue drops; real input, sound ring,
 > ROM/WRAM mirror, all 16 task stacks, and halt state remained healthy through tick 2,230—well past
 > the former 765/767 ordering failure. Final-ROM MAME gates are 160/160 optest and 782/782 opsweep.
-> This is an evidence-backed playable candidate, not yet a shippable/full-playthrough-validated
-> release. Exact MAME pixel fidelity, hardware timing, the 21-track listening pass, and real SFX
-> remain open. R5's failed labs remain valid negative evidence, not the v105 verdict. The remainder
-> of this file is retained as engineering history and partial evidence.
+> This was the R6 evidence-backed playable verdict. R7 supersedes that label after real playtesting;
+> the timing, renderer, input, and scheduler measurements remain valid historical evidence for exact
+> v105. The remainder of this file is retained as engineering history and partial evidence.
 
 > ## ⚠️ SOUND PORT — INTEGRATED, AUTOMATED GATES GREEN, MUSICAL VALIDATION INCOMPLETE
 > The full TAD/YM2610 sound port is done and verified end to end: real FM instruments
@@ -30,7 +46,8 @@ Last updated: July 22, 2026. Per-area detail lives in the linked docs.
 > carry path), 8/8 random-power-on boots, live trigger-injection chains, and audio
 > playing WHILE the game runs. Docs: `tools/sound/README.md` (pipeline + close-out),
 > `docs/SOUND_COMMAND_MAP.md` (byte map + method). Remaining (non-blocking): the by-ear
-> listening pass, real SFX authoring, rights review (tracks 3/8/19 = John Williams).
+> listening pass, real SFX authoring, rights review (tracks 3/8/19 = John Williams). R7 confirms
+> these are audible fidelity defects, not merely optional release polish.
 
 > ## ✅ COLD BOOT RESTORED + LOOP_HOOK ROOT-CAUSED (2026-07-10/11, `sound-p3`)
 > Production cold boot had been silently dead for months (code growth covered the

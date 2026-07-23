@@ -1,20 +1,94 @@
 # CONFESSION.md
 
 An honest accounting of what is wrong, overclaimed, or unfinished in this project, originated
-2026-07-12 and reconciled with the production playability result on 2026-07-22. The project's older
-status docs and memory files were optimistic to the point of being misleading. Where a historical
-claim below conflicts with the dated reconciliation at the top of this file, use the newer result.
+2026-07-12 and last corrected after the first real v105 user playtest on 2026-07-22. The project's
+older status docs and memory files were optimistic to the point of being misleading. Where a
+historical claim below conflicts with the newest dated correction, use the newer result.
 
-The current single-sentence version: **production candidate v105 now clears the project's explicit
-30 Hz playability gate from a clean power-on, including rendering, real input, sound-ring health,
-and the former tick-765/767 scheduler hazard; it is an evidence-backed playable candidate, but not
-yet a shippable or full-playthrough-validated port, and the audio listening/SFX and exact MAME pixel
-fidelity work remain open.**
+The current single-sentence version: **v105's formal 30 Hz measurement was real, but calling it
+playable was false: its combat return routing broke both player attacks and enemy offense, and its
+recognizable music is audibly incomplete; v124 repairs the demonstrated combat failures and is
+stable in the current long run, but measures 29.7002 game-fps / 360,990.164 SA-1 cycles per tick,
+so it remains a near-30 Hz interactive technical demo, not a playable or shippable port.**
 
-## Playability reconciliation — July 22, 2026
+## Post-user-playtest correction — July 22, 2026
+
+The first real v105 playtest invalidated the R6 **playable** verdict. The tester initially saw a
+long black screen, then was eventually able to insert a coin, start, see the level, move Superman,
+and observe enemies while recognizable music played. That is meaningful interaction, but Superman
+could not attack, enemies did not damage him, and the music audibly cut out or lost continuity.
+The tester was not using the controls incorrectly.
+
+The combat defect was a concrete port bug. The native/HLE path for 68000 function `$012B6C`
+hardcoded return PC `$01177C`, although the function has 34 real BSR return PCs. Most callers
+therefore resumed in the wrong combat handler. The repaired path propagates the actual saved
+return PC on every exit and normalizes only the one legacy native caller that intentionally enters
+without the ordinary BSR frame. On exact v124 ROM SHA-256
+`777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352`:
+
+- the `$012B6C` HLE is exact against MAME 0.287 for all 35 tested caller/fixture combinations;
+- its retained `$0122A4` combat spine is exact for 4/4 live fixtures, including every register,
+  CCR, terminal PC, and all 64 KiB of work RAM;
+- controller Button 1 visibly changes the punch/fire action and Button 2 visibly changes the jump
+  action; and
+- an uninterrupted 800-video-frame idle-combat check activates enemy attack records and reduces
+  Superman's health from 20 to 18 without a halt.
+
+SNES controls are Select = coin, Start = start, B or Y = arcade Button 1 (punch/fire), and A or X =
+arcade Button 2 (jump). The arcade game has no independent kick input; expecting a separate punch
+and kick button was an understandable assumption, not the cause of the failure.
+
+The audio symptom is also real, but this recovery does not pretend it has been fixed. An organic
+gameplay capture kept TAD on song 3 with no stop, reload, command drop, or digital-silence interval
+of 200 ms or longer. However, observed enemy SFX commands `$1D`, `$25`, `$5B`, and `$27` are
+unmapped/ignored, most SFX are placeholders, pitch bends/LFO/portamento remain untranscribed, and
+several source samples are deliberately trimmed to roughly 0.35-0.5 seconds. Byte-perfect
+transport and a recognizable melody were never proof of musical fidelity. The perceived
+cutting-out is currently classified as incomplete transcription/authoring, not user error.
+
+### Current production measurement
+
+v124 starts from power-on with `TESTFLAG=0`, organically arms production pacing, uses the real
+controller mailbox, validates the real `$00:F5A3` tick boundary, and runs through the known
+ordering region. Its uninterrupted settled window recorded:
+
+| Metric | v124 result |
+|---|---:|
+| Emulated SNES video frames | 3,602 |
+| Real game ticks / nominal game rate | 1,783 / **29.700167 Hz** |
+| SA-1 cycles / mean per tick | 643,645,462 / **360,990.164** |
+| Requests / unit ACK transactions / true draws | 1,783 / 1,782 / 1,782 |
+| Maximum ACK silence | 3 video frames |
+| Final tick / halt / task mask | 2,210 / `$0000` / `$FFF1` |
+| Initialized task contexts / minimum saved-stack margin | 14 / 138 bytes |
+
+Tick and render progress were present in the final frame, the sound-ring pointer and real input
+were valid, renderer queues did not overflow, the ROM/WRAM mirror remained exact, and every
+initialized task stack remained above its floor. The run failed exactly two named gates:
+**29.700167 < 30 game-fps** and **360,990.164 > 358,000 cycles/tick**. It misses the rate by
+0.299833 game-fps and the budget by 2,990.164 cycles/tick. Under this repository's explicit
+contract, it may not be called playable.
+
+Two apparently faster `$26A0` follow-ups demonstrate why local/exact tests are insufficient. v125
+passed its 10/10 exact differential and a checkpoint soak, then halted `$DEAD` during the formal
+cold boot and stopped progressing for 1,753 frames. v126 likewise passed 10/10 and a shorter soak,
+then halted `$DEAD` with 604 frames of silence. Both changes are removed. The production harness
+now rejects stale endpoints by requiring recent tick/render progress and a non-derailed SA-1 PC;
+v124 is the retained safe candidate.
+
+The historical R6 measurement below remains valid evidence about v105's cadence, scheduler,
+renderer conservation, and tested time window. Its promotion from that evidence to **playable**
+did not include a real combat playtest and is explicitly superseded.
+
+Final exact-v124 interpreter semantics are also green against MAME 0.287: optest 160/160 and
+opsweep 782/782 cells (1,564/1,564 vectors). These do not override the failed performance or audio
+verdicts.
+
+## Historical R6 performance reconciliation — July 22, 2026
 
 The July 12 confession remains the baseline for old ROMs and for every claim not explicitly
-superseded here. Its performance verdict is now historical. Starting from power-on with
+superseded in the correction above. Its earlier performance verdict is historical. Starting from
+power-on with
 `TESTFLAG=0`, the exact production candidate ROM SHA-256
 `72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3` organically armed the six
 production gates, initialized the real two-vblank pacing path, drove coin/Start and gameplay
@@ -52,7 +126,8 @@ checkpoint profile are under
 `build/playability-20260720/deadline-debt10-manifest-v105-direct-ownership-*` and are summarized in
 `RECOVERY.md` R6 and `docs/PROFILE_CAMPAIGN.md`.
 
-Current honest limits:
+R6 limits as recorded at the time (historical; the playability label and candidate state are
+superseded above):
 
 - This proves representative sustained gameplay through tick 2,230 and the known ordering hazard,
   not a complete playthrough, every stage/boss, real-cartridge timing, or shippability.

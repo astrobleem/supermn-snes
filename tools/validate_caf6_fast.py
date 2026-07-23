@@ -182,6 +182,16 @@ def build_case(
         put16(work, A6_FRAME - 0x16, 1)
         put16(work, A6_FRAME - 0x14, 2)
         put32(work, A6_FRAME - 0x12, 0x000326AE)
+    elif selection == "late-frame-list33208":
+        # Corrected late gameplay reaches the general frame-pointer branch
+        # with D2=$74.  $0328C0 supplies selector $00BC, whose immutable table
+        # entry is list $033208.
+        put16(work, A6_FRAME - 0x1A, 0x0074)
+        put16(work, A6_FRAME - 0x04, 0x0074)
+        put16(work, A6_FRAME - 0x18, 0x00A8)
+        put16(work, A6_FRAME - 0x16, 1)
+        put16(work, A6_FRAME - 0x14, 1)
+        put32(work, A6_FRAME - 0x12, 0x000328C0)
     elif selection == "d1-negative":
         # Equal D2, non-positive D0, then negative D1 returns to cb00.
         put16(work, A6_FRAME - 0x1A, 0)
@@ -261,6 +271,37 @@ def make_cases() -> list[base.Case]:
             mirrored=True,
             wide_attribute=False,
             table_index=0x0014,
+        ),
+        build_case(
+            "production-list-332fe-index-0028",
+            0xCAF60F,
+            selection="direct-index",
+            mirrored=False,
+            wide_attribute=True,
+            table_index=0x0028,
+        ),
+        build_case(
+            "production-list-33208-index-00a8",
+            0xCAF610,
+            selection="direct-index",
+            mirrored=True,
+            wide_attribute=False,
+            table_index=0x00A8,
+        ),
+        build_case(
+            "production-list-33208-frame-328c0",
+            0xCAF611,
+            selection="late-frame-list33208",
+            mirrored=False,
+            wide_attribute=True,
+        ),
+        build_case(
+            "production-list-32f78-index-0024",
+            0xCAF612,
+            selection="direct-index",
+            mirrored=True,
+            wide_attribute=False,
+            table_index=0x0024,
         ),
         build_case(
             "production-list-32fca-negative-d1-d2-8",
@@ -402,8 +443,15 @@ def nexen_result(
         "fallback": symbol_address(esc3, 0x97, "hcaf6_fallback"),
         "const_32f78": symbol_address(esc6, 0x95, "hcaf6_const_list"),
         "const_32fca": symbol_address(esc7, 0x9D, "hcaf6_32fca"),
+        "const_33208": symbol_address(esc6, 0x95, "hcaf6_const_33208"),
+        "const_332fe": symbol_address(esc6, 0x95, "hcaf6_const_332fe"),
+        "generic_late": symbol_address(esc3, 0x97, "hcaf6_loop_generic"),
     }
-    if "32fca" in case.name:
+    if "33208" in case.name:
+        expected_route = "const_33208"
+    elif "332fe" in case.name:
+        expected_route = "const_332fe"
+    elif "32fca" in case.name:
         expected_route = "const_32fca"
     elif "32f78" in case.name:
         expected_route = "const_32f78"
@@ -523,7 +571,11 @@ def compare(case: base.Case, arcade: base.Result, console: base.Result) -> dict:
         console.sr & base.CCR_MASK
     )
     route_probe = getattr(console, "route_probe", {})
-    if "32fca" in case.name:
+    if "33208" in case.name:
+        expected_route = "const_33208"
+    elif "332fe" in case.name:
+        expected_route = "const_332fe"
+    elif "32fca" in case.name:
         expected_route = "const_32fca"
     elif "32f78" in case.name:
         expected_route = "const_32f78"

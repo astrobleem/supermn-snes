@@ -168,9 +168,15 @@ DIRECT_PCS = {
     # page-$2A1 entry out of the dense blob to make room for $01C9xx without
     # increasing the fixed forty-page bank-$96 footprint.
     0x02A190,
+    # Correct bank-$01 landing/combat returns would each consume a new
+    # 768-byte dense page.  Route both exact PCs through the sparse dispatcher.
+    0x011BDC, 0x011C9A,
 }
 
 JMP_STATE_PCS |= {0x01177C}   # $011752 spine second half: reached by the hle_12b6c rts POP (op_rts_norm -> xlat)
+# These are genuine BSR returns from hle_12b6c.  The old hard-coded $01177C
+# shortcut hid them; the corrected HLE now materializes the actual caller.
+JMP_STATE_PCS |= {0x011BDC, 0x011C9A}
 JMP_STATE_PCS |= {0x3B48, 0x3B58, 0x3B70}   # $3B48 GAME_TICK prologue fragments (3B48 = choke ct_ext arm; 3B58/3B70 = header-callee rts pops)
 JMP_STATE_PCS |= {0x075C, 0x077A}   # sched plumbing: first task-SELECT + the trap-handler DEFER entry (choke ct_ext arms)
 # Genuine-return continuations inside the native $0175A0 coroutine.  The

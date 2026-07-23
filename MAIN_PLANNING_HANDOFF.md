@@ -1,6 +1,26 @@
 # MAIN_PLANNING_HANDOFF.md
 
-> ## R6 PLAYABILITY OVERRIDE (2026-07-22)
+> ## R7 USER-PLAYTEST / COMBAT OVERRIDE (2026-07-22)
+>
+> R6's exact timing result was real, but its **playable** conclusion was not. The first human v105
+> playtest eventually reached gameplay and movement, then found that attacks did nothing, enemies
+> never damaged Superman, and recognizable music audibly cut out. The combat root cause was the
+> `$012B6C` HLE hardcoding `$01177C` instead of returning to each of 34 real BSR callers.
+>
+> Retained exact v124, ROM SHA-256
+> `777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352`, repairs the return contract.
+> It passes 35/35 focused MAME cases, 4/4 full-work-RAM combat-spine cases, visible attack/jump
+> checks, and an 800-frame idle check in which enemy attacks activate and health falls 20→18.
+> Its uninterrupted clean-power-on production window remains stable through tick 2,210 but measures
+> **29.700167 game-fps / 360,990.164 SA-1 cycles per tick**. That misses the 30 Hz / 358K contract,
+> so current truth is **combat-fixed near-30 Hz technical demo, not playable or shippable**.
+>
+> Audio is not fixed: current evidence rules out a simple TAD stop/reload/drop or ≥200 ms digital
+> silence, but unmapped enemy SFX, placeholders, trimmed samples, and missing pitch/LFO/portamento
+> transcription remain audible. Current engineering truth is in `CONFESSION.md`, `RECOVERY.md` R7,
+> `AGENTS.md`, and the newest section of `docs/PROFILE_CAMPAIGN.md`.
+
+> ## HISTORICAL R6 PERFORMANCE RESULT (2026-07-22)
 >
 > The historical R5 task below is complete and superseded for one exact production candidate.
 > v105, ROM SHA-256
@@ -12,11 +32,9 @@
 > tick 2,230 with halt zero and all 16 task stacks above their floors. Fresh MAME gates pass
 > optest 160/160 and opsweep 782/782.
 >
-> Current engineering truth is in `CONFESSION.md`, `RECOVERY.md` R6, `AGENTS.md`, and the
-> 2026-07-22 section of `docs/PROFILE_CAMPAIGN.md`. The candidate is playable under the project's
-> representative 30 Hz evidence contract, not yet shippable or full-playthrough validated.
-> Aligned MAME pixel fidelity, hardware qualification, audio listening, and real SFX remain open.
-> Do not transfer the verdict to another ROM hash without rerunning the full cold-boot gate.
+> This historical result remains valid cadence/renderer/scheduler evidence for exact v105. R7
+> supersedes its playable label after real combat/audio testing. Do not transfer either verdict to
+> another ROM hash without rerunning the full cold-boot and human-playtest gates.
 >
 > ## RECOVERY OVERRIDE (2026-07-12)
 >

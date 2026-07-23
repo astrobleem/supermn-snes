@@ -29,7 +29,9 @@ entry_c262_generated_resume=$99C906
 entry_2742t=$99DE0E
 L25110_25122=$97804F
 h25110_stage1_done=$9785DA
-Lcaf6_cb9c=$97DC4C
+Lcaf6_cb9c=$97DC50
+entry_12a92=$97B800
+entry_caf6=$97D800
 ; <<< ESCBANK6_SYMS <<<
 hobj_capture_reset=$9D87C0 ; invalidate a prior full-plane paced OBJ capture
 
@@ -5146,39 +5148,80 @@ e111at_source_ready:
     xba
     sta $8E                 ; d7 count
 
-    ; Organic late-combat calls use three immutable ROM shapes.  Their
+    ; Organic late-combat calls use six immutable ROM shapes.  Their
     ; capacity is larger than the number of nonzero cells, and the observed
     ; coordinates keep every nonzero cell inside the unclipped X/Y range.
     ; Select only that fully proven class; all other sources, capacities, and
     ; clipping cases retain the generic loop below.
     lda $9A
     cmp #$0003
-    bne e111at_generic
+    beq e111at_hot_bank_ok
+    jmp e111at_generic
+e111at_hot_bank_ok:
     lda $9C
     cmp #$37F0
     beq e111at_hot_source_337f0
     cmp #$3C0A
     beq e111at_hot_source_33c0a
+    cmp #$3C40
+    beq e111at_hot_source_33c40
+    cmp #$3C76
+    beq e111at_hot_source_33c76
+    cmp #$3CAC
+    beq e111at_hot_source_33cac
     cmp #$44C6
     beq e111at_hot_source_344c6
-    bra e111at_generic
+    jmp e111at_generic
 e111at_hot_source_337f0:
     lda $8E
     cmp #$0011              ; 18 slots for 16 nonzero cells
-    bne e111at_generic
+    beq e111at_hot_source_337f0_ok
+    jmp e111at_generic
+e111at_hot_source_337f0_ok:
     stz $9E                 ; shape selector 0
     bra e111at_hot_guard
 e111at_hot_source_33c0a:
     lda $8E
     cmp #$0011              ; 18 slots for 12 nonzero cells
-    bne e111at_generic
+    beq e111at_hot_source_33c0a_ok
+    jmp e111at_generic
+e111at_hot_source_33c0a_ok:
     lda #$0001
     sta $9E                 ; shape selector 1
+    bra e111at_hot_guard
+e111at_hot_source_33c40:
+    lda $8E
+    cmp #$0011              ; 18 slots for 14 nonzero cells
+    beq e111at_hot_source_33c40_ok
+    jmp e111at_generic
+e111at_hot_source_33c40_ok:
+    lda #$0005
+    sta $9E                 ; shape selector 5
+    bra e111at_hot_guard
+e111at_hot_source_33c76:
+    lda $8E
+    cmp #$0011              ; 18 slots for 12 nonzero cells
+    beq e111at_hot_source_33c76_ok
+    jmp e111at_generic
+e111at_hot_source_33c76_ok:
+    lda #$0003
+    sta $9E                 ; shape selector 3
+    bra e111at_hot_guard
+e111at_hot_source_33cac:
+    lda $8E
+    cmp #$0011              ; 18 slots for 14 nonzero cells
+    beq e111at_hot_source_33cac_ok
+    jmp e111at_generic
+e111at_hot_source_33cac_ok:
+    lda #$0004
+    sta $9E                 ; shape selector 4
     bra e111at_hot_guard
 e111at_hot_source_344c6:
     lda $8E
     cmp #$000F              ; 16 slots for 13 nonzero cells
-    bne e111at_generic
+    beq e111at_hot_source_344c6_ok
+    jmp e111at_generic
+e111at_hot_source_344c6_ok:
     lda #$0002
     sta $9E                 ; shape selector 2
 e111at_hot_guard:
@@ -5190,11 +5233,28 @@ e111at_hot_guard:
     lda $400000,x
     xba
     sta $80
+    lda $3C                 ; screen Y at [a7+10]
+    clc
+    adc #$000A
+    tax
+    lda $400000,x
+    xba
+    sta $96                 ; preserve source.lo in $9C until all guards pass
+    cmp #$0140              ; hottest five-column cell is +$40, below $180
+    bcc e111at_hot_x_guard
+    ; The wider all-hidden-Y admission failed the uninterrupted production
+    ; ordering gate at frame 8,659/tick 1,755.  Its function-local fixtures
+    ; were insufficient to prove the later whole-program path, so keep every
+    ; clipped/high/wrapped Y case on the generic implementation.
+    jmp e111at_generic
+e111at_hot_x_guard:
     lda $80                 ; XBA flags reflect its low byte, not word sign
     bmi e111at_hot_negative_x
     cmp #$00AB              ; row 4 remains nonnegative through X=$AA
     bcs e111at_generic
-    bra e111at_hot_x_ready
+    lda $96
+    sta $9C
+    jmp e111at_hot
 e111at_hot_negative_x:
     ; The organic Right+B $033C0A stream enters with screen X <= -$50.
     ; Across the complete signed-negative range $8000-$FFB0, every one of
@@ -5209,16 +5269,8 @@ e111at_hot_negative_x:
     cmp #$FFB1
     bcs e111at_generic
     inc $94                 ; replace all five computed X rows with $00FA
-e111at_hot_x_ready:
-    lda $3C                 ; screen Y at [a7+10]
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
+    lda $96
     sta $9C
-    cmp #$0140              ; hottest nonzero column is +$40, below $180
-    bcs e111at_generic
     jmp e111at_hot
 
 e111at_generic:
@@ -5534,10 +5586,26 @@ e111at_hot_rows_ready:
     sta $6C
     ldy #$0000
     lda $9E
-    beq e111at_hot_337f0
+    bne e111at_hot_select_1
+    jmp e111at_hot_337f0
+e111at_hot_select_1:
     cmp #$0001
-    beq e111at_hot_33c0a
+    bne e111at_hot_select_2
+    jmp e111at_hot_33c0a
+e111at_hot_select_2:
+    cmp #$0002
+    bne e111at_hot_select_3
     jmp e111at_hot_344c6
+e111at_hot_select_3:
+    cmp #$0003
+    bne e111at_hot_select_4
+    jmp e111at_hot_33c76
+e111at_hot_select_4:
+    cmp #$0004
+    bne e111at_hot_select_5
+    jmp e111at_hot_33cac
+e111at_hot_select_5:
+    jmp e111at_hot_33c40
 
 ; $0337F0: 5x5, nonzero at 0-3 / 0-3 / 1-2 / 0-2 / 0-2.
 e111at_hot_337f0:
@@ -5675,6 +5743,143 @@ e111at_hot_344c6:
     ldx $96
     jsr e111at_hot_emit
     ldx #$0002              ; three unused output slots
+    jmp e111at_hot_finish
+
+; $033C76: 5x5, nonzero at 1-2 / 1-2 / 1-2 / 0-2 / 0-2.
+e111at_hot_33c76:
+    lda $80
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $80
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $84
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $84
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8E
+    jsr e111at_hot_emit
+    ldx #$0005              ; six unused output slots
+    jmp e111at_hot_finish
+
+; $033CAC: 5x5, nonzero at 1-2 / 0-3 / 1-2 / 0-2 / 0-2.
+e111at_hot_33cac:
+    lda $80
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $80
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $82
+    ldx $96
+    jsr e111at_hot_emit
+    lda $84
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $84
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8E
+    jsr e111at_hot_emit
+    ldx #$0003              ; four unused output slots
+    jmp e111at_hot_finish
+
+; $033C40: 5x5, nonzero at 0-2 / 0-2 / 1-2 / 0-2 / 0-2.
+; This is the previously generic once-per-tick late-combat animation frame
+; captured organically at $95:A8F0 with X=$005F, Y=$010E, and D7=$0011.
+e111at_hot_33c40:
+    lda $80
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $80
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $80
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $82
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $84
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $84
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $86
+    ldx $8E
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8A
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8C
+    jsr e111at_hot_emit
+    lda $88
+    ldx $8E
+    jsr e111at_hot_emit
+    ldx #$0003              ; four unused output slots
 
 e111at_hot_finish:
     lda #$00FA
@@ -5692,9 +5897,12 @@ e111at_hot_fill:
     jmp e111at_done
 
 e111at_hot_emit:
+.a16
+.i16
     xba
     sta [$66],y
     txa
+    and #$01FF
     sta $9A
     lda [$6A],y
     xba
@@ -14278,6 +14486,7 @@ hcaf6_const_list:
     sta $40000C,x
 
     ; Records 1-4.  Parameters are x, y, local-x, local-y, and type.
+hcaf6_const_records_1_4:
     lda #$0004
     sta $88
     lda #$000D
@@ -14327,7 +14536,9 @@ hcaf6_const_list:
 
 hcaf6_const_done:
     ; Five ADDA.L #$10,A0 operations and the exhausted DBRA residue.
-    lda #$2FCA
+    lda $20
+    clc
+    adc #$0050
     sta $20
     lda #$0003
     sta $22
@@ -14512,3 +14723,471 @@ h25_pred_true:
     sec
     rts
 h25_predicates_end:
+
+; Correct landing/combat continuations after hle_12b6c.  The old HLE forced
+; every caller to $01177C; once it returned to the real BSR sites these two
+; hot paths became visible in the production profile.  They are bare no-push
+; continuations because the HLE's RTS has already consumed the caller return.
+; Commands:
+;   tools/transpile.py 011bdc --coroutine --bank6 --bail --xflag --escapes=12a92,caf6
+;   tools/transpile.py 011c9a --coroutine --bank6 --bail --xflag --escapes=12a92,caf6
+    .org $FC20
+.a16
+.i16
+; --- transpiled from $011BDC (19 instrs) by tools/transpile.py [bank1] ---
+entry_11bdc:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    ; CALL-BRIDGE bsr.w $12a92 -> entry_12a92 (NATIVE escape), resume br11bdc_1
+    lda #br11bdc_1
+    sta $40
+    lda #$00F9
+    sta $42
+    jml.l entry_12a92
+br11bdc_1:
+    ; restore real 68K call return residue below A7: $011BE0
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$1BE0
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE bsr.w $caf6 -> entry_caf6 (NATIVE escape), resume br11bdc_2
+    lda #br11bdc_2
+    sta $40
+    lda #$00F9
+    sta $42
+    jml.l entry_caf6
+br11bdc_2:
+    ; restore real 68K call return residue below A7: $011BE4
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$1BE4
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFEC
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    bne Lf11bdc_1
+    jmp L11bdc_11c12
+Lf11bdc_1:
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$00AC
+    bne Lf11bdc_2
+    jmp L11bdc_11bf4
+Lf11bdc_2:
+    lda #$1BBE
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+L11bdc_11bf4:
+    lda $00
+    sec
+    sbc #$0001
+    beq Lf11bdc_3
+    jmp Ltj11bdc_11bbe
+Lf11bdc_3:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0010
+    bne Lf11bdc_4
+    jmp L11bdc_11c12
+Lf11bdc_4:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0004
+    bne Lf11bdc_5
+    jmp Ltj11bdc_11bbe
+Lf11bdc_5:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0008
+    bne Lf11bdc_6
+    jmp Ltj11bdc_11bbe
+Lf11bdc_6:
+L11bdc_11c12:
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0010
+    beq Lf11bdc_7
+    jmp L11bdc_11c1e
+Lf11bdc_7:
+    lda #$1C22
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+L11bdc_11c1e:
+    lda #$174A
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltj11bdc_11bbe:
+    lda #$1BBE
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+
+; --- transpiled from $011C9A (9 instrs) by tools/transpile.py [bank1] ---
+entry_11c9a:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    ; CALL-BRIDGE bsr.w $12a92 -> entry_12a92 (NATIVE escape), resume br11c9a_1
+    lda #br11c9a_1
+    sta $40
+    lda #$00F9
+    sta $42
+    jml.l entry_12a92
+br11c9a_1:
+    ; restore real 68K call return residue below A7: $011C9E
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$1C9E
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE bsr.w $caf6 -> entry_caf6 (NATIVE escape), resume br11c9a_2
+    lda #br11c9a_2
+    sta $40
+    lda #$00F9
+    sta $42
+    jml.l entry_caf6
+br11c9a_2:
+    ; restore real 68K call return residue below A7: $011CA2
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$1CA2
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFBC
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0010
+    beq Lf11c9a_1
+    jmp Ltj11c9a_11dfc
+Lf11c9a_1:
+    lda $38
+    clc
+    adc #$FFEC
+    tax
+    lda $400000,x
+    xba
+    beq Lf11c9a_2
+    jmp Ltj11c9a_11c62
+Lf11c9a_2:
+    lda $38
+    clc
+    adc #$FFE6
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0004
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FF8C
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    xba
+    sta $400000,x
+    xba
+    lda #$1CBC
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltj11c9a_11c62:
+    lda #$1C62
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltj11c9a_11dfc:
+    lda #$1DFC
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+landing_combat_continuations_end:
+
+; ============================================================================
+; Exact constant-list body for late-game $00CAF6 list $033208.
+;
+; Bank $9D's generated-selector admission has proved this exact five-record
+; list, D7=4, bounded A6/A2, and all five A1 slots before entering here.
+; Reuse the differential-tested $032F78 record core above; $033208 differs
+; only in three record coordinates.  This keeps the specialization inside the
+; final free bank-$95 tail without duplicating the CB9E semantics.
+;
+; Fixed at $95:FE20 because bank $97 reaches it with a literal JML.
+; ============================================================================
+    .org $FE20
+hcaf6_const_33208:
+    rep #$30
+    .a16
+    .i16
+
+    ; Frame invariants shared by all five records.
+    lda $38
+    clc
+    adc #$FFDE                    ; [A6-$22]
+    tax
+    lda $400000,x
+    xba
+    sta $80
+    lda $38
+    clc
+    adc #$FFE2                    ; [A6-$1E]
+    tax
+    lda $400000,x
+    xba
+    sta $82
+    lda $38
+    sec
+    sbc #$0024                    ; BTST #7,[A6-$24]
+    tax
+    lda $400000,x
+    and #$0080
+    sta $84
+    lda $38
+    clc
+    adc #$FFAE                    ; low word of [A6-$54]
+    tax
+    lda $400000,x
+    xba
+    sta $28
+    lda #$00F0
+    sta $2A
+    lda $38
+    clc
+    adc #$FFCA                    ; first [A6-$38+offset] pointer low
+    sta $86
+
+    ; Record 0 is identical to the established $032F78 sentinel record.
+    jsr hcaf6_const_next_a1
+    ldx $24
+    lda #$FFFF
+    sta $400000,x
+    lda #$0000
+    sta $40000E,x
+    lda #$8000
+    clc
+    adc $18
+    xba
+    sta $40000A,x
+    lda #$0000
+    sta $40000C,x
+
+    ; Records 1-4: x, y, local-x, local-y, and type.
+    lda #$0000
+    sta $88
+    lda #$0009
+    sta $8A
+    lda #$FFE2
+    sta $8C
+    lda #$FFEA
+    sta $8E
+    stz $90
+    jsr hcaf6_const_record
+
+    lda #$FFFA
+    sta $88
+    lda #$000B
+    sta $8A
+    lda #$FFEB
+    sta $8C
+    lda #$0007
+    sta $8E
+    lda #$0001
+    sta $90
+    jsr hcaf6_const_record
+
+    lda #$FFF8
+    sta $88
+    lda #$000B
+    sta $8A
+    lda #$0008
+    sta $8C
+    lda #$001F
+    sta $8E
+    lda #$0002
+    sta $90
+    jsr hcaf6_const_record
+
+    lda #$FFF8
+    sta $88
+    lda #$000B
+    sta $8A
+    lda #$FFE2
+    sta $8C
+    lda #$001F
+    sta $8E
+    lda #$0003
+    sta $90
+    jsr hcaf6_const_record
+
+    ; Five ADDA.L #$10,A0 operations and exhausted DBRA residue.
+    lda #$325A
+    sta $20
+    lda #$0003
+    sta $22
+    lda #$FFFF
+    sta $1C
+    jml.l Lcaf6_cb9c
+hcaf6_const_33208_end:
+
+; $0332FE shares records 1-4 with $032F78.  Its first record is positive
+; rather than the sentinel form, so initialize the common frame state, execute
+; that one record through the established semantic core, then join the exact
+; shared tail.  Fixed at $95:FF10 for bank $97's literal JML.
+    .org $FF10
+hcaf6_const_332fe:
+    rep #$30
+    .a16
+    .i16
+
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    lda $400000,x
+    xba
+    sta $80
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    lda $400000,x
+    xba
+    sta $82
+    lda $38
+    sec
+    sbc #$0024
+    tax
+    lda $400000,x
+    and #$0080
+    sta $84
+    lda $38
+    clc
+    adc #$FFAE
+    tax
+    lda $400000,x
+    xba
+    sta $28
+    lda #$00F0
+    sta $2A
+    lda $38
+    clc
+    adc #$FFCA
+    sta $86
+
+    ; Record 0: offset 0, (5,61,-14,-6,$80100001).
+    lda #$0005
+    sta $88
+    lda #$003D
+    sta $8A
+    lda #$FFF2
+    sta $8C
+    lda #$FFFA
+    sta $8E
+    lda #$8010
+    sta $90
+    jsr hcaf6_const_record
+    ; This list's positive first record carries longword $80100001; the
+    ; shared later-record core normally sees a zero low byte in this slot.
+    ldx $24
+    sep #$20
+    .a8
+    lda #$01
+    sta $40000D,x
+    rep #$20
+    .a16
+    jmp hcaf6_const_records_1_4
+hcaf6_const_332fe_end:

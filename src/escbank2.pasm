@@ -6894,7 +6894,9 @@ hc172_optional_hot_end:
 ; hle_12b6c — HAND-WRITTEN HLE of the $012B6C dispatcher tree (HLE SPIKE; see
 ; MAIN_PLANNING_HANDOFF.md). Fixed .org $E000 so interp.pasm's bhp_bank_ext can `jml $94E000`
 ; without symbol plumbing. Entry (from bhp_bank_ext): the `bsr $12b6c` was consumed, NO return
-; pushed; $40/$42 = return $01177C; DP reg file live; 16-bit M/X.
+; pushed; $40/$42 = the actual bank-$01 BSR return; DP reg file live; 16-bit M/X.
+; The one direct bank-$99 link from entry_11752 retains its native continuation in $40/$42;
+; normalize that route to the equivalent logical $01177C continuation before materializing ret1.
 ; SEMANTICS (68K, capstone-verified):
 ;   $12B6C: d7.w = w(a6-$72); ==0 -> $12B84; (d7.w &= 3) != 0 -> $12B84; else -> $12C04
 ;   $12B84: a2 = *(long)(a3 + sext w(a6-$18)) [ROM sprite-frame table]; d1.w = w(a4+2)-$20;
@@ -6915,6 +6917,23 @@ hc172_optional_hot_end:
     .org $E000
 hle_12b6c:
     rep #$30
+    lda $42
+    cmp #$0001
+    beq hle_return_ready
+    ; The original direct link resumes at physical bank-$99 br11752_5 and has
+    ; no native post-HLE continuation, so normalize that one exact convention
+    ; to the logical $01177C return.  Other escape banks may call this HLE with
+    ; their own continuation and must retain it so ors_pre can resume them.
+    cmp #$0099
+    bne hle_return_ready
+    lda $40
+    cmp #$B5B9               ; pinned entry_11752 br11752_5 direct link
+    bne hle_return_ready
+    lda #$177C
+    sta $40
+    lda #$0001
+    sta $42
+hle_return_ready:
     ; ---- $12B6C dispatcher: d7.w = w(a6-$72) ----
     lda $38
     clc
@@ -6931,11 +6950,11 @@ hle_12b6c:
     jmp hle_pC
 
 hle_bail:                ; rare path -> re-simulate `bsr $12b6c`, interp runs the tree faithfully
-    lda #$177C
+    lda $40
     sta $54
-    lda #$0001
+    lda $42
     sta $56
-    jsl.l push32_l       ; push ret1 = $0001177C
+    jsl.l push32_l       ; push the actual caller's ret1
     lda #$2B6C
     sta $40
     lda #$0001
@@ -7094,7 +7113,7 @@ hle_pB_stk:
     xba
     sta $88
     ; ---- stack image (byte-identical to the interpreted run) ----
-    ; [a7-4]=ret1 $0001177C  [a7-8]=ret2 $00012B82  [a7-10]=$0012  [a7-14]=a2.l
+    ; [a7-4]=actual ret1  [a7-8]=ret2 $00012B82  [a7-10]=$0012  [a7-14]=a2.l
     ; [a7-16]=d0  [a7-18]=d1  [a7-20]=d2  [a7-22]=w58 ; then a7 -= 22
     lda $3C
     sec
@@ -7146,12 +7165,14 @@ hle_pB_stk:
     sta $400000,x        ; [a7-6] = $2B82 (ret2 lo)
     inx
     inx
-    lda #$0100
-    sta $400000,x        ; [a7-4] = $0001 (ret1 hi = bsr $12b6c's push)
+    lda $42
+    xba
+    sta $400000,x        ; [a7-4] = actual ret1 high word (BE)
     inx
     inx
-    lda #$7C17
-    sta $400000,x        ; [a7-2] = $177C (ret1 lo)
+    lda $40
+    xba
+    sta $400000,x        ; [a7-2] = actual ret1 low word (BE)
     ; ---- CCR at the jsr: N/Z from w58 (move.w -$58(a6),-(a7)); V=0 C=0; X set above ----
     lda $88
     and #$8000
@@ -7167,7 +7188,7 @@ hle_pB_ccr:
     ; table implementation.  The superseded generated ce4t made this shape slower than the old
     ; bank-$00 leaf; hce4_entry now makes it faster while also restoring the LINK/MOVEM residue
     ; and CCR/X effects that leaf omitted.  The continuation rewrites its native sentinel to the
-    ; real $012BFC jsr return, consumes the adda/rts/rts tail, and rejoins at $01177C.
+    ; real $012BFC jsr return, consumes the adda/rts/rts tail, and rejoins at the actual caller.
     ; Other callees (the $0D96 flipped-sprite variant) retain the faithful interpreter handoff.
     lda $26
     bne hle_pB_go
@@ -7223,7 +7244,7 @@ hle_pC:                  ; ---- $12C04 marshalling ----
     lda $400000,x
     xba
     sta $88
-    ; stack: [a7-4]=ret1 $0001177C  [a7-8]=ret2 $00012B7C  [a7-10]=$0012  [a7-12]=w58 ; a7 -= 12
+    ; stack: [a7-4]=actual ret1  [a7-8]=ret2 $00012B7C  [a7-10]=$0012  [a7-12]=w58 ; a7 -= 12
     lda $3C
     sec
     sbc #$000C
@@ -7249,12 +7270,14 @@ hle_pC:                  ; ---- $12C04 marshalling ----
     sta $400000,x        ; [a7-6] = $2B7C (ret2 lo)
     inx
     inx
-    lda #$0100
-    sta $400000,x        ; [a7-4] = $0001 (ret1 hi)
+    lda $42
+    xba
+    sta $400000,x        ; [a7-4] = actual ret1 high word (BE)
     inx
     inx
-    lda #$7C17
-    sta $400000,x        ; [a7-2] = $177C (ret1 lo)
+    lda $40
+    xba
+    sta $400000,x        ; [a7-2] = actual ret1 low word (BE)
     lda $8A
     sta $3C
     lda $8C
@@ -9241,10 +9264,12 @@ xlat_dispatch:
     ; overlap with xlat_choke at $F980.  Page $DB is harmlessly admitted to
     ; the sparse dispatcher and returns to xd_table on every exact-PC miss.
     lda $42
-    cmp #$0002
-    beq xd_sparse_direct
-    cmp #$0000
-    bne xd_table
+    beq xd_sparse_bank0
+    cmp #$0003
+    bcc xd_sparse_direct       ; bank $01/$02: exact sparse scan, then generic miss
+    bra xd_table
+    nop                        ; retain the fixed $F931 generic-table seam
+xd_sparse_bank0:
     lda $40
     xba
     and #$00FF
@@ -9867,7 +9892,8 @@ hce4_cold:
     jmp ce4_generated_after_counter
 
 ; Return from hle_12b6c's native CE4 call.  hce4_entry has consumed the
-; sentinel and restored A7 to the 14-byte argument base.
+; sentinel and restored A7 to the 14-byte argument base.  Recover the actual
+; BSR return from the faithful stack residue before resuming the caller.
 hle_ce4_cont:
     rep #$30
     lda $3C
@@ -9887,10 +9913,18 @@ hle_ce4_cont:
     lda $3E
     adc #$0000
     sta $3E
-    lda #$177C
-    sta $40
-    lda #$0001
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda $400000,x
+    xba
     sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
     jml.l ors_pre
 
 ; ============================================================================

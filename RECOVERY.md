@@ -2,15 +2,18 @@
 
 Started July 12, 2026; latest evidence reconciliation July 22, 2026. This is the active
 project-control document. It converts the repository from overlapping optimistic handoffs into one
-evidence-backed engineering line. **R6 supersedes the R2/R5 performance verdict for the exact v105
-candidate it identifies; the older measurements remain authoritative for their older ROMs.**
+evidence-backed engineering line. **R7 supersedes R6's playable verdict after the first real user
+playtest exposed broken combat and audibly incomplete music. R6 remains valid historical
+performance/scheduler/renderer evidence for exact v105; R7 identifies the retained v124
+combat-fixed technical demo and its new production result.**
 
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
-- The completed recovery line is now `main`. The current R6 production candidate is an uncommitted
-  working tree based at `f34fc4c`; its exact ROM and source hashes are recorded in R6. Do not
-  attribute that candidate to the clean base commit.
+- The completed recovery line became `main`; current recovery work is on
+  `agent/playability-recovery`. Exact ROM hashes, rather than an old handoff's branch name, identify
+  each measured candidate. v105 (`72d925ac…`) is historical; retained combat-fixed v124 is
+  `777507c9…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -47,6 +50,10 @@ dirty `main` worktree identified above.
 - R6's v105 power-on production measurement: exact tick-hook/counter agreement, real input,
   uninterrupted video-time cadence, cycle-stamped SA-1 work, request/ACK/true-render conservation,
   queue overflow telemetry, sound-ring health, task-stack floors, and survival through tick 2,230.
+  This is strong timing/ordering evidence, not evidence that combat was usable.
+- R7's v124 evidence: 35/35 `$012B6C` MAME cases, 4/4 live combat-spine differentials, visible
+  Button 1/2 actions, enemy attack plus health loss in an 800-frame idle window, and a formal
+  power-on 3,602-frame production run with current progress and intact safety checks.
 
 ### Partial evidence, not a project-level verdict
 
@@ -57,12 +64,13 @@ dirty `main` worktree identified above.
 
 ### Unproven or contradicted
 
-- A complete playthrough, every stage/boss path, real-cartridge timing, or shippability. R6
-  supersedes the older statement that no credible 30 Hz landing point existed for the tested
-  representative gameplay path; it does not promote that result into full-game coverage.
+- Playability, a complete playthrough, every stage/boss path, real-cartridge timing, or
+  shippability. v105 met a narrow formal performance contract but failed the first human combat
+  test. v124 repairs those demonstrated combat failures but misses both formal 30 Hz thresholds.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
-- Complete/faithful sound by ear.
+- Complete/faithful sound by ear. The first user playtest reports recognizable music that audibly
+  cuts out; R7 diagnoses incomplete transcription/SFX authoring without claiming an audio fix.
 - Organic firing of every mapped music/SFX trigger.
 
 ## Canonical tools
@@ -449,12 +457,122 @@ accepted. The performance margin is small, so any change to interpreter work, na
 pacing, renderer ownership, input ordering, audio supervision, or layout must rerun the full cold-
 boot gate against its new ROM hash.
 
+**R7 correction:** the paragraph above records the July 22 R6 conclusion but is no longer current.
+The formal cadence evidence was real; the inference that it was playable was falsified by the first
+human combat/audio playtest described below.
+
+### R7 — User-playtest truth and combat recovery
+
+#### The v105 playable verdict failed
+
+The first real user test initially saw a long black screen, then eventually inserted a coin,
+started the round, saw Superman/enemies/backgrounds, moved normally, and heard recognizable music.
+It also found three playability failures that R6 had not tested:
+
+- neither expected attack button produced an attack;
+- enemies appeared inert and did not damage Superman; and
+- the music audibly lost continuity or cut out.
+
+The tester was not operating the ROM incorrectly. Select inserts a coin, Start starts, B/Y map to
+arcade Button 1 (punch/fire), and A/X map to arcade Button 2 (jump). The original arcade game has
+no independent kick input.
+
+#### Combat root cause and repair
+
+The HLE/native replacement for 68000 function `$012B6C` always returned to `$01177C`. That happened
+to fit one historical fixture, but the ROM has 34 BSR callers with distinct saved return PCs.
+Resuming the wrong combat handler explains both the missing player attack transitions and inert
+enemy behavior. The retained repair returns through the actual saved `$40/$42` PC for normal HLE
+entries and normalizes only the legacy `$99:B5B9` native entry to `$01177C`.
+
+Exact retained v124 ROM SHA-256 is
+`777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352`.
+Current evidence tied to that hash:
+
+- `$012B6C->$012B84->$00CE4` is green against MAME 0.287 for **35/35** caller/fixture
+  combinations, covering every discovered BSR return plus the legacy native entry;
+- the retained `$0122A4` combat spine is green for **4/4** live reference/candidate fixtures with
+  exact D/A registers, CCR, terminal PC, and full 64 KiB work RAM;
+- Button 1 and Button 2 each change visible output in the expected punch/fire and jump action
+  checks; and
+- an uninterrupted 800-video-frame idle-combat window activates an enemy attack record and changes
+  player health **20 -> 18** with halt zero.
+
+The retained performance work also includes guarded exact paths for `$CAF6`, `$111A`, `$023A0C`,
+`$0122A4`, narrow `$002BE2`, and an order-preserving `$0026A0` body. Final-hash focused gates are
+green: `$CAF6` 19/19, `$111A` 21/21, `$023A0C` 6/6, `$002BE2` 6/6, `$0026A0` 10/10, and the full
+opcode gates optest 160/160 plus opsweep 782/782 cells / 1,564 vectors.
+
+#### Formal v124 production result
+
+`tools/recovery_baseline.py` booted v124 from power-on with `TESTFLAG=0`, armed the production gates
+organically, validated the real `$00:F5A3` boundary against the game counter, used Nexen port 0 and
+the ROM's real manual `$4016` mailbox, settled gameplay, and then ran one uninterrupted production
+window:
+
+| Uninterrupted production gameplay metric | v124 result |
+|---|---:|
+| Emulated SNES video frames | 3,602 |
+| Real game ticks / nominal game rate | 1,783 / **29.700167 Hz** |
+| SA-1 cycles / mean per tick | 643,645,462 / **360,990.164** |
+| Requests / unit ACK transactions / true draws | 1,783 / 1,782 / 1,782 |
+| Maximum transaction debt / ACK silence | 2 / 3 video frames |
+| Final tick / halt / task mask | 2,210 / `$0000` / `$FFF1` |
+| Final SA-1 PC / 68K PC | `$0083C0` / `$0006C4` |
+| Initialized task contexts / minimum saved-stack margin | 14 / 138 bytes |
+| Final sound-ring pointer / input mailbox / injection | `$00F01C3D` / `$8100` / `$0000` |
+
+The one-request endpoint lag is an in-flight final transaction, not a skipped ACK: ACK steps were
+unit increments, debt stayed within two, queue drops remained zero, and the last tick/render hooks
+were zero/one frames old. Halt stayed zero, all initialized stacks remained above their floors,
+the ROM/WRAM supervisor mirror was exact, and the known ordering window was crossed with continued
+work through tick 2,210.
+
+The run failed exactly the rate and representative-cycle checks:
+
+- **29.700167 < 30 game-fps** by 0.299833; and
+- **360,990.164 > 358,000 cycles/tick** by 2,990.164.
+
+Primary evidence:
+`build/user-playtest-v105-investigation/production-v124-26a0-ordered-coldboot-uninterrupted-3600f-v1/`.
+The uninterrupted hook stream hashes to
+`5782ac9392e5eec76e4539ccc0ecd2df9b597e6b580839e8465df5e626fae83a`; the renderer-debt trace
+hashes to `f7ae81eded6cd37aca525d56b3df76875d56a335732c06578e97d6047e61f1d8`.
+
+Two faster-looking `$26A0` variants were rejected, not retained:
+
+- v125's direct-return shortcut passed 10/10 exact cases and a 3,600-frame checkpoint soak, then
+  halted `$DEAD` in the formal power-on run and accumulated 1,753 frames without tick progress
+  (15.3082 game-fps endpoint average).
+- v126's packed byte/ROR mask also passed 10/10 and a 1,800-frame checkpoint soak, then halted
+  `$DEAD` with 604 frames without tick progress (24.3198 game-fps endpoint average).
+
+Those failures exposed a validator weakness: an old tick total above 800 could make
+`known_ordering_event_survived` look green after execution had already stopped. The harness now
+also requires recent tick progress, recent render progress, and a non-derailed SA-1 PC. Both unsafe
+variants are removed; the exact v124 source rebuild reproduces hash `777507c9…`.
+
+#### Audio classification
+
+An organic gameplay WAV stayed on TAD song 3 and showed no stop/reload, command drop, or digital
+silence interval of at least 200 ms. That rules out one narrow transport-failure theory, not the
+user's audible symptom. Enemy SFX IDs `$1D/$25/$5B/$27` were observed but ignored/unmapped; most
+SFX remain placeholders, pitch bends/LFO/portamento are not transcribed, and several samples are
+trimmed to roughly 0.35-0.5 seconds. The honest classification is **recognizable but musically
+incomplete**. No audio-fidelity fix is claimed in R7.
+
+#### R7 verdict
+
+v124 is the retained combat-fixed playtest ROM and a stable near-30 Hz technical demo in the tested
+window. It is **not playable under the repository contract** because it misses both formal 30 Hz
+thresholds, has not passed a human confirmation of repaired combat, and still has known audible
+music/SFX incompleteness. Restore the word playable only after one exact ROM clears the cold-boot
+rate/budget/ordering/renderer gates and a real user confirms combat and audio behavior.
+
 ## Decision rule after the baseline
 
-R6 supersedes R5's technical-demo-only performance verdict for the exact v105 candidate. Preserve
+R7 supersedes R6's playable label while preserving its exact v105 performance evidence. Preserve
 the production evidence contract: local/checkpoint improvements remain local evidence, while a new
-playability claim requires another power-on uninterrupted run. Continue full-game coverage,
-aligned MAME graphics validation, hardware timing, and audio listening/SFX work under the honest
-label **playable candidate, not shippable release**. If a later ROM misses either sustained 30 Hz or
-the ordering/renderer conservation gates, fall back to this exact hash or restore the technical-
-demo verdict rather than projecting a recovery.
+playability claim requires another power-on uninterrupted run plus a human combat/audio playtest.
+Continue under the honest label **interactive technical demo, not playable or shippable**. v124 is
+the retained safe playtest hash; do not resurrect v125/v126 or project a local speedup into fps.

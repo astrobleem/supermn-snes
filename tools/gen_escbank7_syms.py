@@ -19,7 +19,16 @@ IMPORTS = [
             "h25110_final_tst_rebuild",
             "entry_1d5f0",
             "Lcaf6_cb9c",
+            "caf6_generated_loop_record",
+            "hcaf6_loop",
+            "hcaf6_fallback",
             "entry_1f1c0_generated",
+            "entry_12e56",
+            "entry_12c1a",
+            "entry_129c6",
+            "entry_12a92",
+            "entry_12af6",
+            "entry_caf6",
         ],
     ),
     (
@@ -58,6 +67,10 @@ IMPORTS = [
             "entry_4542",
             "entry_ce58",
             "entry_2bda_generated_resume",
+            "entry_2be2_generated_resume",
+            "br2be2_1",
+            "h26_mask_generated_resume",
+            "h26_return",
             "entry_3c36_generated_resume",
             "br3c36_5",
             "ibridge",
@@ -69,7 +82,7 @@ IMPORTS = [
     (
         Path("src/escbank2.sym"),
         0x94,
-        ["entry_c172", "entry_295at", "entry_29b6t"],
+        ["entry_c172", "entry_295at", "entry_29b6t", "hle_12b6c"],
     ),
     (
         Path("src/escbank5.sym"),
@@ -77,6 +90,7 @@ IMPORTS = [
         [
             "entry_24bc2", "entry_2429c", "entry_c846", "entry_11752",
             "entry_96a", "entry_9ea", "entry_24920t", "entry_24956t",
+            "entry_cc10",
         ],
     ),
     (
@@ -88,6 +102,8 @@ IMPORTS = [
             "entry_1c11a",
             "entry_29128",
             "entry_29144",
+            "entry_11bdc",
+            "entry_11c9a",
         ],
     ),
 ]

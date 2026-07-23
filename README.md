@@ -9,17 +9,24 @@ hardware, while hot paths are migrated to native 65816 over time. Every componen
 validated **differentially against ground truth** — MAME for the arcade side, a real
 SNES PPU (via Nexen) for the target side.
 
-> ## Production status (July 22, 2026) — playable candidate, not a release
+> ## Production status (July 22, 2026) — combat-fixed technical demo, not playable
 >
-> Exact production candidate v105 now clears the project's evidence contract from a clean
-> power-on: **1,802 game ticks in 3,603 uninterrupted SNES frames = 30.0083 game-fps**, with
-> rendering, real input, audio supervision, transitions, and waits included. Mean SA-1 work is
-> **357,281.999 cycles/tick**. It also survives through tick 2,230 with halt zero and every task
-> stack above its floor; 1,802 requests produced 1,802 unit ACKs and 1,802 true draws with no
-> queue overflow. ROM SHA-256: `72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3`.
-> This is an **evidence-backed playable candidate**, not a shippable or full-playthrough-validated
-> release. See [RECOVERY.md](RECOVERY.md) R6 and [CONFESSION.md](CONFESSION.md). The R5 document
-> remains the negative record for the older unsafe lab designs, not the current verdict.
+> The first real v105 user playtest invalidated its **playable** label: the formal 30 Hz timing
+> result was genuine, but a bad `$012B6C` HLE return broke player attacks and enemy offense, and
+> the recognizable soundtrack is audibly incomplete. Exact v124 repairs the demonstrated combat
+> failures: all 35 caller returns match MAME, attack/jump visibly respond, and enemies activate
+> attacks and damage Superman in the retained idle-combat check.
+>
+> v124 ROM SHA-256:
+> `777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352`.
+> Its clean-power-on production window is stable through tick 2,210, but records **1,783 game
+> ticks in 3,602 SNES frames = 29.7002 game-fps** at **360,990.164 cycles/tick**. That misses the
+> explicit 30 Hz / 358K gates, so the honest status is **near-30 Hz interactive technical demo,
+> not playable or shippable**. See [RECOVERY.md](RECOVERY.md) R7 and
+> [CONFESSION.md](CONFESSION.md).
+>
+> Playtest controls: **Select** = coin, **Start** = start, **B/Y** = arcade Button 1
+> (punch/fire), **A/X** = arcade Button 2 (jump). The arcade game has no separate kick input.
 >
 > **R4 (sound truth) closed July 19**: two interpreter fast-path bank bugs — silently
 > killing *every* organic sound trigger since the beginning — were found and fixed
@@ -38,14 +45,14 @@ SNES PPU (via Nexen) for the target side.
 
 | Area | State |
 |---|---|
-| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Correctness gates **opsweep 782/782 + optest 154/154**. |
+| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Final-v124 correctness gates **opsweep 782/782 + optest 160/160**. |
 | Graphics pipeline | ✅ current Nexen cold boot renders the settled level and conserves every formal-window draw; ⚠️ exact aligned same-state MAME pixel fidelity remains open |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **30 Hz playability budget** | ✅ **cleared by exact v105 candidate** — formal power-on gameplay window is **30.0083 game-fps / 357,281.999 mean SA-1 cycles/tick**, with unit renderer conservation and survival past tick 2,230; the margin is small and any relevant change must rerun the full gate |
+| **30 Hz playability budget** | ❌ **not cleared by retained v124** — formal power-on gameplay window is **29.7002 game-fps / 360,990.164 mean SA-1 cycles/tick**; ordering, progress, renderer, input, sound-ring, mirror, and stack checks remain healthy through tick 2,210 |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
-| Audio (YM2610 → SNES TAD) | ✅ **music organic end-to-end** (R4, 2026-07-19): all 21 tracks byte/oracle-validated AND the real game triggers fire organically (boot/attract/coin/round-start, arcade parity); 21 side-by-side listening pairs recorded (by-ear sign-off pending). SFX remain placeholder (2 mapped; authoring never scoped) |
+| Audio (YM2610 → SNES TAD) | ⚠️ **organic transport works; musical fidelity does not** — the first user playtest reports recognizable music that cuts out. A current capture shows no TAD stop/reload/drop or ≥200 ms digital silence, but ignored enemy SFX, placeholder SFX, trimmed samples, and untranscribed pitch/LFO/portamento remain |
 
 See **[CONFESSION.md](CONFESSION.md)** for the authoritative correction and
 **[RECOVERY.md](RECOVERY.md)** for the active recovery campaign. `STATUS.md` and
@@ -68,7 +75,7 @@ subset Superman happens to use — so it is reusable for future arcade→SNES po
 
 **Validated against MAME** by two single-instruction gates — `tools/opsweep.py`
 (op×addressing-mode grid, **782/782**) and `tools/optest.py` (curated per-opcode
-vectors vs MAME, **154/154**) — plus a frame-boundary **lock-step differential** harness
+vectors vs MAME, **160/160**) — plus a frame-boundary **lock-step differential** harness
 (inject MAME's 68K state, run a game-frame, diff work RAM — this caught 4 opcode bugs the
 op sweep missed). The hot path is then migrated to native 65816 by **`tools/transpile.py`**,
 each escape checked bit-exact against the interpreter (and the hottest against MAME
@@ -79,8 +86,8 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 
 - **[CONFESSION.md](CONFESSION.md)** — highest-authority correction to project status
 - **[RECOVERY.md](RECOVERY.md)** — active consolidation and baseline campaign
-- **[docs/PROFILE_CAMPAIGN.md](docs/PROFILE_CAMPAIGN.md)** — native/render campaign and the R6
-  production playability evidence
+- **[docs/PROFILE_CAMPAIGN.md](docs/PROFILE_CAMPAIGN.md)** — native/render campaign, historical R6
+  timing evidence, and the R7 user-playtest/combat correction
 - **[docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md)** — historical
   continuous profile and the two rejected pre-R6 pacing labs
 - **[STATUS.md](STATUS.md)** — detailed historical state (superseded where noted)
@@ -108,7 +115,7 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 4. Run the interpreter regression gates (need MAME + Nexen MCP running):
    ```sh
    python3 tools/opsweep.py        # SA-1-aware op×addressing-mode grid vs MAME (782/782)
-   python3 tools/optest.py         # curated per-opcode vectors vs MAME (154/154)
+   python3 tools/optest.py         # curated per-opcode vectors vs MAME (160/160)
    ```
 5. Transpile a hot 68K function to a native escape:
    ```sh
@@ -139,7 +146,7 @@ agent) picking the project up.
   reproducible via `bash tools/build_interp.sh` at commit `4034f1e` (R0 provenance in
   [RECOVERY.md](RECOVERY.md)). Pre-recovery tips are preserved as local `archive/*` refs.
 - **A complete, oracle-validated MC68000 interpreter** on the SA-1 (opsweep 782/782,
-  optest 154/154, lock-step differentials), ~25 validated native escapes, a working
+  optest 160/160, lock-step differentials), ~25 validated native escapes, a working
   transpiler, and the full validation harness suite (`tools/README.md`).
 - **Working demo**: boots the real game from the real 68K reset vector, renders, takes
   input, plays music organically, runs gameplay — at ~1.3 game-fps.

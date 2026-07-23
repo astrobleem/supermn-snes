@@ -6452,6 +6452,13 @@ Lfcaf6_8:
     lda #$0040
     sta $18
 Lcaf6_cb46:
+    ; The retained selector above is deliberately general.  Once it has
+    ; resolved a list and materialized D7/A0/D6, let bank $9D admit the two
+    ; late-game immutable lists that dominate the corrected combat path.
+    ; A miss returns immediately below and executes this untouched generated
+    ; record loop.  Keep the external entry pinned and byte-audited.
+    jml.l $9DFE40
+caf6_generated_loop_record:
     lda $20
     clc
     adc #$0000
@@ -6852,7 +6859,9 @@ hcaf6_selector_equal:
 hcaf6_selector_fail:
     .a16
     .i16
-    jmp hcaf6_fallback
+    ; Give the exact late-game selector families one guarded external chance
+    ; before restarting the untouched generated function.
+    jml.l $9DFED0
 hcaf6_selector_special:
     .a16
     .i16
@@ -6948,7 +6957,7 @@ hcaf6_selector_direct_body:
 hcaf6_selector_direct_fail:
     .a16
     .i16
-    jmp hcaf6_fallback
+    jml.l $9DFED0
 hcaf6_selector_direct_ok:
     .a16
     .i16
@@ -7145,9 +7154,26 @@ hcaf6_loop:
     lda $20
     cmp #$2FCC
     beq hcaf6_loop_32fca
+    cmp #$320A
+    beq hcaf6_loop_33208
+    cmp #$3300
+    beq hcaf6_loop_332fe
+    cmp #$2F7A
+    bne hcaf6_loop_generic
     jml.l $95FA00
 hcaf6_loop_32fca:
     jml.l $9DA200
+hcaf6_loop_33208:
+    jml.l $95FE20
+hcaf6_loop_332fe:
+    jml.l $95FF10
+hcaf6_loop_generic:
+    ; The constant-list routes above already know offsets 0,4,8,12,16.
+    ; This formerly unreachable generic body must fetch the current record's
+    ; actual A6-table offset before deriving A1.
+    ldy #$0000
+    jsr hcb_rdw_a0
+    sta $00
     lda $38
     clc
     adc #$FFC8

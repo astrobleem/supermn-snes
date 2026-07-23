@@ -11,8 +11,17 @@ Lf25110_267=$979431
 L25110_25816=$979451
 h25110_final_tst_rebuild=$979838
 entry_1d5f0=$97EC00
-Lcaf6_cb9c=$97DC4C
+Lcaf6_cb9c=$97DC50
+caf6_generated_loop_record=$97D9D5
+hcaf6_loop=$97DEEB
+hcaf6_fallback=$97DFAE
 entry_1f1c0_generated=$97FC64
+entry_12e56=$97A000
+entry_12c1a=$97B000
+entry_129c6=$97A800
+entry_12a92=$97B800
+entry_12af6=$97C000
+entry_caf6=$97D800
 op_rte=$00B3B8
 inext=$00D128
 jsrabs_hook=$00E200
@@ -37,6 +46,10 @@ entry_2658e=$92E566
 entry_4542=$92E70E
 entry_ce58=$92E787
 entry_2bda_generated_resume=$92B734
+entry_2be2_generated_resume=$92B798
+br2be2_1=$92B7E4
+h26_mask_generated_resume=$928F1E
+h26_return=$929007
 entry_3c36_generated_resume=$92D02E
 br3c36_5=$92D28D
 ibridge=$92F828
@@ -46,6 +59,7 @@ entry_3a92=$92DB82
 entry_c172=$949D7E
 entry_295at=$94A523
 entry_29b6t=$94A64B
+hle_12b6c=$94E000
 entry_24bc2=$998000
 entry_2429c=$9985D3
 entry_c846=$99AF6A
@@ -54,11 +68,14 @@ entry_96a=$99C200
 entry_9ea=$99C500
 entry_24920t=$99E4A7
 entry_24956t=$99E5CB
+entry_cc10=$99B1CE
 entry_2a190=$95B660
 entry_175a0=$95C103
 entry_1c11a=$95D041
 entry_29128=$95BC71
 entry_29144=$95BD54
+entry_11bdc=$95FC20
+entry_11c9a=$95FD39
 ; <<< ESCBANK7_SYMS <<<
 
 .snes
@@ -383,8 +400,12 @@ hfr_b1_n3:
     jmp hfr_t_1c11a
 hfr_b1_n4:
     cmp #$1752
-    bne hfr_b1_miss
+    bne hfr_b1_n5
     jmp hfr_t_11752
+hfr_b1_n5:
+    cmp #$22A4
+    bne hfr_b1_miss
+    jmp hfr_t_122a4
 hfr_b1_miss:
     jml.l op_rte
 
@@ -536,6 +557,19 @@ hfr_t_11752:
     pha
     rep #$20
     lda #entry_11752
+    pha
+    jmp hfr_commit
+
+hfr_t_122a4:
+    sta $40
+    lda #$0001
+    sta $42
+    phy
+    sep #$20
+    lda #$9D
+    pha
+    rep #$20
+    lda #$8D00              ; entry_122a4 is pinned below
     pha
     jmp hfr_commit
 
@@ -1259,6 +1293,353 @@ Lf2ad4c_2:
     sta $3C
     jml.l ors_pre
 entry_2ad4ct_end:
+
+    .org $8D00
+; --- transpiled from $0122A4 (15 instrs) by tools/transpile.py [bank1] ---
+entry_122a4:
+    rep #$30
+    lda $3A
+    cmp #$00F0
+    bne h122a4_cold
+    lda $3E
+    cmp #$00F0
+    bne h122a4_cold
+    lda $3C
+    cmp #$0020
+    bcc h122a4_cold
+    bra h122a4_hot
+h122a4_cold:
+    lda #$22A4
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+h122a4_hot:
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    php
+    rep #$30
+    lda #$0002
+    jsr esc7_ac_charge
+    plp
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    ; CALL-BRIDGE bsr.w $12e56 -> entry_12e56 (NATIVE escape), resume br122a4_1
+    lda #br122a4_1
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l entry_12e56
+br122a4_1:
+    ; restore real 68K call return residue below A7: $0122AC
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22AC
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    ; CALL-BRIDGE bsr.w $12c1a -> entry_12c1a (NATIVE escape), resume br122a4_2
+    lda #br122a4_2
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l entry_12c1a
+br122a4_2:
+    ; restore real 68K call return residue below A7: $0122B0
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22B0
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    ; CALL-BRIDGE bsr.w $129c6 -> entry_129c6 (NATIVE escape), resume br122a4_3
+    lda #br122a4_3
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l entry_129c6
+br122a4_3:
+    ; restore real 68K call return residue below A7: $0122B4
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22B4
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    ; CALL-BRIDGE bsr.w $cc10 -> entry_cc10 (NATIVE escape), resume br122a4_4
+    lda #br122a4_4
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l entry_cc10
+br122a4_4:
+    ; restore real 68K call return residue below A7: $0122B8
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22B8
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    ; CALL-BRIDGE bsr.w $12b6c -> entry_12b6c (NATIVE escape), resume br122a4_5
+    lda #br122a4_5
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l hle_12b6c
+br122a4_5:
+    ; restore real 68K call return residue below A7: $0122BC
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22BC
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    ; CALL-BRIDGE bsr.w $12a92 -> entry_12a92 (NATIVE escape), resume br122a4_6
+    lda #br122a4_6
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l entry_12a92
+br122a4_6:
+    ; restore real 68K call return residue below A7: $0122C0
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22C0
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    ; CALL-BRIDGE bsr.w $12af6 -> entry_12af6 (NATIVE escape), resume br122a4_7
+    lda #br122a4_7
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l entry_12af6
+br122a4_7:
+    ; restore real 68K call return residue below A7: $0122C4
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22C4
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    ; CALL-BRIDGE bsr.w $caf6 -> entry_caf6 (NATIVE escape), resume br122a4_8
+    lda #br122a4_8
+    sta $40
+    lda #$00F8
+    sta $42
+    jml.l entry_caf6
+br122a4_8:
+    ; restore real 68K call return residue below A7: $0122C8
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$22C8
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0002
+    jsr esc7_ac_charge
+    plp
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lf122a4_1
+    jmp Ltj122a4_122a2
+Lf122a4_1:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc7_ac_charge
+    plp
+    lda $38
+    clc
+    adc #$FFB2
+    tax
+    lda $400000,x
+    xba
+    beq Lf122a4_2
+    bmi Lf122a4_2
+    jmp L122a4_122da
+Lf122a4_2:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    lda #$2392
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+L122a4_122da:
+    php
+    rep #$30
+    lda #$0001
+    jsr esc7_ac_charge
+    plp
+    lda #$2344
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltj122a4_122a2:
+    lda #$22A2
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+
+; Bank-local twin of escbank2's esc_ac_charge.  The RTE hook enters this
+; complete 15-instruction 68K spine without returning through iloop between
+; its outer instructions, so charge each generated basic block dynamically.
+; The eight native callees retain their own established charge contracts.
+esc7_ac_charge:
+    rep #$30
+    pha
+    lda $AC
+    sec
+    sbc $01,s
+    bcc esc7_ac_clamp
+    beq esc7_ac_clamp
+    sta $AC
+    pla
+    rts
+esc7_ac_clamp:
+    lda #$0001
+    sta $AC
+    pla
+    rts
+
+entry_122a4_end:
 
     .org $9000
 ; --- transpiled from $02A86E (68 instrs) by tools/transpile.py [bank1] ---
@@ -2002,6 +2383,384 @@ L2a86e_2a960:
     jml.l ors_pre
 entry_2a86et_end:
 ; <<< ESCBANK7_BODIES <<<
+
+; ============================================================================
+; $002BE2 canonical-work-RAM input-command fast path.
+;
+; The retained bank-$92 body is already a native escape, but it still pays for
+; two generic effective addresses, two synthetic call frames, a nested native
+; $2BC2 call, and both generated pop epilogues.  The production caller uses
+; canonical A5/A7 work RAM.  Prove that shape, preserve every dead stack byte
+; left by the generated call chain, then perform the same command-port and
+; work-RAM writes directly.  A guard miss resumes the untouched generated body
+; before its first architectural write.
+; ============================================================================
+    .org $9600
+h2be2_fast:
+    rep #$30
+.a16
+.i16
+
+    lda $34
+    bne h2be2_fast_guard_fail
+    lda $36
+    cmp #$00F0
+    bne h2be2_fast_guard_fail
+    lda $3E
+    cmp #$00F0
+    bne h2be2_fast_guard_fail
+    lda $3C
+    cmp #$000A
+    bcc h2be2_fast_guard_fail
+    bra h2be2_fast_hot
+
+h2be2_fast_guard_fail:
+    jmp h2be2_fast_cold
+
+h2be2_fast_hot:
+    ; Final generated stack residue, relative to the unchanged architectural
+    ; A7: nested physical continuation at -10, the pushed command word at -6,
+    ; and the outer physical continuation at -4.
+    lda $3C
+    sec
+    sbc #$000A
+    tax
+    lda #$00FE
+    xba
+    sta $400000,x
+    lda #br2be2_1
+    xba
+    sta $400002,x
+    lda $401B1E
+    sta $400004,x
+    lda $42
+    xba
+    sta $400006,x
+    lda $40
+    xba
+    sta $400008,x
+
+    ; $2BC2 moves the argument into D7.W, writes D7.B to the special
+    ; $900C01 command selector, and copies D7.W to A5+$1B1C.  Raw work-RAM
+    ; loads/stores preserve the emulated big-endian word.
+    lda $401B1E
+    sta $401B1C
+    xba
+    sta $1C
+    sta $80
+    and #$FF00
+    sta $90
+    lda $80
+    sep #$20
+.a8
+    sta $62
+    rep #$20
+.a16
+
+    ; Match the generated helper scratch and final host X residue.  The
+    ; established native $2BC2/$2BE2 bodies leave emulated CCR/X untouched.
+    lda #$1B1C
+    sta $54
+    lda #$00F0
+    sta $52
+    lda #$00FE
+    sta $56
+    txa
+    clc
+    adc #$0008
+    tax
+    jml.l ors_pre
+
+h2be2_fast_cold:
+    ; Replay the four bytes replaced by entry_2be2's size-neutral wrapper.
+    rep #$30
+    lda $40
+    jml.l entry_2be2_generated_resume
+h2be2_fast_end:
+
+; ============================================================================
+; Guarded game-tick $26A0 order-preserving unrolled body.
+;
+; The retained callable helper has already pushed its physical continuation
+; and proved that A5 maps to non-wrapping work RAM.  For canonical A5=$F00000,
+; unroll its two passes but preserve the original observation order exactly:
+; read all sixteen flag words, publish both mask words, then reread and copy
+; all sixteen records.  Noncanonical A5 resumes the retained loop before its
+; first read.  Return through the original h26_return pop/normalization path.
+; ============================================================================
+    .org $9800
+h26_unrolled_ordered:
+    rep #$30
+.a16
+.i16
+    lda $34
+    bne h26_unrolled_ordered_cold
+    bra h26_unrolled_ordered_hot
+
+h26_unrolled_ordered_cold:
+    stz $80
+    lda #$0001
+    jml.l h26_mask_generated_resume
+
+h26_unrolled_ordered_hot:
+    ; Pass 1: build the complete mask without touching the video shadow.
+    stz $80                      ; completed 16-bit mask
+
+    lda $4028EA
+    and #$0001
+    beq h26_mask_0_clear
+    lda $80
+    ora #$0001
+    sta $80
+h26_mask_0_clear:
+    lda $4028EE
+    and #$0001
+    beq h26_mask_1_clear
+    lda $80
+    ora #$0002
+    sta $80
+h26_mask_1_clear:
+    lda $4028F2
+    and #$0001
+    beq h26_mask_2_clear
+    lda $80
+    ora #$0004
+    sta $80
+h26_mask_2_clear:
+    lda $4028F6
+    and #$0001
+    beq h26_mask_3_clear
+    lda $80
+    ora #$0008
+    sta $80
+h26_mask_3_clear:
+    lda $4028FA
+    and #$0001
+    beq h26_mask_4_clear
+    lda $80
+    ora #$0010
+    sta $80
+h26_mask_4_clear:
+    lda $4028FE
+    and #$0001
+    beq h26_mask_5_clear
+    lda $80
+    ora #$0020
+    sta $80
+h26_mask_5_clear:
+    lda $402902
+    and #$0001
+    beq h26_mask_6_clear
+    lda $80
+    ora #$0040
+    sta $80
+h26_mask_6_clear:
+    lda $402906
+    and #$0001
+    beq h26_mask_7_clear
+    lda $80
+    ora #$0080
+    sta $80
+h26_mask_7_clear:
+    lda $40290A
+    and #$0001
+    beq h26_mask_8_clear
+    lda $80
+    ora #$0100
+    sta $80
+h26_mask_8_clear:
+    lda $40290E
+    and #$0001
+    beq h26_mask_9_clear
+    lda $80
+    ora #$0200
+    sta $80
+h26_mask_9_clear:
+    lda $402912
+    and #$0001
+    beq h26_mask_10_clear
+    lda $80
+    ora #$0400
+    sta $80
+h26_mask_10_clear:
+    lda $402916
+    and #$0001
+    beq h26_mask_11_clear
+    lda $80
+    ora #$0800
+    sta $80
+h26_mask_11_clear:
+    lda $40291A
+    and #$0001
+    beq h26_mask_12_clear
+    lda $80
+    ora #$1000
+    sta $80
+h26_mask_12_clear:
+    lda $40291E
+    and #$0001
+    beq h26_mask_13_clear
+    lda $80
+    ora #$2000
+    sta $80
+h26_mask_13_clear:
+    lda $402922
+    and #$0001
+    beq h26_mask_14_clear
+    lda $80
+    ora #$4000
+    sta $80
+h26_mask_14_clear:
+    lda $402926
+    and #$0001
+    beq h26_mask_15_clear
+    lda $80
+    ora #$8000
+    sta $80
+h26_mask_15_clear:
+
+    ; Publish the two completed mask bytes before any record copy, exactly as
+    ; the retained helper does.
+    lda $80
+    and #$00FF
+    xba
+    sta $413604
+    lda $80
+    xba
+    and #$00FF
+    xba
+    sta $413606
+
+    ; Pass 2: copy each complete record in source order.
+    lda $4028EA
+    sta $413408
+    lda $4028EC
+    sta $413400
+    lda $4028EE
+    sta $413428
+    lda $4028F0
+    sta $413420
+    lda $4028F2
+    sta $413448
+    lda $4028F4
+    sta $413440
+    lda $4028F6
+    sta $413468
+    lda $4028F8
+    sta $413460
+    lda $4028FA
+    sta $413488
+    lda $4028FC
+    sta $413480
+    lda $4028FE
+    sta $4134A8
+    lda $402900
+    sta $4134A0
+    lda $402902
+    sta $4134C8
+    lda $402904
+    sta $4134C0
+    lda $402906
+    sta $4134E8
+    lda $402908
+    sta $4134E0
+    lda $40290A
+    sta $413508
+    lda $40290C
+    sta $413500
+    lda $40290E
+    sta $413528
+    lda $402910
+    sta $413520
+    lda $402912
+    sta $413548
+    lda $402914
+    sta $413540
+    lda $402916
+    sta $413568
+    lda $402918
+    sta $413560
+    lda $40291A
+    sta $413588
+    lda $40291C
+    sta $413580
+    lda $40291E
+    sta $4135A8
+    lda $402920
+    sta $4135A0
+    lda $402922
+    sta $4135C8
+    lda $402924
+    sta $4135C0
+    lda $402926
+    sta $4135E8
+    lda $402928
+    sta $4135E0
+    sta $88                     ; final raw word drives MOVE.W CCR
+
+    ; Match the retained loop's completed pointer/counter/index residues.
+    stz $82
+    lda #$28EA
+    sta $84
+    sep #$20
+.a8
+    lda #$40
+    sta $86
+    rep #$20
+.a16
+    ldy #$0040
+
+    ; Exact final emulated register state from the retained helper.
+    lda #$0020
+    sta $00
+    stz $02
+    lda $80
+    xba
+    and #$00FF
+    sta $04
+    stz $06
+    lda #$0004
+    sta $08
+    stz $0A
+    lda #$FFFF
+    sta $1C
+    stz $1E
+    lda #$0608
+    sta $20
+    lda #$00D0
+    sta $22
+    lda #$0600
+    sta $24
+    lda #$00D0
+    sta $26
+    lda #$292A
+    sta $28
+    lda #$00F0
+    sta $2A
+
+    ; LSR.W #8 contributes X from mask bit 7.  The final MOVE.W contributes
+    ; N/Z from the last raw source word and clears V/C.
+    lda $80
+    and #$0080
+    beq h26_unrolled_x_clear
+    lda #$0001
+    sta $A2
+    bra h26_unrolled_x_done
+h26_unrolled_x_clear:
+    stz $A2
+h26_unrolled_x_done:
+    stz $6E
+    stz $72
+    lda $88
+    and #$0080
+    sta $70
+    stz $60
+    lda $88
+    bne h26_unrolled_nz_done
+    inc $60
+h26_unrolled_nz_done:
+    jml.l h26_return
+h26_unrolled_ordered_end:
 
 ; ============================================================================
 ; $0020E8 guarded production tile-strip builder.
@@ -6738,17 +7497,20 @@ brdc2e_1:
 entry_dc2et_end:
 ; <<< ESCBANK7_DA_TASK_BODIES <<<
 
-; Compact direct-dispatch island for the sparse bank-$00 $D7/$D8/$D9/$DA/$DC
-; pages.  A dense $96 xlat sub-table consumes 768 bytes per page, while these
-; eight entries need only the exact comparisons below.  $94:F900 admits only
-; those four high-byte pages; an unknown PC rejoins the ordinary lookup/miss
-; path with the original $40/$42 target intact.
+; Compact direct-dispatch island for sparse bank-$00/$01/$02 targets.  A dense
+; $96 xlat sub-table consumes 768 bytes per page; the fixed bank is already
+; full.  $94:F900 admits bank $01/$02 plus selected bank-$00 pages here; an
+; unknown PC rejoins the ordinary lookup/miss path with $40/$42 intact.
     .org $DA00
 xlat_da_dispatch:
     rep #$30
     lda $42
     cmp #$0002
     beq xdd_bank2
+    cmp #$0001
+    bne xdd_not_bank1
+    jmp xdd_bank1
+xdd_not_bank1:
     cmp #$0000
     bne xdd_miss
     lda $40
@@ -6845,6 +7607,21 @@ xdd_24920:
     jmp entry_24920t
 xdd_24956:
     jmp entry_24956t
+xdd_bank1:
+    lda $40
+    cmp #$1BDC
+    beq xdd_11bdc
+    cmp #$1C9A
+    beq xdd_11c9a
+    cmp #$22A4
+    beq xdd_122a4
+    jml.l xd_table
+xdd_122a4:
+    jmp entry_122a4
+xdd_11c9a:
+    jml.l entry_11c9a
+xdd_11bdc:
+    jml.l entry_11bdc
 xlat_da_dispatch_end:
 
 ; ============================================================================
@@ -9636,5 +10413,274 @@ h29b6_reject:
     stz $42
     jml.l inext
 entry_29b6_fast_end:
+
+; ============================================================================
+; Guarded admission for the general native $00CAF6 record loop.
+;
+; The generated bank-$97 selector has already performed the complete arcade
+; selector tree, pushed CAF6's real return, and resolved A0/D7/D6.  Corrected
+; late gameplay overwhelmingly selects immutable lists $033208 and $0332FE;
+; both contain five records with A6-table offsets 0,4,8,12,16.  Prove those
+; exact list/count and work-RAM shapes before entering bank $97's direct loop.
+; A miss resumes the untouched generated loop before its first record write.
+;
+; Fixed at $9D:FE40 because bank $97 reaches it with a literal JML.
+; ============================================================================
+    .org $FE40
+hcaf6_generic_admit:
+    rep #$30
+    .a16
+    .i16
+
+    ; A0 points just past the count word; D7 contains the DBRA count.
+    lda $22
+    cmp #$0003
+    beq hcaf6_generic_count_check
+    jmp hcaf6_generic_reject
+hcaf6_generic_count_check:
+    lda $1C
+    cmp #$0004
+    bne hcaf6_generic_reject
+    lda $20
+    cmp #$2F7A                    ; list $032F78, first record
+    beq hcaf6_generic_frame
+    cmp #$2FCC                    ; list $032FCA, first record
+    beq hcaf6_generic_frame
+    cmp #$320A                    ; list $033208, first record
+    beq hcaf6_generic_frame
+    cmp #$3300                    ; list $0332FE, first record
+    bne hcaf6_generic_reject
+
+hcaf6_generic_frame:
+    ; Bound every A6-relative read used by CAF6/CB9E.
+    lda $3A
+    cmp #$00F0
+    bne hcaf6_generic_reject
+    lda $38
+    cmp #$1000
+    bcc hcaf6_generic_reject
+    cmp #$2000
+    bcs hcaf6_generic_reject
+
+    ; [A6-$54] is the output A2 record written by each positive CB9E record.
+    lda $38
+    sec
+    sbc #$0054
+    tax
+    lda $400000,x
+    xba
+    cmp #$00F0
+    bne hcaf6_generic_reject
+    inx
+    inx
+    lda $400000,x
+    xba
+    cmp #$3000
+    bcc hcaf6_generic_reject
+    cmp #$FFFB
+    bcs hcaf6_generic_reject
+
+    ; Both admitted immutable lists address these five contiguous pointer
+    ; slots.  Prove every target before the first architectural write so a
+    ; later record cannot strand a partially accelerated call.
+    lda $38
+    sec
+    sbc #$0038
+    tax
+    ldy #$0005
+hcaf6_generic_a1:
+    lda $400000,x
+    xba
+    cmp #$00F0
+    bne hcaf6_generic_reject
+    inx
+    inx
+    lda $400000,x
+    xba
+    cmp #$3000
+    bcc hcaf6_generic_reject
+    cmp #$3FF1
+    bcs hcaf6_generic_reject
+    inx
+    inx
+    dey
+    bne hcaf6_generic_a1
+    jml.l hcaf6_loop
+
+hcaf6_generic_reject:
+    jml.l caf6_generated_loop_record
+hcaf6_generic_admit_end:
+
+; ============================================================================
+; Exact late-game selector adapter for hcaf6_fast misses.
+;
+; Bank $97 has proved canonical A6 but has made no architectural change and
+; has not yet pushed CAF6's return.  Resolve only the immutable selector
+; values seen in corrected gameplay, reproduce the selector's observable
+; D0/D1 lows, initialize the loop state, and reuse the complete address guard
+; above.  Anything else restarts the untouched generated CAF6 body.
+;
+; Fixed at $9D:FED0 because two bank-$97 miss stubs use a literal JML.
+; ============================================================================
+    .org $FED0
+hcaf6_late_selector:
+    rep #$30
+    .a16
+    .i16
+
+    ; This adapter owns only the equal-D2 selector family.
+    lda $38
+    sec
+    sbc #$001A
+    tax
+    lda $400000,x
+    xba
+    sta $8E
+    lda $38
+    sec
+    sbc #$0004
+    tax
+    lda $400000,x
+    xba
+    cmp $8E
+    beq hcaf6_late_d0
+    jmp hcaf6_late_reject
+hcaf6_late_d0:
+
+    ; D0 input 2..$7FFF selects [A6-$18] directly.  Input 1 executes
+    ; SUBQ.W on D1 and obtains the selector from the bounded ROM frame pointer.
+    lda $38
+    sec
+    sbc #$0016
+    tax
+    lda $400000,x
+    xba
+    cmp #$0001
+    beq hcaf6_late_frame
+    cmp #$0002
+    bcc hcaf6_late_direct_reject
+    cmp #$8000
+    bcs hcaf6_late_direct_reject
+    dec a
+    sta $00
+    lda $38
+    sec
+    sbc #$0018
+    tax
+    lda $400000,x
+    xba
+    jmp hcaf6_late_map
+hcaf6_late_direct_reject:
+    jmp hcaf6_late_reject
+
+hcaf6_late_frame:
+    stz $00
+    lda $38
+    sec
+    sbc #$0014
+    tax
+    lda $400000,x
+    xba
+    cmp #$0001
+    bcc hcaf6_late_frame_reject
+    cmp #$8001
+    bcs hcaf6_late_frame_reject
+    dec a
+    sta $04
+    lda $38
+    sec
+    sbc #$0012
+    tax
+    lda $400000,x
+    xba
+    cmp #$0003
+    bne hcaf6_late_frame_reject
+    inx
+    inx
+    lda $400000,x
+    xba
+    cmp #$2000
+    bcc hcaf6_late_frame_reject
+    cmp #$4000
+    bcs hcaf6_late_frame_reject
+    sta $90
+    lda #$00C4
+    sta $92
+    lda [$90]
+    xba
+    bra hcaf6_late_map
+hcaf6_late_frame_reject:
+    jmp hcaf6_late_reject
+
+hcaf6_late_map:
+    cmp #$000C
+    beq hcaf6_late_32f78
+    cmp #$0020
+    beq hcaf6_late_32f78
+    cmp #$0024
+    beq hcaf6_late_32f78
+    cmp #$0124
+    beq hcaf6_late_32f78
+    cmp #$0010
+    beq hcaf6_late_32fca
+    cmp #$0014
+    beq hcaf6_late_32fca
+    cmp #$0028
+    beq hcaf6_late_332fe
+    cmp #$00A8
+    beq hcaf6_late_33208
+    cmp #$00BC
+    bcc hcaf6_late_reject
+    cmp #$00D5
+    bcs hcaf6_late_reject
+    and #$0003
+    bne hcaf6_late_reject
+
+hcaf6_late_33208:
+    lda #$320A
+    bra hcaf6_late_list_ready
+hcaf6_late_332fe:
+    lda #$3300
+    bra hcaf6_late_list_ready
+hcaf6_late_32fca:
+    lda #$2FCC
+    bra hcaf6_late_list_ready
+hcaf6_late_32f78:
+    lda #$2F7A
+hcaf6_late_list_ready:
+    sta $20
+    lda #$0003
+    sta $22
+    lda #$0004
+    sta $1C
+
+    ; D2.W is loaded by CAF6 before the records.  D6 is $20 or $40 according
+    ; to [A6-$50].  Constant and generic record bodies own the remaining state.
+    lda $8E
+    sta $08
+    lda #$0020
+    sta $18
+    lda $38
+    sec
+    sbc #$0050
+    tax
+    lda $400000,x
+    xba
+    beq hcaf6_late_d6_ready
+    lda #$0040
+    sta $18
+hcaf6_late_d6_ready:
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    ; Same physical bank: an absolute JML would encode logical bank $00 under
+    ; Poppy's bankless .org model.  Preserve bank $9D with a local JMP.
+    jmp hcaf6_generic_admit
+
+hcaf6_late_reject:
+    jml.l hcaf6_fallback
+hcaf6_late_selector_end:
 
 escbank7_end:

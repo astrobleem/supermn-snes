@@ -991,6 +991,107 @@ def transpile_2a86e() -> str:
     return body.replace(needle, wrapper, 1) + "\nentry_2a86et_end:"
 
 
+def transpile_122a4() -> str:
+    """Generate the post-TRAP object collision spine.
+
+    The coroutine resumes at $0122A4, visits eight already-native callees, and
+    returns to the next TRAP or the original task tail.  Retain the real 68K
+    return residue at every call boundary while eliminating the repeated
+    interpreter dispatches between them.
+    """
+
+    command = [
+        sys.executable,
+        str(ROOT / "tools/transpile.py"),
+        "0122A4",
+        "--coroutine",
+        "--bank7",
+        "--bail",
+        "--xflag",
+        "--exitccr",
+        "--accharge",
+        "--escapes=12e56,12c1a,129c6,cc10,12b6c,12a92,12af6,caf6",
+    ]
+    result = subprocess.run(
+        command,
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode:
+        sys.stderr.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        raise SystemExit("transpile failed for $0122A4")
+    if "UNIMPLEMENTED" in result.stdout or "BAIL" in result.stderr:
+        raise SystemExit("transpile emitted an incomplete $0122A4 body")
+
+    body = result.stdout.rstrip()
+    needle = (
+        "entry_122a4:\n"
+        "    rep #$30\n"
+        "    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)\n"
+    )
+    wrapper = (
+        "entry_122a4:\n"
+        "    rep #$30\n"
+        "    lda $3A\n"
+        "    cmp #$00F0\n"
+        "    bne h122a4_cold\n"
+        "    lda $3E\n"
+        "    cmp #$00F0\n"
+        "    bne h122a4_cold\n"
+        "    lda $3C\n"
+        "    cmp #$0020\n"
+        "    bcc h122a4_cold\n"
+        "    bra h122a4_hot\n"
+        "h122a4_cold:\n"
+        "    lda #$22A4\n"
+        "    sta $40\n"
+        "    lda #$0001\n"
+        "    sta $42\n"
+        "    jml.l inext\n"
+        "h122a4_hot:\n"
+        "    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)\n"
+    )
+    if body.count(needle) != 1:
+        raise SystemExit("unexpected $0122A4 transpiler prologue")
+    body = body.replace(needle, wrapper, 1)
+    if body.count("    jmp entry_12b6c") != 1:
+        raise SystemExit("unexpected $0122A4 -> $012B6C call bridge")
+    body = body.replace("    jmp entry_12b6c", "    jml.l hle_12b6c", 1)
+    charge_calls = body.count("    jsr esc_ac_charge\n")
+    if charge_calls != 12:
+        raise SystemExit(
+            f"expected 12 dynamic AC-charge sites in $0122A4, found {charge_calls}"
+        )
+    body = body.replace("    jsr esc_ac_charge\n", "    jsr esc7_ac_charge\n")
+    helper = """
+
+; Bank-local twin of escbank2's esc_ac_charge.  The RTE hook enters this
+; complete 15-instruction 68K spine without returning through iloop between
+; its outer instructions, so charge each generated basic block dynamically.
+; The eight native callees retain their own established charge contracts.
+esc7_ac_charge:
+    rep #$30
+    pha
+    lda $AC
+    sec
+    sbc $01,s
+    bcc esc7_ac_clamp
+    beq esc7_ac_clamp
+    sta $AC
+    pla
+    rts
+esc7_ac_clamp:
+    lda #$0001
+    sta $AC
+    pla
+    rts
+"""
+    return body + helper + "\nentry_122a4_end:"
+
+
 def main() -> int:
     h20e8_dma_data = generate_h20e8_dma_data()
     H20E8_DMA_DATA.write_bytes(h20e8_dma_data)
@@ -1000,6 +1101,8 @@ def main() -> int:
         START
         + "\n"
         + transpile_2ad4c()
+        + "\n\n    .org $8D00\n"
+        + transpile_122a4()
         + "\n\n    .org $9000\n"
         + transpile_2a86e()
         + "\n"

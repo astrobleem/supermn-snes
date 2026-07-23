@@ -12,7 +12,7 @@ Project-state documents conflict. Use this precedence order:
    accounting as the baseline. Only a later dated `RECOVERY.md` result that explicitly supersedes
    an individual claim can replace it; otherwise, where documents conflict, believe the confession.
    It was recovered from the old `sound-p3` worktree during repository consolidation.
-2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R6 results
+2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R7 results
    supersede the older campaign projections they explicitly close.
 3. The newest branch/worktree-specific handoff and evidence (`docs/PROFILE_CAMPAIGN.md`,
    `MAIN_PLANNING_HANDOFF.md`, `supersoundhandoff.md`, and focused `docs/handoff/*`).
@@ -33,42 +33,49 @@ without explicit instruction.
 
 ## Honest project state
 
-- The exact R6 v105 production candidate is **playable at the project's 30 Hz gate**, but it is
-  not shippable and has not completed a full-game playthrough or real-hardware qualification. Its
-  ROM SHA-256 is `72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3`;
-  do not transfer this verdict to another build without rerunning the production evidence gate.
-- The v105 fresh-power-on, `TESTFLAG=0` run armed production organically, used the real controller
-  path, and sustained **30.008326 game ticks/s** over 3,603 SNES video frames / 1,802 game ticks.
-  It averaged **357,281.999 SA-1 cycles/tick**, below the 358K gate, and reached gameplay tick
-  2,230 with halt zero, task mask `$FFA7`, all 16 task stacks initialized, and a 136-byte minimum
-  stack margin. The real `$0818` hook and game counter matched 150-for-150.
-- Renderer conservation is part of that verdict: 1,802 requests, 1,802 unit-step ACK transactions,
-  1,802 true render completions, zero queue drops, bounded transaction debt, and empty queues at
-  the endpoint. v104 met the timing and ordering gates but silently coalesced two direct snapshots;
-  it is rejected. v105 adds the missing direct-snapshot ownership guard.
+- The port is interactive in controlled tests, but it is not playable or shippable. R6's exact
+  v105 ROM did clear the formal 30 Hz cadence/budget test, but the first real user playtest found
+  that player attacks and enemy offense were broken. The **playable** label is superseded; retain
+  v105 only as historical performance/scheduler/renderer evidence.
+- The combat root cause was the `$012B6C` HLE hardcoding return PC `$01177C` for a function with 34
+  real BSR callers. Exact v124 ROM SHA-256
+  `777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352` propagates the real return
+  PC. It passes 35/35 focused MAME cases and 4/4 live combat-spine differentials; Button 1 visibly
+  attacks, Button 2 visibly jumps, and an 800-frame idle check activates enemy attacks and changes
+  health from 20 to 18 (two points of damage).
+- v124's formal power-on production window recorded **1,783 game ticks in 3,602 SNES video
+  frames = 29.700167 game-fps**, at **360,990.164 SA-1 cycles/tick**. It ended at tick 2,210 with
+  halt zero, task mask `$FFF1`, 14 initialized task stacks, a 138-byte minimum margin, valid real
+  input/sound ring, no renderer queue overflow, and progress in the final frame. It misses the
+  30 Hz gate by 0.299833 fps and the 358K budget by 2,990.164 cycles/tick, so call it a stable
+  near-30 Hz technical demo, never a playable candidate.
+- R7 tested and rejected two tempting `$26A0` shortcuts. v125 and v126 passed their 10/10 exact
+  differentials and checkpoint soaks, then halted `$DEAD` during formal power-on runs with 1,753
+  and 604 frames of lost progress. Both are removed. The performance harness now requires recent
+  tick/render progress and rejects derailed execution rather than trusting stale totals.
 - The July 12 recovery ROM's **1.3237 game-fps after production arming** and roughly 8.10M SA-1
-  cycles/tick remain the correct historical baseline for that ROM. R6 supersedes that performance
-  verdict only for the exact v105 hash. Older 3-10x or 8-15 fps projections remain invalid because
-  they measured partial injected windows and excluded end-to-end work.
-- R5's negative scheduler result also remains valid history: its NMI/WAI and supervisor-wake labs
-  failed the producer-ordering event at ticks 765-767. R6 is materially different: it reduces
-  active work, retains at least one real vblank per tick, delivers an ordered ordinary virtual IRQ,
-  and uses bounded primary/secondary renderer ownership. The same-ROM checkpoint profile crossed
-  ticks 765-767 and the uninterrupted cold boot continued through tick 2,230 without the derail.
-- The legal MC68000 interpreter and shipped native escapes have strong differential evidence. On
-  v105, fresh MAME gates passed optest 160/160 and opsweep 782/782 cells (1,564/1,564 shots). This
-  is still not proof of every whole-program address-space path; R4's bank-assumption bugs are the
-  standing warning against promoting focused vectors into universal correctness.
-- A settled production-cold-boot Nexen capture now renders the recognizable level background, HUD,
-  and player scene while the formal run conserves every render transaction. Exact aligned MAME
-  pixel fidelity remains open; visual plausibility alone is not the fidelity oracle.
+  cycles/tick remain the correct historical baseline for that ROM. Older 3-10x or 8-15 fps
+  projections remain invalid because they measured partial injected windows and excluded
+  end-to-end work.
+- R5's negative scheduler result remains valid history: its NMI/WAI and supervisor-wake labs
+  failed the producer-ordering event at ticks 765-767. The retained v124 architecture keeps the
+  R6 paced scheduler/renderer ownership design and survives through tick 2,210, but its whole
+  production tick still misses the explicit rate and cycle gates.
+- The legal MC68000 interpreter and shipped native escapes have strong differential evidence:
+  final-v124 optest 160/160, opsweep 782/782, plus focused MAME and Nexen differentials are real.
+  This is still not proof of every whole-program address-space path; R4's bank-assumption bugs
+  remain the warning against promoting focused vectors into universal correctness.
+- A settled production-cold-boot Nexen capture renders the recognizable level background, HUD,
+  player, and enemies while rendering continues through the formal run. Exact aligned MAME pixel
+  fidelity remains open; visual plausibility alone is not the fidelity oracle.
 - The TAD sound port is merged upstream and its data/blob paths are byte- and oracle-validated.
-  R4's final no-injection production cold boot proved the organic boot, attract, coin, and
-  round-start command chain end-to-end after the two interpreter bank fixes. The 21 comparison
-  pairs are recorded, but the by-ear listening/classification pass is still open; most SFX are
-  placeholders, and pitch bends/LFO/portamento remain untranscribed.
-- The `$0818` `$AC=$2000` clamp remains the gate-off fallback. The organically armed v105 path uses
-  the paced scheduler above; neither path by itself proves a full playthrough crash-free.
+  R4 proved the organic boot, attract, coin, and round-start command chain, but the real user
+  playtest reports audible cutting-out. A current organic capture shows no TAD stop/reload/drop or
+  200 ms digital silence; the likely audible causes are incomplete transcription, trimmed samples,
+  ignored enemy SFX IDs, placeholder SFX, and missing pitch/LFO/portamento work. It has not passed
+  by-ear musical validation.
+- The `$0818` `$AC=$2000` clamp remains the gate-off fallback. The organically armed production
+  path uses the paced scheduler above; neither path proves a full playthrough crash-free.
 - C-Chip work is genuinely resolved for the observed game contract: deterministic boot replay,
   status gate, and input mailbox. Read `CCHIP_BOOT_HANDSHAKE.md` and `CCHIP_FIRMWARE.md`.
 
@@ -92,10 +99,9 @@ span in cycles and label it injected, checkpointed, isolated, or lab as appropri
   765-767 with halt, PC, task mask, sound ring, gate values, and every initialized task-stack floor
   checked. A short green soak is not enough.
 - The 30 Hz gate is a representative whole gameplay tick at or below 358K SA-1 cycles with pacing
-  and rendering included. Exact v105 clears both that budget and the ordering gate and may be called
-  a playable candidate. Any relevant code or ROM change must rerun the full cold-boot contract;
-  until it does, describe the changed build as an unqualified technical demo rather than inheriting
-  v105's verdict.
+  and rendering included. v124 survives the ordering gate but misses both the rate and cycle
+  thresholds. A credible future candidate must clear those formal gates and then pass an actual
+  human combat/audio playtest before the word **playable** is restored.
 
 ## Repository and private inputs
 

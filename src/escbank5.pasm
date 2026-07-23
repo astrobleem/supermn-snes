@@ -15372,8 +15372,10 @@ lh_0818_paced_end:
 ; state still matches.  When $AC<=1, preserve the original inext handoff so
 ; iloop can raise a pending IRQ / run VID_FRAME *before* the BSR.  Clamping at
 ; one and entering the HLE would move that boundary across the complete native
-; dispatcher.  Keep this in a guarded tail island so entry_11752's tightly
-; packed body remains size-neutral.
+; dispatcher.  The HLE recognizes this bank-$99 direct-entry convention and
+; normalizes its native $40/$42 residue to logical return $01177C.  Keep this
+; in a guarded tail island so entry_11752's tightly packed body remains
+; size-neutral.
 .org $FBE0
 h11752_charge_12b6c:
     rep #$30

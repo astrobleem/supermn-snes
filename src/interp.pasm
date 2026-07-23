@@ -11279,7 +11279,7 @@ bbe_b1:
     cmp #$2B6C           ; $012B6C (the HLE'd dispatcher tree)
     bne bbe_t2
     lda $54
-    sta $40              ; 68K PC = bsr return ($01177C); NO return pushed (HLE simulates it)
+    sta $40              ; 68K PC = the actual bsr return; NO return pushed (HLE simulates it)
     lda #$0001
     sta $42
     pla                  ; drop RET1 -> 65816 S back at the iloop dispatch level

@@ -246,9 +246,9 @@ BODY_HOOKS = {
     "hce4_ext_exhausted": 0x9DE710,
     "hce4_ext_fill": 0x9DE724,
     "hle_ce4_cont": 0x94FD7A,
-    "br23a0c_1": 0x98A36D,
+    "br23a0c_1": 0x98A306,
     "entry_23ae2": 0x98A900,
-    "br23a0c_3": 0x98A6D3,
+    "br23a0c_3": 0x98A601,
     "entry_23b52": 0x98AB00,
     "br23864_2": 0x989CF5,
     "br23864_3": 0x989D02,
@@ -692,6 +692,15 @@ def parse_args() -> argparse.Namespace:
             "a high-volume diagnostic and does not alter the ROM."
         ),
     )
+    parser.add_argument(
+        "--trace-111a-sources",
+        action="store_true",
+        help=(
+            "Retain exact-cycle reads of the $9A-$9D cached $00111A source "
+            "pointer. This is a diagnostic watchpoint used to associate "
+            "organic hot/generic decisions with immutable ROM shapes."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -802,6 +811,21 @@ def refresh_current_layout_hooks() -> None:
             ) from exc
 
     dynamic = {
+        # The table-convention $00111A body is under active optimization.
+        # Resolve every seam from the current bank-$95 symbols so the whole
+        # call and hot/generic split cannot silently use stale interior
+        # addresses after adding another guarded ROM shape.
+        "entry_111at": ("esc6", "entry_111at"),
+        "e111at_source_ready": ("esc6", "e111at_source_ready"),
+        "e111at_hot_guard": ("esc6", "e111at_hot_guard"),
+        "e111at_generic": ("esc6", "e111at_generic"),
+        "e111at_done": ("esc6", "e111at_done"),
+        "e111at_return": ("esc6", "e111at_return"),
+        "e111at_hot": ("esc6", "e111at_hot"),
+        "e111at_hot_rows_ready": ("esc6", "e111at_hot_rows_ready"),
+        "e111at_hot_finish": ("esc6", "e111at_hot_finish"),
+        "e111at_hot_emit": ("esc6", "e111at_hot_emit"),
+        "entry_111at_end": ("esc6", "entry_111at_end"),
         # The producer-side render manifest is still evolving while the 30 Hz
         # transition spikes are being removed.  Resolve every phase boundary
         # from the current bank-$9E symbols: stale interior addresses can fire
@@ -1866,6 +1890,7 @@ def main() -> int:
             ),
             intervals_requested=args.intervals,
             warmup_ticks=args.warmup_ticks,
+            trace_111a_sources=args.trace_111a_sources,
             hook_addresses={
                 "clamp": f"{CLAMP:06X}",
                 "take_irq": f"{TAKE_IRQ:06X}",
@@ -2011,6 +2036,15 @@ def main() -> int:
                     name: m.add_exec_hook(address, cpu_type="Sa1")
                     for name, address in BODY_HOOKS.items()
                 },
+                **(
+                    {
+                        "111at_source_dp_read": m.add_read_hook(
+                            0x009A, 0x009D, cpu_type="Sa1"
+                        )
+                    }
+                    if args.trace_111a_sources
+                    else {}
+                ),
             }
             by_handle = {handle: label for label, handle in handles.items()}
             m.drain_notifications(timeout=0.05)

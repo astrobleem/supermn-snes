@@ -48,12 +48,12 @@ entry_13bet=$94AB04
 entry_8fat=$94AD98
 entry_fd2t=$94B009
 entry_c9a6=$94B0CB
-entry_d6e6=$94E2A7
-entry_d64a=$94E313
-entry_d3de=$94E5DD
-entry_cfa4=$94E66D
-entry_cec2=$94E979
-entry_d52e=$94EE1A
+entry_d6e6=$94E2C2
+entry_d64a=$94E32E
+entry_d3de=$94E5F8
+entry_cfa4=$94E688
+entry_cec2=$94E994
+entry_d52e=$94EE35
 entry_25110=$978000
 entry_12e56=$97A000
 entry_129c6=$97A800
@@ -1903,8 +1903,12 @@ h26_bank_ok:
 h26_range_ok:
 
     ; Build the 16-bit mask from bit 0 of each four-byte record.
-    stz $80              ; mask
-    lda #$0001
+    ; Preserve the callable helper's push/pop and native-return boundary, but
+    ; let canonical A5=$F00000 use the order-preserving unrolled bank-$9D
+    ; implementation.  The JML+NOP is exactly the old STZ/LDA footprint.
+    jml.l $9D9800
+    nop
+h26_mask_generated_resume:
     sta $82              ; current bit
     ldx #$28EA
     ldy #$0010
@@ -6870,9 +6874,11 @@ entry_2bda_generated_resume:
 ; --- $002BE2 (callee, jah2_ext) ---
 ; --- transpiled from $002BE2 (4 instrs) by tools/transpile.py [bank1] ---
 entry_2be2:
-    rep #$30
+    ; Size-neutral redirect to the guarded canonical-work-RAM path in bank $9D.
+    ; A rejected state replays REP/LDA and resumes at the first untouched byte.
+    jml.l $9D9600
+entry_2be2_generated_resume:
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
     sta $54
     lda $42
     sta $56

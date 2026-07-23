@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """MAME/Nexen differential for the hot $012B6C -> $12B84 -> $0CE4 tree.
 
-The arcade oracle enters the original $012B6C with its real $01177C BSR
-return on the stack.  Nexen enters hle_12b6c using the production hook
-contract (that push was consumed, A7 is the caller value, and $40/$42 hold
-$01177C).  A validation-only runtime xlat poke routes the final $01177C
-dispatch to the inert bank-$00 spin loop, so state is sampled before the real
-native caller continuation can mutate it.
+The arcade oracle enters the original $012B6C with each real BSR return on
+the stack.  Nexen enters hle_12b6c using the production hook contract (that
+push was consumed, A7 is the caller value, and $40/$42 hold the actual return).
+A validation-only runtime xlat poke routes each final return dispatch to the
+inert bank-$00 spin loop, so state is sampled before the real caller can
+mutate it.
 All D/A registers, CCR X/N/Z/V/C, and the full low-16-KiB work window are
 compared.  This is bounded semantic/cycle evidence, not FPS.
 """
@@ -17,6 +17,7 @@ import argparse
 import json
 import random
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import validate_d96_hle as base
@@ -25,12 +26,34 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ROM = ROOT / "build" / "interp.sfc"
 ENTRY_PC = 0x012B6C
 ENTRY_NATIVE = 0x94E000
-RETURN_PC = 0x01177C
 RETURN_NATIVE = 0x00D15A
-RETURN_XLAT_FILE_OFFSET = 0x2B3D74
+XLAT_FILE_BASE = 0x2B0000
+VALIDATION_SUBTABLE_PC = 0x01177C
+SPARSE_RETURN_COMPARE_OFFSETS = (0x2EDAD9, 0x2EDADE)
 CALLER_SP = 0xF03D00
 A4_RECORD = 0xF02C00
 A6_FRAME = 0xF03A00
+
+# Every aligned ``bsr.w $012B6C`` in the original program ROM.  This list is
+# intentionally explicit: the old test covered only $01177C, which let a
+# hard-coded return survive while all other player-state callers misreturned.
+CALLER_RETURN_PCS = (
+    0x0114A0, 0x0114FA, 0x01151C, 0x01155E,
+    0x0115FC, 0x011656, 0x011678, 0x0116BA,
+    0x01171E, 0x01177C, 0x01189E, 0x011908,
+    0x011940, 0x01198A, 0x0119C6, 0x011A0E,
+    0x011A8A, 0x011ACC, 0x011B26, 0x011BDC,
+    0x011C9A, 0x011CF4, 0x011D4A, 0x011DB8,
+    0x011F08, 0x011FCE, 0x012020, 0x012082,
+    0x0120D4, 0x012118, 0x012218, 0x0122BC,
+    0x012320, 0x0123FA,
+)
+
+
+@dataclass
+class Case(base.Case):
+    return_pc: int
+    incoming_pc: int
 
 
 def put16(work: bytearray, address: int, value: int) -> None:
@@ -53,7 +76,9 @@ def build_case(
     record_y: int,
     attr_select: int,
     x_flag: int,
-) -> base.Case:
+    return_pc: int,
+    incoming_pc: int | None = None,
+) -> Case:
     rng = random.Random(seed)
     work = bytearray(rng.randrange(256) for _ in range(0x10000))
     regs = {reg: rng.randrange(1 << 32) for reg in base.REG_NAMES}
@@ -87,50 +112,103 @@ def build_case(
     # The real BSR return is part of the expected final stack residue.  MAME
     # begins at SP=CALLER_SP-4; the native hook begins at SP=CALLER_SP and
     # hle_12b6c materializes this word itself.
-    put32(work, CALLER_SP - 4, RETURN_PC)
-    return base.Case(name, regs, sr, bytes(work))
+    put32(work, CALLER_SP - 4, return_pc)
+    return Case(
+        name,
+        regs,
+        sr,
+        bytes(work),
+        return_pc,
+        return_pc if incoming_pc is None else incoming_pc,
+    )
 
 
-def make_cases() -> list[base.Case]:
-    return [
+def make_cases() -> list[Case]:
+    shapes = (
         # ROM $3478A contains longword $0000084A; frame header 0,3.
-        build_case(
-            "rom-frame-084a-visible",
-            0x12B600,
-            frame_table=0x0003478A,
-            cursor=0x0000,
-            record_x=0x0080,
-            record_y=0x0060,
-            attr_select=0,
-            x_flag=0,
-        ),
+        {
+            "name": "rom-frame-084a-visible",
+            "frame_table": 0x0003478A,
+            "cursor": 0x0000,
+            "record_x": 0x0080,
+            "record_y": 0x0060,
+            "attr_select": 0,
+            "x_flag": 0,
+        },
         # ROM $481A -> $00004E36; frame header 0,7.  Negative cursor and Y
         # clipping exercise signed output placement and final X replacement.
-        build_case(
-            "rom-frame-4e36-negative-cursor-offscreen",
-            0x12B601,
-            frame_table=0x0000481A,
-            cursor=0xFFF0,
-            record_x=0x0020,
-            record_y=0x01B0,
-            attr_select=1,
-            x_flag=1,
-        ),
+        {
+            "name": "rom-frame-4e36-negative-cursor-offscreen",
+            "frame_table": 0x0000481A,
+            "cursor": 0xFFF0,
+            "record_x": 0x0020,
+            "record_y": 0x01B0,
+            "attr_select": 1,
+            "x_flag": 1,
+        },
         # ROM $70F4 -> $00005BB0; frame header 1,4 (two columns).
+        {
+            "name": "rom-frame-5bb0-two-columns",
+            "frame_table": 0x000070F4,
+            "cursor": 0x0010,
+            "record_x": 0x00F5,
+            "record_y": 0x0010,
+            "attr_select": 0,
+            "x_flag": 1,
+        },
+    )
+    cases = []
+    for index, return_pc in enumerate(CALLER_RETURN_PCS):
+        shape = shapes[index % len(shapes)]
+        cases.append(
+            build_case(
+                f"{shape['name']}-return-{return_pc:06x}",
+                0x12B600 + index,
+                frame_table=shape["frame_table"],
+                cursor=shape["cursor"],
+                record_x=shape["record_x"],
+                record_y=shape["record_y"],
+                attr_select=shape["attr_select"],
+                x_flag=shape["x_flag"],
+                return_pc=return_pc,
+            )
+        )
+    # entry_11752 links straight to $94:E000 after its native $99:B5B9
+    # continuation.  Architecturally this is the old $011778 BSR and must
+    # rejoin at logical $01177C.
+    shape = shapes[0]
+    cases.append(
         build_case(
-            "rom-frame-5bb0-two-columns",
-            0x12B602,
-            frame_table=0x000070F4,
-            cursor=0x0010,
-            record_x=0x00F5,
-            record_y=0x0010,
-            attr_select=0,
-            x_flag=1,
-        ),
-    ]
+            "native-entry-11752-return-01177c",
+            0x12B6FF,
+            frame_table=shape["frame_table"],
+            cursor=shape["cursor"],
+            record_x=shape["record_x"],
+            record_y=shape["record_y"],
+            attr_select=shape["attr_select"],
+            x_flag=shape["x_flag"],
+            return_pc=0x01177C,
+            incoming_pc=0x99B5B9,
+        )
+    )
+    return cases
 
 
-def mame_result(session: base.MameSession, case: base.Case) -> base.Result:
+def discover_caller_returns(rom: bytes) -> tuple[int, ...]:
+    """Find aligned BSR.W instructions targeting $012B6C in the embedded 68K ROM."""
+    program = rom[0x10000:0x90000]
+    returns = []
+    for pc in range(0, len(program) - 3, 2):
+        if program[pc : pc + 2] != b"\x61\x00":
+            continue
+        displacement = int.from_bytes(program[pc + 2 : pc + 4], "big", signed=True)
+        # 68000 PC-relative word displacement is based at the extension word.
+        if (pc + 2 + displacement) & 0xFFFFFF == ENTRY_PC:
+            returns.append(pc + 4)
+    return tuple(returns)
+
+
+def mame_result(session: base.MameSession, case: Case) -> base.Result:
     session.pause()
     session.write_block(0xF00000, case.work)
     for name in base.REG_NAMES[:-1]:
@@ -142,7 +220,7 @@ def mame_result(session: base.MameSession, case: base.Case) -> base.Result:
     session.set_reg("PC", ENTRY_PC)
     captured = session.cmd(
         "capture_at_pc",
-        pc=RETURN_PC,
+        pc=case.return_pc,
         addr=0xF00000,
         len=0x4000,
         nth=1,
@@ -158,7 +236,62 @@ def mame_result(session: base.MameSession, case: base.Case) -> base.Result:
     return base.Result(result_regs, regs["SR"] & 0xFFFF, bytes.fromhex(captured["hex"]))
 
 
-def nexen_result(m: base.McpSession, nat: Path, case: base.Case) -> base.Result:
+def redirect_return_to_spin(
+    m: base.McpSession,
+    rom: bytes,
+    return_pc: int,
+) -> dict[str, int]:
+    """Route one bank-$01 return through an existing dense xlat sub-table."""
+    scratch_page = (VALIDATION_SUBTABLE_PC >> 8) & 0x3FF
+    scratch_pointer_offset = XLAT_FILE_BASE + scratch_page * 2
+    subtable_offset = int.from_bytes(
+        rom[scratch_pointer_offset : scratch_pointer_offset + 2],
+        "little",
+    )
+    if not subtable_offset:
+        raise RuntimeError("validation xlat scratch page is absent from this ROM")
+
+    return_page = (return_pc >> 8) & 0x3FF
+    page_pointer_offset = XLAT_FILE_BASE + return_page * 2
+    target_offset = XLAT_FILE_BASE + subtable_offset + (return_pc & 0xFF) * 3
+    m.write_memory(
+        "snesPrgRom",
+        page_pointer_offset,
+        subtable_offset.to_bytes(2, "little").hex(),
+    )
+    m.write_memory(
+        "snesPrgRom",
+        target_offset,
+        RETURN_NATIVE.to_bytes(3, "little").hex(),
+    )
+    return {
+        "page_pointer_file_offset": page_pointer_offset,
+        "subtable_offset": subtable_offset,
+        "target_file_offset": target_offset,
+    }
+
+
+def disable_production_sparse_return(
+    m: base.McpSession,
+    rom: bytes,
+) -> None:
+    """Let the validation-only dense redirect catch the two shipped hot returns."""
+    expected = (b"\xDC\x1B", b"\x9A\x1C")
+    for offset, operand in zip(SPARSE_RETURN_COMPARE_OFFSETS, expected):
+        if rom[offset : offset + 2] != operand:
+            raise RuntimeError(
+                f"sparse return compare moved at ROM ${offset:06X}: "
+                f"{rom[offset:offset + 2].hex()} != {operand.hex()}"
+            )
+        m.write_memory("snesPrgRom", offset, "ffff")
+
+
+def nexen_result(
+    m: base.McpSession,
+    nat: Path,
+    rom: bytes,
+    case: Case,
+) -> base.Result:
     m.load_state(str(nat))
     m.pause()
     reg_blob = b"".join(base.le32(case.regs[f"D{i}"]) for i in range(8))
@@ -177,8 +310,8 @@ def nexen_result(m: base.McpSession, nat: Path, case: base.Case) -> base.Result:
     base.write_u16(m, 0x60, (flags >> 2) & 1)
     base.write_u16(m, 0x70, (flags >> 3) & 1)
     base.write_u16(m, 0xA2, (flags >> 4) & 1)
-    base.write_u16(m, 0x40, RETURN_PC & 0xFFFF)
-    base.write_u16(m, 0x42, (RETURN_PC >> 16) & 0xFFFF)
+    base.write_u16(m, 0x40, case.incoming_pc & 0xFFFF)
+    base.write_u16(m, 0x42, (case.incoming_pc >> 16) & 0xFFFF)
     base.write_u16(m, 0x7C, 7)
     base.write_u16(m, 0xA4, case.regs["A7"] & 0xFFFF)
     base.write_u16(m, 0xA6, (case.regs["A7"] >> 16) & 0xFFFF)
@@ -192,10 +325,10 @@ def nexen_result(m: base.McpSession, nat: Path, case: base.Case) -> base.Result:
     base.write_u16(m, 0x0702, 0)
     base.write_u16(m, 0x0704, 1)
 
-    # xlat[$01177C] normally enters the active bank-$99 caller continuation.
     # Redirect only this loaded emulator instance to the inert $00:D15A loop
     # so run_until cannot race past the comparison point.
-    m.write_memory("snesPrgRom", RETURN_XLAT_FILE_OFFSET, "5ad100")
+    disable_production_sparse_return(m, rom)
+    redirect_return_to_spin(m, rom, case.return_pc)
 
     hook = m.add_exec_hook(RETURN_NATIVE, cpu_type="Sa1")
     m.drain_notifications(timeout=0.05)
@@ -228,7 +361,7 @@ def nexen_result(m: base.McpSession, nat: Path, case: base.Case) -> base.Result:
     )
 
 
-def compare(case: base.Case, arcade: base.Result, console: base.Result) -> dict:
+def compare(case: Case, arcade: base.Result, console: base.Result) -> dict:
     reg_mismatches = {
         name: {"mame": arcade.regs[name], "nexen": console.regs[name]}
         for name in base.REG_NAMES
@@ -242,6 +375,8 @@ def compare(case: base.Case, arcade: base.Result, console: base.Result) -> dict:
     ccr_mismatch = (arcade.sr & base.CCR_MASK) != (console.sr & base.CCR_MASK)
     return {
         "case": case.name,
+        "return_pc": f"{case.return_pc:06X}",
+        "incoming_pc": f"{case.incoming_pc:06X}",
         "result": "green" if not reg_mismatches and not ccr_mismatch and not offsets else "red",
         "reg_mismatches": reg_mismatches,
         "mame_ccr": arcade.sr & base.CCR_MASK,
@@ -273,6 +408,14 @@ def main() -> int:
             parser.error(f"missing required input: {path}")
 
     cases = make_cases()
+    rom = args.rom.read_bytes()
+    discovered_returns = discover_caller_returns(rom)
+    if discovered_returns != CALLER_RETURN_PCS:
+        parser.error(
+            "embedded 68K caller set changed: expected "
+            f"{[f'{pc:06X}' for pc in CALLER_RETURN_PCS]}, got "
+            f"{[f'{pc:06X}' for pc in discovered_returns]}"
+        )
     events: list[dict] = []
     provenance = {
         "event": "provenance",
@@ -287,9 +430,13 @@ def main() -> int:
         "entry_native": f"{ENTRY_NATIVE:06X}",
         "return_native": f"{RETURN_NATIVE:06X}",
         "runtime_xlat_redirect": {
-            "file_offset": f"{RETURN_XLAT_FILE_OFFSET:06X}",
+            "strategy": (
+                "disable the two production sparse-return comparisons, then repoint "
+                "the return page to the existing $0117xx dense sub-table"
+            ),
             "target": f"{RETURN_NATIVE:06X}",
         },
+        "caller_return_pcs": [f"{pc:06X}" for pc in CALLER_RETURN_PCS],
         "cases": len(cases),
         "time": time.time(),
     }
@@ -323,7 +470,7 @@ def main() -> int:
         stderr_log=ROOT / "build" / "playability-20260719" / "12b6c-nexen.stderr.log",
     ) as nexen:
         for case in cases:
-            console = nexen_result(nexen, args.nat, case)
+            console = nexen_result(nexen, args.nat, rom, case)
             event = {"event": "case", **compare(case, arcade[case.name], console)}
             events.append(event)
             print(json.dumps(event, sort_keys=True), flush=True)
