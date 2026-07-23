@@ -12,7 +12,7 @@ Project-state documents conflict. Use this precedence order:
    accounting as the baseline. Only a later dated `RECOVERY.md` result that explicitly supersedes
    an individual claim can replace it; otherwise, where documents conflict, believe the confession.
    It was recovered from the old `sound-p3` worktree during repository consolidation.
-2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R8 results
+2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R9 results
    supersede the older campaign projections they explicitly close.
 3. The newest branch/worktree-specific handoff and evidence (`docs/PROFILE_CAMPAIGN.md`,
    `MAIN_PLANNING_HANDOFF.md`, `supersoundhandoff.md`, and focused `docs/handoff/*`).
@@ -45,12 +45,25 @@ without explicit instruction.
   health from 20 to 18 (two points of damage).
 - Exact v124 also freezes when a charged Button 1 shot is released. Its `$00D3B0` native handler
   flowed from `$92:EFFB` across a later `.org $F000` island, which silently replaced 201 bytes.
-  Exact v127 candidate SHA-256
+  Exact v127 ROM SHA-256
   `1a8a5742536b6142a42387546524bb0e785fac508a01e6ff5e5c53027b06db35` relocates the complete
   body to audited `$94:B400` space. Real-controller 96/120/180-frame holds are green through up to
   1,200 frames after release, with continued ticks/renders, halt zero, and intact stack floors.
-  A fresh `TESTFLAG=0` smoke organically arms production and reaches gameplay. This is focused
-  charged-shot/cold-boot-reachability evidence, not a new FPS result or human-confirmed playability.
+  A fresh `TESTFLAG=0` smoke organically arms production and reaches gameplay.
+- The tester's exact Mesen 2.1.1 reports were real. v127's production queue copied retired zero
+  palette `$41:6800`, active-display DMA forced blank into visible scanlines, large transition
+  uploads could outlive VBlank, and standalone TAD credit track `$19` replaced the active song.
+  Exact v128 candidate SHA-256
+  `7c4b757ddf5c0297eb1b3aa65f4f6d74ecf289fdfa5f70d0d71811843906db57` copies live palette
+  `$41:2000`, publishes chunked/size-aware DMA through NMI after the scheduler wake, and suppresses
+  `$19` while music is active. A fresh exact-Mesen post-TAITO capture and same-ROM real-input
+  transition/charge-release sequence are green, with digitally continuous gameplay audio. This is
+  compatibility evidence, not musical validation, FPS evidence, or human-confirmed playability.
+- v128's retained wake-before-DMA ordering survives a checkpointed 1,200-frame Nexen window with
+  600 ticks/requests/ACKs, halt zero, exact supervisor mirror, and intact stacks, but produces only
+  568 true renders and 31 new queue coalesces during cache-heavy bursts. The renderer-conservation
+  gate is red. An intermediate Mesen-green DMA-before-wake ROM halted `$DEAD` in the formal
+  power-on run and is rejected.
 - v124's formal power-on production window recorded **1,783 game ticks in 3,602 SNES video
   frames = 29.700167 game-fps**, at **360,990.164 SA-1 cycles/tick**. It ended at tick 2,210 with
   halt zero, task mask `$FFF1`, 14 initialized task stacks, a 138-byte minimum margin, valid real
@@ -70,18 +83,22 @@ without explicit instruction.
   R6 paced scheduler/renderer ownership design and survives through tick 2,210, but its whole
   production tick still misses the explicit rate and cycle gates.
 - The legal MC68000 interpreter and shipped native escapes have strong differential evidence:
-  current-v127 optest 160/160, opsweep 782/782, plus focused MAME and Nexen differentials are real.
+  retained current-line optest 160/160, opsweep 782/782, plus focused MAME and Nexen differentials
+  are real.
   This is still not proof of every whole-program address-space path; R4's bank-assumption bugs
   remain the warning against promoting focused vectors into universal correctness.
-- A settled production-cold-boot Nexen capture renders the recognizable level background, HUD,
-  player, and enemies while rendering continues through the formal run. Exact aligned MAME pixel
-  fidelity remains open; visual plausibility alone is not the fidelity oracle.
+- A settled v124 production-cold-boot Nexen capture renders the recognizable level background,
+  HUD, player, and enemies while rendering continues through its formal run. v128 repairs the
+  reported exact-Mesen visual corruption but retains burst-time queue coalescing in the checkpointed
+  Nexen window. Exact aligned MAME pixel fidelity remains open; visual plausibility alone is not the
+  fidelity oracle.
 - The TAD sound port is merged upstream and its data/blob paths are byte- and oracle-validated.
   R4 proved the organic boot, attract, coin, and round-start command chain, but the real user
-  playtest reports audible cutting-out. A current organic capture shows no TAD stop/reload/drop or
-  200 ms digital silence; the likely audible causes are incomplete transcription, trimmed samples,
-  ignored enemy SFX IDs, placeholder SFX, and missing pitch/LFO/portamento work. It has not passed
-  by-ear musical validation.
+  playtest reports audible cutting-out. v128 fixes one concrete replacement path: the standalone
+  `$19` credit cue no longer displaces an active song, and its exact-Mesen gameplay capture has no
+  internal 200 ms digital silence. The remaining likely audible causes are incomplete transcription,
+  trimmed samples, ignored enemy SFX IDs, placeholder SFX, and missing pitch/LFO/portamento work.
+  It has not passed by-ear musical validation.
 - The `$0818` `$AC=$2000` clamp remains the gate-off fallback. The organically armed production
   path uses the paced scheduler above; neither path proves a full playthrough crash-free.
 - C-Chip work is genuinely resolved for the observed game contract: deterministic boot replay,

@@ -19,6 +19,8 @@ VMADDL=$2116
 VMADDH=$2117
 CGADD=$2121
 CGDATA=$2122
+SLHV=$2137
+OPVCT=$213D
 TM=$212C
 NMITIMEN=$4200
 HVBJOY=$4212
@@ -1429,21 +1431,22 @@ bg_hscroll:
     plp
     rts
 
-; dma0_blank_pulse — channel-0 DMA with the smallest safe forced-blank window.
-; Callers have already programmed $4300-$4306 and enter A8/X16.  The old call
-; sites were `lda #$01 / sta MDMAEN` (five bytes); each is now a size-neutral
-; `jsr` plus two NOPs, so the tightly pinned renderer/supervisor layout does not
-; move.  A is intentionally clobbered exactly as it was by the old sequence.
+; dma0_blank_pulse — publish a channel-0 DMA for the next NMI/VBlank.
+; Callers have already programmed $4300-$4306 and enter A8/X16.  The former
+; implementation set INIDISP=$80 immediately around every DMA.  Once production
+; reached a render every two video frames, Mesen 2.1.1 showed those mid-screen
+; blank pulses as black horizontal bars on every rendered frame.  Merely polling
+; HVBJOY is insufficient: NMI can consume most of an already-active VBlank before
+; returning to this helper, which made the 4 KiB tilemap upload partial.  Publish
+; byte flag $1F11 instead; nmi_pacing_wram executes DMA0 near the leading edge,
+; then clears the flag.  Small follow-up transfers may share the safe tail of
+; that same VBlank according to their actual byte count; larger transfers wait
+; for a fresh NMI edge.  The pinned entry jumps to the size-aware implementation
+; in the $8Axx helper island so the tightly packed $88CC-$8900 seam does not grow.
 .a8
 .i16
 dma0_blank_pulse:
-    lda #$80
-    sta INIDISP
-    lda #$01
-    sta MDMAEN
-    lda #$0F
-    sta INIDISP
-    rts
+    jmp dma0_blank_pulse_extended
 
 ; ---- BOOT_ARM ($E9:8900): production escape-gate enable (Option A) -----------------
 ; The interp's notest/production boot calls `jsl BOOT_ARM` here IN PLACE OF the SA-1
@@ -1633,6 +1636,157 @@ tad_bssclr:
     jsr video_boot_finish_extended ; finish the boot-only song request
     rts
 
+; Large producer-prepared native BG runs cannot be issued as one DMA: the
+; visible-period tail is rejected by the PPU.  This WRAM-mirrored helper owns a
+; formerly empty renderer seam and receives an already-programmed DMA0 with its
+; total byte length in $D6.  It balances bg_tile_run_dma's PHP itself.
+.org $8A00
+.a8
+.i16
+bg_tile_run_dma_chunks:
+    rep #$20
+.a16
+btr_chunk_loop:
+    lda $D6
+    cmp #$1701
+    bcc btr_final_chunk
+    sec
+    sbc #$1700
+    pha
+    sep #$20
+.a8
+    stz DAS0L
+    lda #$17             ; 5.75 KiB: about 35 of the 37 VBlank scanlines
+    sta DAS0H
+    jsr dma0_blank_pulse
+    rep #$20
+.a16
+    pla
+    sta $D6
+    bra btr_chunk_loop
+btr_final_chunk:
+    sep #$20
+.a8
+    lda $D6
+    sta DAS0L
+    lda $D7
+    sta DAS0H
+    jsr dma0_blank_pulse
+    plp
+    rts
+bg_tile_run_dma_chunks_end:
+
+; Service a foreground-published PPU DMA only after the scheduler wake has run
+; at its established leading-edge position.  Controller sampling follows the
+; DMA but still completes before NMI return and the next wake decision.  A
+; 5.75 KiB transfer consumes roughly 35 scanlines; running it before
+; pacing_try_wake shifted the SA-1 release deep into VBlank and eventually
+; destroyed the task-ordering contract.  Small CGRAM/OAM transfers are different:
+; queue-capture work can move the following NMI entry to line 236, but a sub-1 KiB
+; transfer still fits safely before line 252.  Use the programmed descriptor size
+; to retain that safe tail instead of making a 544-byte upload wait three frames.
+; Larger transfers keep the conservative leading-edge cutoff.  If there is not
+; enough VBlank left, retain the flag and let the foreground wait for the next NMI.
+.a8
+.i16
+service_pending_dma0:
+    lda $1F11
+    beq spd_done
+    lda HVBJOY
+    bpl spd_done
+    lda SLHV             ; latch H/V counters
+    lda OPVCT            ; vertical low byte
+    tax
+    lda DAS0H
+    cmp #$04
+    bcs spd_large
+    txa
+    cmp #$FC             ; sub-1 KiB: start no later than line 251
+    bcs spd_done
+    bra spd_line_ok
+spd_large:
+    txa
+    cmp #$E3             ; large descriptor: start no later than line 226
+    bcs spd_done
+spd_line_ok:
+    lda OPVCT            ; vertical bit 8 (reject lines 256-261)
+    and #$01
+    bne spd_done
+    lda #$01
+    sta MDMAEN
+    stz $1F11            ; release foreground only after DMA completes
+spd_done:
+    rts
+service_pending_dma0_end:
+
+; Continue a renderer's consecutive sub-1 KiB transfers in the VBlank that
+; serviced its first descriptor.  The common OBJ native record is 128 bytes;
+; rejecting every transfer at line 252 made a cache refill issue only one or two
+; records per VBlank and stretched a 7.8 KiB burst across ten video frames.
+; Size tiers retain a full scanline of safety before visible line 0:
+;   <=255 bytes through line 259, <=511 through 257, <=767 through 256,
+;   <=1023 through 253.  Larger descriptors always publish for a fresh NMI.
+.a8
+.i16
+dma0_blank_pulse_extended:
+    phx
+    lda HVBJOY
+    bpl dma0_publish
+    lda DAS0H
+    cmp #$04
+    bcs dma0_publish
+    lda SLHV
+    lda OPVCT
+    tax
+    lda OPVCT
+    and #$01
+    bne dma0_high_page
+
+    ; Lines 225-255.  High-byte tiers 0-2 all fit from line 255; the
+    ; 768-1023-byte tier needs two more scanlines of margin.
+    lda DAS0H
+    cmp #$03
+    bcc dma0_direct
+    txa
+    cmp #$FE
+    bcs dma0_publish
+    bra dma0_direct
+
+dma0_high_page:
+    lda DAS0H
+    beq dma0_high_tiny
+    cmp #$01
+    beq dma0_high_511
+    cmp #$02
+    bne dma0_publish
+    txa
+    cmp #$01             ; 512-767 bytes: line 256 only
+    bcs dma0_publish
+    bra dma0_direct
+dma0_high_511:
+    txa
+    cmp #$02             ; 256-511 bytes: lines 256-257
+    bcs dma0_publish
+    bra dma0_direct
+dma0_high_tiny:
+    txa
+    cmp #$04             ; <=255 bytes: lines 256-259
+    bcs dma0_publish
+dma0_direct:
+    lda #$01
+    sta MDMAEN
+    plx
+    rts
+dma0_publish:
+    plx
+    lda #$01
+    sta $1F11            ; private WRAM: pending DMA0 descriptor, published last
+dma0_wait_complete:
+    lda $1F11
+    bne dma0_wait_complete
+    rts
+dma0_blank_pulse_extended_end:
+
 ; =============================================================================
 ; Production 30 Hz pacing supervisor — copied by rc_copy and executed from WRAM.
 ;
@@ -1783,6 +1937,7 @@ nmi_pacing_wram:
     inc a
     sta $41012A          ; one shared-window epoch increment per real SNES vblank
     jsr pacing_try_wake
+    jsr service_pending_dma0
     jsr pacing_sample_joy
     lda $3302            ; leave Bus-A latched on IRAM, not a ROM fetch
     plb
@@ -2036,6 +2191,21 @@ sv_armed:
 .a8
 .i16
 snd_map:
+    ; The arcade mixes its $19 credit cue over the current music.  TAD track 2
+    ; is a standalone transcription, so loading it while a song is active
+    ; replaces that song and leaves gameplay silent when the short cue ends.
+    ; Keep the active track instead; when no song is selected, retain the
+    ; existing table mapping so the standalone cue remains available.
+    cmp #$19
+    bne sm_range
+    pha
+    lda $7e1f0c          ; TadPrivate_nextSong (explicit WRAM bank; caller DBR is unknown)
+    beq sm_coin_silent
+    pla
+    rts
+sm_coin_silent:
+    pla
+sm_range:
     cmp #$80
     bcs sm_done          ; ids >= $80 never observed -> ignore
     phb                  ; save caller DBR (TAD API needs a low-RAM DB)
@@ -4315,13 +4485,13 @@ btr_shift:
     sta A1T0H
     lda $D2
     sta A1B0
-    lda $D6
-    sta DAS0L
-    lda $D7
-    sta DAS0H
-    jsr dma0_blank_pulse
-    plp
-    rts
+    ; A producer-prepared transition can coalesce tens of KiB into one native
+    ; run.  A single DMA of that size outlives VBlank and Mesen correctly
+    ; rejects the visible-period tail, leaving noisy pattern data.  Transfer
+    ; full 5.75 KiB chunks on separate NMI edges.  DMA0 advances A1T0 and VMADD
+    ; automatically; only the remaining byte count must survive the NMI, so
+    ; keep it on the protected 5A22 stack rather than in clobberable DP scratch.
+    jmp bg_tile_run_dma_chunks
 
 ; =============================================================================
 ; Deferred native OBJ tile uploads.
@@ -4875,7 +5045,12 @@ rqc_packed:
 
     lda $7ED186
     beq rqc_palette_done
-    ldx #$6800
+    ; Production pacing does not populate the retired legacy snapshot at
+    ; $41:6800.  arm=$0003 keeps the SA-1 asleep here, so the authoritative
+    ; live palette at $41:2000 is stable.  Copying $6800 promoted a zero
+    ; palette after busy frames: Mesen showed the post-TAITO scene for three
+    ; video frames, then black for ~37, repeating every 40 frames.
+    ldx #$2000
     ldy #$D1A0
     lda #$0400
     jsr pacing_snapshot_dma
@@ -5042,7 +5217,7 @@ rqc2_sparse_fit:
 
     lda $7EB006
     beq rqc2_palette_done
-    ldx #$6800
+    ldx #$2000          ; same stable live-palette contract as the primary queue
     ldy #$B020
     lda #$0400
     jsr pacing_snapshot_dma

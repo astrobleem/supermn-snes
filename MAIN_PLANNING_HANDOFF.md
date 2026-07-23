@@ -1,5 +1,25 @@
 # MAIN_PLANNING_HANDOFF.md
 
+> ## R9 EXACT-MESEN REGRESSION OVERRIDE (2026-07-23)
+>
+> The tester's exact Mesen 2.1.1 report was correct. v127 copied a retired zero palette into queued
+> renders after TAITO, forced blank around foreground DMA during Clark's walk, could overrun VBlank
+> with large transition uploads, and loaded standalone credit track `$19` over active music.
+>
+> Exact v128 candidate SHA-256
+> `7c4b757ddf5c0297eb1b3aa65f4f6d74ecf289fdfa5f70d0d71811843906db57`
+> uses live palette `$41:2000`, wake-before-DMA NMI publication with chunked/size-aware transfers,
+> and suppresses `$19` while a song is active. A fresh post-TAITO exact-Mesen capture has no former
+> black interval; a same-ROM real-input coin/Start/transition/charged-release sequence ends live at
+> frame 7,935 / tick 1,403 / render 1,342 with halt zero and digitally continuous gameplay audio.
+>
+> Do not call it playable. A checkpointed Nexen ordering window records 600 ticks/requests/ACKs but
+> 568 true renders and 31 new queue coalesces during cache-heavy bursts. An intermediate DMA-before-
+> wake ordering passed Mesen and then halted `$DEAD` in the formal power-on run; it is rejected.
+> v124 remains the latest formal performance evidence at 29.700167 game-fps / 360,990.164
+> cycles/tick. Read `CONFESSION.md`, `RECOVERY.md` R9, and
+> `docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md`.
+
 > ## R7 USER-PLAYTEST / COMBAT OVERRIDE (2026-07-22)
 >
 > R6's exact timing result was real, but its **playable** conclusion was not. The first human v105

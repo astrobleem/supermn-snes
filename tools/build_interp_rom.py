@@ -371,8 +371,26 @@ assert VID[0x1D12:0x1D29] == bytes.fromhex(
 # Production pacing is split across fixed WRAM-mirrored islands immediately
 # before the TAD code at $9000. Guard both the flowing rc_copy tail and every
 # handler seam because Poppy silently accepts overlapping .org sections.
-assert VID[0x0A00:0x0DD0] == bytes(0x3D0), (
-    "video rc_copy flow grew into the $8A00-$8DCF pacing seam"
+bg_tile_run_dma_chunks = vid_off("bg_tile_run_dma_chunks")
+bg_tile_run_dma_chunks_end = vid_off("bg_tile_run_dma_chunks_end")
+service_pending_dma0 = vid_off("service_pending_dma0")
+service_pending_dma0_end = vid_off("service_pending_dma0_end")
+dma0_blank_pulse_extended = vid_off("dma0_blank_pulse_extended")
+dma0_blank_pulse_extended_end = vid_off("dma0_blank_pulse_extended_end")
+assert bg_tile_run_dma_chunks == 0x8A00
+assert (
+    0x8A00
+    < bg_tile_run_dma_chunks_end
+    == service_pending_dma0
+    < service_pending_dma0_end
+    == dma0_blank_pulse_extended
+    < dma0_blank_pulse_extended_end
+    <= 0x8B00
+)
+assert VID[
+    dma0_blank_pulse_extended_end - 0x8000:0x0DD0
+] == bytes(0x8DD0 - dma0_blank_pulse_extended_end), (
+    "VBlank DMA helpers grew into the $8DD0 pacing island"
 )
 assert VID[0x099C:0x09AB] == bytes.fromhex(
     "bf0080e99f00807fe8e8e00030d0f1"
@@ -422,15 +440,15 @@ assert pacing_pending_direct_guard + 9 + pending_guard_branch == pacing_snapshot
 assert VID[pacing_helpers_end - 0x8000:0x0F00] == bytes(
     0x8F00 - pacing_helpers_end
 ), "pacing helper grew into the fixed NMI handler"
-assert VID[0x0F00:0x0F34] == bytes.fromhex(
+assert VID[0x0F00:0x0F37] == bytes.fromhex(
     "08c23048da5a8be220a90048aba9808d"
-    "0122af2a01411a8f2a014120008e208a"
-    "8ead0233abe220a30829fb8308c2307a"
-    "fa682840"
+    "0122af2a01411a8f2a014120008e2033"
+    "8a208a8ead0233abe220a30829fb8308"
+    "c2307afa682840"
 ), (
-    "pacing NMI handler lost its A-preserving stacked-P patch/restore order"
+    "pacing NMI handler lost its leading-edge wake/DMA or A-preserving restore order"
 )
-assert VID[0x0F34:0x0F40] == bytes(0x0C), (
+assert VID[0x0F37:0x0F40] == bytes(0x09), (
     "pacing NMI handler grew into the fixed coprocessor-IRQ handler"
 )
 assert VID[0x0F68:0x1000] == bytes(0x98), (

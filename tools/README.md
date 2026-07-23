@@ -112,10 +112,29 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
 - **`recovery_baseline.py`** [S] — production `TESTFLAG=0` cold boot, exact accelerator-arm
   observation, real virtual-mailbox coin/start inputs, counter-vs-hook validation, and honest
   separation of SNES video frames, Superman ticks, SA-1 cycles, and host throughput.
+- **`mesen211_mcp_controller.sh`** [S] — exact legacy-Mesen compatibility launcher. It runs
+  `/home/chad/Mesen2/bin/linux-x64/Release/Mesen` with a port-0 `SnesController` override and
+  `--doNotSaveSettings`, preventing inherited controller configuration from invalidating real-input
+  tests.
+- **`capture_mesen211_transitions.py`** [S] — fresh-power-on or named-state Mesen 2.1.1 frame
+  capture for title/transition compatibility. It records exact ROM/emulator/controller provenance,
+  screenshots, checkpoints, PPU brightness/forced-blank state, halt/tick/render state, and a JSON
+  manifest. It is visual compatibility evidence, never gameplay stability or FPS evidence.
+- **`validate_mesen211_playtest.py`** [S] — replays the reported real-controller sequence in exact
+  Mesen 2.1.1: coin, Start, Clark/round transition, grounded B charge/release, tick/native hooks,
+  screenshots/states, and digital-audio capture/silence analysis. It intentionally labels its
+  result checkpointed compatibility evidence; musical fidelity still requires listening against
+  the arcade reference.
 - **`validate_charged_shot.py`** [S] — checkpointed real-controller B hold/release regression.
   It records the `$D3B0` charged-shot native entry and relocated continuation, game-tick/render
   progress, projectile state, production gates, task-stack floors, screenshots, and a first-stall
   state/CPU trace. This is charged-shot liveness evidence, never cold-boot or FPS evidence.
+- **`soak_gameplay_ordering.py`** [S] — checkpointed real-input scheduler/renderer ordering soak.
+  It checks tick-hook/counter agreement, request/ACK/true-render conservation, queue-overflow
+  deltas, gates, supervisor mirror, sound/input state, and task-stack floors. `--dma-trace` adds
+  execution hooks for the published/direct DMA branches so cache-burst losses can be attributed.
+  Any checkpoint mirror refresh is recorded as an intervention; the result is not cold-boot/FPS
+  evidence.
 - **`profile_continuous.py`** [P/S] — simultaneous, non-pausing phase hooks using the R5 Nexen
   `cycleCount` notification stamp. Profiles clamp -> virtual IRQ -> `$3A92` -> next clamp without
   the stop-at-each-hook distortion that invalidated older phase accounting. It rejects cross-loads

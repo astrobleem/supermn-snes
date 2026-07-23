@@ -3,6 +3,29 @@
 Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
+> ## ⚠️ R9 EXACT-MESEN REGRESSION CORRECTION — July 23, 2026
+>
+> The tester's Mesen 2.1.1 reports were correct. After TAITO faded, the no-credit title alternated
+> between a few visible frames and a long black interval because the queued renderer copied retired
+> zero palette `$41:6800`. The pre-round bars came from mid-screen forced-blank DMA, large transition
+> uploads could outlive VBlank and mix tiles, and arcade overlay command `$19` loaded a standalone
+> TAD credit track that replaced the active song.
+>
+> Exact v128 candidate SHA-256
+> `7c4b757ddf5c0297eb1b3aa65f4f6d74ecf289fdfa5f70d0d71811843906db57`
+> uses live palette `$41:2000`, NMI/VBlank DMA publication with chunked/size-aware transfers, and
+> suppresses `$19` while a song is active. A fresh exact-Mesen capture keeps all 16 post-TAITO title
+> samples visible. A same-ROM real-input sequence records coin/Start, the 450-frame Clark transition,
+> and a 272-frame B charge plus 360 post-release frames with no stall; it ends at frame 7,935 /
+> tick 1,403 / render 1,342, halt zero. Gameplay audio has no internal 200 ms or 750 ms digital
+> silence, but it is not musically validated.
+>
+> This candidate is still **not playable**. A checkpointed 1,200-frame Nexen ordering window remains
+> live and balanced at 600 ticks/requests/ACKs, but completes 568 true renders and adds 31 queue
+> coalesces during cache-heavy bursts. No formal cold-boot rate result supersedes v124's 29.7002
+> game-fps measurement, and exact v128 still needs human confirmation. See [RECOVERY.md](RECOVERY.md)
+> R9 and [the focused Mesen handoff](docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md).
+
 > ## ⚠️ R8 CHARGED-SHOT CORRECTION — July 23, 2026
 >
 > Exact v124 froze when a held Button 1 charge was released. The `$00D3B0` native handler started

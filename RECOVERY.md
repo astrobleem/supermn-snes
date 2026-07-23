@@ -5,9 +5,10 @@ project-control document. It converts the repository from overlapping optimistic
 evidence-backed engineering line. **R7 supersedes R6's playable verdict after the first real user
 playtest exposed broken combat and audibly incomplete music. R6 remains valid historical
 performance/scheduler/renderer evidence for exact v105; R7 identifies the retained v124
-combat-fixed technical demo and its new production result. R8 supersedes v124 as the playtest ROM
-after reproducing and repairing its charged-shot release freeze; it does not replace v124's formal
-performance measurement.**
+combat-fixed technical demo and its new production result. R8 repairs v124's charged-shot release
+freeze. R9 accepts the tester's exact Mesen 2.1.1 rendering/audio reports, repairs their concrete
+causes in v128, and records a remaining burst-render conservation failure; it does not replace
+v124's formal performance measurement or restore the playable label.**
 
 ## Canonical repository state
 
@@ -15,7 +16,8 @@ performance measurement.**
 - The completed recovery line became `main`; current recovery work is on
   `agent/playability-recovery`. Exact ROM hashes, rather than an old handoff's branch name, identify
   each measured candidate. v105 (`72d925ac…`) is historical; formal combat-fixed v124 is
-  `777507c9…`; charged-shot-fixed v127 candidate is `1a8a5742…`.
+  `777507c9…`; charged-shot-fixed v127 is `1a8a5742…`; exact-Mesen-regression-fixed v128 candidate
+  is `7c4b757d…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -61,6 +63,12 @@ dirty `main` worktree identified above.
   real-controller charge durations through 1,200 post-release frames, retained normal attack/jump
   and enemy-offense behavior, fresh 160/160 plus 782/782 interpreter gates, and a green organic
   power-on-to-gameplay smoke.
+- R9's exact v128 Mesen 2.1.1 compatibility evidence: fresh no-input post-TAITO title capture,
+  real port-0 coin/Start, a 450-frame pre-round transition, grounded B charge/release through 360
+  post-release frames, and a digitally continuous gameplay WAV, all tied to exact emulator and ROM
+  hashes. Its checkpointed Nexen window is strong evidence that wake-before-DMA preserves the
+  established scheduler ordering, while its 31 new queue coalesces are equally strong negative
+  evidence against renderer completeness.
 
 ### Partial evidence, not a project-level verdict
 
@@ -74,8 +82,9 @@ dirty `main` worktree identified above.
 - Playability, a complete playthrough, every stage/boss path, real-cartridge timing, or
   shippability. v105 met a narrow formal performance contract but failed the first human combat
   test. v124 repaired those combat failures but froze on charged-shot release and missed both
-  formal 30 Hz thresholds. v127 repairs the demonstrated freeze in focused tests but has not
-  passed a human confirmation or a new formal rate/budget run.
+  formal 30 Hz thresholds. v127 repaired the demonstrated freeze. v128 repairs the recorded Mesen
+  title/transition/music regressions but still coalesces burst renders in Nexen and has not passed
+  a human confirmation or a new formal rate/budget run.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
 - Complete/faithful sound by ear. The first user playtest reports recognizable music that audibly
@@ -91,8 +100,10 @@ dirty `main` worktree identified above.
 - Agent stdio shim: `tools/nexen_mcp_bridge.py`.
 - Global MCP registrations: `mame` and `nexen-inproc`.
 
-The older `/home/chad/Mesen2` emulator remains available for compatibility with historical scripts,
-but new baseline evidence uses Nexen unless a documented emulator comparison is the purpose.
+The older `/home/chad/Mesen2` emulator remains available for compatibility with historical scripts
+and exact user-report reproduction. R9 pins its Mesen 2.1.1 binary hash and controller
+configuration; new baseline evidence otherwise uses Nexen unless a documented emulator comparison
+is the purpose.
 The original `/home/chad/Nexen` tree is a preserved damaged archive after an unrecoverable system-
 drive read; the clean source/build above and the host recovery copy live on `/mnt/sdc1`.
 
@@ -642,11 +653,97 @@ remains the latest formal performance result, and R7's audio defects remain open
 playable only after one exact ROM clears the cold-boot rate/budget/ordering/renderer gates and a
 real user confirms combat and audio behavior.
 
+### R9 — Exact Mesen 2.1.1 rendering/audio regressions
+
+#### User reports and exact reproduction
+
+The follow-up tester named Mesen 2.1.1 and the precise title interval: after the TAITO logo fades,
+before a credit. Exact v127 reproduced a roughly 40-video-frame cycle in which the title was visible
+for about three frames and black for about 37. The same reported sequence also reproduced active-
+display black bars during Clark's pre-round walk, mixed tiles around the transition, and gameplay
+music replacement after the credit cue. These were port failures, not controller use or tester
+confusion.
+
+#### Renderer and audio repairs
+
+The queued renderer's primary and secondary paths copied palette `$41:6800`, a retired production
+snapshot that remained zero. They now copy the live `$41:2000` palette while the producer is held
+off. The PPU DMA helper no longer wraps every transfer in an immediate forced-blank pulse. It
+publishes the programmed descriptor through private WRAM `$7E:1F11`; NMI wakes the scheduler first,
+services pending DMA in VBlank, then samples input. Large native background runs are split into
+5.75 KiB VBlank chunks, while small consecutive transfers use byte-count-specific safe tail limits.
+The packer reserves and verifies the new helper island.
+
+Arcade command `$19` is a credit cue overlaid on the current YM2610 music. TAD track 2 cannot
+overlay; loading it replaced the active song. The mapper now ignores `$19` while a song is selected
+and preserves the standalone mapping only while silent. This fixes the demonstrated replacement,
+not the known incomplete music/SFX transcription.
+
+Exact v128 playtest-candidate ROM SHA-256:
+`7c4b757ddf5c0297eb1b3aa65f4f6d74ecf289fdfa5f70d0d71811843906db57`.
+
+#### Exact Mesen 2.1.1 compatibility result
+
+The binary used was `/home/chad/Mesen2/bin/linux-x64/Release/Mesen`, SHA-256
+`22f714b4e01358eb758750329124a620db9ea42cad0a7b69fc4fa6447442676f`.
+The project wrapper explicitly selects a SNES controller on port 0.
+
+| Gate | Exact-v128 result |
+|---|---:|
+| Fresh post-TAITO/no-credit samples | frames 5,650-5,800; 16/16 visible, brightness 15, no forced blank |
+| Real input | one Select coin, then Start; no gameplay memory writes |
+| Clark/round transition | 450 frames recorded; inspected montage has no black bars or mixed tiles |
+| Grounded charged B hold / post-release | 272 actual frames / 360 frames |
+| `$D3B0` entry / relocated continuation / tick hooks | 2 / 2 / 316 |
+| Final frame / tick / render / halt | 7,935 / 1,403 / 1,342 / `$0000` |
+| Gameplay WAV | 10.516 s; no internal 200 ms or 750 ms digital silence |
+
+The fresh title state and the subsequent compatibility diagnostic are tied to the same exact ROM.
+The second phase deliberately reloads that same-ROM title state so the regression sequence is
+repeatable; it is checkpointed compatibility evidence, not a new cold-boot performance run or a
+full stability/playability test.
+
+Evidence:
+
+- `build/user-playtest-v105-investigation/v128-tail-batching-mesen211-title-fresh-v1/`
+- `build/user-playtest-v105-investigation/v128-tail-batching-mesen211-full-v1/`
+- `docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md`
+
+#### Rejected ordering and residual renderer debt
+
+An intermediate exact-Mesen-green ROM,
+`0c9bf6d5c3c3b7fe1d7555d23f151dfb094be6042d7ca46bf41d36c6819eb482`,
+serviced PPU DMA before the established scheduler wake. Its formal power-on Nexen run later halted
+`$DEAD`, with no tick progress for the final 1,198 frames. It is rejected. Assembly success and a
+green emulator screenshot sequence did not prove producer ordering.
+
+Wake-before-DMA removes that halt. On exact v128, a checkpointed 1,200-video-frame Nexen window
+crosses the old ordering region with 600 tick hooks/counter increments, 600 frame requests, 600
+ACKs, halt zero, real Right+B input, intact production gates, an exact supervisor mirror, 14
+initialized stacks, and a 138-byte minimum margin. It completes only 568 true renders and adds 31
+queue coalesces, so the no-overflow/conservation gate is red. A 520-frame DMA trace narrows the loss
+to cache-heavy bursts: 260 ticks, 257 renders, and three coalesces; a background transition spans
+five frames, while one OBJ cache refill spans eight frames across 82 small DMA records.
+
+This is a checkpointed ordering/renderer lab, not FPS evidence. The old-helper
+`v128-tail-batching-late-500f-v1` checkpoint is explicitly invalid because its stacked return PC
+points into code that moved; do not cite its zero-render result as current behavior.
+
+#### R9 verdict
+
+v128 is the current exact-Mesen regression-fixed playtest candidate. It closes the demonstrated
+post-TAITO palette flicker, active-display blank bars/partial transition upload, credit-triggered
+song replacement, and charged-release liveness sequence. It remains **not playable or shippable**:
+burst render conservation is red, musical fidelity is still unvalidated/incomplete, no full
+playthrough exists, and this exact hash has neither a new formal power-on 30 Hz result nor a human
+confirmation. v124 remains the latest formal rate/budget evidence.
+
 ## Decision rule after the baseline
 
-R8 supersedes v124 as the playtest candidate while preserving R7's exact v124 formal performance
-evidence. Preserve the production evidence contract: local/checkpoint improvements remain local
-evidence, while a new playability claim requires another power-on uninterrupted run plus a human
-combat/audio playtest. Continue under the honest label **interactive technical demo, not playable
-or shippable**. v127 is the current charged-shot-fixed candidate; do not resurrect v125/v126 or
+R9 supersedes v127 as the playtest candidate while preserving R7's exact v124 formal performance
+evidence and R8's charged-shot diagnosis. Preserve the production evidence contract:
+local/checkpoint improvements remain local evidence, while a new playability claim requires another
+power-on uninterrupted run plus a human combat/audio playtest. Continue under the honest label
+**interactive technical demo, not playable or shippable**. v128 is the current exact-Mesen
+regression-fixed candidate; do not resurrect the rejected pre-wake DMA ordering, v125/v126, or
 project a local result into FPS.

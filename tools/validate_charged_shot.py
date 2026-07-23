@@ -40,6 +40,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nexen", type=Path, default=controls.DEFAULT_NEXEN)
     parser.add_argument("--port", type=int, default=8330)
     parser.add_argument(
+        "--button",
+        choices=("b", "y"),
+        default="b",
+        help="Physical SNES face button used for arcade Button 1.",
+    )
+    parser.add_argument(
+        "--pre-roll-frames",
+        type=int,
+        default=0,
+        help=(
+            "Neutral video frames to advance after loading the checkpoint "
+            "before holding B. Useful when the checkpoint is still in a "
+            "round-start transition."
+        ),
+    )
+    parser.add_argument(
         "--hold-frames",
         type=int,
         default=120,
@@ -270,6 +286,8 @@ def hook_events(
 
 def main() -> int:
     args = parse_args()
+    if args.pre_roll_frames < 0:
+        raise SystemExit("--pre-roll-frames must be non-negative")
     if args.hold_frames <= 0:
         raise SystemExit("--hold-frames must be positive")
     if args.observe_frames <= 0:
@@ -302,6 +320,8 @@ def main() -> int:
         "nexen": str(args.nexen.resolve()),
         "nexen_sha256": sha256(args.nexen),
         "input_transport": "nexen_port0_manual_4016",
+        "physical_button": args.button,
+        "pre_roll_frames": args.pre_roll_frames,
         "hold_frames": args.hold_frames,
         "observe_frames": args.observe_frames,
         "stall_frames": args.stall_frames,
@@ -326,8 +346,23 @@ def main() -> int:
         m.load_state(args.state.resolve())
         m.pause()
         m.tool("set_input", {"port": 0, "buttons": 0, "hold": True})
+        pre_roll_run_results = []
+        pre_roll_remaining = args.pre_roll_frames
+        while pre_roll_remaining:
+            run_result = m.run_frames(pre_roll_remaining)
+            advanced = int(run_result.get("framesAdvanced", 0))
+            if advanced <= 0 or advanced > pre_roll_remaining:
+                raise RuntimeError(
+                    "invalid neutral pre-roll progress: "
+                    f"remaining={pre_roll_remaining}, result={run_result}"
+                )
+            pre_roll_run_results.append(run_result)
+            pre_roll_remaining -= advanced
+            m.pause()
         initial = snapshot(m, "initial", -args.hold_frames - 1)
         controls.require_healthy("initial", initial)
+        initial_state = save_state(m, args.output / "prepared.mss")
+        initial_screenshot = screenshot(m, args.output / "prepared.png")
 
         handles: dict[int, str] = {}
         for address, label, cpu in (
@@ -344,9 +379,17 @@ def main() -> int:
             handles[handle] = label
         m.drain_notifications(timeout=0.05)
 
+        attack_button = {
+            "b": controls.McpSession.BTN_B,
+            "y": controls.McpSession.BTN_Y,
+        }[args.button]
+        expected_real_input = {
+            "b": "8000",
+            "y": "4000",
+        }[args.button]
         m.tool(
             "set_input",
-            {"port": 0, "buttons": controls.McpSession.BTN_B, "hold": True},
+            {"port": 0, "buttons": attack_button, "hold": True},
         )
         hold_run_results = []
         hold_remaining = args.hold_frames
@@ -512,8 +555,8 @@ def main() -> int:
     checks = {
         "real_b_reached_game": (
             held["frame"] - initial["frame"] == args.hold_frames
-            and held["input_real_cache"] == "8000"
-            and held["input_mailbox"] == "8000"
+            and held["input_real_cache"] == expected_real_input
+            and held["input_mailbox"] == expected_real_input
             and held["input_injection"] == "0000"
             and held["game_p1"] == "ef"
         ),
@@ -537,6 +580,10 @@ def main() -> int:
     result.update(
         {
             "initial": initial,
+            "pre_roll_run_results": pre_roll_run_results,
+            "pre_roll_frames_actual": args.pre_roll_frames,
+            "initial_state": initial_state,
+            "initial_screenshot": initial_screenshot,
             "held": held,
             "hold_run_results": hold_run_results,
             "held_frames_actual": held["frame"] - initial["frame"],

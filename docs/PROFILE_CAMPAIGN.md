@@ -1220,3 +1220,51 @@ reaches gameplay at frame 5,711 / tick 291 with halt zero; it is not formal FPS 
 This repair changes gameplay correctness, not the performance verdict. v124 remains the latest
 formal power-on rate result, and v127 remains a human-unconfirmed playtest candidate. Full evidence:
 `docs/handoff/CHARGED_SHOT_FREEZE_20260723.md` and `RECOVERY.md` R8.
+
+## 2026-07-23 exact-Mesen correction: VBlank DMA and live palette
+
+The next human report named Mesen 2.1.1 and four concrete intervals: no-credit title after the
+TAITO fade, Clark's pre-round walk, gameplay music after credit, and charged-shot release. Exact
+v127 reproduced the visual/audio regressions. The tester was not mistaken:
+
+- queued palette snapshots came from retired zero buffer `$41:6800`, producing a roughly 3-visible /
+  37-black-frame title cycle;
+- the DMA wrapper forced blank immediately around foreground PPU transfers, exposing horizontal
+  bars during active display;
+- coalesced background uploads could exceed VBlank and partially corrupt VRAM; and
+- arcade overlay cue `$19` loaded standalone TAD track 2, replacing the active song.
+
+Exact v128 candidate
+`7c4b757ddf5c0297eb1b3aa65f4f6d74ecf289fdfa5f70d0d71811843906db57`
+copies live palette `$41:2000`, publishes DMA0 through private `$7E:1F11`, services it in NMI after
+the established scheduler wake, splits large background runs into 5.75 KiB chunks, permits safe
+small-transfer VBlank-tail batching by byte count, and ignores `$19` while a song is active.
+
+Exact Mesen 2.1.1 evidence is green:
+
+- fresh no-input frames 5,650-5,800 after TAITO remain visible at brightness 15 without forced
+  blank;
+- one real coin and Start traverse the 450-frame Clark/round transition without the reported bars
+  or mixed tiles in the inspected montage;
+- a grounded real-B hold lasts 272 actual frames, then releases through another 360 frames with
+  two `$D3B0` entries, two relocated continuations, 316 tick hooks, and halt zero at frame 7,935 /
+  tick 1,403 / render 1,342; and
+- the 10.516-second gameplay WAV has no internal 200 ms or 750 ms digital-silence interval.
+
+The scheduling iteration produced an important negative result. Servicing PPU DMA before
+`pacing_try_wake` made intermediate ROM `0c9bf6d5…` exact-Mesen green, then halted `$DEAD` in its
+3,600-frame power-on Nexen measurement with no tick progress for the final 1,198 frames. That
+ordering is rejected. Wake-before-DMA restores the established producer order.
+
+The current retained renderer is still not complete. In a checkpointed 1,200-video-frame Nexen
+window it records 600 ticks, 600 requests, 600 ACKs, but only 568 true renders and 31 new queue
+coalesces. Halt, gates, real Right+B mailbox, supervisor mirror, and stack floors remain green.
+A 520-frame DMA trace narrows the losses to cache-heavy bursts: 260 ticks, 257 renders, three
+coalesces; a transition render spans five frames and the worst OBJ refill spans eight frames across
+82 small DMA records.
+
+These are Mesen compatibility and checkpointed renderer/ordering results, not a new end-to-end FPS
+measurement. v124's 29.700167 game-fps / 360,990.164 cycles-per-tick formal run remains current.
+v128 is the exact-Mesen regression-fixed playtest candidate, **not playable or shippable**. Full
+evidence and the invalid old-helper checkpoint warning are in
+`docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md` and `RECOVERY.md` R9.

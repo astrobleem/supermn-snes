@@ -68,6 +68,14 @@ def parse_args() -> argparse.Namespace:
         default=64,
         help="Maximum tick/ACK or request/ACK debt accepted at the final pause.",
     )
+    parser.add_argument(
+        "--dma-trace",
+        action="store_true",
+        help=(
+            "Add bounded 5A22 renderer/NMI/DMA execution and register-write "
+            "hooks. Intended for short checkpointed diagnostics only."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -90,6 +98,7 @@ def hook_events(
                 "frame": int(params.get("frame", 0)),
                 "cpu_type": params.get("cpuType"),
                 "kind": params.get("kind"),
+                "value": int(params.get("value", 0)),
             }
         )
     return events
@@ -190,6 +199,38 @@ def main() -> int:
         tick_handle = m.add_exec_hook(TICK_HOOK, cpu_type="Sa1")
         render_handle = m.add_exec_hook(RENDER_COMPLETE_HOOK, cpu_type="Snes")
         handles = {tick_handle: "tick", render_handle: "render_complete"}
+        if args.dma_trace:
+            for label, address in {
+                "render_start": 0x7F8918,
+                "dma_call": 0x7F88CC,
+                "dma_direct": 0x7F8AB0,
+                "dma_publish": 0x7F8AB7,
+                "bg_chunk_start": 0x7F8A00,
+                "bg_final_chunk": 0x7F8A22,
+                "pending_dma_service": 0x7F8A33,
+                "pending_dma_seen": 0x7F8A38,
+                "pending_dma_in_vblank": 0x7F8A3D,
+                "pending_dma_small_line_ok": 0x7F8A50,
+                "pending_dma_line_ok": 0x7F8A57,
+                "pending_dma_line_high_ok": 0x7F8A5E,
+                "pending_dma_start": 0x7F8A60,
+                "pacing_deadline": 0x7F8E2B,
+                "renderer_queue_full": 0x7F8E67,
+                "nmi": 0x7F8F00,
+            }.items():
+                handles[m.add_exec_hook(address, cpu_type="Snes")] = label
+            for label, address in {
+                "dma0_size_low_write": 0x4305,
+                "dma0_size_high_write": 0x4306,
+                "snapshot_size_low_write": 0x4375,
+                "snapshot_size_high_write": 0x4376,
+                "dma_enable_write": 0x420B,
+                "pending_flag_write": 0x1F11,
+            }.items():
+                handles[m.add_write_hook(address, cpu_type="Snes")] = label
+            handles[m.add_read_hook(0x213D, cpu_type="Snes")] = (
+                "vertical_counter_read"
+            )
         m.drain_notifications(timeout=0.05)
 
         buttons = controls.McpSession.BTN_RIGHT | controls.McpSession.BTN_B
@@ -213,8 +254,8 @@ def main() -> int:
         run_wall_seconds = time.monotonic() - start_wall
         notifications.extend(m.drain_notifications(timeout=0.5))
         events = hook_events(notifications, handles)
-        m.remove_hook(tick_handle)
-        m.remove_hook(render_handle)
+        for handle in handles:
+            m.remove_hook(handle)
         final = controls.snapshot(m, "final")
 
         final_state_path = args.output / "final.mss"
@@ -271,6 +312,9 @@ def main() -> int:
         "render_hook_matches_counter": (
             render_complete_count == render_complete_counter_delta
         ),
+        "renderer_queue_no_new_overflow": (
+            final["render_queue_drops"] == initial["render_queue_drops"]
+        ),
         "interpreter_not_halted": final["halt"] == 0,
         "production_gates_intact": final["gates"] == controls.EXPECTED_GATES,
         "production_pacing_intact": (
@@ -311,6 +355,7 @@ def main() -> int:
         "frames_requested": args.frames,
         "chunk_frames": args.chunk_frames,
         "minimum_tick_delta": args.min_ticks,
+        "dma_trace": args.dma_trace,
         "run_results": run_results,
         "run_wall_seconds": run_wall_seconds,
         "initial": initial,

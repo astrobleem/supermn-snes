@@ -1,17 +1,57 @@
 # CONFESSION.md
 
 An honest accounting of what is wrong, overclaimed, or unfinished in this project, originated
-2026-07-12 and last corrected after the charged-shot user playtest on 2026-07-23. The project's
-older status docs and memory files were optimistic to the point of being misleading. Where a
-historical claim below conflicts with the newest dated correction, use the newer result.
+2026-07-12 and last corrected after the exact-Mesen regression investigation on 2026-07-23. The
+project's older status docs and memory files were optimistic to the point of being misleading.
+Where a historical claim below conflicts with the newest dated correction, use the newer result.
 
 The current single-sentence version: **v105's formal 30 Hz measurement was real, but calling it
 playable was false: its combat return routing broke both player attacks and enemy offense, and its
 recognizable music is audibly incomplete; v124 repaired those combat paths but froze when a charged
-shot was released; v127 repairs that silently overwritten handler in focused tests, while v124's
-29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest formal performance
-measurement, so the port is still a near-30 Hz interactive technical demo, not playable or
-shippable.**
+shot was released; v127 repaired that silently overwritten handler, and exact v128 repairs the
+reported Mesen 2.1.1 title flicker, transition blanking/tile corruption, and credit-triggered music
+replacement in a recorded real-input sequence, but a long Nexen checkpoint still coalesces burst
+renders and v124's 29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest
+formal performance measurement, so the port is still an interactive technical demo, not playable
+or shippable.**
+
+## Post-Mesen-2.1.1 correction — July 23, 2026
+
+The tester was correct about the exact timing and emulator: after the TAITO logo faded, before a
+credit was inserted, Mesen 2.1.1 repeatedly displayed the title for roughly three frames and then
+went black for roughly 37. The production renderer queue copied the retired zero palette at
+`$41:6800`; inserting a coin changed the scene and hid the cadence, but did not make the report
+imaginary. Both queue paths now capture the live palette at `$41:2000`.
+
+The pre-round horizontal bars were also a port bug. The old DMA helper toggled forced blank around
+every transfer even when the renderer called it during active display. Large coalesced background
+uploads could additionally outlive VBlank and leave partial/mixed VRAM. The retained repair
+publishes DMA to NMI through `$7E:1F11`, services it in VBlank after the established scheduler wake,
+chunks large background runs, and batches small follow-ups with size-aware scanline limits.
+
+The new gameplay music loss had a separate cause. Arcade command `$19` is an overlaid credit cue,
+but loading standalone TAD track 2 replaced the active song. `$19` is now ignored while a song is
+selected and retains its old mapping only while silent. This prevents that demonstrated song
+replacement; it does not complete or musically validate the transcription.
+
+Exact v128 playtest-candidate ROM SHA-256
+`7c4b757ddf5c0297eb1b3aa65f4f6d74ecf289fdfa5f70d0d71811843906db57`
+is green in the exact Mesen 2.1.1 compatibility sequence. A fresh power-on no-input capture samples
+frames 5,650-5,800 after the TAITO fade with brightness 15, forced blank clear, halt zero, and no
+former black interval. A same-ROM state then receives one real coin and Start, records the full
+450-frame Clark/round transition without the reported bars or mixed tiles, and releases a grounded
+272-frame real-B charge. The charged-shot entry and relocated continuation each fire twice; after
+360 more frames the game is at frame 7,935 / tick 1,403 / render 1,342 with halt zero. Its
+10.516-second gameplay WAV has no internal 200 ms or 750 ms digital-silence interval.
+
+That green Mesen sequence is not a playable verdict. An intermediate ordering that serviced DMA
+before waking the scheduler passed Mesen but later halted `$DEAD` in the production Nexen run and
+was rejected. The retained wake-before-DMA ordering survives a checkpointed 1,200-frame Nexen
+window with 600 ticks, 600 requests, 600 ACKs, halt zero, intact production gates and stacks, but
+only 568 true renders and 31 new queue coalesces during cache-heavy bursts. It therefore still
+fails the renderer conservation gate. No new uninterrupted power-on rate/budget result supersedes
+v124, and the exact v128 hash still needs human confirmation. See
+`docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md` and `RECOVERY.md` R9.
 
 ## Post-charged-shot correction — July 23, 2026
 
