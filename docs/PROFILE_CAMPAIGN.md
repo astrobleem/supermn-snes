@@ -1268,3 +1268,46 @@ measurement. v124's 29.700167 game-fps / 360,990.164 cycles-per-tick formal run 
 v128 is the exact-Mesen regression-fixed playtest candidate, **not playable or shippable**. Full
 evidence and the invalid old-helper checkpoint warning are in
 `docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md` and `RECOVERY.md` R9.
+
+## 2026-07-23 first-wall/audio/boot correction: exact v130
+
+The tester human-confirmed v128's title, transition, charged-shot, and gameplay-music fixes, then
+found a first-wall mixed-tile freeze and over-transposed instrument timbres. Exact v128 reproduced
+the wall failure at halt `$DEAD`. Both background-reconcile helpers tested `BEQ` after
+`CMP #$0100`; a zero length therefore entered the compact loop, wrapped Y from bank `$41` into
+`$42`, and reached mirrored physical bank `$40`, corrupting scheduler contexts. Moving the zero
+test immediately after the load is size-neutral and passes all six promote/revert ×
+empty/compact/full byte fixtures.
+
+Exact v130
+`1ec22cbc92ad7beef0e20d8af6ff12f57023b7c437311f4bc6be56ce37cdd928`
+replays the same real-controller wall checkpoint to frame 12,372 / tick 3,622 with halt zero, 14
+valid stacks, a 136-byte minimum margin, 2,740 recorded context writes, and no suspicious saved-SP
+high-byte write. A separate 1,800-frame idle window activates an enemy attack record and changes
+health 20→18 at halt zero. These are focused behavior checks, not a full stage or playthrough.
+
+The FM authoring pipeline now supports validated, BRR-budgeted source-octave variants and chooses
+the closest source-note anchor at each key-on. Five Main BGM 1 anchors add 2,376 BRR bytes while
+leaving the 40 old base WAVs byte-identical. The consolidated 45-FM/12-drum project passes the
+compiler; exact SPC ARAM matches the 47,886-byte common block and 8,196-byte song-3 block, leaving
+1,030 bytes before echo. An organic 29.985-second capture is active throughout with no internal
+200 ms or 750 ms quiet interval. This proves the data/load path, not perceived timbre.
+
+The previously black initialization interval now displays an original Mode 7 rotating SA-1 shield
+and static liveness text. A fresh exact-Mesen run samples 11 distinct images at frames 150-450,
+Mode 7, brightness 15, forced blank clear, with activity phase `$82`→`$98`→`$AE`. A continuation
+from the same fresh power-on reaches the ownership boundary: frame 5,125 is still Mode 7; frame
+5,150 is Mode 1 with the activity byte clear, tick 10, and render 5; frame 5,400 reaches tick 135 /
+render 130 at halt zero. A fresh Nexen `TESTFLAG=0` run organically arms, uses the real coin/Start
+mailbox, and settles gameplay at frame 5,976 / tick 423 with halt zero and a 154-byte minimum
+observed stack margin.
+
+The exact-v130 Mesen coin/Start/charge sequence is also green: all ten checks pass, charged-shot
+entry/continuation/tick hooks are 2/2/321, the final state is frame 7,946 / tick 1,408 / render
+1,347 / halt zero, and the 10.682-second WAV has no internal 200 ms or 750 ms quiet interval.
+
+None of these short or checkpointed windows replaces v124's formal 29.700167 game-fps /
+360,990.164 cycles-per-tick result. The inherited burst-render conservation failure remains open.
+Exact v130 is a wall/audio/boot **playtest candidate**, not playable or shippable; the tester still
+needs to hit the wall, listen to the new octave anchors, and judge the boot presentation. Full
+evidence is in `docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md` and `RECOVERY.md` R10.

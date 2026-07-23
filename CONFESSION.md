@@ -1,19 +1,78 @@
 # CONFESSION.md
 
 An honest accounting of what is wrong, overclaimed, or unfinished in this project, originated
-2026-07-12 and last corrected after the exact-Mesen regression investigation on 2026-07-23. The
-project's older status docs and memory files were optimistic to the point of being misleading.
-Where a historical claim below conflicts with the newest dated correction, use the newer result.
+2026-07-12 and last corrected after the first-wall/audio/boot follow-up on 2026-07-23. The project's
+older status docs and memory files were optimistic to the point of being misleading. Where a
+historical claim below conflicts with the newest dated correction, use the newer result.
 
 The current single-sentence version: **v105's formal 30 Hz measurement was real, but calling it
-playable was false: its combat return routing broke both player attacks and enemy offense, and its
-recognizable music is audibly incomplete; v124 repaired those combat paths but froze when a charged
-shot was released; v127 repaired that silently overwritten handler, and exact v128 repairs the
-reported Mesen 2.1.1 title flicker, transition blanking/tile corruption, and credit-triggered music
-replacement in a recorded real-input sequence, but a long Nexen checkpoint still coalesces burst
-renders and v124's 29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest
-formal performance measurement, so the port is still an interactive technical demo, not playable
-or shippable.**
+playable was false; v124 repaired its broken combat routing but froze on charged-shot release;
+v127 repaired that overwritten handler; the user has now confirmed v128's Mesen 2.1.1 title,
+transition, charged-shot, and music-restoration fixes, but then found a first-wall crash and
+over-transposed instrument samples; exact v130 repairs the zero-length background-reconcile loop
+that corrupted scheduler contexts at the wall, adds five note-aware octave samples, and replaces
+the multi-minute black boot interval with a live Mode 7 activity screen, while controlled
+enemy-offense, wall, cold-boot, Mesen 2.1.1, ARAM, and audio-continuity checks are green; v130 still
+awaits human wall/timbre/boot-screen confirmation, burst renderer conservation remains red, and v124's
+29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest formal performance
+measurement, so the port is still an interactive technical demo, not playable or shippable.**
+
+## Post-first-wall, octave-sample, and boot-screen correction — July 23, 2026
+
+The next human test supplied both positive and negative evidence. On exact v128 in Mesen 2.1.1,
+the tester confirmed that the post-TAITO title flicker was gone, the pre-round horizontal bars were
+gone, charged-shot release no longer froze, and gameplay music played again. That human result
+supersedes R9's “still needs human confirmation” wording for those four specific regressions. It
+does not promote the whole game: attacking the first breakable wall froze the game with mixed
+tiles, the tester received no enemy damage in that session, and the instrument samples sounded as
+though single recordings were being shifted too far across octaves.
+
+The wall crash was another concrete port defect. In both `rmb_bg_promote` and `rmb_bg_revert`, the
+zero-length branch came after `CMP #$0100`, so `BEQ` tested the compare flags rather than the
+original `$41:013A` background-list length. A zero-length list therefore entered the compact loop,
+wrapped 16-bit Y, crossed DBR `$41` into `$42`, and hit the 128 KiB BW-RAM mirror at physical bank
+`$40`. It overwrote saved coroutine stack contexts before the eventual mixed-tile freeze and
+`$DEAD` halt. Both helpers now test zero immediately after `LDA`, before the compare.
+
+The helper is byte-exact for all six promote/revert × empty/compact/full fixtures. On exact v130,
+the same real-controller Mesen wall drive reaches frame 12,372 / tick 3,622 with halt zero, all 14
+initialized task stacks valid, a 136-byte minimum margin, 2,740 recorded context writes, and no
+suspicious saved-SP high-byte write. This is checkpointed reproduction evidence, not a full-stage
+or full-playthrough result.
+
+The user's no-damage observation remains useful even though controlled offense still works. Starting
+from the exact-v130 organic cold-boot gameplay state, a 1,800-video-frame idle check activates an
+enemy attack record, changes health from 20 to 18, reaches frame 7,776 / tick 1,324, and keeps halt
+zero.
+Enemy offense is therefore present but encounter-dependent; this does not prove that every enemy or
+collision path is correct.
+
+The first-stage audio pass now gives five wide-range FM patches additional source-octave anchors
+(`p16@o5`, `p21@o4`, `p11@o6`, `p22@o6`, and `p14@o4`) and makes the VGM-to-MML converter choose
+the closest anchor for each actual source note. The 40 pre-existing base FM samples remain
+byte-identical. The exact TAD load is 47,886 bytes of common data plus 8,196 bytes for Main BGM 1
+and 4,096 bytes of echo, leaving 1,030 bytes before `$F000`. A live organic 29.985-second capture
+keeps TAD loaded and running with no internal 200 ms or 750 ms digital-silence interval. Those are
+compiler, ARAM, transport, and continuity results—not proof that the new samples sound right.
+
+The former black boot interval now shows an original Mode 7 red/gold/blue SA-1 shield rotating
+behind static status text. The changing matrix/phase byte is a real 5A22 NMI heartbeat while the
+SA-1 executes the original slow initialization; it is deliberately not a fabricated percentage or
+claim that a particular RAM/ROM subtest is active. Exact-Mesen frames 150-450 remain Mode 7 at
+brightness 15 with 11 distinct screenshots, halt zero, and a changing activity byte. The screen
+releases ownership before the first game-rendered frame: by frame 5,150 the normal Mode 1 renderer
+has started, and by frame 5,400 it has reached tick 135 / render 130 with the activity byte clear.
+
+Exact v130 playtest-candidate ROM SHA-256
+`1ec22cbc92ad7beef0e20d8af6ff12f57023b7c437311f4bc6be56ce37cdd928`
+also cold-boots with `TESTFLAG=0`, organically arms the production gates, reaches gameplay through
+the real controller mailbox, and ends its short settle at frame 5,976 / tick 423 with halt zero,
+continuing rendering, and a 154-byte minimum observed saved-stack margin. A same-hash Mesen 2.1.1
+coin/Start/charged-shot replay is green with two charged-shot entries, two continuations, and 321
+tick hooks. The short settle and checkpointed replays are not a formal rate measurement; v124
+remains the latest formal performance evidence. v130 still needs the tester to hit the first wall,
+judge the new timbres by ear, and accept or reject the boot presentation before those additions are
+human-confirmed.
 
 ## Post-Mesen-2.1.1 correction — July 23, 2026
 

@@ -118,8 +118,21 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   tests.
 - **`capture_mesen211_transitions.py`** [S] — fresh-power-on or named-state Mesen 2.1.1 frame
   capture for title/transition compatibility. It records exact ROM/emulator/controller provenance,
-  screenshots, checkpoints, PPU brightness/forced-blank state, halt/tick/render state, and a JSON
-  manifest. It is visual compatibility evidence, never gameplay stability or FPS evidence.
+  screenshots, checkpoints, PPU Mode/brightness/forced-blank/layer state, the boot-activity byte,
+  halt/tick/render state, and a JSON manifest. It is visual compatibility evidence, never gameplay
+  stability or FPS evidence.
+- **`gen_boot_screen.py`** [S] — deterministic original-asset generator for the temporary
+  32 KiB Mode 7 SA-1 boot activity screen. It emits the low-byte Mode 7 map, high-byte tile data,
+  OBJ font/OAM, CGRAM, and 64-entry matrix table consumed over a 128-VBlank turn by
+  `src/video.pasm`.
+  `build_interp_rom.py` regenerates and hash/layout-checks the asset before packing it at
+  file `$300000-$307FFF`; no arcade graphics are used.
+- **`validate_bg_reconcile_helpers.py`** [S] — byte-oracle for the native background-list promote
+  and revert helpers. It covers empty, compact, and full paths and specifically guards the
+  zero-length flag-ordering bug that crossed BW-RAM mirrors at the first breakable wall.
+- **`trace_wall_context.py`** [S] — Mesen 2.1.1 real-controller first-wall replay with scheduler-
+  context write hooks. It records the renderer manifest, every initialized task stack/floor, and
+  suspicious saved-SP high-byte writes. This is focused crash/context evidence, not a stage soak.
 - **`validate_mesen211_playtest.py`** [S] — replays the reported real-controller sequence in exact
   Mesen 2.1.1: coin, Start, Clark/round transition, grounded B charge/release, tick/native hooks,
   screenshots/states, and digital-audio capture/silence analysis. It intentionally labels its

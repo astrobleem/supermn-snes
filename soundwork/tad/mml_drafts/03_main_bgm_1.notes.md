@@ -13,7 +13,7 @@
 | A | FM0 | 420 | 2-5 | fm_p10 |
 | B | FM1 | 383 | 3-6 | fm_p21 |
 | C | FM2 | 669 | 3-7 | fm_p15 |
-| D | FM3 | 485 | 2-7 | fm_p11 |
+| D | FM3 | 485 | 2-7 | fm_p20 |
 | E | ADPCM-A ch4 | 44 | 4-4 | (drum kit, see below) |
 | F | ADPCM-A ch5 | 339 | 4-4 | (drum kit, see below) |
 
@@ -27,15 +27,15 @@ Extract these windows from the type-0x82 sample-ROM blocks (see vgm_extract_adpc
 
 | Instrument | ROM window | Bytes | Hits | ADPCM-A ch |
 |-----------|-----------|------:|-----:|-----------|
-| @14 sm_drum_060000 | 0x060000-0x0629FF | 10752 | 145 | [5] |
-| @15 sm_drum_062a00 | 0x062A00-0x0651FF | 10240 | 88 | [5] |
-| @16 sm_drum_065200 | 0x065200-0x0677FF | 9728 | 26 | [5] |
-| @17 sm_drum_067800 | 0x067800-0x069EFF | 9984 | 32 | [5] |
-| @18 sm_drum_069f00 | 0x069F00-0x06C4FF | 9728 | 25 | [5] |
-| @19 sm_drum_06f900 | 0x06F900-0x0727FF | 12032 | 5 | [5] |
-| @20 sm_drum_077900 | 0x077900-0x0799FF | 8448 | 4 | [5] |
-| @21 sm_drum_079a00 | 0x079A00-0x07B4FF | 6912 | 48 | [4, 5] |
-| @22 sm_drum_07b500 | 0x07B500-0x07F1FF | 15616 | 10 | [5] |
+| @17 sm_drum_060000 | 0x060000-0x0629FF | 10752 | 145 | [5] |
+| @18 sm_drum_062a00 | 0x062A00-0x0651FF | 10240 | 88 | [5] |
+| @19 sm_drum_065200 | 0x065200-0x0677FF | 9728 | 26 | [5] |
+| @20 sm_drum_067800 | 0x067800-0x069EFF | 9984 | 32 | [5] |
+| @21 sm_drum_069f00 | 0x069F00-0x06C4FF | 9728 | 25 | [5] |
+| @22 sm_drum_06f900 | 0x06F900-0x0727FF | 12032 | 5 | [5] |
+| @23 sm_drum_077900 | 0x077900-0x0799FF | 8448 | 4 | [5] |
+| @24 sm_drum_079a00 | 0x079A00-0x07B4FF | 6912 | 48 | [4, 5] |
+| @25 sm_drum_07b500 | 0x07B500-0x07F1FF | 15616 | 10 | [5] |
 
 ## Known limitations of the auto-conversion
 

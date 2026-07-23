@@ -1,0 +1,35 @@
+{
+  "_comment": "Evidence-driven octave anchors for the first-stage score. The 2400-byte BRR cap leaves room for song bytecode and TAD tables inside the measured 3512-byte Main BGM 1 ARAM margin.",
+  "target_track": "03 Main BGM 1",
+  "brr_budget": 2400,
+  "variants": [
+    {
+      "pid": 16,
+      "ident": "020272621d00000017d010100303000300000100f6e6e6e6000000003d0000",
+      "octave": 5
+    },
+    {
+      "pid": 21,
+      "ident": "41614272120000004f52521205040404030303031616360600000000350000",
+      "octave": 4
+    },
+    {
+      "pid": 11,
+      "ident": "415174611c321200595c59510a0d0b0f0000000b16265616000000003a0000",
+      "octave": 6
+    },
+    {
+      "pid": 22,
+      "ident": "3171713123232300121212120700000007060608f9f9f9f9000000003a0000",
+      "octave": 6,
+      "also_for": [
+        18
+      ]
+    },
+    {
+      "pid": 14,
+      "ident": "120216121d3a210056565656030303030000000015153505000000003a0000",
+      "octave": 4
+    }
+  ]
+}

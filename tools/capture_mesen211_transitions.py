@@ -101,6 +101,11 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "render_complete": le16(
             m.read_memory("snesWorkRam", 0x89A2, 2)
         ),
+        "boot_activity": int(
+            m.read_memory("snesWorkRam", 0x1F1B, 1)[0]
+        ),
+        "bg_mode": int(ppu.get("bgMode", -1)),
+        "main_screen_layers": int(ppu.get("mainScreenLayers", -1)),
         "brightness": int(ppu.get("brightness", -1)),
         "forced_blank": bool(ppu.get("forcedBlank", False)),
         "ppu_frame": int(ppu.get("frameCount", 0)),
@@ -254,6 +259,8 @@ def main() -> int:
                         "pc68k": snap["pc68k"],
                         "task_mask": snap["task_mask"],
                         "render_complete": snap["render_complete"],
+                        "boot_activity": snap["boot_activity"],
+                        "bg_mode": snap["bg_mode"],
                         "brightness": snap["brightness"],
                         "forced_blank": snap["forced_blank"],
                         "screenshot_sha256": row["screenshot"]["sha256"],

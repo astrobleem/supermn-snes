@@ -12,7 +12,7 @@ Project-state documents conflict. Use this precedence order:
    accounting as the baseline. Only a later dated `RECOVERY.md` result that explicitly supersedes
    an individual claim can replace it; otherwise, where documents conflict, believe the confession.
    It was recovered from the old `sound-p3` worktree during repository consolidation.
-2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R9 results
+2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R10 results
    supersede the older campaign projections they explicitly close.
 3. The newest branch/worktree-specific handoff and evidence (`docs/PROFILE_CAMPAIGN.md`,
    `MAIN_PLANNING_HANDOFF.md`, `supersoundhandoff.md`, and focused `docs/handoff/*`).
@@ -58,7 +58,21 @@ without explicit instruction.
   `$41:2000`, publishes chunked/size-aware DMA through NMI after the scheduler wake, and suppresses
   `$19` while music is active. A fresh exact-Mesen post-TAITO capture and same-ROM real-input
   transition/charge-release sequence are green, with digitally continuous gameplay audio. This is
-  compatibility evidence, not musical validation, FPS evidence, or human-confirmed playability.
+  compatibility evidence, not musical validation or FPS evidence. The user has since confirmed
+  those four focused v128 title/transition/charge/music repairs.
+- The same user run exposed a first-wall mixed-tile freeze and over-transposed instrument samples.
+  Exact v130 candidate SHA-256
+  `1ec22cbc92ad7beef0e20d8af6ff12f57023b7c437311f4bc6be56ce37cdd928` moves both
+  background-reconcile zero tests before `CMP #$0100`, preventing a wrapped `$41`→`$42` access
+  from reaching mirrored physical bank `$40` and corrupting saved task contexts. Its first-wall
+  replay reaches tick 3,622 at halt zero with 14 valid stacks and a 136-byte minimum margin.
+  A controlled 1,800-frame idle window activates enemy offense and changes health 20→18.
+- v130 also adds five note-aware source-octave FM anchors and an original Mode 7 boot activity
+  screen. Exact SPC ARAM is byte-correct and an organic 29.985-second capture has no internal
+  200 ms or 750 ms digital silence; this is not by-ear validation. Fresh exact-Mesen boot captures
+  show a rotating activity marker throughout the formerly black interval and a clean handoff from
+  Mode 7 to the normal Mode 1 renderer by frame 5,150. The marker is liveness, not a fabricated
+  percentage or proof of a particular internal self-test.
 - v128's retained wake-before-DMA ordering survives a checkpointed 1,200-frame Nexen window with
   600 ticks/requests/ACKs, halt zero, exact supervisor mirror, and intact stacks, but produces only
   568 true renders and 31 new queue coalesces during cache-heavy bursts. The renderer-conservation
@@ -89,16 +103,18 @@ without explicit instruction.
   remain the warning against promoting focused vectors into universal correctness.
 - A settled v124 production-cold-boot Nexen capture renders the recognizable level background,
   HUD, player, and enemies while rendering continues through its formal run. v128 repairs the
-  reported exact-Mesen visual corruption but retains burst-time queue coalescing in the checkpointed
-  Nexen window. Exact aligned MAME pixel fidelity remains open; visual plausibility alone is not the
-  fidelity oracle.
+  reported exact-Mesen visual corruption; v130 adds the temporary Mode 7 boot presentation and
+  clean ownership handoff. It retains burst-time queue coalescing in the checkpointed Nexen window.
+  Exact aligned MAME pixel fidelity remains open; visual plausibility alone is not the fidelity
+  oracle.
 - The TAD sound port is merged upstream and its data/blob paths are byte- and oracle-validated.
   R4 proved the organic boot, attract, coin, and round-start command chain, but the real user
   playtest reports audible cutting-out. v128 fixes one concrete replacement path: the standalone
-  `$19` credit cue no longer displaces an active song, and its exact-Mesen gameplay capture has no
-  internal 200 ms digital silence. The remaining likely audible causes are incomplete transcription,
-  trimmed samples, ignored enemy SFX IDs, placeholder SFX, and missing pitch/LFO/portamento work.
-  It has not passed by-ear musical validation.
+  `$19` credit cue no longer displaces an active song. v130 adds five first-stage octave anchors;
+  its exact-Mesen and organic captures have no internal 200 ms digital silence. The remaining likely
+  audible causes are incomplete transcription, trimmed samples, ignored enemy SFX IDs, placeholder
+  SFX, and missing pitch/LFO/portamento work. The new anchors have not passed by-ear musical
+  validation.
 - The `$0818` `$AC=$2000` clamp remains the gate-off fallback. The organically armed production
   path uses the paced scheduler above; neither path proves a full playthrough crash-free.
 - C-Chip work is genuinely resolved for the observed game contract: deterministic boot replay,

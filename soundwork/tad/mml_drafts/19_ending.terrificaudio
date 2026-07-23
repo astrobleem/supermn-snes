@@ -125,7 +125,7 @@
       "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
     },
     {
-      "name": "fm_p16",
+      "name": "fm_p16_o5",
       "source": "instruments/placeholder.wav",
       "freq": 523.252,
       "loop": "none",
@@ -137,7 +137,7 @@
       "comment": "PLACEHOLDER FM voice \u2014 replace source with a rendered YM2610 FM patch (looped WAV) and set freq to its true pitch"
     },
     {
-      "name": "fm_p35",
+      "name": "fm_p22_o6",
       "source": "instruments/placeholder.wav",
       "freq": 2093.008,
       "loop": "none",

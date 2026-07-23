@@ -327,6 +327,8 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32, fm_map=None):
     # fm_map = fm_instruments.json from render_fm_patches.py. We re-walk the VGM
     # with vgm_fm_patches.capture_file (same 44100 Hz timeline as ym.decode) and
     # key each keyon by (fm_voice, onset_sample) -> (instrument name, carrier TL).
+    # When octave variants exist, select the sample rendered nearest to the actual
+    # source-note pitch instead of shifting one modal sample across the full range.
     # Velocity: amp = 10^(-0.75*dTL/20) vs the instrument's render TL (its loudest
     # captured instance), mapped to MML coarse volume v1..16 with v14 = loudest
     # (anchor chosen so the pack-wide AVERAGE note lands near the old flat v10).
@@ -337,10 +339,22 @@ def convert(path, outdir, bpm=None, zenlen=192, ppqn=48, grid=32, fm_map=None):
         import vgm_fm_patches as fmp
         fmj = _json.loads(Path(fm_map).read_text())
         ident_to_inst = fmj["ident_to_inst"]
+        ident_to_variants = fmj.get("ident_to_variants", {})
         inst_render_tl = fmj["inst_render_tl"]
         cap = fmp.capture_file(Path(path))
         for (t, fmidx, raw, ident, ctl, block, fnum) in cap["events"]:
-            name = ident_to_inst.get(ident.hex())
+            ident_hex = ident.hex()
+            variants = ident_to_variants.get(ident_hex)
+            if variants:
+                midi = ym.freq_to_midi(
+                    ym.fnum_block_to_freq(fnum, block, cap["clock"])
+                )
+                name = min(
+                    variants,
+                    key=lambda v: abs(midi - v["anchor_midi"]),
+                )["name"]
+            else:
+                name = ident_to_inst.get(ident_hex)
             if name:
                 keyon_map[(fmidx, t)] = (name, min(ctl) if ctl else 127)
 

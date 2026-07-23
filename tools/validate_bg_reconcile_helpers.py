@@ -92,7 +92,7 @@ def run_case(
     entry: int,
     name: str,
     direction: str,
-    full: bool,
+    representation: str,
 ) -> dict[str, object]:
     m.pause()
     m.load_state(state)
@@ -100,11 +100,16 @@ def run_case(
 
     baseline_code = pattern(3, 7)
     baseline_color = pattern(5, 11)
-    if full:
+    if representation == "full":
         candidate_code = pattern(7, 19)
         candidate_color = pattern(11, 23)
         manifest_length = 0xFFFE
         offsets: tuple[int, ...] = ()
+    elif representation == "empty":
+        candidate_code = baseline_code
+        candidate_color = baseline_color
+        manifest_length = 0
+        offsets = ()
     else:
         candidate_code_array = bytearray(baseline_code)
         candidate_color_array = bytearray(baseline_color)
@@ -189,7 +194,7 @@ def run_case(
     return {
         "name": name,
         "direction": direction,
-        "representation": "full" if full else "compact-list",
+        "representation": representation,
         "entry": f"{entry:06X}",
         "manifest_length": manifest_length,
         "offsets": list(offsets),
@@ -225,15 +230,15 @@ def main() -> int:
         stderr_log=args.output / "nexen.stderr.log",
     ) as m:
         for direction in ("promote", "revert"):
-            for full in (False, True):
-                name = f"{direction}-{'full' if full else 'compact'}"
+            for representation in ("empty", "compact-list", "full"):
+                name = f"{direction}-{representation}"
                 case = run_case(
                     m,
                     args.state.resolve(),
                     entries[direction],
                     name,
                     direction,
-                    full,
+                    representation,
                 )
                 cases.append(case)
                 print(json.dumps({"event": "case", **case}, sort_keys=True), flush=True)

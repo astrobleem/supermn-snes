@@ -9,33 +9,40 @@ hardware, while hot paths are migrated to native 65816 over time. Every componen
 validated **differentially against ground truth** — MAME for the arcade side, a real
 SNES PPU (via Nexen) for the target side.
 
-> ## Production status (July 23, 2026) — exact-Mesen regression-fixed candidate, not playable
+> ## Production status (July 23, 2026) — wall/audio/Mode-7 candidate, not playable
 >
 > The first real v105 user playtest invalidated its **playable** label: the formal 30 Hz timing
 > result was genuine, but a bad `$012B6C` HLE return broke player attacks and enemy offense, and
 > the recognizable soundtrack is audibly incomplete. Exact v124 repaired those demonstrated
 > combat paths, but the next playtest found that releasing a held Button 1 energy charge froze it.
-> v127 repaired the silently overwritten `$D3B0` handler.
+> v127 repaired the silently overwritten `$D3B0` handler. v128 then repaired the tester's exact
+> Mesen 2.1.1 title flicker, pre-round bars, charged-shot, and music-replacement regressions; the
+> tester has now human-confirmed all four of those focused repairs.
 >
-> The follow-up tester was also right about Mesen 2.1.1: after TAITO faded, the no-credit title
-> flickered black; the pre-round walk had horizontal bars/mixed tiles; the credit cue could replace
-> gameplay music. Exact v128 candidate SHA-256:
-> `7c4b757ddf5c0297eb1b3aa65f4f6d74ecf289fdfa5f70d0d71811843906db57`.
-> It repairs the stale queued palette, moves PPU DMA into VBlank with chunked/size-aware transfers,
-> and prevents the standalone `$19` credit cue from replacing an active song.
+> That same playtest exposed a first-wall mixed-tile freeze and over-transposed instrument samples.
+> Exact v130 candidate SHA-256:
+> `1ec22cbc92ad7beef0e20d8af6ff12f57023b7c437311f4bc6be56ce37cdd928`.
+> It fixes a zero-length background-reconcile loop that crossed BW-RAM mirrors and corrupted task
+> contexts, and adds five note-aware source-octave FM samples. The exact first-wall replay reaches
+> tick 3,622 at halt zero with 14 valid stacks; an idle encounter activates enemy offense and
+> changes health 20→18. Exact SPC ARAM is byte-correct and a 29.985-second organic audio capture
+> has no internal 200 ms or 750 ms digital silence. Those audio results are not a listening verdict.
 >
-> A fresh exact-Mesen capture keeps the post-TAITO title visible before credit. A same-ROM real-input
-> sequence covers coin/Start, the 450-frame Clark transition, and charged-B release through another
-> 360 frames with halt zero and continuing game/render progress. Its gameplay WAV has no internal
-> 200 ms or 750 ms digital silence. However, a checkpointed Nexen ordering window completes only
-> 568 true renders for 600 ticks and adds 31 queue coalesces during cache-heavy bursts.
+> The former multi-minute black boot now shows an original rotating Mode 7 SA-1 shield and activity
+> text while the SA-1 runs the slow original initialization. It is a heartbeat, not a fake progress
+> percentage. Exact Mesen frames 150-450 show 11 distinct Mode 7 images; the marker clears before
+> the normal Mode 1 renderer takes over at frame 5,150. A fresh `TESTFLAG=0` run organically arms,
+> accepts real coin/Start, and settles gameplay at frame 5,976 / tick 423 / halt zero. A same-hash
+> Mesen sequence also clears coin/Start, the Clark transition, and charged-shot release with all
+> ten checks green.
 >
-> No new rate is inferred from those compatibility/checkpoint tests. v124's clean-power-on window
+> No new rate is inferred from those smoke/checkpoint tests. v124's clean-power-on window
 > remains the latest formal measurement: **1,783 game
 > ticks in 3,602 SNES frames = 29.7002 game-fps** at **360,990.164 cycles/tick**. That misses the
-> explicit 30 Hz / 358K gates, and v128's burst-render gate is also red. The honest status is
-> **interactive technical demo, not playable or shippable**. See [RECOVERY.md](RECOVERY.md) R9,
-> [the exact-Mesen handoff](docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md), and
+> explicit 30 Hz / 358K gates, and the inherited burst-render gate is also red. The wall/timbre/
+> boot changes still need human confirmation. The honest status is **interactive technical demo,
+> not playable or shippable**. See [RECOVERY.md](RECOVERY.md) R10,
+> [the focused handoff](docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md), and
 > [CONFESSION.md](CONFESSION.md).
 >
 > Playtest controls: **Select** = coin, **Start** = start, **B/Y** = arcade Button 1
@@ -59,13 +66,13 @@ SNES PPU (via Nexen) for the target side.
 | Area | State |
 |---|---|
 | **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Retained current-line correctness gates **opsweep 782/782 + optest 160/160**. |
-| Graphics pipeline | ⚠️ v128 repairs the exact-Mesen title/transition corruption, but a checkpointed cache-heavy Nexen window completes 568/600 requested tick renders and adds 31 queue coalesces; exact aligned same-state MAME pixel fidelity remains open |
+| Graphics pipeline | ⚠️ v130 retains v128's exact-Mesen title/transition repair and adds a clean Mode 7 boot-screen handoff, but the checkpointed cache-heavy Nexen window still completes 568/600 requested tick renders and adds 31 queue coalesces; exact aligned same-state MAME pixel fidelity remains open |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **30 Hz playability budget** | ❌ **not cleared by the latest formal run (v124)** — power-on gameplay window is **29.7002 game-fps / 360,990.164 mean SA-1 cycles/tick**; v128 has no new formal rate result and its burst-render gate is red |
+| **30 Hz playability budget** | ❌ **not cleared by the latest formal run (v124)** — power-on gameplay window is **29.7002 game-fps / 360,990.164 mean SA-1 cycles/tick**; v130 has no new formal rate result and inherits the red burst-render gate |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
-| Audio (YM2610 → SNES TAD) | ⚠️ **organic transport works; musical fidelity does not** — v128 fixes the demonstrated `$19` credit-cue song replacement and its gameplay capture has no ≥200 ms digital silence, but ignored enemy SFX, placeholder SFX, trimmed samples, and untranscribed pitch/LFO/portamento remain |
+| Audio (YM2610 → SNES TAD) | ⚠️ **organic transport works; musical fidelity is unconfirmed** — v130 retains the `$19` repair and adds five first-stage octave anchors; ARAM is byte-exact and the organic capture has no ≥200 ms silence, but the new timbres need listening and ignored enemy SFX, placeholder SFX, trimmed samples, and untranscribed pitch/LFO/portamento remain |
 
 See **[CONFESSION.md](CONFESSION.md)** for the authoritative correction and
 **[RECOVERY.md](RECOVERY.md)** for the active recovery campaign. `STATUS.md` and
@@ -100,9 +107,11 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 - **[CONFESSION.md](CONFESSION.md)** — highest-authority correction to project status
 - **[RECOVERY.md](RECOVERY.md)** — active consolidation and baseline campaign
 - **[docs/PROFILE_CAMPAIGN.md](docs/PROFILE_CAMPAIGN.md)** — native/render campaign, historical R6
-  timing evidence, and the R7-R9 user-playtest corrections
+  timing evidence, and the R7-R10 user-playtest corrections
+- **[docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md](docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md)**
+  — exact v130 wall-context, octave-audio, Mode 7 boot, cold-boot, and retest evidence
 - **[docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md](docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md)**
-  — exact Mesen 2.1.1 title/transition/audio/charge evidence and residual render-debt verdict
+  — historical v128 exact-Mesen title/transition/audio/charge evidence and residual render-debt verdict
 - **[docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md)** — historical
   continuous profile and the two rejected pre-R6 pacing labs
 - **[STATUS.md](STATUS.md)** — detailed historical state (superseded where noted)

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Build the full-ROM 68K-interpreter harness: a 1MB HiROM .sfc embedding the
+Build the full-ROM 68K-interpreter harness: a 4MB HiROM .sfc embedding the
 65816 interpreter (file $8000, CPU $00/$C0:8000-FFFF) + the entire 512KB 68K
 program image (file $10000, CPU $C1:0000+ — so 68K addr A reads flat at $C10000+A).
 Load this in Mesen (MESEN_ROM) to let the interpreter follow cross-ROM control flow.
 """
 import hashlib
 from pathlib import Path
+
+from gen_boot_screen import ASSET_SIZE as BOOT_ASSET_SIZE
+from gen_boot_screen import build_asset as build_boot_asset
 
 INTERP = Path("src/interp.bin").read_bytes()        # 32KB ($8000-$FFFF)
 IMG = Path("data/superman_m68k.bin").read_bytes()   # 512KB 68K program
@@ -325,6 +328,21 @@ ROM = bytearray(0x400000)                            # 4MB HiROM
 ROM[0x8000:0x10000] = INTERP                         # interpreter + vectors @ $00/$C0:8000
 ROM[0x10000:0x90000] = IMG                           # 68K image @ $C1:0000 (flat $C10000+A)
 ROM[0x90000:0x290000] = SNES_GFX                     # native SNES tiles @ $C9:0000
+BOOT_ASSET, BOOT_ASSET_REPORT = build_boot_asset()
+assert len(BOOT_ASSET) == BOOT_ASSET_SIZE == 0x8000
+assert BOOT_ASSET_REPORT["sha256"] == hashlib.sha256(BOOT_ASSET).hexdigest()
+assert BOOT_ASSET_REPORT["sections"] == {
+    "tilemap_low": [0x0000, 0x4000],
+    "mode7_tile_high": [0x4000, 0x2800],
+    "obj_tiles": [0x6800, 0x1000],
+    "oam": [0x7800, 0x0220],
+    "palette": [0x7C00, 0x0200],
+    "matrices": [0x7E00, 0x0200],
+}, "Mode 7 generator offsets no longer match boot_screen_init's DMA descriptors"
+assert ROM[0x300000:0x308000] == bytes(0x8000), (
+    "5A22 bank-$F0 boot-asset window overlaps another packed payload"
+)
+ROM[0x300000:0x308000] = BOOT_ASSET                  # original Mode 7 boot screen @ $F0:0000
 VID = Path("src/video.bin").read_bytes()             # video subsystem (assembled @ $8000)
 assert len(VID) <= 0x8000, len(VID)
 VID_SYMBOLS = Path("src/video.sym").read_text(encoding="utf-8-sig")
@@ -377,6 +395,8 @@ service_pending_dma0 = vid_off("service_pending_dma0")
 service_pending_dma0_end = vid_off("service_pending_dma0_end")
 dma0_blank_pulse_extended = vid_off("dma0_blank_pulse_extended")
 dma0_blank_pulse_extended_end = vid_off("dma0_blank_pulse_extended_end")
+boot_mode7_tick = vid_off("boot_mode7_tick")
+boot_mode7_tick_end = vid_off("boot_mode7_tick_end")
 assert bg_tile_run_dma_chunks == 0x8A00
 assert (
     0x8A00
@@ -388,17 +408,23 @@ assert (
     <= 0x8B00
 )
 assert VID[
-    dma0_blank_pulse_extended_end - 0x8000:0x0DD0
-] == bytes(0x8DD0 - dma0_blank_pulse_extended_end), (
-    "VBlank DMA helpers grew into the $8DD0 pacing island"
+    dma0_blank_pulse_extended_end - 0x8000:boot_mode7_tick - 0x8000
+] == bytes(boot_mode7_tick - dma0_blank_pulse_extended_end), (
+    "VBlank DMA helpers grew into the fixed Mode 7 activity island"
+)
+assert boot_mode7_tick == 0x8B00 and boot_mode7_tick < boot_mode7_tick_end <= 0x8DD0
+assert VID[
+    boot_mode7_tick_end - 0x8000:0x0DD0
+] == bytes(0x8DD0 - boot_mode7_tick_end), (
+    "Mode 7 activity helper grew into the $8DD0 pacing island"
 )
 assert VID[0x099C:0x09AB] == bytes.fromhex(
     "bf0080e99f00807fe8e8e00030d0f1"
 ), "rc_copy no longer mirrors the full $8000-$AFFF production supervisor"
-assert VID[0x0DD0:0x0DE1] == bytes.fromhex(
-    "08e220af2c0141c9a5f004284c56882860"
+assert VID[0x0DD0:0x0DE4] == bytes.fromhex(
+    "08e2209c1b1faf2c0141c9a5f004284c56882860"
 ), "ordered-input wrapper moved or changed"
-assert VID[0x0DE1:0x0E00] == bytes(0x1F), (
+assert VID[0x0DE4:0x0E00] == bytes(0x1C), (
     "ordered-input wrapper grew into pacing_try_wake"
 )
 pacing_try_wake = vid_off("pacing_try_wake")
@@ -440,15 +466,16 @@ assert pacing_pending_direct_guard + 9 + pending_guard_branch == pacing_snapshot
 assert VID[pacing_helpers_end - 0x8000:0x0F00] == bytes(
     0x8F00 - pacing_helpers_end
 ), "pacing helper grew into the fixed NMI handler"
-assert VID[0x0F00:0x0F37] == bytes.fromhex(
+assert VID[0x0F00:0x0F3A] == bytes.fromhex(
     "08c23048da5a8be220a90048aba9808d"
     "0122af2a01411a8f2a014120008e2033"
-    "8a208a8ead0233abe220a30829fb8308"
+    "8a208a8e20008bad0233abe220a30829fb8308"
     "c2307afa682840"
 ), (
-    "pacing NMI handler lost its leading-edge wake/DMA or A-preserving restore order"
+    "pacing NMI handler lost its leading-edge wake/DMA/boot-animation "
+    "or A-preserving restore order"
 )
-assert VID[0x0F37:0x0F40] == bytes(0x09), (
+assert VID[0x0F3A:0x0F40] == bytes(0x06), (
     "pacing NMI handler grew into the fixed coprocessor-IRQ handler"
 )
 assert VID[0x0F68:0x1000] == bytes(0x98), (
@@ -515,6 +542,8 @@ queue_capture_secondary = vid_off("render_queue_capture_secondary")
 queue_capture_secondary_end = vid_off("render_queue_capture_secondary_end")
 queue_promote = vid_off("render_queue_promote")
 queue_promote_end = vid_off("render_queue_promote_end")
+boot_screen_init = vid_off("boot_screen_init")
+boot_screen_init_end = vid_off("boot_screen_init_end")
 video_image_end = vid_off("video_image_end")
 assert palette_test == 0xA1A0 and palette_test < palette_test_end <= bg_test == 0xA1E8
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
@@ -703,9 +732,15 @@ assert queue_promote == 0xED00 and queue_promote < queue_promote_end <= 0xF000
 assert queue_promote_end - queue_promote == 0x022A, (
     "pinned lazy-installer size no longer matches the queue promoter"
 )
-assert video_image_end == queue_promote_end
+assert queue_promote_end <= boot_screen_init == 0xF000
+assert VID[
+    queue_promote_end - 0x8000:boot_screen_init - 0x8000
+] == bytes(boot_screen_init - queue_promote_end), (
+    "private-WRAM queue promoter grew into the Mode 7 boot-screen island"
+)
+assert boot_screen_init < boot_screen_init_end == video_image_end <= 0x10000
 assert len(VID) == video_image_end - 0x8000, (
-    "unexpected video bytes follow the private-WRAM queue promoter"
+    "unexpected video bytes follow the Mode 7 boot-screen helper"
 )
 assert bg_slot == 0x854E and bg_tile_dma == 0x859E, (
     "BG allocator stub moved an established renderer/supervisor address"
@@ -2839,6 +2874,13 @@ patch_counter_pattern(
 print(
     "Validation counters: %s"
     % ("enabled (diagnostic)" if pc_ring_enabled else "disabled (production)")
+)
+print(
+    "Mode 7 boot asset: %s (%d text sprites)"
+    % (
+        BOOT_ASSET_REPORT["sha256"],
+        BOOT_ASSET_REPORT["visible_obj_sprites"],
+    )
 )
 
 # checksum (zero the fields, sum, write complement+checksum)

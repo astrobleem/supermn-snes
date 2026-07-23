@@ -7,6 +7,45 @@ running *blind*: every 68K write to a video/sprite hardware bank is currently a
 does with the video hardware, what I learned getting it alive, and the concrete
 plan + traps for the next phase.
 
+## Current correction: Mode 7 boot ownership (July 23, 2026)
+
+The opening statement above describes the June bring-up and is historical: production now renders
+the game. Exact v130 also replaces the long black SA-1/interpreter initialization interval with a
+temporary 5A22-owned Mode 7 activity screen.
+
+`tools/gen_boot_screen.py` deterministically creates a 32 KiB original asset:
+
+| Asset region | Offset | Size | Purpose |
+|---|---:|---:|---|
+| Mode 7 map low bytes | `$0000` | `$4000` | 128×128 low-byte tilemap |
+| Mode 7 tile high bytes | `$4000` | `$2800` | blank tile + 144 emblem tiles |
+| OBJ font tiles | `$6800` | `$1000` | static status text |
+| OAM | `$7800` | `$0220` | 56 visible 8×8 text sprites |
+| CGRAM | `$7C00` | `$0200` | boot palette |
+| Mode 7 A/B/C/D table | `$7E00` | `$0200` | 64 matrices, traversed over 128 VBlanks |
+
+The packer regenerates and places that asset at file `$300000-$307FFF` (5A22
+`$F0:0000-$7FFF`) and asserts every DMA seam plus SHA-256
+`7abed7112d3f1ef36c2191f307f2b02674321af9e24a7081d408df7ec34d8f04`.
+Nothing is derived from the arcade graphics.
+
+`boot_screen_init` is fixed at `$E9:F000`. It forces blank only during one-time setup, DMAs the
+map/tiles/font/OAM/CGRAM, copies the matrix table to private WRAM `$7E:F100`, selects Mode 7 BG1 +
+OBJ, centers the matrix, and restores brightness 15. `$7E:1F1B` owns the active flag (bit 7) and
+seven-bit animation phase. The WRAM-mirrored `boot_mode7_tick` runs once per NMI, reads the next
+matrix, and updates M7A-D. It does not touch the SA-1 scheduler or pretend to measure boot
+percentage.
+
+The first real game renderer clears `$1F1B` before claiming the display. Exact Mesen 2.1.1 evidence
+keeps frames 150-5,125 in Mode 7 with a changing activity byte and halt zero, then shows Mode 1 /
+activity `$00` / tick 10 / render 5 at frame 5,150. By frame 5,400 it reaches tick 135 / render
+130. Brightness remains 15 and forced blank remains clear across the handoff. After clearing, NMI
+overhead is only the call and inactive-flag branch/return.
+
+See `docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md`. The status strings describe
+high-level liveness (`ROM LOADED`, `SA-1 68000 CORE ACTIVE`, `ARCADE BOOT IN PROGRESS`); they are
+not claims that a particular internal RAM/ROM test is active.
+
 ## The one hard-won rule: dispatch every memory store by destination bank
 
 The interpreter models 68K work RAM `$F0xxxx → SNES $7F`. Many store handlers in
@@ -136,9 +175,12 @@ must keep replaying `cchip_boot_response.bin` — don't break it (see
 
 ## Polish status (the four follow-ups)
 
-- **Vblank-timed DMA ✓** `vid_frame` forces blank (INIDISP=$80) around the per-frame
-  VRAM/OAM/CGRAM uploads, then restores $0F — legal on real hardware (was DMAing during
-  active display, Mesen-only). `vidtest` already ran under reset's forced blank.
+- **Vblank-timed DMA ✓ (implementation superseded by R9).** The June path made `vid_frame`
+  force blank around each foreground upload. A real Mesen 2.1.1 playtest later exposed those pulses
+  as horizontal bars and showed that large transfers could outlive VBlank. Production now
+  publishes descriptors through `$7E:1F11`; NMI services them after the established scheduler wake,
+  splits large background uploads, and permits small VBlank-tail batches only under size-aware
+  scanline limits. Preserve the old wording as history, not current architecture.
 - **Pixel-diff vs MAME ✓ (integration validated)** `tools/render_arcade_ref.py` is a
   pure-Python (no numpy/PIL) port of the validated `render_full_frame.py` decode; it
   renders the same `c_*.bin` to `/tmp/arcade_ref.png` (47 colors, matching MAME). The

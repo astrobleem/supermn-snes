@@ -8,7 +8,10 @@ performance/scheduler/renderer evidence for exact v105; R7 identifies the retain
 combat-fixed technical demo and its new production result. R8 repairs v124's charged-shot release
 freeze. R9 accepts the tester's exact Mesen 2.1.1 rendering/audio reports, repairs their concrete
 causes in v128, and records a remaining burst-render conservation failure; it does not replace
-v124's formal performance measurement or restore the playable label.**
+v124's formal performance measurement or restore the playable label. R10 records the user's
+confirmation of those v128 repairs, fixes the newly exposed first-wall context corruption in v129,
+adds a targeted octave-sample pass, and promotes the combined exact v130 ROM with a Mode 7 boot
+activity screen. The wall/audio/boot additions remain awaiting human confirmation.**
 
 ## Canonical repository state
 
@@ -16,8 +19,9 @@ v124's formal performance measurement or restore the playable label.**
 - The completed recovery line became `main`; current recovery work is on
   `agent/playability-recovery`. Exact ROM hashes, rather than an old handoff's branch name, identify
   each measured candidate. v105 (`72d925ac…`) is historical; formal combat-fixed v124 is
-  `777507c9…`; charged-shot-fixed v127 is `1a8a5742…`; exact-Mesen-regression-fixed v128 candidate
-  is `7c4b757d…`.
+  `777507c9…`; charged-shot-fixed v127 is `1a8a5742…`; exact-Mesen-regression-fixed v128 is
+  `7c4b757d…`; first-wall/octave-sample v129 is `8f240332…`; combined wall/audio/Mode-7 v130
+  candidate is `1ec22cbc…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -69,6 +73,13 @@ dirty `main` worktree identified above.
   hashes. Its checkpointed Nexen window is strong evidence that wake-before-DMA preserves the
   established scheduler ordering, while its 31 new queue coalesces are equally strong negative
   evidence against renderer completeness.
+- R10's exact v130 focused evidence: six byte-exact background-reconcile fixtures, a real-input
+  Mesen first-wall replay through tick 3,622 with halt zero and intact task stacks, an organic
+  cold-boot-to-gameplay smoke, and an 1,800-frame idle-combat check that activates an enemy attack
+  record and changes health 20→18. Its TAD compiler/ARAM byte oracle and continuous live capture
+  validate the new octave-sample data path, not its perceived musical quality. Exact-Mesen captures
+  also prove that the Mode 7 boot activity screen moves during the formerly black interval, clears
+  before normal Mode 1 ownership, and preserves the green coin/Start/charged-shot sequence.
 
 ### Partial evidence, not a project-level verdict
 
@@ -82,13 +93,17 @@ dirty `main` worktree identified above.
 - Playability, a complete playthrough, every stage/boss path, real-cartridge timing, or
   shippability. v105 met a narrow formal performance contract but failed the first human combat
   test. v124 repaired those combat failures but froze on charged-shot release and missed both
-  formal 30 Hz thresholds. v127 repaired the demonstrated freeze. v128 repairs the recorded Mesen
-  title/transition/music regressions but still coalesces burst renders in Nexen and has not passed
-  a human confirmation or a new formal rate/budget run.
+  formal 30 Hz thresholds. v127 repaired the demonstrated freeze. The user confirmed v128's
+  recorded Mesen title/transition/charged-shot/music regressions, then exposed the first-wall crash.
+  v130 repairs that focused wall path and adds the octave/boot work but still inherits the red
+  burst-render conservation result and has passed neither a full-stage/full-playthrough test nor a
+  new formal rate/budget run.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
-- Complete/faithful sound by ear. The first user playtest reports recognizable music that audibly
-  cuts out; R7 diagnoses incomplete transcription/SFX authoring without claiming an audio fix.
+- Complete/faithful sound by ear. The user now identifies excessive sample transposition as a
+  concrete timbre defect. R10 adds five first-stage octave anchors, but only a new listening test
+  can accept or reject that authoring pass; ignored/placeholder SFX and missing
+  pitch/LFO/portamento remain.
 - Organic firing of every mapped music/SFX trigger.
 
 ## Canonical tools
@@ -731,19 +746,136 @@ points into code that moved; do not cite its zero-render result as current behav
 
 #### R9 verdict
 
-v128 is the current exact-Mesen regression-fixed playtest candidate. It closes the demonstrated
+At the close of R9, v128 was the exact-Mesen regression-fixed playtest candidate. It closes the demonstrated
 post-TAITO palette flicker, active-display blank bars/partial transition upload, credit-triggered
 song replacement, and charged-release liveness sequence. It remains **not playable or shippable**:
 burst render conservation is red, musical fidelity is still unvalidated/incomplete, no full
 playthrough exists, and this exact hash has neither a new formal power-on 30 Hz result nor a human
 confirmation. v124 remains the latest formal rate/budget evidence.
 
+### R10 — First-wall corruption, octave anchors, and live boot activity
+
+#### Human v128 result and new reports
+
+The next user run supplied the human confirmation R9 lacked for its four concrete regressions:
+on exact v128 in Mesen 2.1.1, the post-TAITO title no longer flickered, the pre-round horizontal
+bars were gone, a charged shot released without freezing, and gameplay music played again. That
+accepts those specific v128 repairs, not the project as a whole.
+
+The same run exposed two new defects. Attacking the first breakable wall froze the game with mixed
+tiles, and several FM instruments sounded as though one recording was being transposed too far
+across octaves. The tester also reported no enemy damage in that encounter. Controlled evidence
+below shows that offense exists, but does not dismiss the encounter-specific report.
+
+#### First-wall root cause and repair
+
+Exact v128 reproduces the wall failure with halt `$DEAD`, PC `$1000B0`, opcode `$F800`, mixed tiles,
+and corrupted saved task contexts. The corruption came from the zero-length paths in both
+`rmb_bg_promote` and `rmb_bg_revert`: `BEQ` followed `CMP #$0100`, so it tested the compare flags
+instead of the length loaded from `$41:013A`. A zero-length list entered the compact loop, wrapped
+16-bit Y, crossed DBR `$41` into `$42`, and reached the 128 KiB BW-RAM mirror at physical bank
+`$40`, overwriting coroutine contexts. Both helpers now branch on zero immediately after `LDA`.
+
+`tools/validate_bg_reconcile_helpers.py` is byte-exact for promote and revert with empty, compact,
+and full inputs (6/6). On exact v130, `tools/trace_wall_context.py` replays the same real-controller
+wall checkpoint through frame 12,372 / tick 3,622 with halt zero, 14 valid initialized task
+stacks, a 136-byte minimum margin, 2,740 recorded context writes, and no suspicious high-byte
+saved-SP write. This closes the reproduced wall corruption path only; it is not a stage or
+playthrough soak.
+
+The exact-v130 idle-offense window starts at frame 5,976 / tick 423 / health 20 and ends after
+1,800 video frames at frame 7,776 / tick 1,324 / health 18 with an active enemy attack record and
+halt zero. The starting cold-boot checkpoint caught Superman just before landing; he reached arcade
+Y `$0070` during the window. The offense result is therefore behavior evidence, not a claim that
+every enemy/collision encounter is correct.
+
+#### Note-aware octave samples
+
+The old FM renderer assigned one sample to ranges spanning as many as three to five octaves. The
+pipeline now accepts explicitly configured source-octave variants, validates each numeric patch ID
+against the exact 31-byte YM2610 identity, rejects variants that do not serve actual target-track
+notes, enforces a BRR budget, and makes `vgm2mml.py` select the nearest source-note anchor at each
+key-on. `tools/sound/fm_octave_variants.json` adds five Main BGM 1 anchors:
+`p16@o5`, `p21@o4`, `p11@o6`, `p22@o6` (also used by identical `p18`), and `p14@o4`.
+The extra BRR payload is 2,376 bytes; all 40 old base WAVs remain byte-identical.
+
+The consolidated project now has 45 FM instruments plus 12 drums. `tad-compiler check` and the
+combined blob build pass. Exact-v130 SPC ARAM matches the expected 47,886-byte common block
+(`55999723…`) and 8,196-byte song-3 block (`2d0d603a…`) byte for byte, with 1,030 bytes before the
+`$F000` echo buffer. An organic 29.985-second capture advances 902 ticks, remains active from start
+to end, has no internal 200 ms or 750 ms quiet interval, and ends at halt zero. These checks prove
+generation, fit, load, transport, and digital continuity—not that the new timbres sound right.
+
+#### Mode 7 boot activity screen
+
+The formerly black multi-minute initialization now displays original, non-arcade-derived assets:
+a red/gold/blue SA-1 shield rotates in Mode 7 behind `SUPERMAN ROM LOADED`,
+`SA-1 68000 CORE ACTIVE`, and `ARCADE BOOT IN PROGRESS`. The 5A22 owns this temporary display;
+each NMI advances a phase through a 64-entry matrix table over 128 VBlanks while the SA-1
+continues the unchanged original boot.
+The changing animation is a liveness indicator, not a fabricated progress percentage or a claim
+about which internal RAM/ROM test is executing.
+
+The generated 32 KiB asset SHA-256 is
+`7abed7112d3f1ef36c2191f307f2b02674321af9e24a7081d408df7ec34d8f04` and contains 56 static text
+sprites. A fresh exact-Mesen power-on samples frames 150-450 in Mode 7 at brightness 15, forced
+blank clear, halt zero, tick zero, and 11 distinct screenshot hashes; the activity byte changes
+from `$82` at frame 150 to `$98` at 300 and `$AE` at 450. At the game-renderer handoff, the boot
+activity byte is cleared before normal ownership; Mode 1 begins by frame 5,150, reaches tick 135 /
+render 130 by frame 5,400, and never leaves a forced-blank pulse.
+
+#### Exact v130 combined result
+
+Exact v130 playtest-candidate ROM SHA-256:
+`1ec22cbc92ad7beef0e20d8af6ff12f57023b7c437311f4bc6be56ce37cdd928`.
+
+| Gate | Exact-v130 result |
+|---|---:|
+| Build/layout | 4 MiB production ROM; pack/layout assertions green |
+| `TESTFLAG=0` power-on | gates arm organically; real coin/Start; gameplay settled |
+| Cold-boot endpoint | frame 5,976 / tick 423 / halt `$0000`; 154-byte minimum observed stack margin |
+| Post-TAITO title | 201 exact-Mesen samples; Mode 1, brightness 15, no forced blank, halt zero |
+| Coin/Start/charge sequence | all 10 checks green; charged entry/continuation/tick hooks 2/2/321 |
+| Mesen sequence endpoint | frame 7,946 / tick 1,408 / render 1,347 / halt `$0000` |
+| Mesen gameplay WAV | 10.682 s active; no internal 200 ms or 750 ms quiet interval |
+| First-wall context replay | frame 12,372 / tick 3,622 / 14 valid stacks / halt `$0000` |
+| Idle enemy offense | health 20→18; attack record active; halt `$0000` |
+| Organic audio capture | 29.985 s / 902 ticks / no 200 ms or 750 ms internal quiet interval |
+| SPC ARAM oracle | common and Main BGM 1 byte-exact; 1,030-byte headroom |
+
+The power-on run is a reachability/settle smoke. Its short post-arm ratios are not a formal
+performance result, and none of the checkpointed rows above are FPS evidence.
+
+Primary evidence:
+
+- `build/user-playtest-v105-investigation/production-v130-mode7-wall-audio-coldboot-settle-v1/`
+- `build/user-playtest-v105-investigation/v130-wall-bg-reconcile-helpers-v1/`
+- `build/user-playtest-v105-investigation/v130-mode7-boot-mesen211-early-v3/`
+- `build/user-playtest-v105-investigation/v130-mode7-boot-mesen211-handoff-v2/`
+- `build/user-playtest-v105-investigation/v130-mode7-title-post-taito-mesen211-v1/`
+- `build/user-playtest-v105-investigation/v130-mesen211-full-reported-sequence-v1/`
+- `build/user-playtest-v105-investigation/v130-wall-context-regression-mesen211-v1/`
+- `build/user-playtest-v105-investigation/idle-combat-v130-mode7-wall-audio-v1/`
+- `build/user-playtest-v105-investigation/v130-organic-octave-audio-v1/`
+- `docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md`
+
+#### R10 verdict
+
+v130 supersedes v128 as the combined first-wall/audio/boot **playtest candidate**. Automated and
+controlled checks close the reproduced wall corruption, prove encounter AI can attack, prove the
+new audio data loads continuously, and prove the Mode 7 indicator hands the display back cleanly.
+They do not establish a complete stage, a crash-free playthrough, musical fidelity, exact MAME
+pixel fidelity, renderer conservation, or the formal 30 Hz budget. The tester still needs to hit
+the first wall, listen to the first-stage instruments, and judge the boot screen on this exact
+hash. The correct project label remains **interactive technical demo, not playable or shippable**.
+
 ## Decision rule after the baseline
 
-R9 supersedes v127 as the playtest candidate while preserving R7's exact v124 formal performance
-evidence and R8's charged-shot diagnosis. Preserve the production evidence contract:
+R10 supersedes v128 as the playtest candidate while preserving R7's exact v124 formal performance
+evidence, R8's charged-shot diagnosis, and R9's renderer-conservation failure. Preserve the
+production evidence contract:
 local/checkpoint improvements remain local evidence, while a new playability claim requires another
 power-on uninterrupted run plus a human combat/audio playtest. Continue under the honest label
-**interactive technical demo, not playable or shippable**. v128 is the current exact-Mesen
-regression-fixed candidate; do not resurrect the rejected pre-wake DMA ordering, v125/v126, or
+**interactive technical demo, not playable or shippable**. v130 is the current combined
+wall/audio/boot candidate; do not resurrect the rejected pre-wake DMA ordering, v125/v126, or
 project a local result into FPS.

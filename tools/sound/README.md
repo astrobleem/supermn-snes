@@ -39,9 +39,9 @@ Sound-port P3 turned the drafts into real audio. Four new tools, run in this ord
 |---|---|
 | `vgm_fm_patches.py` | Capture + dedupe every YM2610 FM patch at key-on across all VGMs (carrier-TL/volume normalized out) → `soundwork/samples/fm_patches.json` with per-(track,voice) usage + note histograms. |
 | `patch_render.cpp` | Standalone ymfm-based renderer: one captured patch → held-note mono WAV at the chip's native rate. Build: `g++ -O2 -std=c++17 -I ymfm/src patch_render.cpp ymfm/src/ymfm_opn.cpp ymfm/src/ymfm_adpcm.cpp ymfm/src/ymfm_ssg.cpp -o patch_render` (clone https://github.com/aaronsgiles/ymfm). |
-| `render_fm_patches.py` | For each *dominant* patch of some (track, FM-voice): render at the modal pitch, resample to 64 (or 32, for o7-reaching patches — the S-DSP 4× pitch ceiling) samples/period, keep a short attack + amplitude-flattened crossfaded 8-period loop, classify the FM envelope → TAD `gain`/`adsr`. Emits `instruments/fm_pNN.wav` + `fm_instruments.json`. |
+| `render_fm_patches.py` | For each *dominant* patch of some (track, FM-voice): render at the modal pitch, resample to 64 (or 32, for o7-reaching patches — the S-DSP 4× pitch ceiling) samples/period, keep a short attack + amplitude-flattened crossfaded 8-period loop, classify the FM envelope → TAD `gain`/`adsr`. It can also render validated, BRR-budgeted source-octave variants from `fm_octave_variants.json`. Emits `instruments/fm_pNN*.wav` + `fm_instruments.json`. |
 | `prep_drums.py` | Trim/fade/downsample the 12 unique decoded ADPCM-A windows to an ARAM-fitting budget → `instruments/sm_drum_XXXXXX.wav` + `drums_report.json`. |
-| `build_common_project.py` | Consolidate everything into ONE shared-pool project `superman_all.terrificaudio` (47 instruments, 21 songs, merged SFX file) and rewrite each MML's `@0-@3` bindings to its dominant-patch instruments. |
+| `build_common_project.py` | Consolidate everything into ONE shared-pool project `superman_all.terrificaudio` (currently 45 FM instruments + 12 drums, 21 songs, merged SFX file) and rewrite each MML's `@0-@3` bindings to its selected patch instruments. |
 
 ```bash
 # full P3 regen (after unpacking VGMs to soundwork/source/vgm_unpacked)
@@ -60,7 +60,8 @@ The initial P3 pass bound each (track, FM-voice) to its *dominant* patch with a 
 `v10`. The polish stage restores per-note fidelity:
 
 - `render_fm_patches.py --extra-budget N` renders the highest-impact **non-dominant**
-  patches too (default ~4 KB of extra BRR) and **aliases** every remaining patch to its
+  patches too (default 2.6 KB of extra BRR, matching the reproducible consolidated build) and
+  **aliases** every remaining patch to its
   nearest rendered timbre (weighted register distance: algorithm ≫ MUL/TL ≫ envelope
   rates). `fm_instruments.json` gains `ident_to_inst` (every captured patch → an
   instrument that exists) + `inst_render_tl`.
@@ -71,11 +72,37 @@ The initial P3 pass bound each (track, FM-voice) to its *dominant* patch with a 
   loudest so the average note lands near the old flat v10). Instrument octave ranges
   tighten to only the notes each instrument actually plays.
 
+### R10 source-octave variants (2026-07-23)
+
+The first human listening report identified a concrete failure mode: several instruments sounded
+like one sample was being shifted too far across octaves. `render_fm_patches.py` now accepts
+`--octave-variants tools/sound/fm_octave_variants.json` and applies these gates before spending
+ARAM:
+
+- the patch ID must be numeric and match the captured exact 31-byte YM2610 identity;
+- a configured target track must actually play notes served by that anchor;
+- generated BRR bytes must remain under the config cap;
+- a variant may not silently alias to a less appropriate timbre; and
+- base-sample normalization is independent of variant generation, so the old WAVs remain stable.
+
+`fm_instruments.json` records `ident_to_variants`, and `vgm2mml.py` chooses the closest source-note
+anchor for every matched key-on rather than binding an entire voice/range to one sample.
+
+The current Main BGM 1 configuration adds `p16@o5`, `p21@o4`, `p11@o6`, `p22@o6`
+(also serving byte-identical `p18`), and `p14@o4`. It consumes 2,376 BRR bytes under a
+2,400-byte cap; all 40 prior base FM WAVs remain byte-identical.
+
 ARAM budget (verified by `tad-compiler check`, which validates per-song fit): common data
 (FM + drums + tables/SFX) + largest song + 4 KB echo + driver must stay ≤ 64 KB — after
 the polish stage this is nearly full; `check` is the gate when tuning `--extra-budget` /
 drum caps. Remaining by-ear items: echo/vibrato taste, FM pitch-bends (`MP`), long drum
 tails capped (in-game hits retrigger gate-style, masking this).
+
+For exact v130 (`1ec22cbc…`), the live SPC oracle matches 47,886 bytes of common data and
+8,196 bytes of Main BGM 1 byte for byte, with 1,030 bytes before the `$F000` echo buffer.
+The organic 29.985-second capture has no internal 200 ms or 750 ms quiet interval. These are
+compiler/load/continuity checks only; the octave pass remains unaccepted until it is compared by ear
+with the arcade track.
 
 ## Concurrent live-gameplay validation (P3 close-out, 2026-07-10)
 

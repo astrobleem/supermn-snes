@@ -3,6 +3,35 @@
 Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
+> ## ⚠️ R10 FIRST-WALL / OCTAVE-AUDIO / MODE-7 BOOT CANDIDATE — July 23, 2026
+>
+> The tester human-confirmed v128's post-TAITO title, pre-round bars, charged-shot, and gameplay-
+> music repairs, then found a new first-wall mixed-tile freeze and excessive sample transposition.
+> The wall crash was a zero-length bug in both background-reconcile helpers: `BEQ` consumed flags
+> from `CMP #$0100`, entered a wrapped Y loop, crossed BW-RAM mirrors, and corrupted coroutine
+> contexts. The repaired helpers are byte-exact for 6/6 empty/compact/full cases.
+>
+> Exact v130 candidate SHA-256
+> `1ec22cbc92ad7beef0e20d8af6ff12f57023b7c437311f4bc6be56ce37cdd928`
+> reaches the same wall replay at frame 12,372 / tick 3,622 with halt zero, 14 valid task stacks,
+> 136-byte minimum margin, and no suspicious context write. A controlled 1,800-frame idle run
+> activates enemy offense and changes health 20→18. The sound pipeline adds five note-aware
+> source-octave anchors; exact SPC ARAM is byte-correct and a 29.985-second organic capture has no
+> internal 200 ms or 750 ms digital silence. Musical quality still requires listening.
+>
+> The old black initialization interval now has an original Mode 7 rotating SA-1 shield and status
+> text. Fresh Mesen 2.1.1 frames 150-450 remain in Mode 7 with 11 distinct images and a changing
+> activity byte; at frame 5,150 the indicator is clear and the normal Mode 1 renderer owns the
+> display. A fresh `TESTFLAG=0` run organically arms, accepts real coin/Start, and settles gameplay
+> at frame 5,976 / tick 423 / halt zero. A same-hash Mesen coin/Start/charged-shot sequence has no
+> failed checks (entry/continuation/tick hooks 2/2/321).
+>
+> This is still **not playable or shippable**. The first wall, octave timbres, and boot presentation
+> await human confirmation; full-stage/playthrough, aligned MAME pixels, renderer conservation, and
+> formal 30 Hz gates remain open. v124's 29.7002 game-fps / 360,990.164 cycles/tick run remains the
+> latest formal performance evidence. See [RECOVERY.md](RECOVERY.md) R10 and
+> [the focused handoff](docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md).
+
 > ## ⚠️ R9 EXACT-MESEN REGRESSION CORRECTION — July 23, 2026
 >
 > The tester's Mesen 2.1.1 reports were correct. After TAITO faded, the no-credit title alternated
@@ -23,8 +52,9 @@ Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 > This candidate is still **not playable**. A checkpointed 1,200-frame Nexen ordering window remains
 > live and balanced at 600 ticks/requests/ACKs, but completes 568 true renders and adds 31 queue
 > coalesces during cache-heavy bursts. No formal cold-boot rate result supersedes v124's 29.7002
-> game-fps measurement, and exact v128 still needs human confirmation. See [RECOVERY.md](RECOVERY.md)
-> R9 and [the focused Mesen handoff](docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md).
+> game-fps measurement. R10 above records the later human confirmation of v128's four focused
+> repairs; the renderer-conservation failure remains current. See [RECOVERY.md](RECOVERY.md) R9 and
+> [the focused Mesen handoff](docs/handoff/MESEN211_PLAYTEST_REGRESSIONS_20260723.md).
 
 > ## ⚠️ R8 CHARGED-SHOT CORRECTION — July 23, 2026
 >

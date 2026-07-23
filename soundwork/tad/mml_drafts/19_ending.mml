@@ -21,8 +21,8 @@
 @7 fm_p13
 @8 fm_p50
 @9 fm_p11
-@10 fm_p16
-@11 fm_p35
+@10 fm_p16_o5
+@11 fm_p22_o6
 @12 fm_p15
 @13 sm_drum_060000
 @14 sm_drum_062a00
@@ -237,19 +237,19 @@ C ^1
 ; bar 16
 C ^2^16. r16 @8 v6 o4 d3^96
 ; bar 17
-C ^32 d16. d16. r32 f16. r32 e16. d8 a16 r16. g32 @11 v9 o6 c16 r16 c16 c32
+C ^32 d16. d16. r32 f16. r32 e16. d8 a16 r16. g32 @11 v11 o6 c16 r16 c16 c32
 ; bar 18
 C ^32 c16 r16 c32 r32 c32 r32 c16 c16. c16 r16 @8 v6 o4 d3^96 r32 d16
 ; bar 19
-C ^32 d8 o5 c4 o4 b16 g32 r32 a32 r16 g16 r32 @11 o6 c32 r16 c16 c16 c16
+C ^32 d8 o5 c4 o4 b16 g32 r32 a32 r16 g16 r32 @11 v8 o6 c32 r16 c16 c16 c16
 ; bar 20
-C r16 c16 c16 c16 r32 c16 c16. r16 @8 o4 d4. d16. d32
+C r16 c16 c16 c16 r32 c16 c16. r16 @8 v6 o4 d4. d16. d32
 ; bar 21
-C ^16. f16. r32 e16. r32 d16. b16. a16 b32 @11 v10 o6 c+32 r32 d+32 f32 f+32 g+32 r32 a+32 o7 c32 o6 a+32 r32 g+32
+C ^16. f16. r32 e16. r32 d16. b16. a16 b32 @11 v12 o6 c+32 r32 d+32 f32 f+32 g+32 r32 a+32 o7 c32 o6 a+32 r32 g+32
 ; bar 22
 C f+32 f32 d+16 c+32 c32 c+16 d+32 f32 f+32 r16 @8 v4 o5 c16 r32 o4 b16 v5 o5 c16 r32 v8 d4^16 d32
 ; bar 23
-C ^32 d16. d16 r32 d16 d16 r32 f16 r16. e16 c32 @11 v10 o6 c32 r32 d32 e32 f32 g32 r32 f32 e32 d32 c16
+C ^32 d16. d16 r32 d16 d16 r32 f16 r16. e16 c32 @11 v12 o6 c32 r32 d32 e32 f32 g32 r32 f32 e32 d32 c16
 ; bar 24
 C o5 b32 a32 g32 r32 f+32 g32 a32 r32 b32 r16 @6 v4 d8.^32 r32 @7 d32 r32 o4 g32 r16 o5 d32 r32 v5 d8.
 ; bar 25

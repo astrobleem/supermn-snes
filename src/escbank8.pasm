@@ -5427,10 +5427,10 @@ rmb_bg_reconcile_done:
 ; candidates lack an authoritative compact length and retain the 2 KiB copy.
 rmb_bg_promote:
     lda $41013A
+    beq rmb_bg_promote_done
     cmp #$0100
     bcs rmb_bg_promote_full
     sta $0158
-    beq rmb_bg_promote_done
     ldy #$0000
 rmb_bg_promote_cell:
     ldx $1A00,y
@@ -5456,10 +5456,10 @@ rmb_bg_promote_full:
 ; candidate==baseline invariant remains explicit.
 rmb_bg_revert:
     lda $41013A
+    beq rmb_bg_revert_done
     cmp #$0100
     bcs rmb_bg_revert_full
     sta $0158
-    beq rmb_bg_revert_done
     ldy #$0000
 rmb_bg_revert_cell:
     ldx $1A00,y

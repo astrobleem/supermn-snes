@@ -11,7 +11,11 @@ Pipeline (per patch that is the DOMINANT patch of at least one (track, FM-voice)
   3. Keep a short attack (up to ATTACK_PERIODS periods), then an 8-period loop:
      amplitude-flattened across the loop window (so a decaying render still loops
      cleanly) and crossfaded end->start (kills detune/LFO beating clicks).
-  4. Normalize ALL patches by one global factor (preserves the arcade FM mix).
+  4. Normalize the base patch set by one global factor (preserves the arcade FM
+     mix), then apply that same factor to optional octave-anchor variants.
+  5. For configured wide-range patches, render additional source octaves and
+     emit note-aware mappings. This preserves pitch-dependent FM timbre and keeps
+     attack time much closer to the source than shifting one sample by 2-3 octaves.
 
 Outputs: instruments/<name>.wav + fm_instruments.json (name, freq, loop offset,
 octave range, per-(track,voice) binding map for the consolidation step).
@@ -40,6 +44,13 @@ def fnum_to_freq(block, fnum, clock):
 def note_octave(notestr):
     # "c6" / "a+4" -> 6 / 4
     return int(notestr.lstrip("abcdefg+").lstrip("+") or 0)
+
+
+def note_midi(notestr: str) -> int:
+    """MML note name to MIDI integer (`c4` == 60)."""
+    octave = note_octave(notestr)
+    name = notestr[: -len(str(octave))]
+    return NOTE_SEMIS[name] + 12 * (octave + 1)
 
 
 def note_freq(name: str, octave: int) -> float:
@@ -169,9 +180,14 @@ def main():
     ap.add_argument("--out", default="soundwork/tad/mml_drafts/instruments")
     ap.add_argument("--tmp", default="/tmp/fm_render")
     ap.add_argument("--target-peak", type=int, default=24000)
-    ap.add_argument("--extra-budget", type=int, default=4200,
+    ap.add_argument("--extra-budget", type=int, default=2600,
                     help="BRR bytes for non-dominant patches (per-note @ switches); "
                          "the rest alias to their nearest rendered timbre")
+    ap.add_argument("--octave-variants",
+                    default="tools/sound/fm_octave_variants.json",
+                    help="JSON octave-anchor policy for wide-range patches")
+    ap.add_argument("--no-octave-variants", action="store_true",
+                    help="disable the configured octave-anchor pass")
     args = ap.parse_args()
 
     j = json.loads(Path(args.patches).read_text())
@@ -184,6 +200,7 @@ def main():
     bindings = []
     patch_notes = {}              # pid -> {notekey: count}
     global_keyons = {}            # pid -> total keyons
+    track_patch_notes = {}        # track -> pid -> {notekey: count}
     for u in j["usage"]:
         ph = {int(k): v for k, v in u["patch_hist"].items()}
         dom = max(ph, key=ph.get)
@@ -194,6 +211,8 @@ def main():
             d = patch_notes.setdefault(pid, {})
             for nk, cnt in nh.items():
                 d[nk] = d.get(nk, 0) + cnt
+                td = track_patch_notes.setdefault(u["track"], {}).setdefault(pid, {})
+                td[nk] = td.get(nk, 0) + cnt
             global_keyons[pid] = global_keyons.get(pid, 0) + sum(nh.values())
 
     dominants = sorted({b["pid"] for b in bindings})
@@ -211,14 +230,15 @@ def main():
         octs = [note_octave(nk.split("|")[0]) for nk in patch_notes[pid]]
         return min(octs), max(octs)
 
-    def render_one(pid, period_override=None):
+    def render_one(pid, period_override=None, mode_override=None, render_name=None):
         p = plist[pid]
         assert p["id"] == pid
-        mode = max(patch_notes[pid], key=patch_notes[pid].get)
+        mode = mode_override or max(patch_notes[pid], key=patch_notes[pid].get)
         note, block, fnum = mode.split("|")
         f0 = fnum_to_freq(int(block), int(fnum), clock)
         period = period_override or pick_period(patch_octaves(pid)[1])
-        wf = tmp / f"p{pid}.wav"
+        label = render_name or f"p{pid}"
+        wf = tmp / f"{label}.wav"
         r = subprocess.run([args.renderer, p["raw"], block, fnum,
                             str(HOLD_S), str(TAIL_S), str(wf)],
                            capture_output=True, text=True)
@@ -233,7 +253,7 @@ def main():
         rs = resample_to_period(a, src_rate, f0, period)
         looped, ls = build_looped(rs, period)
         brr = len(looped) // 16 * 9
-        print(f"  p{pid}: modal {note} f0={f0:.1f}Hz period={period} attack={ls} "
+        print(f"  {label}: modal {note} f0={f0:.1f}Hz period={period} attack={ls} "
               f"total={len(looped)} smp (~{brr}B BRR) env={envclass} [{envstr}]")
         return (looped, ls, period, note, envstr, envclass, brr)
 
@@ -283,9 +303,134 @@ def main():
             print(f"  p{rp}: merged range tops o{inst_range[rp][1]} -> re-render at period {need}")
             rendered[rp] = render_one(rp, period_override=need)
 
+    # Render the explicitly budgeted octave anchors. The policy records the patch
+    # identity as well as its numeric ID so a regenerated/reordered capture cannot
+    # silently attach an anchor to the wrong timbre.
+    variant_policy = None
+    variant_renders = []
+    if not args.no_octave_variants:
+        variant_policy = json.loads(Path(args.octave_variants).read_text())
+        target_track = variant_policy["target_track"]
+        target_notes = track_patch_notes.get(target_track)
+        if target_notes is None:
+            raise SystemExit(f"octave-variant target track not found: {target_track!r}")
+        variant_budget = int(variant_policy["brr_budget"])
+        variant_spent = 0
+        seen_variant_names = set()
+        for spec in variant_policy["variants"]:
+            pid = int(spec["pid"])
+            if not 0 <= pid < len(plist) or plist[pid]["id"] != pid:
+                raise SystemExit(f"invalid octave-variant pid {pid}")
+            if plist[pid]["ident"] != spec["ident"]:
+                raise SystemExit(
+                    f"octave-variant p{pid:02d} identity changed; audit the policy before rendering"
+                )
+            octave = int(spec["octave"])
+            octave_notes = {
+                nk: cnt for nk, cnt in target_notes.get(pid, {}).items()
+                if note_octave(nk.split("|")[0]) == octave
+            }
+            if not octave_notes:
+                raise SystemExit(
+                    f"octave-variant p{pid:02d} has no o{octave} notes in {target_track!r}"
+                )
+            mode = max(octave_notes, key=octave_notes.get)
+            covered_pids = [pid, *(int(p) for p in spec.get("also_for", []))]
+            for covered_pid in covered_pids:
+                if covered_pid not in patch_notes:
+                    raise SystemExit(
+                        f"octave-variant p{pid:02d} covers unknown p{covered_pid:02d}"
+                    )
+                if covered_pid != pid:
+                    base_source = alias.get(covered_pid, covered_pid)
+                    old_distance = patch_distance(
+                        plist[covered_pid]["ident"], plist[base_source]["ident"]
+                    )
+                    new_distance = patch_distance(
+                        plist[covered_pid]["ident"], plist[pid]["ident"]
+                    )
+                    if new_distance >= old_distance:
+                        raise SystemExit(
+                            f"p{pid:02d} is not a closer timbre for covered p{covered_pid:02d} "
+                            f"({new_distance} >= {old_distance})"
+                        )
+            highest_octave = max(patch_octaves(p)[1] for p in covered_pids)
+            period = pick_period(highest_octave)
+            name = f"fm_p{pid:02d}_o{octave}"
+            if name in seen_variant_names:
+                raise SystemExit(f"duplicate octave variant {name}")
+            seen_variant_names.add(name)
+            data = render_one(
+                pid,
+                period_override=period,
+                mode_override=mode,
+                render_name=name,
+            )
+            variant_spent += data[6]
+            if variant_spent > variant_budget:
+                raise SystemExit(
+                    f"octave variants exceed BRR policy budget "
+                    f"({variant_spent} > {variant_budget} bytes)"
+                )
+            variant_renders.append({
+                "name": name,
+                "source_pid": pid,
+                "octave": octave,
+                "covered_pids": covered_pids,
+                "render": data,
+            })
+        print(
+            f"octave variants: {variant_spent}B of {variant_budget}B policy budget "
+            f"for {target_track!r}"
+        )
+
+    # The base scale intentionally excludes octave variants: rerunning this pass
+    # must not change the established mix of every pre-existing FM instrument.
     scale = args.target_peak / max(max(abs(x) for x in r[0]) for r in rendered.values())
+
+    # Build note-aware choices for every captured patch identity. Each identity
+    # retains its prior base/alias sample and gains only its configured closer
+    # octave anchors. MML generation selects the closest source-note anchor.
+    choices_by_pid = {}
+    for pid in patch_notes:
+        source_pid = alias.get(pid, pid)
+        base_name = f"fm_p{source_pid:02d}"
+        base_note = rendered[source_pid][3]
+        choices_by_pid[pid] = [{
+            "name": base_name,
+            "anchor_midi": note_midi(base_note),
+            "source_pid": source_pid,
+        }]
+    for variant in variant_renders:
+        anchor_note = variant["render"][3]
+        choice = {
+            "name": variant["name"],
+            "anchor_midi": note_midi(anchor_note),
+            "source_pid": variant["source_pid"],
+        }
+        for pid in variant["covered_pids"]:
+            choices_by_pid[pid].append(choice)
+
+    inst_octaves = {}
+    inst_pids_assigned = {}
+    assignment_counts = {}
+    for pid, notes in patch_notes.items():
+        counts = {}
+        for nk, count in notes.items():
+            midi = note_midi(nk.split("|")[0])
+            choice = min(
+                choices_by_pid[pid],
+                key=lambda c: abs(midi - c["anchor_midi"]),
+            )
+            name = choice["name"]
+            inst_octaves.setdefault(name, set()).add(note_octave(nk.split("|")[0]))
+            inst_pids_assigned.setdefault(name, set()).add(pid)
+            counts[name] = counts.get(name, 0) + count
+        assignment_counts[str(pid)] = counts
+
     instruments = []
     ident_to_inst = {}
+    ident_to_variants = {}
     inst_render_tl = {}
     total_brr = 0
     for pid, (samples, ls, period, note, envstr, envclass, brr) in rendered.items():
@@ -298,7 +443,8 @@ def main():
         w.setframerate(32000)     # nominal; TAD pitch comes from freq + note
         w.writeframes(out.tobytes())
         w.close()
-        lo, hi = inst_range[pid]
+        assigned_octaves = inst_octaves.get(name, {note_octave(note)})
+        lo, hi = min(assigned_octaves), max(assigned_octaves)
         total_brr += len(out) // 16 * 9
         instruments.append({
             "name": name, "pid": pid, "wav": f"instruments/{name}.wav",
@@ -306,16 +452,66 @@ def main():
             "first_octave": lo, "last_octave": hi,
             "envelope": envstr, "env_class": envclass,
             "modal_note": note, "samples": len(out),
-            "aliased_pids": sorted(inst_pids[pid] - {pid}),
+            "aliased_pids": sorted(inst_pids_assigned.get(name, set()) - {pid}),
         })
         ident_to_inst[plist[pid]["ident"]] = name
         inst_render_tl[name] = plist[pid]["min_carrier_tl"]
+
+    for variant in variant_renders:
+        name = variant["name"]
+        pid = variant["source_pid"]
+        samples, ls, period, note, envstr, envclass, brr = variant["render"]
+        peak = max(abs(x) for x in samples) * scale
+        if peak > 32767:
+            print(f"WARNING {name}: scaled peak {peak:.1f} clips signed 16-bit output")
+        out = array.array(
+            "h", (max(-32768, min(32767, int(x * scale))) for x in samples)
+        )
+        wpath = outdir / f"{name}.wav"
+        w = wave.open(str(wpath), "wb")
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(32000)
+        w.writeframes(out.tobytes())
+        w.close()
+        assigned_octaves = inst_octaves.get(name, {variant["octave"]})
+        lo, hi = min(assigned_octaves), max(assigned_octaves)
+        total_brr += len(out) // 16 * 9
+        instruments.append({
+            "name": name,
+            "pid": pid,
+            "source_pid": pid,
+            "octave_variant": variant["octave"],
+            "covered_pids": variant["covered_pids"],
+            "wav": f"instruments/{name}.wav",
+            "freq": 32000.0 / period,
+            "loop_offset": ls,
+            "first_octave": lo,
+            "last_octave": hi,
+            "envelope": envstr,
+            "env_class": envclass,
+            "modal_note": note,
+            "samples": len(out),
+            "aliased_pids": sorted(inst_pids_assigned.get(name, set()) - {pid}),
+        })
+        inst_render_tl[name] = plist[pid]["min_carrier_tl"]
+
     for pid, target in alias.items():
         ident_to_inst[plist[pid]["ident"]] = f"fm_p{target:02d}"
+    for pid, choices in choices_by_pid.items():
+        ident_to_variants[plist[pid]["ident"]] = [
+            {"name": c["name"], "anchor_midi": c["anchor_midi"]}
+            for c in choices
+        ]
     Path(outdir / "fm_instruments.json").write_text(json.dumps(
         {"instruments": instruments, "bindings": bindings,
-         "ident_to_inst": ident_to_inst, "inst_render_tl": inst_render_tl,
+         "ym2610_clock": clock,
+         "ident_to_inst": ident_to_inst,
+         "ident_to_variants": ident_to_variants,
+         "inst_render_tl": inst_render_tl,
          "aliases": {str(k): v for k, v in sorted(alias.items())},
+         "octave_variant_policy": variant_policy,
+         "octave_variant_assignments": assignment_counts,
          "total_brr_estimate": total_brr}, indent=1))
     print(f"TOTAL FM BRR ~= {total_brr} bytes across {len(instruments)} instruments "
           f"({len(alias)} patches aliased)")
