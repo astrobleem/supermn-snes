@@ -27,9 +27,47 @@ JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC,
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest
 # cluster (~12.5%), its rts reach (from $0047FE) was uncatchable by any hook -> entry_ce4t.
-TABLE_PCS = {0xCE4, 0x295A, 0x29B6, 0x13BE,
+TABLE_PCS = {0xCE4, 0x111A, 0x295A, 0x29B6, 0x13BE,
+             # Bounded one-shot round-transition initializer.  It exits at
+             # the original $D9A8 allocator seam before any yielding call.
+             0x00D7BE,
+             # $D8AC task's yield-bounded hot path.  These callees are entered
+             # with a real return already on the 68K stack; $DA44 retains that
+             # real $D8B4 return across its $DA70 trap #5 yield.
+             0x00D9CC, 0x00DC44, 0x00DA44, 0x00DA9E,
+             0x00DAF4, 0x00DC2E,
+             # $111A already has a validated hand-native implementation for
+             # jsr (An).  Indexed indirect JSR reaches xlat_dispatch after its
+             # real return has been pushed, so bank $95 provides the tiny
+             # table-convention adapter that pops that return and reuses the
+             # same body.  Missing this route left the full $114E-$11A2 loops
+             # interpreted during active gameplay.
+             # Production round-start pool allocators.  These are leaf/rts
+             # routines reached with a real caller return on the 68K stack.
+             0x024A60, 0x024A84, 0x024920, 0x024956,
+             # Round-start overflow bank ($95): call/rts-class routines.  Some
+             # bounded prefixes yield before their eventual rts; their real
+             # caller return remains on the 68K stack across that yield.
+             # Both the generated and compact $C8E0 deployments are rejected:
+             # the former regressed the live transition and the latter corrupted
+             # the organic task mask to $D0FF. $C9A6 remains a direct internal
+             # callee, not a general table target.
+             0x00C722, 0x00BBA4,
+             0x00C60E, 0x00C6BC, 0x008D56,
+             0x002D8A,
+             # Organic gameplay-entry one-shot roots. The two bank-$02 roots
+             # use the compact bank-$9D dispatcher so the dense xlat blob
+             # does not grow another 768-byte page. $091E is reached by an
+             # absolute-long JSR and is handled in the relocated JAH2 bank-0
+             # scan, so it needs no dense table slot.
+             0x024AA8, 0x028F92,
+             # The $007734 fan-out caller pushes a genuine $007786 return and
+             # enters this trap-bearing table body directly in bank $9E.
+             # Keeping it in the table also covers any faithful indirect reach.
+             0x008B46,
              0x8FA,   # CAMPAIGN 2 (2026-07-01): $0008FA long block-copy, jsr-reached, 446 interp-instr/heavy-tick -> entry_8fat (chokepoint allowlist)
-             0xFD2}   # CAMPAIGN 2: $000FD2 = MID-LOOP RESUME of the $0FB8 fill (IRQ slices the fill; ISR-exit rte resumes at $0FD2 -- unreachable by jsr/jmp/rte tables), 595 interp-instr/heavy-tick -> entry_fd2t
+             0xFD2,   # CAMPAIGN 2: $000FD2 = MID-LOOP RESUME of the $0FB8 fill (IRQ slices the fill; ISR-exit rte resumes at $0FD2 -- unreachable by jsr/jmp/rte tables), 595 interp-instr/heavy-tick -> entry_fd2t
+             0x01F1C0} # object leaf already reached through ojmp_hook; entry_1f1c0t
              # $13BE (2026-07-01): rts-class LEAF handler added to the fetch-chokepoint allowlist (see interp choke_tramp). [$1400 dropped: it is an INTERNAL label of $13BE, covered by entry_13bet.] $0CE4 (ce4t) -- SHIPPED 2026-06-29, the first --table (rts-class) escape. Catches the
                       # rts/jmp reaches of $CE4 (~12.5% of frame) that the inline jah2 entry_ce4 (jsr-only)
                       # MISSES: an instrumented run showed entry_ce4t fires 63451x via the table.
@@ -54,19 +92,111 @@ TABLE_PCS = {0xCE4, 0x295A, 0x29B6, 0x13BE,
 # ((PC>>8) & 0x1FF) so bank-$01 resume PCs dispatch through the SAME ors_rte_x->ojmp_hook route
 # with ZERO bank-$00 changes (xlat_dispatch accepts $42 in {0,1}). $01D5F0 = objproc physics visit,
 # $01E7C0 = objproc render visit (docs/OBJPROC_SPEC.md).
-CORO_PCS = {0xC172, 0x01D5F0, 0x01E7C0,
+CORO_PCS = {0xC172, 0x01D51A, 0x01D5F0, 0x01E7C0,
+            # $DA44 resumes at $DA72 and immediately RTSes to the genuine
+            # $D8B4 continuation.  Both are no-push coroutine continuations.
+            0x00DA72, 0x00D8B4,
             0x024BC2, 0x02429C,   # trap#5 SHELL resume PCs (escbank5; bank-$02 pages)
+            # Signed record path around TRAP #1.  These two exact PCs use the
+            # compact bank-$9D dispatcher so bank $96 does not gain another
+            # 768-byte page; their bodies live in bank $9E.
+            0x024D28, 0x024D64,
             0xC604, 0xC78E, 0xCD1A,   # CP1 2.2 light-tick task resumes (escbank5)
             0xC846,                   # CP1 2.2 gameplay-tick per-slot loop resume (escbank5)
+            0xC7DC,                   # post-$C7DA trap continuation; bank-$98 entry_c7dc
+            0xC892,                   # post-$C890 yield continuation; bank-$98 entry_c892
             0x011752,                 # $011752 contiguous-tree spine, first half (escbank5)
-            0x46DE}                   # $0046DE light-tick task resume (escbank5; first --fnfrag body)
+            0x46DE,                   # $0046DE light-tick task resume (escbank5; first --fnfrag body)
+            # One-shot gameplay-entry task.  Its otherwise-new $C0 page is
+            # routed by the compact bank-$9D dispatcher.
+            0x00C0BC,
+            # Production round-start initial roots: all are op_rte/coroutine convention
+            # (no synthetic return push).  $CE48 is a bounded prefix that tail-enters the
+            # already deployed $CE58 continuation after clearing its frame.
+            0xC262, 0xC3F6, 0xCE48, 0x8D72, 0x7C22,
+            # Consecutive round-start task-creation continuations.
+            0x74B8, 0x74D4, 0x74EC,
+            # Sustained gameplay object-update root.  Its state dispatch is
+            # guarded in bank $95 and falls back for every nonzero state.
+            0x02A190,
+            # Eight-slot object callback/update coroutine resumed organically
+            # at $0175A0 after its setup yield.
+            0x0175A0,
+            # Nested callback/yield loop and its genuine return continuation.
+            # Both labels live in one body so the hot backward edge remains
+            # native while a callback that yields retains return $01770E.
+            0x0176F6, 0x01770E,
+            # Object-state coroutine resumed after the $01C118 trap #5.
+            0x01C11A,
+            # Fetch-choked first iteration of the guarded inactive-record pass.
+            0x01C9AE,
+            # Organic gameplay-entry fan-out.  The bank-$00 $76/$77 entries
+            # use the compact bank-$9E dispatcher; bank-$01/$02 entries reuse
+            # already-allocated dense pages.  Every TRAP remains interpreted
+            # so scheduler ordering and IRQ density are unchanged.
+            0x0076B6, 0x0076D4, 0x0076EC, 0x007704, 0x00771C, 0x007734,
+            0x01E71E, 0x024B5A, 0x02427C,
+            # Post-TRAP #5 inner-loop continuation in the bounded $8B46 task.
+            0x008B9C}
+
+# These bank-$00 entries occupy four otherwise-empty high-byte pages.  A dense
+# xlat sub-table costs 768 bytes per page, so representing them in the generic
+# blob would overflow bank $96 even though only eight slots are live.  The
+# range arm at $94:F900 routes pages $D8/$D9/$DA/$DC to the compact dispatcher
+# at $9D:DA00 instead.  Keep them in TABLE_PCS/CORO_PCS above so convention
+# selection and missing-entry checks still cover them; omit only their dense
+# data pages below.
+DIRECT_PCS = {
+    0x00C0BC,
+    0x00D7BE,
+    0x00D8B4, 0x00D9CC,
+    0x00DA44, 0x00DA72, 0x00DA9E, 0x00DAF4,
+    0x00DC2E, 0x00DC44,
+    0x024AA8, 0x028F92,
+    0x024D28, 0x024D64,
+    # The $0076B6 one-shot task and genuine-return continuations occupy two
+    # otherwise-empty bank-$00 pages.  $94:F900 routes those pages through
+    # $9D:DA00 to the exact bank-$9E dispatcher at $9E:A700.
+    0x0076B6, 0x0076BC, 0x0076C2, 0x0076D4, 0x0076EC,
+    0x007704, 0x00771C, 0x007734, 0x007748, 0x00776A,
+    0x00777A, 0x007782, 0x007786,
+    # Free one dense page for the $008Bxx continuation cluster.  Bank-$02 is
+    # already admitted to $9D:DA00, so these two exact production allocators
+    # are cheaper as sparse comparisons than as a 768-byte page.
+    0x024920, 0x024956,
+    # Bank $02 already routes through the sparse dispatcher.  Move this lone
+    # page-$2A1 entry out of the dense blob to make room for $01C9xx without
+    # increasing the fixed forty-page bank-$96 footprint.
+    0x02A190,
+}
 
 JMP_STATE_PCS |= {0x01177C}   # $011752 spine second half: reached by the hle_12b6c rts POP (op_rts_norm -> xlat)
 JMP_STATE_PCS |= {0x3B48, 0x3B58, 0x3B70}   # $3B48 GAME_TICK prologue fragments (3B48 = choke ct_ext arm; 3B58/3B70 = header-callee rts pops)
 JMP_STATE_PCS |= {0x075C, 0x077A}   # sched plumbing: first task-SELECT + the trap-handler DEFER entry (choke ct_ext arms)
+# Genuine-return continuations inside the native $0175A0 coroutine.  The
+# callees see/preserve real $0175E8/$017612 stack values; their RTS reaches
+# these bare no-push labels through op_rts_norm -> xlat_dispatch.
+JMP_STATE_PCS |= {0x0175E8, 0x017612}
+# Genuine RTS return from the already-native $01F2E4 allocator into the
+# one-shot object initializer.  The caller return is gone, so this is a bare
+# no-push continuation rather than a table/rts-class entry.
+JMP_STATE_PCS |= {0x01D53A}
+# Genuine returns inside the one-shot fan-out bodies.  The real return has
+# already been consumed, so each continuation is a bare no-push entry.
+JMP_STATE_PCS |= {
+    0x0076BC, 0x0076C2,
+    0x007748, 0x00776A, 0x00777A, 0x007782, 0x007786,
+    0x01E772, 0x01E7B0,
+    0x024BAA,
+    0x024282, 0x024288, 0x02428E, 0x024294,
+    0x008B72,
+}
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS | CORO_PCS
-BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94, "src/escbank3.sym": 0x97, "src/escbank4.sym": 0x98, "src/escbank5.sym": 0x99}
+BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94,
+               "src/escbank3.sym": 0x97, "src/escbank4.sym": 0x98,
+               "src/escbank5.sym": 0x99, "src/escbank6.sym": 0x95,
+               "src/escbank7.sym": 0x9D, "src/escbank8.sym": 0x9E}
 
 def load_native_addrs():
     """entry_X -> 24-bit native address (bank forced per source bank)."""
@@ -76,7 +206,14 @@ def load_native_addrs():
         if not p.exists():
             continue
         for line in p.read_text(encoding="utf-8-sig").splitlines():
-            m = re.match(r"\s*[0-9A-Fa-f]{2}:([0-9A-Fa-f]{4})\s+(entry_[0-9a-z]+)", line)
+            # Require the complete symbol token.  Prefix-matching
+            # ``entry_c262_generated_resume`` as ``entry_c262`` silently
+            # replaced the guarded $C900 wrapper with its $C906 fallback seam.
+            m = re.match(
+                r"\s*[0-9A-Fa-f]{2}:([0-9A-Fa-f]{4})\s+"
+                r"(entry_[0-9a-z]+)(?:\s|$)",
+                line,
+            )
             if m:
                 out[m.group(2)] = (bank << 16) | int(m.group(1), 16)
     return out
@@ -84,7 +221,9 @@ def load_native_addrs():
 def load_entry_pcs():
     """entry_X -> 68K PC, from the `transpiled from $XXXXXX` comment preceding each label."""
     out = {}
-    for f in ("src/escbank.pasm", "src/escbank2.pasm", "src/escbank3.pasm", "src/escbank4.pasm", "src/escbank5.pasm"):
+    for f in ("src/escbank.pasm", "src/escbank2.pasm", "src/escbank3.pasm",
+              "src/escbank4.pasm", "src/escbank5.pasm", "src/escbank6.pasm",
+              "src/escbank7.pasm", "src/escbank8.pasm"):
         last = None
         for ln in Path(f).read_text().splitlines():
             m = re.search(r"transpiled from \$([0-9A-Fa-f]+)", ln)
@@ -119,10 +258,20 @@ def main():
             pick = (pc, cands[0][1], cands[0][0])   # fallback: whatever resolved
         pairs.append(pick)
     pairs.sort()
+    c262 = [addr for pc, addr, _name in pairs if pc == 0xC262]
+    assert c262 == [0x99C900], (
+        "$C262 xlat entry must target the guarded $99:C900 wrapper, got %r" % c262
+    )
     if len(pairs) != len(ALLOWED_PCS):
         got = {p for p, _, _ in pairs}
         print("gen_xlat_table: WARNING missing jmp-state entries: %s"
               % [hex(x) for x in ALLOWED_PCS - got], file=sys.stderr)
+
+    direct_pairs = [item for item in pairs if item[0] in DIRECT_PCS]
+    assert len(direct_pairs) == len(DIRECT_PCS), (
+        "direct xlat entries missing: %s" % sorted(DIRECT_PCS - {p for p, _, _ in direct_pairs})
+    )
+    pairs = [item for item in pairs if item[0] not in DIRECT_PCS]
 
     # build the page table: 768 pages, index = (bank<<8)|(PC>>8) (bank 0/1/2 —
     # xlat_dispatch accepts $42 in {0,1,2} and merges bank<<8 into the page index)
@@ -158,10 +307,13 @@ def main():
     assert len(blob) <= 0x8000, "xlat table %d bytes overflows $96:8000 bank" % len(blob)
 
     Path("src/xlat_table.bin").write_bytes(blob)
-    print("gen_xlat_table: %d entries, %d pages, %d bytes -> src/xlat_table.bin (@ $96:8000)"
-          % (len(pairs), len(page_off), len(blob)))
+    print("gen_xlat_table: %d dense entries + %d direct entries, %d pages, %d bytes "
+          "-> src/xlat_table.bin (@ $96:8000)"
+          % (len(pairs), len(direct_pairs), len(page_off), len(blob)))
     for pc, addr, name in pairs:
         print("    $%06X -> $%06X  [%s]  page $%03X off $%04X" % (pc, addr, name, (pc>>8)&0x3FF, page_off[(pc>>8)&0x3FF]))
+    for pc, addr, name in direct_pairs:
+        print("    $%06X -> $%06X  [%s]  direct $9D:DA00" % (pc, addr, name))
 
 if __name__ == "__main__":
     main()

@@ -3,6 +3,14 @@
 Date: July 12, 2026. This is the focused evidence record for recovery gate R5. It does not change
 the production ROM and does not supersede the canonical cold-boot rate in `RECOVERY.md` R2.
 
+> **Superseded for production candidate v105 on July 22, 2026.** R5 remains the authoritative
+> negative result for its two lab ROMs and explains why their short numbers were unsafe. It is no
+> longer the current project-level performance verdict. R6 first reduced active work, retained a
+> real-vblank minimum and ordinary virtual-IRQ ordering, added explicit renderer ownership/queues,
+> then passed an uninterrupted power-on 30.0083 Hz window through tick 2,230 at 357,281.999 mean
+> SA-1 cycles/tick. See `RECOVERY.md` R6 and the July 22 section of
+> `docs/PROFILE_CAMPAIGN.md`. Do not use the R5 table below to describe v105.
+
 ## Verdict
 
 The apparent 4-6x disagreement between the canonical 8.10M-cycle tick and the old injected

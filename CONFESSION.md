@@ -1,14 +1,68 @@
 # CONFESSION.md
 
-An honest accounting of what is wrong, overclaimed, or unfinished in this project as of
-2026-07-12, written for the next engineer. The project's status docs and memory files are
-optimistic to the point of being misleading. This document is the correction. Where it
-conflicts with a cheerful banner in `STATUS.md` or a memory file, believe this.
+An honest accounting of what is wrong, overclaimed, or unfinished in this project, originated
+2026-07-12 and reconciled with the production playability result on 2026-07-22. The project's older
+status docs and memory files were optimistic to the point of being misleading. Where a historical
+claim below conflicts with the dated reconciliation at the top of this file, use the newer result.
 
-The current single sentence version: **the Superman port is not playable or shippable; its
-canonical post-arm rate is 1.3237 game-fps, R5's fast NMI/WAI pacing experiment reproduced the
-known `$080100` derail, the sound port has still never received a listening pass, and the level
-background has not received an aligned MAME fidelity verdict.**
+The current single-sentence version: **production candidate v105 now clears the project's explicit
+30 Hz playability gate from a clean power-on, including rendering, real input, sound-ring health,
+and the former tick-765/767 scheduler hazard; it is an evidence-backed playable candidate, but not
+yet a shippable or full-playthrough-validated port, and the audio listening/SFX and exact MAME pixel
+fidelity work remain open.**
+
+## Playability reconciliation — July 22, 2026
+
+The July 12 confession remains the baseline for old ROMs and for every claim not explicitly
+superseded here. Its performance verdict is now historical. Starting from power-on with
+`TESTFLAG=0`, the exact production candidate ROM SHA-256
+`72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3` organically armed the six
+production gates, initialized the real two-vblank pacing path, drove coin/Start and gameplay
+Right+B through Nexen port 0 and the ROM's manual `$4016` reader, and matched the real `$00:F5A3`
+tick hook to `$0760` for 150/150 consecutive boundaries.
+
+After same-boot gameplay detection and settling, one uninterrupted window advanced **1,802 game
+ticks in 3,603 emulated SNES video frames: 30.0083 game-fps at the deliberately conservative
+60-frame/s conversion**. The SA-1 advanced 643,822,163 cycles, or **357,281.999 cycles/tick**, below
+the project's 358K representative-tick budget. This was not an injected or save-state rate. The
+window included waits, virtual IRQ delivery, rendering, audio supervision, the round transition,
+and the old ordering event; it ended at tick 2,230 with halt zero, task mask `$FFA7`, all 16 task
+contexts initialized, and a 136-byte minimum saved-stack margin.
+
+Renderer conservation is explicit rather than inferred from a final counter: 1,802 requests,
+1,802 unit-step ACK transactions, and 1,802 true completed draws were observed continuously. No ACK
+skipped a sequence, both compressed queue slots ended empty, and the persistent overflow counter
+remained zero. The real input cache and mailbox both ended at `$8100`, the injection word remained
+zero, the sound-ring pointer remained valid at `$00F01C3B`, and the WRAM renderer/supervisor image
+was byte-exact to the selected ROM.
+
+The production architecture is not the rejected R5 shortcut promoted by wishful multiplication.
+It first reduced active 68K and 5A22 work, retained a minimum of one real vblank per tick, delivered
+the ordinary virtual IRQ only after the masked hardware wake, retained complete renderer candidates
+in a two-entry queue, and repaid a measured round-transition deadline debt without zero-frame
+bursts. A same-ROM checkpoint profile independently recorded 950 complete intervals in exactly
+1,900 video frames, with mean 357,366.195 cycles/tick; its debt reached the empirically required
+bound of ten and returned to zero.
+
+Fresh final-ROM semantic gates are green: `optest.py` 160/160 and `opsweep.py` 782/782 (1,564
+vectors) against MAME 0.287, in addition to the focused MAME differentials retained throughout the
+native campaign. These are strong evidence, not a claim that every unvisited whole-game path has
+been proven. The formal cold-boot log, hook stream, renderer-debt trace, screenshots, states, and
+checkpoint profile are under
+`build/playability-20260720/deadline-debt10-manifest-v105-direct-ownership-*` and are summarized in
+`RECOVERY.md` R6 and `docs/PROFILE_CAMPAIGN.md`.
+
+Current honest limits:
+
+- This proves representative sustained gameplay through tick 2,230 and the known ordering hazard,
+  not a complete playthrough, every stage/boss, real-cartridge timing, or shippability.
+- The recognizable level is reproduced by the current cold boot, but an aligned same-state MAME
+  pixel verdict remains open.
+- The organic TAD command path and 60 Hz supervisor remained healthy, but the 21-track by-ear pass,
+  most SFX, pitch bends/LFO/portamento, and rights review remain open.
+- Candidate v105 is currently an uncommitted working-tree result based on `main` commit `f34fc4c`.
+  The ROM and source hashes identify the evidence exactly; do not silently attribute it to that
+  clean commit or to an older release ROM.
 
 ## Recovery reconciliation — July 12, 2026
 

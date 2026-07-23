@@ -13,8 +13,8 @@ a checkpoint when all production gates latch, then loads that checkpoint into
 the profiling Nexen.  The default uses the same Nexen build on both sides;
 legacy Mesen checkpoints do not preserve this fork's SA-1 IRAM state across a
 cross-load and are therefore rejected by the gate check.  All reported cycles
-come from one uninterrupted Nexen interval after the load.  ``--drive-gameplay``
-uses the documented coin/start mailbox without hooks, saves a settled same-ROM
+come from one uninterrupted Nexen interval after the load. ``--drive-gameplay``
+drives Nexen port 0 through the ROM's manual $4016 reader without hooks, saves a settled same-ROM
 gameplay checkpoint, and profiles that state instead of the initial attract mode.
 """
 
@@ -51,10 +51,13 @@ DEFAULT_OUTPUT = ROOT / "build/recovery-20260712/r5-continuous-profile"
 
 CLAMP = 0x00F5A3
 TAKE_IRQ = 0x00B404
-ENTRY_3A92 = 0x92DC3B
+# Current src/escbank.sym: entry_3a92 is $92:DB82.  The former $92:DC3B
+# constant landed inside the body after earlier code-size reductions and made
+# the phase split look plausible while attributing the wrong boundary.
+ENTRY_3A92 = 0x92DB82
 IDLE_ENTRY_LAB = 0x00F597
 IDLE_VSYNC_LAB_MARKER_OFFSET = 0x2CFF00
-IDLE_VSYNC_LAB_MARKERS = (b"R5VSYNC1", b"R5VNMI01")
+IDLE_VSYNC_LAB_MARKERS = (b"R5VSYNC1", b"R5VNMI01", b"R5VNMI02", b"R5VNMI03")
 EXPECTED_GATES = {
     "loop": 1,
     "escape": 1,
@@ -74,6 +77,12 @@ GATE_ADDRS = {
 CANONICAL_POST_ARM_CYCLES_PER_TICK = 8_099_238
 COIN = 0x2000
 START = 0x1000
+VIDEO_WRAM_ROM_START = 0x298000
+VIDEO_WRAM_LENGTH = 0x3000
+VIDEO_WRAM_OFFSET = 0x18000
+SUPERVISOR_LOOP_OFFSET = 0xF000
+SUPERVISOR_LOOP_LENGTH = 0x37
+PACING_CATCHUP_DEBT_MAX = 10
 
 
 def sha256(path: Path) -> str:
@@ -179,12 +188,29 @@ def parse_args() -> argparse.Namespace:
         help="Drive coin/start from the arm checkpoint and profile a settled gameplay state.",
     )
     parser.add_argument(
+        "--allow-stale-renderer-checkpoint",
+        action="store_true",
+        help=(
+            "Allow zero frame-ack progress only when profiling an explicitly "
+            "supplied checkpoint. This produces compute-only checkpoint lab "
+            "evidence, never FPS or production-rendering evidence."
+        ),
+    )
+    parser.add_argument(
         "--gameplay-settle-ticks",
         type=int,
         default=60,
         help="Ticks to run after gameplay task-mask detection before profiling.",
     )
     parser.add_argument("--drive-chunk-frames", type=int, default=300)
+    parser.add_argument(
+        "--input-buttons",
+        type=lambda value: int(value, 0),
+        help=(
+            "Hold this Nexen port-0 button mask during profiling (for example "
+            "0x82 for Right+B). Intended for an explicitly supplied gameplay state."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -199,6 +225,96 @@ def configure_dotnet(executable: Path) -> None:
         if item and item not in (root, other)
     ]
     os.environ["PATH"] = ":".join([root, other, *current])
+
+
+def establish_renderer_integrity(
+    m: McpSession, rom: Path
+) -> tuple[bytes, bytes, dict[str, Any]]:
+    rom_data = rom.read_bytes()
+    expected_mirror = rom_data[
+        VIDEO_WRAM_ROM_START : VIDEO_WRAM_ROM_START + VIDEO_WRAM_LENGTH
+    ]
+    actual_mirror = bytes(
+        m.read_memory("snesWorkRam", VIDEO_WRAM_OFFSET, VIDEO_WRAM_LENGTH)
+    )
+    if actual_mirror != expected_mirror:
+        differing = sum(
+            left != right for left, right in zip(actual_mirror, expected_mirror)
+        )
+        raise RuntimeError(
+            f"WRAM video mirror differs from the selected ROM in {differing} bytes"
+        )
+    expected_loop = bytes(
+        m.read_memory(
+            "snesWorkRam", SUPERVISOR_LOOP_OFFSET, SUPERVISOR_LOOP_LENGTH
+        )
+    )
+    matches = [
+        offset
+        for offset in range(0, VIDEO_WRAM_LENGTH - SUPERVISOR_LOOP_LENGTH + 1)
+        if expected_mirror[offset : offset + SUPERVISOR_LOOP_LENGTH]
+        == expected_loop
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            "WRAM supervisor loop is not a unique byte match in the ROM mirror: "
+            f"matches={matches}"
+        )
+    return expected_mirror, expected_loop, renderer_integrity_snapshot(
+        m, expected_mirror, expected_loop, matches[0]
+    )
+
+
+def renderer_integrity_snapshot(
+    m: McpSession,
+    expected_mirror: bytes,
+    expected_loop: bytes,
+    loop_rom_offset: int,
+) -> dict[str, Any]:
+    mirror = bytes(
+        m.read_memory("snesWorkRam", VIDEO_WRAM_OFFSET, VIDEO_WRAM_LENGTH)
+    )
+    loop = bytes(
+        m.read_memory(
+            "snesWorkRam", SUPERVISOR_LOOP_OFFSET, SUPERVISOR_LOOP_LENGTH
+        )
+    )
+    frame_bytes = bytes(m.read_memory("snesMemory", 0x3300, 4))
+    frame_request = le16(frame_bytes)
+    frame_ack = le16(frame_bytes[2:])
+    mirror_diffs = [
+        {
+            "wram_address": f"7F:{(VIDEO_WRAM_OFFSET + offset) & 0xFFFF:04X}",
+            "offset": offset,
+            "expected": expected,
+            "observed": observed,
+        }
+        for offset, (observed, expected) in enumerate(zip(mirror, expected_mirror))
+        if observed != expected
+    ]
+    return {
+        "frame_request": frame_request,
+        "frame_ack": frame_ack,
+        "frame_request_ack_lag": (frame_request - frame_ack) & 0xFFFF,
+        "video_mirror_matches_rom": mirror == expected_mirror,
+        "video_mirror_diff_bytes": len(mirror_diffs),
+        "video_mirror_diffs": mirror_diffs[:32],
+        "video_mirror_sha256": hashlib.sha256(mirror).hexdigest(),
+        "supervisor_loop_matches_rom": loop == expected_loop,
+        "supervisor_loop_sha256": hashlib.sha256(loop).hexdigest(),
+        "supervisor_loop_rom_offset": loop_rom_offset,
+    }
+
+
+def require_renderer_integrity(label: str, state: dict[str, Any]) -> None:
+    if not state["video_mirror_matches_rom"]:
+        raise RuntimeError(
+            f"{label} WRAM video mirror corruption: "
+            f"{state['video_mirror_diff_bytes']} differing bytes: "
+            f"{state.get('video_mirror_diffs', [])}"
+        )
+    if not state["supervisor_loop_matches_rom"]:
+        raise RuntimeError(f"{label} WRAM supervisor loop corruption")
 
 
 def hook_events(rows: Iterable[dict[str, Any]], handle: int | None = None) -> list[dict]:
@@ -217,6 +333,7 @@ def wait_for_production_gates(
     timeout: float,
     poll_seconds: float,
     log: Recorder,
+    require_pacing: bool,
 ) -> dict[str, Any]:
     start = time.monotonic()
     last_heartbeat = start
@@ -228,7 +345,14 @@ def wait_for_production_gates(
         if le16(m.read_memory("Sa1Memory", GATE_ADDRS["loop"], 2)) == 1:
             m.pause()
             state = snapshot(m)
-            if state["gates"] == EXPECTED_GATES:
+            pacing_ready = (
+                state["production_pacing_gate"] == 1
+                and state["pacing_initialized"] == 0xA5
+                and state["pacing_supervisor_ready"] == 0x5A
+            )
+            if state["gates"] == EXPECTED_GATES and (
+                pacing_ready or not require_pacing
+            ):
                 return state
             m.resume()
         now = time.monotonic()
@@ -268,7 +392,15 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "task_mask": r16(0x400002, "snesMemory"),
         "sound_ring_ptr": m.read_memory("snesMemory", 0x401C40, 4).hex(),
         "gates": {name: r16(address) for name, address in GATE_ADDRS.items()},
-        "idle_vsync_lab_gate": r16(0x0734),
+        "production_pacing_gate": r16(0x0734),
+        "pacing_epoch": m.read_memory("snesMemory", 0x41012A, 1)[0],
+        "pacing_last_release": m.read_memory("snesMemory", 0x41012B, 1)[0],
+        "pacing_initialized": m.read_memory("snesMemory", 0x41012C, 1)[0],
+        "pacing_supervisor_ready": m.read_memory("snesMemory", 0x41012D, 1)[0],
+        "pacing_catchup_debt": m.read_memory("snesMemory", 0x410130, 1)[0],
+        "input_mailbox": f"{r16(0x410000, 'snesMemory'):04x}",
+        "input_injection": f"{r16(0x410002, 'snesMemory'):04x}",
+        "input_real_cache": f"{r16(0x1F12, 'snesWorkRam'):04x}",
         "sa1_cycles": int(cpu.get("cycleCount", 0)),
         "sa1_pc": (int(cpu.get("k", 0)) << 16) | int(cpu.get("pc", 0)),
         "emulator_running": bool(state.get("isRunning", False)),
@@ -276,16 +408,32 @@ def snapshot(m: McpSession) -> dict[str, Any]:
     }
 
 
-def require_production_state(label: str, state: dict[str, Any]) -> None:
+def require_production_state(
+    label: str, state: dict[str, Any], require_pacing: bool = True
+) -> None:
     if state["gates"] != EXPECTED_GATES:
         raise RuntimeError(
             f"{label} gate mismatch: expected {EXPECTED_GATES}, got {state['gates']}"
         )
     if state["halt"] != 0:
         raise RuntimeError(f"{label} interpreter halted: $4E={state['halt']:#06x}")
-    if state["sound_ring_ptr"] != "00f01c20":
+    if require_pacing and (
+        state["production_pacing_gate"] != 1
+        or state["pacing_initialized"] != 0xA5
+        or state["pacing_supervisor_ready"] != 0x5A
+        or state["pacing_catchup_debt"] > PACING_CATCHUP_DEBT_MAX
+    ):
         raise RuntimeError(
-            f"{label} sound ring mismatch: {state['sound_ring_ptr']} != 00f01c20"
+            f"{label} production pacing is not organically active: "
+            f"gate={state['production_pacing_gate']:#06x}, "
+            f"cadence={state['pacing_initialized']:#04x}, "
+            f"ready={state['pacing_supervisor_ready']:#04x}"
+        )
+    ring_pointer = int(state["sound_ring_ptr"], 16)
+    if not 0x00F01C20 <= ring_pointer <= 0x00F01C40:
+        raise RuntimeError(
+            f"{label} sound ring pointer outside $F01C20-$F01C40: "
+            f"{state['sound_ring_ptr']}"
         )
 
 
@@ -313,8 +461,14 @@ def bootstrap_state(args: argparse.Namespace, log: Recorder, checkpoint: Path) -
             args.arm_timeout,
             args.poll_seconds,
             log,
+            require_pacing=not args.idle_vsync_lab,
         )
-        require_production_state("bootstrap", state)
+        require_production_state(
+            "bootstrap", state, require_pacing=not args.idle_vsync_lab
+        )
+        _mirror, _loop, renderer = establish_renderer_integrity(m, args.rom.resolve())
+        require_renderer_integrity("bootstrap", renderer)
+        log.emit("bootstrap_renderer_integrity", **renderer)
         if args.idle_vsync_lab:
             m.write_u16(0x0734, 1, "Sa1Memory")
             state = snapshot(m)
@@ -359,11 +513,22 @@ def drive_gameplay_state(
         m.pause()
         initial = snapshot(m)
         require_production_state("gameplay drive start", initial)
+        expected_mirror, expected_loop, renderer = establish_renderer_integrity(
+            m, args.rom.resolve()
+        )
+        require_renderer_integrity("gameplay drive start", renderer)
+        loop_rom_offset = int(renderer["supervisor_loop_rom_offset"])
+        last_renderer_ack = int(renderer["frame_ack"])
+        last_renderer_request = int(renderer["frame_request"])
+        renderer_ack_advances = 0
+        renderer_stagnant_chunks = 0
+        renderer_pending_since_frame: int | None = None
         last_tick = initial["tick"]
         total_ticks = 0
         stage = "preinput"
         stage_tick = 0
         input_word = 0
+        controller_buttons = 0
         gameplay_tick: int | None = None
         gameplay_frame: int | None = None
         frames_per_tick = 45.0
@@ -374,18 +539,36 @@ def drive_gameplay_state(
             source_state=str(source_state),
             source_state_sha256=sha256(source_state),
             settle_ticks=args.gameplay_settle_ticks,
+            renderer=renderer,
             **initial,
         )
 
         def set_input(value: int) -> None:
-            nonlocal input_word
+            nonlocal input_word, controller_buttons
             input_word = value
-            m.write_u16(0x410002, value, "snesMemory")
+            controller_buttons = {
+                0: 0,
+                COIN: McpSession.BTN_SELECT,
+                START: McpSession.BTN_START,
+            }[value]
+            m.tool(
+                "set_input",
+                {"port": 0, "buttons": controller_buttons, "hold": True},
+            )
             log.emit(
                 "gameplay_drive_input",
                 stage=stage,
                 tick_total=total_ticks,
                 value=value,
+                controller_buttons=controller_buttons,
+                transport="nexen_port0_manual_4016",
+            )
+
+        set_input(0)
+        if initial["input_injection"] != "0000":
+            raise RuntimeError(
+                "production checkpoint has a non-idle virtual injection word: "
+                f"{initial['input_injection']}"
             )
 
         while time.monotonic() - start < args.arm_timeout:
@@ -423,8 +606,34 @@ def drive_gameplay_state(
                 last_progress_frame = state["frame"]
 
             require_production_state("gameplay drive", state)
-            if state["idle_vsync_lab_gate"] != 0:
-                raise RuntimeError("production gameplay drive unexpectedly has $0734 set")
+            renderer = renderer_integrity_snapshot(
+                m, expected_mirror, expected_loop, loop_rom_offset
+            )
+            require_renderer_integrity("gameplay drive", renderer)
+            current_ack = int(renderer["frame_ack"])
+            current_request = int(renderer["frame_request"])
+            ack_delta = (current_ack - last_renderer_ack) & 0xFFFF
+            if ack_delta:
+                renderer_ack_advances += ack_delta
+                renderer_stagnant_chunks = 0
+                renderer_pending_since_frame = None
+            elif current_request != current_ack and tick_delta:
+                renderer_stagnant_chunks += 1
+                if renderer_pending_since_frame is None:
+                    renderer_pending_since_frame = state["frame"]
+            else:
+                renderer_stagnant_chunks = 0
+                renderer_pending_since_frame = None
+            if (
+                renderer_pending_since_frame is not None
+                and state["frame"] - renderer_pending_since_frame >= 600
+            ):
+                raise RuntimeError(
+                    "gameplay drive frame acknowledgements stalled with a pending request "
+                    "for 600 video frames"
+                )
+            last_renderer_ack = current_ack
+            last_renderer_request = current_request
 
             relative = total_ticks - stage_tick
             transitioned = False
@@ -481,6 +690,7 @@ def drive_gameplay_state(
                     tick_total=total_ticks,
                     input=input_word,
                     gameplay_tick=gameplay_tick,
+                    renderer=renderer,
                     **state,
                 )
                 last_heartbeat = now
@@ -500,6 +710,8 @@ def drive_gameplay_state(
                     gameplay_tick=gameplay_tick,
                     gameplay_frame=gameplay_frame,
                     total_ticks=total_ticks,
+                    renderer=renderer,
+                    renderer_ack_advances=renderer_ack_advances,
                     **state,
                 )
                 return gameplay_state
@@ -658,11 +870,31 @@ def profile(args: argparse.Namespace, state_path: Path, log: Recorder) -> dict[s
         m.pause()
         m.load_state(state_path.resolve())
         m.pause()
+        if args.input_buttons is not None:
+            m.tool(
+                "set_input",
+                {"port": 0, "buttons": args.input_buttons, "hold": True},
+            )
+            log.emit(
+                "profile_input",
+                input_transport="nexen_port0_manual_4016",
+                controller_buttons=args.input_buttons,
+            )
         start_state = snapshot(m)
         require_production_state("profiling Nexen", start_state)
-        if args.idle_vsync_lab and start_state["idle_vsync_lab_gate"] != 1:
+        expected_mirror, expected_loop, renderer_start = establish_renderer_integrity(
+            m, args.rom.resolve()
+        )
+        require_renderer_integrity("profile start", renderer_start)
+        loop_rom_offset = int(renderer_start["supervisor_loop_rom_offset"])
+        if args.idle_vsync_lab and start_state["production_pacing_gate"] != 1:
             raise RuntimeError("idle-vsync lab checkpoint does not have $0734=1")
-        log.emit("profile_start", state=str(state_path), **start_state)
+        log.emit(
+            "profile_start",
+            state=str(state_path),
+            renderer=renderer_start,
+            **start_state,
+        )
 
         handles = {
             "clamp": m.add_exec_hook(CLAMP, cpu_type="Sa1"),
@@ -723,6 +955,17 @@ def profile(args: argparse.Namespace, state_path: Path, log: Recorder) -> dict[s
             m.remove_hook(handle)
         end_state = snapshot(m)
         require_production_state("profile end", end_state)
+        renderer_end = renderer_integrity_snapshot(
+            m, expected_mirror, expected_loop, loop_rom_offset
+        )
+        require_renderer_integrity("profile end", renderer_end)
+        renderer_ack_delta = (
+            int(renderer_end["frame_ack"]) - int(renderer_start["frame_ack"])
+        ) & 0xFFFF
+        if renderer_ack_delta == 0 and not args.allow_stale_renderer_checkpoint:
+            raise RuntimeError(
+                "profile collected game-tick intervals without a renderer acknowledgement"
+            )
 
     intervals, summary = analyze(collected)
     for interval in intervals:
@@ -731,6 +974,9 @@ def profile(args: argparse.Namespace, state_path: Path, log: Recorder) -> dict[s
     return {
         "start_state": start_state,
         "end_state": end_state,
+        "renderer_start": renderer_start,
+        "renderer_end": renderer_end,
+        "renderer_ack_delta": renderer_ack_delta,
         "hook_counts": {
             label: sum(1 for event in collected if event["label"] == label)
             for label in handles
@@ -749,8 +995,22 @@ def main() -> int:
         raise SystemExit("--gameplay-settle-ticks cannot be negative")
     if args.drive_chunk_frames <= 0:
         raise SystemExit("--drive-chunk-frames must be positive")
+    if args.input_buttons is not None and not 0 <= args.input_buttons <= 0x0FFF:
+        raise SystemExit("--input-buttons must be a 12-bit Nexen controller mask")
+    if args.input_buttons is not None and args.state is None:
+        raise SystemExit("--input-buttons requires an explicit --state")
+    if args.input_buttons is not None and args.drive_gameplay:
+        raise SystemExit("--input-buttons cannot be combined with --drive-gameplay")
     if args.drive_gameplay and args.idle_vsync_lab:
         raise SystemExit("--drive-gameplay profiles production, not an idle-vsync lab")
+    if args.allow_stale_renderer_checkpoint and args.state is None:
+        raise SystemExit(
+            "--allow-stale-renderer-checkpoint requires an explicit --state"
+        )
+    if args.allow_stale_renderer_checkpoint and args.drive_gameplay:
+        raise SystemExit(
+            "--allow-stale-renderer-checkpoint cannot weaken a fresh gameplay drive"
+        )
     args.rom = args.rom.resolve()
     args.nexen = args.nexen.resolve()
     args.bootstrap_emulator = args.bootstrap_emulator.resolve()
@@ -783,7 +1043,9 @@ def main() -> int:
             IDLE_VSYNC_LAB_MARKER_OFFSET + 8
         ]
         if marker not in IDLE_VSYNC_LAB_MARKERS:
-            raise SystemExit("--idle-vsync-lab requires a marked R5VSYNC1/R5VNMI01 lab ROM")
+            raise SystemExit(
+                "--idle-vsync-lab requires a marked R5VSYNC1/R5VNMI01/R5VNMI02/R5VNMI03 lab ROM"
+            )
 
     nexen_repo = repo_for(args.nexen)
     log = Recorder(args.output / "profile.jsonl")
@@ -814,6 +1076,13 @@ def main() -> int:
         drive_gameplay=args.drive_gameplay,
         gameplay_settle_ticks=(
             args.gameplay_settle_ticks if args.drive_gameplay else None
+        ),
+        allow_stale_renderer_checkpoint=args.allow_stale_renderer_checkpoint,
+        evidence_scope=(
+            "checkpointed compute-only cycle lab; renderer acknowledgement may "
+            "remain stale; not fps"
+            if args.allow_stale_renderer_checkpoint
+            else "continuous production cycle attribution"
         ),
     )
     try:

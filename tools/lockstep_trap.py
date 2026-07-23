@@ -19,10 +19,14 @@ D=[be32(regs,i*4) for i in range(8)]; A=[be32(regs,(8+i)*4) for i in range(7)]
 SP=be32(regs,15*4); USP=be32(regs,16*4); SR=be32(regs,17*4)&0xFFFF
 Z=(SR>>2)&1;C=SR&1;N=(SR>>3)&1;V=(SR>>1)&1;X=(SR>>4)&1
 def le32(v): return '%02x%02x%02x%02x'%(v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF)
-NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT=os.environ.get('NAT','/tmp/b0_native.mss')
+NEXEN=os.environ.get(
+    'NEXEN',
+    '/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen',
+)
+NAT=os.environ.get('NAT','/tmp/b0_native.mss')
 WN=len(wramA)
 print("triple %s AC=%04X ESC=%d WN=%d SP=%06X"%(TD,AC,ESC,WN,SP&0xFFFFFF),flush=True)
-with McpSession(rom=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','build','interp.sfc'),mesen=NEXEN,port=7526,boot_wait=6.0,socket_timeout=300.0) as m:
+with McpSession(rom=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','build','interp.sfc'),mesen=NEXEN,port=int(os.environ.get('PORT','7526')),boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a): b=m.read_memory('Sa1Memory',a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)
     def wh(a,hx,mt='Sa1Memory'): m.write_memory(mt,a,hx)
@@ -192,7 +196,7 @@ with McpSession(rom=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..'
         rf=bytes(m.read_memory('Sa1Memory',0x00,0x40))
         nm=['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6','a7']
         print("=== reg file @ B1 (PC=$%04X) ==="%B1PC,flush=True)
-        print("  \$AC=$%04X  \$4A/4C(instr)=%d  \$AA(vbl)=$%04X  \$A8=$%04X"%(r16(0xAC),r16(0x4A)|(r16(0x4C)<<16),r16(0xAA),r16(0xA8)),flush=True)
+    print("  $AC=$%04X  $4A/4C(instr)=%d  $AA(vbl)=$%04X  $A8=$%04X"%(r16(0xAC),r16(0x4A)|(r16(0x4C)<<16),r16(0xAA),r16(0xA8)),flush=True)
         for i in range(16):
             lo=rf[i*4]|(rf[i*4+1]<<8); hi=rf[i*4+2]|(rf[i*4+3]<<8)
             print("  %s=$%04X%04X"%(nm[i],hi,lo),flush=True)

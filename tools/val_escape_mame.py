@@ -17,9 +17,14 @@ RN=['d0','d1','d2','d3','d4','d5','d6','d7','a0','a1','a2','a3','a4','a5','a6']
 D=[be32(regs,i*4) for i in range(8)]; A=[be32(regs,(8+i)*4) for i in range(7)]; SP=be32(regs,15*4); USP=be32(regs,16*4); SR=be32(regs,17*4)&0xFFFF
 def le32(v): return '%02x%02x%02x%02x'%(v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF)
 Z=(SR>>2)&1;C=SR&1;N=(SR>>3)&1;V=(SR>>1)&1;X=(SR>>4)&1
-NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT='/tmp/b0_native.mss'
+NEXEN=os.environ.get(
+    'NEXEN',
+    '/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen',
+)
+NAT=os.environ.get('NAT','/tmp/b0_native.mss')
 jsrb=bytes([0x4E,0xB9,0x00,0x00,(TGT>>8)&0xFF,TGT&0xFF])
-with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=7513,boot_wait=6.0,socket_timeout=300.0) as m:
+with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,
+                port=int(os.environ.get('PORT','7513')),boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a,mt='Sa1Memory'): b=m.read_memory(mt,a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)
     def wh(a,hx,mt='Sa1Memory'): m.write_memory(mt,a,hx)

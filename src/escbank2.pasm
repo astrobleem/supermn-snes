@@ -24,6 +24,7 @@ ojmp_hook=$00D1B3
 ors_pre=$00D16F
 ; <<< ESCBANK2_SYMS <<<
 entry_d232=$99EB00   ; pt.22 P3b: --bank5 $99 body, .org-fixed (no $94->$99 const auto-gen; hand const)
+hce4_shape_try=$95F400 ; guarded immutable-shape renderer in bank $95
 
     .org $8000
 
@@ -1940,9 +1941,15 @@ brd07a_1:
     jml.l inext
 ; --- transpiled from $000CE4 (57 instrs) by tools/transpile.py [bank1] ---
 entry_ce4t:
-    rep #$30
-    lda $000724
-    inc a
+    ; Size-neutral redirect into the guarded semantic renderer at $94:FA00.
+    ; These six bytes replace REP/LDA/INC exactly, keeping every following
+    ; bank-$94 symbol stable.  The cold trampoline recreates those operations
+    ; before rejoining at the generated counter store below.
+    jmp hce4_entry
+    nop
+    nop
+    nop
+ce4_generated_after_counter:
     sta $000724
     ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
     lda $38
@@ -3712,6 +3719,255 @@ entry_c172:
     lda #$0023      ; 35 c172 charge
     jsr esc_ac_charge
     plp
+
+    ; Hot semantic path for the normal fourteen-record sprite-position update.
+    ; The transpiled body below spends ~34.4K SA-1 cycles/tick here, including
+    ; fourteen native $295A calls, even though the settled gameplay path only
+    ; subtracts one byte-sized speed and scatters two words per record.  Keep
+    ; every cold/indirect case on the generated implementation: this path fires
+    ; only for the canonical A5 base, canonical draw pointers, a disjoint task
+    ; stack, non-overlapping shadow destinations, and when no record would take
+    ; the optional $29B6 branch (signed result <= -64).
+    ;
+    ; Besides the architectural register/CCR result, materialize the final
+    ; $295A call's exact 68000 below-SP residue.  The native indirect bridge's
+    ; sentinel return is an implementation detail; the correct residue contains
+    ; the arcade return PC $0000C212.
+.a16
+.i16
+    lda $34
+    beq hc172_a5_lo_ok
+    jmp hc172_cold
+hc172_a5_lo_ok:
+    lda $36
+    cmp #$00F0
+    beq hc172_a5_ok
+    jmp hc172_cold
+hc172_a5_ok:
+    lda $3E
+    cmp #$00F0
+    beq hc172_sp_bank_ok
+    jmp hc172_cold
+hc172_sp_bank_ok:
+    lda $3C
+    cmp #$28EA           ; [A7-26,A7) entirely below shadow/source range
+    bcc hc172_sp_ok
+    beq hc172_sp_ok
+    cmp #$2A3C           ; or entirely above it: A7-26 >= $2A22
+    bcs hc172_sp_ok
+    jmp hc172_cold
+hc172_sp_ok:
+    lda $401CBE          ; BE long $0000295A, read as two raw native words
+    beq hc172_p295a_hi_ok
+    jmp hc172_cold
+hc172_p295a_hi_ok:
+    lda $401CC0
+    cmp #$5A29
+    beq hc172_p295a_ok
+    jmp hc172_cold
+hc172_p295a_ok:
+    lda $401CC2          ; BE long $000029B6
+    beq hc172_p29b6_hi_ok
+    jmp hc172_cold
+hc172_p29b6_hi_ok:
+    lda $401CC4
+    cmp #$B629
+    beq hc172_ptrs_ok
+    jmp hc172_cold
+hc172_ptrs_ok:
+    stz $80              ; zero-extended speed byte
+    sep #$20
+.a8
+    lda $402A36
+    sta $80
+    rep #$20
+.a16
+
+    ; Preflight all records before changing emulated state.  BGT.W #$FFC0 is
+    ; true for $0000-$7FFF and $FFC1-$FFFF.  Anything else needs the optional
+    ; draw/state-machine path and therefore falls back untouched.
+    ldx #$29B2
+    ldy #$000E
+hc172_preflight:
+    lda $400000,x
+    xba
+    sec
+    sbc $80
+    cmp #$8000
+    bcc hc172_result_ok
+    cmp #$FFC1
+    bcs hc172_result_ok
+    ; The fixed tail helper handles the bounded optional-$29B6 case and keeps
+    ; the real callback stack image.  Every other rejection remains cold.
+    jmp hc172_optional_hot
+hc172_result_ok:
+    lda $400004,x        ; $295A destination offset = record[4] >> 4
+    xba
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    cmp #$00C5           ; dest..dest+3 must remain below record block $29B2
+    bcc hc172_dest_ok
+    jmp hc172_cold
+hc172_dest_ok:
+    txa
+    clc
+    adc #$0008
+    tax
+    dey
+    bne hc172_preflight
+
+    ; MOVE.B speed,D3 preserves D3's upper 24 bits.  The following MOVE/ADD
+    ; consume its complete low word, not merely the zero-extended speed.
+    sep #$20
+.a8
+    lda $80
+    sta $0C
+    rep #$20
+.a16
+    lda $0C
+    xba
+    sta $402A32
+    lda $402A34
+    xba
+    clc
+    adc $0C
+    xba
+    sta $402A34
+
+    ; D0 is the zero-extended speed used by SUB.W.  Scratch cells retain the
+    ; current record's logical BE values for the direct $295A scatter.
+    lda $80
+    sta $00
+    stz $02
+    ldx #$29B2
+    ldy #$000E
+hc172_hot_loop:
+    lda $400000,x
+    xba
+    sec
+    sbc $80
+    sta $84              ; updated record[0]
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $86              ; record[2]
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $88              ; record[4]
+    txa
+    clc
+    adc #$0004
+    sta $82              ; next record
+    lda $88
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    clc
+    adc #$28EA
+    tax
+    lda $84
+    xba
+    sta $400000,x
+    lda #$00F9
+    sec
+    sbc $86
+    sta $8A
+    xba
+    sta $400002,x
+    ldx $82
+    dey
+    bne hc172_hot_loop
+
+hc172_hot_finish:
+    ; Exact final 68000 registers for the completed fourteen-iteration path.
+    lda #$FFFF
+    sta $18              ; D6.w after DBRA exhaustion; D6 high word preserved
+    lda #$295A
+    sta $20
+    stz $22              ; A0 = draw helper pointer
+    lda #$2A22
+    sta $30
+    lda #$00F0
+    sta $32              ; A4 = A5+$29B2 + 14*8
+    lda $8A
+    sta $1C              ; D7.w = $00F9 - final record[2]; high word preserved
+
+    ; Final $295A stack image at [original A7-26, original A7).  Logical 68K
+    ; words are byte-swapped before native stores into the BE work-RAM image.
+    lda $3C
+    sec
+    sbc #$001A
+    tax
+    lda #$F000           ; saved A4 high word $00F0
+    sta $400000,x
+    lda #$1A2A           ; saved A4 low word $2A1A (last record)
+    sta $400002,x
+    lda $3A              ; saved A6 high word
+    xba
+    sta $400004,x
+    lda $38              ; saved A6 low word
+    xba
+    sta $400006,x
+    lda #$0000           ; JSR return high word
+    sta $400008,x
+    lda #$12C2           ; JSR return low word $C212
+    sta $40000A,x
+    lda $88              ; arg: final record[4]
+    xba
+    sta $40000C,x
+    lda #$0000           ; arg: immediate zero
+    sta $40000E,x
+    lda $86              ; arg: final record[2]
+    xba
+    sta $400010,x
+    lda $84              ; arg: updated final record[0]
+    xba
+    sta $400012,x
+    lda #$0000           ; args: cleared long and leading cleared word
+    sta $400014,x
+    sta $400016,x
+    sta $400018,x
+
+    ; The last flag setter inside $295A is SUB.W, which supplies X.  The
+    ; function's closing CLR.B forces Z=1,N=V=C=0 while preserving that X.
+    lda #$00F9
+    sec
+    sbc $86
+    bcc hc172_x_set
+    stz $A2
+    bra hc172_x_done
+hc172_x_set:
+    lda #$0001
+    sta $A2
+hc172_x_done:
+    lda #$0001
+    sta $60
+    stz $6E
+    stz $70
+    stz $72
+    sep #$20
+.a8
+    lda #$00
+    sta $402A36
+    rep #$20
+.a16
+    lda #$C170
+    sta $40
+    stz $42
+    jml.l inext
+
+hc172_cold:
+    rep #$30
+.a16
+.i16
     lda #$000D
     sta $18
     lda $34
@@ -5497,10 +5753,17 @@ L13be_1418:
 
 ; --- transpiled from $0008FA (12 instrs) by tools/transpile.py [bank1] ---
 entry_8fat:
-    rep #$30
-    lda $407FE4          ; fire counter (work-RAM $7FE0-block convention)
+    ; Size-neutral guarded semantic redirect.  The original REP + absolute-long
+    ; fire-counter load occupied six bytes; retain that exact seam so every
+    ; following bank-$94 entry stays pinned.  Unsupported cases recreate the
+    ; load in bank $95 and resume at the INC below.
+    jml.l $959D00
+    nop
+    nop
+h8fa_generated_resume:
     inc a
     sta $407FE4
+h8fa_generated_body:
     ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
     lda $38
     sta $54
@@ -6199,6 +6462,433 @@ Lc9a6_c9f0:
     adc #$0004
     sta $3C
     jml.l ors_pre
+escbank2_flowing_end:
+
+; ============================================================================
+; hc172_optional_hot — bounded $C172 record update with real $29B6 callbacks.
+;
+; The inline hot path above owns ticks where every updated X is greater than
+; -64.  A crossing record normally drops into the large generated coroutine,
+; even though the only additional work is a bounded $29B6 tile callback before
+; the usual $295A scatter.  This fixed tail helper keeps the complete callback
+; contract: canonical ROM table pointers, the genuine 18-byte call frame,
+; $29B6's LINK/MOVEM residue, pointer/offset rollover, register side effects,
+; and the zero-table abort.  Unsupported pointers, stack aliases, or output
+; destinations delegate before changing emulated state.
+;
+; Entry is reached only from hc172_preflight after the common A5/pointer/stack
+; guards and fixed $AC charge.  Bank $94:D800-$DFFF was an audited zero gap
+; before the separately pinned $94:E000 HLE island.
+; ============================================================================
+    .org $D800
+hc172_optional_hot:
+.a16
+.i16
+    rep #$30
+
+    ; $29B6 may leave a 38-byte frame below its 18-byte table-call frame.
+    ; Keep all of it nonwrapping and below both the $295A output plane and the
+    ; $29B2 source records.  Other legal stack layouts retain the cold body.
+    lda $3C
+    cmp #$0038
+    bcs hcx_stack_low_ok
+    jmp hc172_cold
+hcx_stack_low_ok:
+    cmp #$28EB
+    bcc hcx_stack_ok
+    cmp #$2A80                       ; high frame bottom $2A48, above state
+    bcs hcx_stack_ok
+    jmp hc172_cold
+hcx_stack_ok:
+
+    ; The state-machine pointer tables must remain inside the packed 512 KiB
+    ; arcade image for every possible optional record in this fourteen-record
+    ; pass.  Individual selected $29B6 sources still keep their own guard and
+    ; legal interpreter fallback.
+    ldx #$2A38
+    lda $400000,x
+    xba
+    sta $8C
+    cmp #$0007
+    bcc hcx_table_base_ok
+    beq hcx_table_base_last
+    jmp hc172_cold
+hcx_table_base_last:
+    lda $400002,x
+    xba
+    cmp #$FFC5
+    bcc hcx_table_base_ok
+    jmp hc172_cold
+hcx_table_base_ok:
+    ldx #$2A44
+    lda $400000,x
+    xba
+    sta $8E
+    cmp #$0007
+    bcc hcx_tile_base_ok
+    beq hcx_tile_base_last
+    jmp hc172_cold
+hcx_tile_base_last:
+    lda $400002,x
+    xba
+    cmp #$FFE1
+    bcc hcx_tile_base_ok
+    jmp hc172_cold
+hcx_tile_base_ok:
+
+    ; Re-run the destination proof from the first record.  No emulated state
+    ; changed in the inline preflight before it transferred here.
+    stz $80
+    sep #$20
+.a8
+    lda $402A36
+    sta $80
+    rep #$20
+.a16
+    ldx #$29B2
+    ldy #$000E
+hcx_preflight:
+    lda $400004,x
+    xba
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    cmp #$00C5
+    bcc hcx_dest_ok
+    jmp hc172_cold
+hcx_dest_ok:
+    txa
+    clc
+    adc #$0008
+    tax
+    dey
+    bne hcx_preflight
+
+    ; Original $C172 prologue and loop registers.
+    sep #$20
+.a8
+    lda $80
+    sta $0C                         ; MOVE.B speed,D3
+    rep #$20
+.a16
+    lda $0C
+    xba
+    sta $402A32
+    lda $402A34
+    xba
+    clc
+    adc $0C
+    xba
+    sta $402A34
+    lda $80
+    sta $00                         ; CLR.L/MOVE.B speed,D0
+    stz $02
+    lda #$000D
+    sta $18                         ; D6 loop counter; high word preserved
+    lda #$29B2
+    sta $30
+    lda #$00F0
+    sta $32                         ; A4 = A5+$29B2
+
+hcx_loop:
+    ldx $30
+    lda $400000,x
+    xba
+    sec
+    sbc $00                         ; D0.w retains speed across $29B6 MOVEM.W
+    sta $84                         ; updated record[0]
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $86                         ; record[2]
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $88                         ; record[4]
+
+    ; BGT.W #$FFC0 skips the optional callback.  $8000-$FFC0 is the
+    ; signed <= -64 range that owns the state-machine update.
+    lda $84
+    cmp #$8000
+    bcc hcx_scatter_far
+    cmp #$FFC1
+    bcc hcx_optional
+hcx_scatter_far:
+    jmp hcx_scatter
+hcx_optional:
+
+    ; SUB.W supplies X through the table-zero abort.  CMP/TST do not alter X.
+    lda $84
+    clc
+    adc $00                         ; recover the pre-SUB record word
+    sec
+    sbc $00
+    bcc hcx_sub_x_set
+    stz $A2
+    bra hcx_sub_x_done
+hcx_sub_x_set:
+    lda #$0001
+    sta $A2
+hcx_sub_x_done:
+
+    ; A1 = *(long *)(A5+$2A38); TST.L (A1) is the original end marker.
+    ldx #$2A38
+    lda $400000,x
+    xba
+    sta $26
+    lda $400002,x
+    xba
+    sta $24
+    sta $54
+    lda $26
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E                         ; selected pointer high word
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $92                         ; selected pointer low word (not yet A1)
+    ora $9E
+    bne hcx_table_live
+    jmp hcx_table_zero_abort
+hcx_table_live:
+    lda $9E
+    sta $26
+    lda $92
+    sta $24                         ; MOVEA.L (A1),A1 only after nonzero TST
+
+    ; CLR.L D3 / MOVE.W offset,D3 / ADDA.L D3,A1.
+    ldx #$2A3C
+    lda $400000,x
+    xba
+    sta $0C
+    stz $0E
+    clc
+    adc $24
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+
+    ; A2 = long(A5+$2A44), retained across the following pointer rollover.
+    ldx #$2A44
+    lda $400000,x
+    xba
+    sta $2A
+    lda $400002,x
+    xba
+    sta $28
+
+    ; ADDI.W #$38,$2A3C; at $E0, clear and advance the two long pointers.
+    lda $0C
+    clc
+    adc #$0038
+    sta $90
+    cmp #$00E0
+    beq hcx_pointer_wrap
+    ldx #$2A3C
+    xba
+    sta $400000,x
+    bra hcx_pointer_ready
+hcx_pointer_wrap:
+    ldx #$2A3C
+    lda #$0000
+    sta $400000,x
+
+    ldx #$2A3A                    ; ADDI.L #4,$2A38, low word first
+    lda $400000,x
+    xba
+    clc
+    adc #$0004
+    xba
+    sta $400000,x
+    dex
+    dex
+    lda $400000,x
+    xba
+    adc #$0000
+    xba
+    sta $400000,x
+
+    ldx #$2A46                    ; ADDI.L #2,$2A44
+    lda $400000,x
+    xba
+    clc
+    adc #$0002
+    xba
+    sta $400000,x
+    dex
+    dex
+    lda $400000,x
+    xba
+    adc #$0000
+    xba
+    sta $400000,x
+hcx_pointer_ready:
+
+    ; ADDI.W #$1C0,(A4) precedes the $29B6 call.
+    lda $84
+    clc
+    adc #$01C0
+    sta $84
+    ldx $30
+    xba
+    sta $400000,x
+
+    ; Read the tile-base word at A2 for the exact $29B6 argument frame.
+    lda $28
+    sta $54
+    lda $2A
+    sta $52
+    jsl.l rdw_ea_l
+    sta $8A
+
+    ; Real table-call frame at original A7-18:
+    ; return, row, tile base, 0, 0, source long, 0.
+    lda $3C
+    sec
+    sbc #$0012
+    sta $3C
+    tax
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda #$FD00                      ; logical return bank $00FD
+    sta $400000,x
+    inx
+    inx
+    lda #hcx_after_29b6
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $88                         ; row = record[4]
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $8A                         ; tile-base word = (A2)
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda #$0000
+    sta $400000,x
+    inx
+    inx
+    sta $400000,x
+    inx
+    inx
+    lda $26                         ; selected source high word
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $24                         ; selected source low word
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda #$0000
+    sta $400000,x
+
+    lda #$29B6
+    sta $20
+    stz $22                         ; A0 = callback PC
+    jml.l $9DFC00                   ; fixed, packer-audited entry_29b6_fast
+
+hcx_after_29b6:
+    ; RTS consumed the four-byte return; discard the retained 14-byte args.
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+
+    ; The callback legitimately clobbers scratch.  Reload all current-record
+    ; values from architected A4 before simulating the following $295A call.
+hcx_scatter:
+    ldx $30
+    lda $400000,x
+    xba
+    sta $84
+    lda $400002,x
+    xba
+    sta $86
+    lda $400004,x
+    xba
+    sta $88
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    clc
+    adc #$28EA
+    tax
+    lda $84
+    xba
+    sta $400000,x
+    lda #$00F9
+    sec
+    sbc $86
+    sta $8A
+    sta $1C                         ; $295A final D7.w
+    xba
+    sta $400002,x
+    lda #$295A
+    sta $20
+    stz $22                         ; $295A leaves A0 at its entry address
+
+    lda $30
+    clc
+    adc #$0008
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq hcx_complete
+    jmp hcx_loop
+hcx_complete:
+    jmp hc172_hot_finish
+
+hcx_table_zero_abort:
+    ; Faithful $C22A early exit after TST.L found a zero table entry.
+    sep #$20
+.a8
+    lda #$00
+    sta $402A37
+    sta $402A36
+    rep #$20
+.a16
+    lda #$0000
+    sta $402A32
+    lda #$0001
+    sta $60                         ; final CLR.B: Z=1, N=V=C=0, X retained
+    stz $70
+    stz $72
+    stz $6E
+hcx_table_zero_done:
+    lda #$C236
+    sta $40
+    stz $42
+    jml.l inext
+hc172_optional_hot_end:
 
 ; ============================================================================
 ; hle_12b6c — HAND-WRITTEN HLE of the $012B6C dispatcher tree (HLE SPIKE; see
@@ -6473,28 +7163,33 @@ hle_pB_stk:
     bne hle_pB_ccr
     inc $60              ; Z
 hle_pB_ccr:
-    ; ---- v2: a1 == $0CE4 -> skip the interp `jsr (a1)` dispatch and jump DIRECTLY to the
-    ; hand-native bank-$00 leaf entry_ce4 (the SAME body the jah2 path dispatches -> identical
-    ; behavior + stack residue). Leaf convention: args at [a7] (no return push), $40/$42 preset
-    ; to the return $012BFC; it ends `jmp inext` -> the interp resumes at the adda/rts/rts tail.
-    ; (Tried + REJECTED: sentinel-return through the transpiled entry_ce4t to also absorb the
-    ; tail natively -- ce4t is ~15K cyc SLOWER than this leaf; the 3 tail instrs cost only ~8K.
-    ; Measured: v1 jsr-handoff 37,845 / ce4t-sentinel 41,457 / this 35K-class. See handoff doc.)
-    ; Other callees (the $0D96 flipped-sprite variant) -> v1 handoff (jah2 dispatches as baseline).
+    ; ---- v3: a1 == $0CE4 -> push a bank-$94 continuation and enter the guarded semantic
+    ; table implementation.  The superseded generated ce4t made this shape slower than the old
+    ; bank-$00 leaf; hce4_entry now makes it faster while also restoring the LINK/MOVEM residue
+    ; and CCR/X effects that leaf omitted.  The continuation rewrites its native sentinel to the
+    ; real $012BFC jsr return, consumes the adda/rts/rts tail, and rejoins at $01177C.
+    ; Other callees (the $0D96 flipped-sprite variant) retain the faithful interpreter handoff.
     lda $26
     bne hle_pB_go
     lda $24
     cmp #$0CE4
     bne hle_pB_go
     lda $8A
+    sec
+    sbc #$0004
     sta $3C
+    tax
     lda $8C
-    sta $3E              ; a7 -= 22 (args at [a7])
-    lda #$2BFC
-    sta $40              ; return preset (leaf ends `jmp inext`)
-    lda #$0001
-    sta $42
-    jml.l ce4_leaf
+    sbc #$0000
+    sta $3E              ; a7 = args base - 4 (table return followed by CE4 args)
+    lda #$FD00
+    sta $400000,x        ; return high word = $00FD (bank-$94 sentinel)
+    inx
+    inx
+    lda #hle_ce4_cont
+    xba
+    sta $400000,x
+    jmp entry_ce4t
 hle_pB_go:
     lda $8A
     sta $3C
@@ -8502,6 +9197,22 @@ Ld52e_d5b2:
 
 ; >>> ESCBANK2_BODIES_END — new escbank2 bodies inserted before this line <<<
 
+; entry_8c2's direct palette-block copy bypasses map_snes, so its nonzero-mask
+; path must publish the same cumulative renderer dirtiness explicitly.  The
+; caller arrives with the original dirty mask proven nonzero.  Preserve its
+; architected D1=$FFFF result while making the out-of-band manifest write; STA
+; does not disturb the CLR.L condition-code result materialized later.
+.org $DB00
+.a16
+.i16
+h8_mark_palette_dirty:
+    lda #$FFFF
+    sta $04
+    lda #$0001
+    sta $41013E
+    rtl
+h8_mark_palette_dirty_end:
+
 ; ============================================================================
 ; xlat_dispatch — the AOT address-translation indirection ($94:F900).
 ; in: $40 = 68K PC lo16, $42 = PC bank, 16-bit A/X/Y. ojmp_hook (bank $00) jml's here after its
@@ -8521,6 +9232,35 @@ xlat_dispatch:
     ; -> the game diverged/ran away whenever escapes were enabled (escapes-on lockstep RED, off GREEN).
     ; Fix: use $96/$98 (escape-transient DP, dead on the miss path) and preserve X across the miss.
     rep #$30
+    ; Bank-$96's sparse two-level blob is exactly forty 768-byte sub-tables
+    ; plus its page array; adding either new $02A8xx/$02ADxx page would
+    ; overflow the bank.  Sparse bank-$02 combat/initializer entries, the
+    ; bank-$00 $C0BC initializer, and the $D7-$DC task entries therefore route
+    ; through the compact $9D:DA00 dispatcher before the generic lookup.
+    ; build_interp_rom.py proves every fixed bank-$9D seam and refuses any
+    ; overlap with xlat_choke at $F980.  Page $DB is harmlessly admitted to
+    ; the sparse dispatcher and returns to xd_table on every exact-PC miss.
+    lda $42
+    cmp #$0002
+    beq xd_sparse_direct
+    cmp #$0000
+    bne xd_table
+    lda $40
+    xba
+    and #$00FF
+    cmp #$0076
+    bcc xd_table
+    cmp #$0078
+    bcc xd_sparse_direct
+    cmp #$00C0
+    beq xd_sparse_direct
+    cmp #$00D7
+    bcc xd_table
+    cmp #$00DD
+    bcs xd_table
+xd_sparse_direct:
+    jml.l $9DDA00
+xd_table:
     phx                      ; preserve X (interp decode state) for the miss path
     lda $42
     cmp #$0003
@@ -8564,6 +9304,7 @@ xd_hit:                      ; dispatch via push+RTL (avoids the Poppy-mis-sized
     txa
     pha                      ; push PCH:PCL (native lo16 - 1)
     rtl                      ; -> native bank:lo16
+xd_dispatch_end:
 
 ; xlat_choke — FETCH-CHOKEPOINT (interp lh_off does `jml $94F980` per genuinely-interpreted fetch).
 ; Routes the about-to-be-decoded 68K PC through the AOT table so rts/branch-reached escapes (e.g.
@@ -8590,3 +9331,792 @@ xlat_choke:
     jml xlat_dispatch    ; $94F900 (guaranteed HIT -> push+RTL dispatches entry_ce4t, bit-exact)
 xc_dec:
     jml $008102          ; nolog: decode the already-fetched opcode (bank $00)
+
+; ============================================================================
+; hce4_entry — guarded semantic hot path for the $000CE4 sprite renderer.
+;
+; The older bank-$00 ce4_leaf proved that this renderer benefits enormously
+; from direct source/output access, but that leaf is a jsr-hook convention: it
+; deliberately omits the real LINK/MOVEM stack image and does not materialize
+; the final 68000 CCR/X state.  This table-convention implementation retains
+; the same compact rendering strategy while reproducing those architectural
+; effects.  Unsupported address layouts rejoin the generated entry before any
+; emulated-memory or register write.
+;
+; Scratch (not 68K state):
+;   $80/$82 source native pointer, $84 outer, $86 inner initial, $88 d1/X,
+;   $8A original Y, $8C running Y, $8E clipped X, $90 attribute, $92 d7,
+;   $94/$96/$98 output pointers, $9A signed cursor, $9C inner counter,
+;   $9E source kind, $54 tile word.
+; ============================================================================
+.org $FA00
+hce4_entry:
+    rep #$30
+
+    ; Canonical work base and a non-wrapping work-RAM caller frame.
+    lda $34
+    beq hce4_g_a5lo
+    jmp hce4_cold
+hce4_g_a5lo:
+    lda $36
+    cmp #$00F0
+    beq hce4_g_a5hi
+    jmp hce4_cold
+hce4_g_a5hi:
+    lda $3E
+    cmp #$00F0
+    beq hce4_g_spbank
+    jmp hce4_cold
+hce4_g_spbank:
+    lda $3C
+    cmp #$0040                 ; room for 38-byte LINK/MOVEM residue
+    bcs hce4_g_splow
+    jmp hce4_cold
+hce4_g_splow:
+    cmp #$FFE0                 ; return plus 14-byte argument frame cannot wrap
+    bcc hce4_g_sphigh
+    jmp hce4_cold
+hce4_g_sphigh:
+    cmp #$1C00                 ; keep stack/save image clear of output planes
+    bcc hce4_read_args
+    cmp #$3000
+    bcs hce4_read_args
+    jmp hce4_cold
+
+hce4_read_args:
+    tax
+    lda $400004,x              ; 8(a6): signed output cursor
+    xba
+    sta $9A
+    lda $400006,x              ; A(a6): Y/attribute bits
+    xba
+    sta $90
+    lda $400008,x              ; C(a6): screen X
+    xba
+    sta $88
+    lda $40000A,x              ; E(a6): screen Y
+    xba
+    sta $8A
+    lda $40000C,x              ; 10(a6): source pointer high word
+    xba
+    sta $9E
+    lda $40000E,x              ; source pointer low word
+    xba
+    sta $80
+    lda $400010,x              ; 14(a6): output capacity minus one
+    xba
+    sta $92
+
+    ; Bound all three parallel output streams to their normal $03FC-byte
+    ; windows.  Negative capacities use the generated implementation because
+    ; CE4 emits one tile before testing d7.
+    lda $9A
+    and #$0001
+    beq hce4_g_cursor_even
+    jmp hce4_cold
+hce4_g_cursor_even:
+    lda $9A
+    bpl hce4_g_cursor_range
+    cmp #$FF00
+    bcs hce4_g_cursor_range
+    jmp hce4_cold
+hce4_g_cursor_range:
+    lda $92
+    bpl hce4_g_capacity_positive
+    jmp hce4_cold
+hce4_g_capacity_positive:
+    cmp #$01FE                 ; at most 510 output words at cursor zero
+    bcc hce4_g_capacity_max
+    jmp hce4_cold
+hce4_g_capacity_max:
+    inc a
+    asl a
+    clc
+    adc $9A
+    ldx $9A
+    bpl hce4_g_sum_nonnegative
+    bcs hce4_g_sum_nonnegative
+    jmp hce4_cold
+hce4_g_sum_nonnegative:
+    cmp #$03FD
+    bcc hce4_map_source
+    jmp hce4_cold
+
+    ; Map flat 68K ROM $000000-$07FFFF to SA-1 $C1-$C8, or a bounded
+    ; synthetic/work stream above the output planes to bank $40.
+hce4_map_source:
+    lda $9E
+    cmp #$0008
+    bcc hce4_source_rom
+    cmp #$00F0
+    beq hce4_source_work
+    jmp hce4_cold
+hce4_source_rom:
+    cmp #$0007
+    bne hce4_source_rom_map
+    lda $80
+    cmp #$F7F0                 ; reserve a worst-case 32x32-word stream
+    bcc hce4_source_rom_last_ok
+    jmp hce4_cold
+hce4_source_rom_last_ok:
+    lda $9E
+hce4_source_rom_map:
+    clc
+    adc #$00C1
+    sta $82
+    stz $9E                    ; source kind: ROM
+    bra hce4_source_header
+hce4_source_work:
+    lda $80
+    cmp #$2A00
+    bcs hce4_source_work_low
+    jmp hce4_cold
+hce4_source_work_low:
+    cmp #$2F00                 ; small-header guard below reserves through $2F83
+    bcc hce4_source_work_high
+    jmp hce4_cold
+hce4_source_work_high:
+    lda #$0040
+    sta $82
+    lda #$0001
+    sta $9E                    ; source kind: bounded work RAM
+
+hce4_source_header:
+    jsr hce4_read_word
+    sta $84                    ; outer DBRA initial value
+    cmp #$0020
+    bcc hce4_outer_ok
+    jmp hce4_cold
+hce4_outer_ok:
+    jsr hce4_read_word
+    sta $86                    ; inner DBRA initial value
+    cmp #$0020
+    bcc hce4_inner_ok
+    jmp hce4_cold
+hce4_inner_ok:
+    lda $9E
+    beq hce4_guards_done
+    lda $84                    ; work streams use a tighter 8x8 bound
+    cmp #$0008
+    bcc hce4_work_outer_ok
+    jmp hce4_cold
+hce4_work_outer_ok:
+    lda $86
+    cmp #$0008
+    bcc hce4_guards_done
+    jmp hce4_cold
+
+hce4_guards_done:
+    ; Preserve the existing diagnostic behavior only after all fallback guards.
+    lda $000724
+    inc a
+    sta $000724
+
+    ; Exact memory image left by LINK + MOVEM.L A0-A4 + MOVEM.W D0-D6.
+    lda $3C
+    sec
+    sbc #$0026
+    tax
+    lda $00
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $04
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $08
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $0C
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $10
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $14
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $18
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $22
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $20
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $26
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $24
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $2A
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $28
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $2E
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $2C
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $32
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $30
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $3A
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $38
+    xba
+    sta $400000,x
+
+    ; CE4 first sign-extends the cursor through d7, then replaces only d7.w
+    ; with the capacity.  Preserve that otherwise surprising high word.
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1E
+    lda $92
+    sta $1C
+
+    lda #$00EA
+    sec
+    sbc $88
+    sta $88                    ; d1 = $EA - screen X
+    lda #$1CF6
+    clc
+    adc $9A
+    sta $94
+    lda #$20F2
+    clc
+    adc $9A
+    sta $96
+    lda #$24EE
+    clc
+    adc $9A
+    sta $98
+
+    ; Bank $94 has only a narrow seam before the fixed $FE00 DMA island.
+    ; Probe/render the immutable organic ROM shapes in bank $95; carry clear
+    ; means no match and leaves every scratch cell needed by the generic loop
+    ; untouched.  Carry set means output/CCR/D7 are complete.
+    jsl.l hce4_shape_try
+    bcc hce4_outer_loop
+    jmp hce4_hot_done
+
+hce4_outer_loop:
+    lda #$00FA
+    sta $8E                    ; clipped/hidden row X
+    lda $88
+    bmi hce4_x_negative
+    cmp #$00FA
+    bcs hce4_x_ready
+    bra hce4_x_visible
+hce4_x_negative:
+    cmp #$FFFB
+    bcc hce4_x_ready
+hce4_x_visible:
+    sta $8E
+hce4_x_ready:
+    lda $86
+    sta $9C                    ; d2 = inner count
+    lda $8A
+    sta $8C                    ; d3 = original row Y
+
+hce4_inner_loop:
+    ; This is the dominant read site (one call per source cell).  Inline the
+    ; same byte-order/pointer update sequence so every zero and live tile no
+    ; longer pays a native JSR/RTS pair.  The shared helper remains for the two
+    ; one-shot header words and for cold-path locality.
+    ldy #$0000
+    sep #$20
+    lda [$80],y
+    xba
+    iny
+    lda [$80],y
+    rep #$20
+    pha
+    lda $80
+    clc
+    adc #$0002
+    sta $80
+    bcc hce4_inner_read_nowrap
+    inc $82
+hce4_inner_read_nowrap:
+    pla
+    sta $54                    ; d4 = (a1)+
+    beq hce4_after_sprite
+
+    lda $8C
+    bmi hce4_y_negative
+    cmp #$0180
+    bcc hce4_y_visible
+    bra hce4_y_hidden
+hce4_y_negative:
+    cmp #$FFF1
+    bcs hce4_y_visible
+hce4_y_hidden:
+    lda #$00FA
+    bra hce4_write_x
+hce4_y_visible:
+    lda $8E
+hce4_write_x:
+    ldx $94
+    xba
+    sta $400000,x
+    lda $94
+    clc
+    adc #$0002
+    sta $94
+
+    lda $54
+    clc
+    adc #$2000
+    ldx $98
+    xba
+    sta $400000,x
+    lda $98
+    clc
+    adc #$0002
+    sta $98
+
+    lda $8C
+    and #$01FF
+    ora $90
+    ldx $96
+    xba
+    sta $400000,x
+    lda $96
+    clc
+    adc #$0002
+    sta $96
+
+    dec $92                    ; subq.w #1,d7
+    lda $92
+    bmi hce4_exit_exhausted
+
+hce4_after_sprite:
+    lda $8C
+    clc
+    adc #$0010
+    sta $8C
+    dec $9C                    ; DBRA d2
+    lda $9C
+    cmp #$FFFF
+    beq hce4_inner_done
+    jmp hce4_inner_loop
+hce4_inner_done:
+
+    lda $88
+    sec
+    sbc #$0010
+    sta $88                    ; SUBI.W supplies final-row X
+    bcs hce4_d1_no_borrow
+    lda #$0001
+    sta $A2
+    bra hce4_d1_x_done
+hce4_d1_no_borrow:
+    stz $A2
+hce4_d1_x_done:
+    dec $84                    ; DBRA d0
+    lda $84
+    cmp #$FFFF
+    beq hce4_rows_done
+    jmp hce4_outer_loop
+
+hce4_rows_done:
+    ; Nonnegative d7 falls through the original fill loop.  Its final MOVE.W
+    ; leaves N=Z=V=C=0 while retaining X from the last d1 subtraction.
+    lda #$00FA
+    sta $54
+hce4_fill_loop:
+    lda $54
+    ldx $94
+    xba
+    sta $400000,x
+    lda $94
+    clc
+    adc #$0002
+    sta $94
+    dec $92
+    lda $92
+    cmp #$FFFF
+    bne hce4_fill_loop
+    stz $70
+    stz $60
+    stz $72
+    stz $6E
+    bra hce4_hot_done
+
+hce4_exit_exhausted:
+    ; For guarded nonnegative capacities, exhaustion is exactly 0 - 1.
+    lda #$0001
+    sta $70                    ; N=1
+    sta $6E                    ; C/borrow=1
+    sta $A2                    ; X=1
+    stz $60
+    stz $72
+
+hce4_hot_done:
+    lda $92
+    sta $1C                    ; final d7 low word (high came from EXT.L cursor)
+
+    ; MOVEM.W restoration sign-extends D0-D6.  Their low words never left the
+    ; register file, so only the high halves need to be materialized here.
+    ldx #$0000
+hce4_sign_extend:
+    lda $00,x
+    and #$8000
+    beq hce4_sign_zero
+    lda #$FFFF
+hce4_sign_zero:
+    sta $02,x
+    inx
+    inx
+    inx
+    inx
+    cpx #$001C
+    bne hce4_sign_extend
+
+    ; RTS consumes the caller's table return and leaves A7 at entry + 4.
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    jml.l ors_pre
+
+hce4_read_word:
+    ldy #$0000
+    sep #$20
+    lda [$80],y
+    xba
+    iny
+    lda [$80],y
+    rep #$20
+    pha
+    lda $80
+    clc
+    adc #$0002
+    sta $80
+    bcc hce4_read_nowrap
+    inc $82
+hce4_read_nowrap:
+    pla
+    rts
+
+hce4_cold:
+    rep #$30
+    lda $000724
+    inc a
+    jmp ce4_generated_after_counter
+
+; Return from hle_12b6c's native CE4 call.  hce4_entry has consumed the
+; sentinel and restored A7 to the 14-byte argument base.
+hle_ce4_cont:
+    rep #$30
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0100
+    sta $400000,x              ; replace sentinel with real jsr return $00012BFC
+    inx
+    inx
+    lda #$FC2B
+    sta $400000,x
+    lda $3C
+    clc
+    adc #$0016                 ; args 14 + ret2 4 + ret1 4
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda #$177C
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l ors_pre
+
+; ============================================================================
+; h158_dma_1020 — synchronous SA-1 DMA helper for hle_158e ($99:F800).
+;
+; Entry: A=source low16 in linear BW-RAM bank $40, X=architected destination
+; low16 in shadow bank $41, Y=private render-snapshot destination low16 in
+; bank $41, M/X=16.  The SA-1 DMA unit has no BW-RAM -> BW-RAM mode, so copy
+; two chunks (512 + 508 bytes) through IRAM $0100-$02FF.  This ends immediately
+; before physical IRAM $0300/$0302, the live 5A22 FRAME_REQ/FRAME_ACK mailbox
+; ($3300/$3302); the earlier attempt that crossed that boundary produced exact
+; mailbox corruption.  $0200 is the legacy virtual-controller word, so each
+; synchronous chunk saves and restores it around the two DMA legs.  The rest
+; of $0202-$02FF is unowned.  The native stack grows down from $07FF and cannot
+; reach this window without already destroying the PC ring below it.  DMA stalls
+; the SA-1 until each transfer completes; no asynchronous native-stack window is
+; introduced.  The DMA IRQ flag is cleared and DCNT disabled before return.
+;
+; Fixed at $94:FE00 so the bank-$99 HLE can call it without growing through its
+; protected $F8E0-$F8FF seam.  hce4 currently ends below $FD80.
+; ============================================================================
+.org $FE00
+h158_dma_1020:
+    rep #$30
+.a16
+.i16
+    sta $90                    ; physical BW-RAM source offset
+    stx $92                    ; physical shadow destination low16 (bank 1)
+    sty $96                    ; private alternating OBJ snapshot destination (bank 1)
+    lda #$0200                 ; first chunk: 512 bytes
+    sta $94
+    jsr h158_dma_chunk
+    lda $90
+    clc
+    adc #$0200
+    sta $90
+    lda $92
+    clc
+    adc #$0200
+    sta $92
+    lda $96
+    clc
+    adc #$0200
+    sta $96
+    lda #$01FC                 ; second chunk: remaining 508 bytes
+    sta $94
+    jsr h158_dma_chunk
+    rtl
+
+h158_dma_chunk:
+    rep #$20
+.a16
+    lda $0200                  ; preserve legacy controller word inside staging span
+    sta $98
+    sep #$20
+.a8
+    lda #$20
+    sta $220B                  ; clear a stale/completed DMA IRQ flag
+
+    ; BW-RAM -> IRAM $000100.  Writing DDA high starts synchronous IRAM DMA.
+    lda #$81                   ; enable, source=BW-RAM, destination=IRAM
+    sta $2230
+    lda $90
+    sta $2232
+    lda $91
+    sta $2233
+    stz $2234
+    lda $94
+    sta $2238
+    lda $95
+    sta $2239
+    stz $2235
+    lda #$01
+    sta $2236                  ; trigger; SA-1 stalls through completion
+
+    ; IRAM $000100 -> linear BW-RAM $01:dest.  Writing the DDA bank
+    ; starts BW-RAM DMA.  Bank $01 is the physical backing of CPU bank $41.
+    lda #$86                   ; enable, source=IRAM, destination=BW-RAM
+    sta $2230
+    stz $2232
+    lda #$01
+    sta $2233
+    stz $2234
+    lda $94
+    sta $2238
+    lda $95
+    sta $2239
+    lda $92
+    sta $2235
+    lda $93
+    sta $2236
+    lda #$01
+    sta $2237                  ; trigger; SA-1 stalls through completion
+
+    lda $0734                  ; fast NMI/WAI lab snapshots on the 5A22 before wake
+    bne h158_dma_no_secondary
+    jsr h158_dma_secondary     ; duplicate the staged bytes without rereading BW-RAM
+h158_dma_no_secondary:
+
+    rep #$20
+.a16
+    lda $98
+    sta $0200                  ; restore before any SA-1 instruction can consume it
+    sep #$20
+.a8
+    lda #$20
+    sta $220B                  ; acknowledge completion
+    stz $2230                  ; leave DMA disabled
+    rep #$20
+.a16
+    rts
+h158_dma_1020_end:
+
+; Size-neutral cross-bank leaf for entry_8c2.  The routine's final ADDQ.W
+; advances D0 from 31 to 32 and therefore clears X as well as C; the following
+; CLR.L preserves that cleared X while clearing N/V/C.  The first hand-HLE
+; omitted X, a bug hidden until the validator entered the actual native body.
+.org $FEC4
+h8_clear_ccr_x:
+    rep #$20
+.a16
+    stz $6E
+    stz $70
+    stz $72
+    stz $A2
+    rtl
+h8_clear_ccr_x_end:
+
+; A second IRAM -> BW-RAM destination for hle_158e's renderer-private OBJ
+; buffer.  h158_dma_chunk has already populated IRAM $0100 onward; replay the
+; same variable-length staged transfer, avoiding another live-BW read.
+.org $FED4
+.a8
+.i16
+h158_dma_secondary:
+    lda #$86
+    sta $2230
+    stz $2232
+    lda #$01
+    sta $2233
+    stz $2234
+    lda $94
+    sta $2238
+    lda $95
+    sta $2239
+    lda $96
+    sta $2235
+    lda $97
+    sta $2236
+    lda #$01
+    sta $2237
+    rts
+h158_dma_secondary_end:
+
+; Reproduce the condition-code result of hle_158e's final MOVE.L.  The source
+; ends at A5+$28EA, so the last long begins at A5+$28E6.  MOVE.L sets N/Z,
+; clears V/C, and leaves X unchanged.
+.org $FF00
+h158_set_ccr:
+    rep #$30
+.a16
+.i16
+    lda $34
+    clc
+    adc #$28E6
+    tax
+    lda $400000,x
+    sta $80
+    and #$0080                 ; first BE byte bit 7 = logical long bit 31
+    beq h158_ccr_n_clear
+    lda #$0001
+    sta $70
+    bra h158_ccr_n_done
+h158_ccr_n_clear:
+    stz $70
+h158_ccr_n_done:
+    lda $400002,x
+    ora $80
+    beq h158_ccr_z_set
+    stz $60
+    bra h158_ccr_z_done
+h158_ccr_z_set:
+    lda #$0001
+    sta $60
+h158_ccr_z_done:
+    stz $72
+    stz $6E
+    rtl
+
+; The function-local validator can enter with the SA-1 BW-RAM write-enable
+; register protecting the emulated stack.  DMA writes are independent of that
+; CPU-side gate, so preserve the final four bytes left by the original BSRs via
+; a tiny IRAM -> BW-RAM transfer too.  Entry: A=logical low return-PC word and
+; X=physical bank-$40 destination.  Keep this at a fixed address for cross-bank
+; calls from escbank5/6.
+.org $FF80
+h158_dma_residue:
+    rep #$30
+.a16
+.i16
+    stz $0100
+    xba
+    sta $0102                  ; logical $15AA/$17D0 -> bytes 15 AA / 17 D0
+    stx $92
+
+    sep #$20
+.a8
+    lda #$20
+    sta $220B
+    lda #$86                   ; IRAM -> linear BW-RAM
+    sta $2230
+    stz $2232
+    lda #$01
+    sta $2233
+    stz $2234
+    lda #$04
+    sta $2238
+    stz $2239
+    lda $92
+    sta $2235
+    lda $93
+    sta $2236
+    stz $2237                  ; destination bank $00; trigger transfer
+    lda #$20
+    sta $220B
+    stz $2230
+    rep #$20
+.a16
+    rtl

@@ -16,8 +16,17 @@ sys.path.insert(0, 'tools'); sys.path.insert(0, '/home/chad/Mesen2/python')
 os.environ['DOTNET_ROOT'] = '/home/chad/.dotnet10'; os.environ['PATH'] = '/home/chad/.dotnet10:' + os.environ.get('PATH', '')
 import mesen_mcp.session as _sess; _sess.validate_mesen_build = lambda *a, **k: None
 from mesen_mcp import McpSession
-NEXEN = '/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT = '/tmp/b0_native.mss'; S = '/tmp/svframe.mss'
-with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc', mesen=NEXEN, port=7534, boot_wait=6.0, socket_timeout=300.0) as m:
+NEXEN = os.environ.get(
+    'NEXEN',
+    '/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen',
+)
+NAT = os.environ.get('NAT', '/tmp/b0_native.mss'); S = os.environ.get('STATE_OUT', '/tmp/svframe.mss')
+XLAT_DISABLE_OFFSETS = [
+    int(value, 16)
+    for value in os.environ.get('XLAT_DISABLE_OFFSETS', '').split(',')
+    if value.strip()
+]
+with McpSession(rom=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'interp.sfc'), mesen=NEXEN, port=int(os.environ.get('PORT', '7534')), boot_wait=6.0, socket_timeout=300.0) as m:
     def r16(a): b = m.read_memory('Sa1Memory', a, 2); return b[0] | (b[1] << 8)
     def w16(a, v): m.write_u16(a, v, 'Sa1Memory')
     def rd(a, n, mt): return bytes(m.read_memory(mt, a, n))
@@ -35,6 +44,8 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc', mesen=NEXEN, por
     m.save_state(S)
     def one_frame(gate):
         m.load_state(S)
+        for offset in XLAT_DISABLE_OFFSETS:
+            m.write_memory('snesPrgRom', offset, '000000')
         a7 = r16(0x3C) | (r16(0x3E) << 16)
         w16(0x071A, gate); w16(0x0700, 0); w16(0x0712, 0); w16(0x0710, 0)
         w16(0x0714, 1); runf(1); w16(0x0714, 0)             # release past this $0708
@@ -50,8 +61,9 @@ with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc', mesen=NEXEN, por
     # transient there -- a7-aware must cover each task stack too. Each entry_X stashes its a7: $0774
     # ($00C300), $0778 ($02658E). 0 if that body didn't run this frame.
     ta7 = [r16(0x0774), r16(0x0778), r16(0x077C), r16(0x0780), r16(0x0784)]   # $00C300, $02658E, $004542 task a7s
-    print(">>> full frame OFF trapped=%s  ON trapped=%s  (main a7=$%04X  task a7s=%s)"
-          % (ok0, ok1, a7, ['$%04X' % t for t in ta7]))
+    print(">>> full frame OFF trapped=%s  ON trapped=%s  (main a7=$%04X  task a7s=%s  xlat_disabled=%s)"
+          % (ok0, ok1, a7, ['$%04X' % t for t in ta7],
+             ['$%06X' % offset for offset in XLAT_DISABLE_OFFSETS]))
     def is_stack(i):           # transient if within 0x400 below the main a7 OR 0x40 below any task a7
         return ((a7 - 0x400) & 0xFFFF) <= i < a7 or any(t and (t - 0x40) <= i < t for t in ta7)
     ds = [i for i in range(0x10000) if o40[i] != n40[i]]

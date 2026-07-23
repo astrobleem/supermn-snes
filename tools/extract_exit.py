@@ -38,7 +38,11 @@ try:
     print("return frame=%d PC=$%06X SP=$%06X"%(X["frame"],X["registers"]["PC"]&0xFFFFFF,X["registers"]["SP"]&0xFFFFFF),flush=True)
     (OUT/"exit_wram.bin").write_bytes(xw)
     xr=X["registers"]   # registers at R = the function's net output (a7 popped)
-    ev=[xr["D%d"%i] for i in range(8)]+[xr["A%d"%i] for i in range(7)]+[xr["SP"]&0xFFFFFFFF]
+    # Append SR after the historical D0-D7/A0-A6/SP payload. Existing readers consume
+    # the first 64 bytes unchanged; semantic validators can now also prove exit CCR/X.
+    ev=[xr["D%d"%i] for i in range(8)]+[xr["A%d"%i] for i in range(7)]+[
+        xr["SP"]&0xFFFFFFFF, xr.get("SR",0)&0xFFFF
+    ]
     (OUT/"exit_regs.bin").write_bytes(b"".join(struct.pack(">I",x&0xFFFFFFFF) for x in ev))
     deltas=[(i,entry[i],xw[i]) for i in range(0x10000) if entry[i]!=xw[i]]
     print("entry->exit changed: %d bytes"%len(deltas),flush=True)

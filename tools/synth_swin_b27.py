@@ -30,7 +30,12 @@ for idx in range(16):
     if not (wramA[doff] & 0x08):
         wramA[doff] |= 0x08; nset+=1       # bit27 = byte0 bit3 of the BE long
 print("triple %s  SWIN=%d  bit27 set on %d/16 descriptors"%(TD,SWIN,nset),flush=True)
-WN=len(wramA); NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT='/tmp/b0_native.mss'
+WN=len(wramA)
+NEXEN=os.environ.get(
+    'NEXEN',
+    '/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen',
+)
+NAT=os.environ.get('NAT','/tmp/b0_native.mss')
 with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=PORT,boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a): b=m.read_memory('Sa1Memory',a,2); return b[0]|(b[1]<<8)
     def w16(a,v,mt='Sa1Memory'): m.write_u16(a,v,mt)

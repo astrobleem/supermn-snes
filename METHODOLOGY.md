@@ -16,7 +16,7 @@ two traps of a naive port: a pure interpreter is ~2,000× too slow, and a full s
 The interpreter and the transpiler are the two big reusable assets — both are largely game-agnostic.
 
 ## 0a. Before debugging anything: the tribal-knowledge reference
-`docs/INTERP_DEBUG_AND_GOTCHAS.md` — the interpreter's built-in debug interface (PC-ring
+`docs/INTERP_DEBUG_AND_GOTCHAS.md` — the interpreter's diagnostic-build debug interface (PC-ring
 flight recorder, PC-freeze, halt codes, register-file map), the Poppy assembler traps
 (silent `.org` overlap, A8 mode-inference resets, cross-file symbol landmines), emulator-
 harness operational gotchas, and the coroutine-scheduler IRQ contract. Every item there

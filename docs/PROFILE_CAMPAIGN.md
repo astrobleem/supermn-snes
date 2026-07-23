@@ -864,3 +864,226 @@ closed a loop_hook failure family (full detail: memory `sound-p3-progress`; comm
   interp's always-on 68K PC ring (IRAM `$0400-$05FF`, ptr `$48`, last 128 PCs) + the
   `$0710/$0716` PC-freeze (`$0712` frozen-marker, `$0714` release, `$0730=$5A5A`
   re-firing mode) + deterministic per-arm poke-bisects on ROM copies.
+
+---
+
+## 2026-07-20 playability recovery: two hot-path candidates rejected
+
+These are same-checkpoint, PC-ring diagnostic measurements from the retained late-combat
+state, not end-to-end fps.  The retained CE4 reference ROM is SHA-256
+`036ac870600b183f1613c02e76935b8a4ab36581ff5d3fd6fb30a56149a9b084` and averages
+475,770.45 SA-1 cycles/tick over 20 intervals.  Its corresponding production/no-ring
+measurement is 461,864.3 cycles/tick, still 103,864.3 above the 358K 30 Hz gate.
+
+- **`$01E7C0` steady-object hand path: rejected and reverted.**  After fixing an invalid
+  absolute-long,Y lowering, the candidate was exact against the current interpreter in 18/18
+  organic fixtures (six states, xlat off/on/on+choke) and exact against MAME in 18/18 fixtures,
+  including registers, CCR, and mapped work RAM apart from checked native return residue.
+  Despite that semantic result, it averaged 474,455.85 cycles/tick: a gain of only 1,314.6
+  cycles/tick (0.28%).  Evidence:
+  `build/playability-20260720/1e7c0-steady-object-current-baseline-differential-v5/`,
+  `build/playability-20260720/1e7c0-steady-object-mame-differential-v1/`, and
+  `build/playability-20260720/1e7c0-steady-object-late-combat-profile-v1/`.
+
+- **`$CE58 -> $CD1A` direct native bridge: rejected and reverted before semantic promotion.**
+  A size-neutral direct bridge to the existing `$99:ACB1` body stayed live for all 20
+  checkpoint intervals and fired exactly once per tick.  The whole native call, including its
+  four callbacks, still cost 35,638.95 cycles/tick; total tick cost averaged 471,142.65, only
+  4,627.8 cycles/tick (0.97%) below the reference.  PC fetches fell by just one per tick
+  (180.6 -> 179.6) because the apparent 35K `$CD1A..$CD86` interpreter cluster largely moved
+  into the four dynamic callback paths.  That missed the 30K keep threshold, so no MAME
+  semantic claim is made.  Raw profile and candidate ROM:
+  `build/playability-20260720/cd1a-direct-late-combat-profile-v1/` (candidate SHA-256
+  `a464a469071e6426695d57bdec5ad2311837ba6badd1398e2db68cfe861a954f`).
+
+Both reverts were verified by rebuilding with `PC_RING=1` and recovering the retained reference
+ROM byte-for-byte (SHA-256 `036ac870...`).  Neither candidate materially closes the production
+104K-cycle gap; do not revive either from interpreted-PC rankings alone.
+
+## 2026-07-20 playability recovery: `$0176F6/$01770E` native loop retained
+
+The nested object-callback/yield loop at `$0176F6` and its genuine-return continuation at
+`$01770E` are now one native body in bank `$95`.  The generated body keeps the real `$01770E`
+return on the 68K stack across callbacks that yield, statically resolves both jump tables through
+index 16 (the organic state uses index 16), and retains a cold bailout for the dynamic
+`bset` at `$0177FA`.  It also uses `--accharge`: omitting the interpreter-equivalent `$AC` charge
+changed scheduler phase and is not an acceptable production optimization.
+
+The retained candidate passed 18/18 function-local MAME differentials across six organic fixtures
+with xlat off, on, and on+choke.  All D/A registers, CCR/mask, and the mapped 16 KiB work-RAM window
+matched.  Evidence:
+`build/playability-20260720/176f6-native-loop-accharge-mame-differential-v1/`.
+
+The original whole-tick A/B harness used a moving `$92:DB82` polling hook and was invalid: even
+identical-ROM self-audits failed nondeterministically because Nexen did not pause at the hook itself.
+The repaired harness freezes at the first real `$000818` production-wait boundary, verifies the
+freeze marker and PC, then compares coherent state.  Both identical-ROM self-audits passed 4/4,
+and the candidate/reference A/B passed 4/4 with full work RAM, D/A registers, CCR/mask, sound ring,
+task mask, and tick equal.  Evidence:
+`build/playability-20260720/tick-0818-reference-self-audit-v1/`,
+`build/playability-20260720/tick-0818-176f6-accharge-self-audit-v1/`, and
+`build/playability-20260720/176f6-native-loop-accharge-0818-mame-ab-v1/`.  The harness's cycle
+delta includes a variable polling-spin tail and is explicitly non-gating; it is semantic evidence,
+not a performance result.
+
+At the retained late-combat checkpoint, the diagnostic PC-ring ROM (SHA-256
+`b684ddcb987145b09f0b50fe3f611f7c84e82c19fd470d6c2ff2f6db5a1cf664`) averages
+437,009.6 cycles/tick over 20 intervals, 38,760.85 cycles/tick (8.15%) below its diagnostic
+reference.  The production/no-ring ROM (SHA-256
+`a53fb32b700ce133beb1462777fd970eb9cffc139d79b09a0f4087f8a5c40159`) averages
+**425,081.25 cycles/tick** (median 425,832; min 406,643; max 435,866), saving
+36,783.05 cycles/tick (7.96%) against the same-checkpoint 461,864.3-cycle production reference.
+Raw profiles:
+`build/playability-20260720/176f6-native-loop-accharge-late-combat-profile-v1/` and
+`build/playability-20260720/176f6-native-loop-accharge-production-late-combat-continuous-v1/`.
+
+This is a same-checkpoint compute comparison with a stale renderer acknowledgement, **not fps and
+not playability evidence**.  It remains 67,081.25 cycles/tick above the 358K 30 Hz gate.  The
+optimization is retained because it is a large, MAME-checked reduction, but no project-level speed
+claim changes until a production cold-boot run includes pacing, rendering, IRQs, and transitions.
+
+## 2026-07-20 playability recovery: guarded hot renderer shapes retained
+
+Three renderer helpers now recognize only the exact immutable arcade-ROM shapes observed in the
+retained late-combat state, emit their nonzero cells directly, and otherwise resume the existing
+generic implementation.  The guards include the mapped source address, capacity, and coordinate
+bounds; the generic paths remain available for every other state.
+
+- `$111A` passed 10/10 function-local MAME differentials, including all three hot ROM shapes and
+  generic fallbacks.  Its whole-call span fell from 13,547.05 to 5,018.65 diagnostic cycles/tick;
+  the complete diagnostic tick fell from 437,009.6 to 428,457.85.  Evidence:
+  `build/playability-20260720/111a-hot-rom-shapes-mame-differential-v1/` and
+  `build/playability-20260720/111a-hot-rom-shapes-late-combat-profile-v1/`.
+- `$D96` passed 10/10 function-local MAME differentials.  Added to `$111A`, it reduced the complete
+  diagnostic tick by another 5,591.25 cycles to 422,866.6.  Evidence:
+  `build/playability-20260720/d96-hot-rom-shapes-mame-differential-v1/` and
+  `build/playability-20260720/111a-d96-hot-rom-shapes-late-combat-profile-v1/`.
+- `$CE4` uses a one-call bank-$94 stub and a guarded fixed island at `$95:F400-$F9BE`; the ROM packer
+  now asserts the old `$95:F3D6` late-combat end, the zero-filled gap, and the new island end
+  independently.  Bank `$94` and `$95` audit clean.  It passed 14/14 MAME differentials, including
+  six hot ROM sources, a guard edge, low task stack, and generic fallbacks.  The cumulative
+  diagnostic tick is 410,666.2 cycles (median 412,419.5; 387,133-424,175), another 12,200.4-cycle
+  reduction.  Evidence: `build/playability-20260720/ce4-hot-rom-shapes-mame-differential-v1/` and
+  `build/playability-20260720/111a-d96-ce4-hot-rom-shapes-late-combat-profile-v1/`.  The retained
+  diagnostic ROM is SHA-256 `8ba7a54c25b9f50ee97dc91ab8d2038932b2b91e56eed419070693322c7501f8`.
+
+With the PC ring disabled, the cumulative production-code ROM is SHA-256
+`99dc0fc4b172357c2b7f90ebaaec60d8a9bff702c629f0504157055212b79a88`.  Its same-checkpoint
+clamp-to-clamp intervals average **398,761.7 cycles/tick** (median 400,398; min 376,187; max
+412,173), 26,319.55 below the retained `$176F6` production candidate and still **40,761.7 cycles
+above** the 358K gate.  Raw evidence:
+`build/playability-20260720/111a-d96-ce4-hot-rom-shapes-production-late-combat-continuous-v1/`.
+The harness explicitly rejected renderer acknowledgement because this reused checkpoint has a stale
+ACK.  These are same-state compute comparisons, **not fps, not a rendering measurement, and not
+playability evidence**.  Production cold-boot timing and the tick-765-767 ordering gate remain open.
+
+## 2026-07-22 playability recovery: production 30 Hz gate closed
+
+This section supersedes the open performance verdict immediately above for one exact build.  The
+final production candidate is v105, a dirty R6 working tree based on `main` commit
+`f34fc4c8e0e16ac1d7792a881b18d5b3dd97ded0`.  Its 4 MiB ROM SHA-256 is
+`72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3`.  The candidate ROM and a
+hash manifest for every participating source/build file are retained in
+`build/playability-20260720/deadline-debt10-manifest-v105-direct-ownership-candidate-v1/`.
+Do not attribute the result to the clean base commit or transfer it to a rebuilt ROM with another
+hash.
+
+The recovery closed the remaining budget in three coupled layers:
+
+- Guarded native bodies in the expanded `$95/$9D/$9E` escape space removed the active object,
+  scheduler, initializer, and round-transition residual while retaining cold interpreter
+  fallbacks and the observed 68K CCR, register, stack, callback, and `$AC` behavior.  The build
+  asserts every new island, seam, and dispatch target.
+- The SA-1 now prepares an exact immutable renderer manifest: packed visible OBJ records, the
+  producer-unique BG change list, prepared large-transition work, persistent BG/OBJ caches with
+  bounded reclamation, and native-tile data suitable for direct DMA.  The 5A22 consumes complete
+  published images through direct ownership plus a bounded two-entry compressed queue; it never
+  reads a partially rewritten producer image.
+- Production pacing arms only from organic game/renderer signatures.  At `$0818`, the SA-1
+  publishes the manifest and sleeps.  The WRAM supervisor observes a two-vblank target, handles
+  snapshot ownership, publishes real controller input, wakes the SA-1, and preserves the ordinary
+  virtual-IRQ ordering after wake.  A transition overrun creates measured frame debt; subsequent
+  light ticks repay at most one frame while always retaining at least one real vblank.  The retained
+  bound is ten frames.
+
+This is not the rejected R5 NMI/WAI lab under a new label.  R5 accelerated a machine whose active
+work still exceeded the budget and then derailed producer ordering at ticks 765-767.  R6 first
+reduced active work, retained the real-vblank minimum and virtual-IRQ order, made every renderer
+transaction owned, and then ran the same long gate that rejected R5.
+
+### Candidate correction chain
+
+- v103 used a four-frame debt cap.  Its 950-interval checkpoint run consumed 1,908 frames
+  (29.955 nominal ticks/s) and discarded six frames at the cap, so it was rejected.
+- v104 raised the empirically required cap to ten and reached exact 30 Hz cadence.  Its formal
+  cold boot also met the cycle, input, stack, sound, and tick-765/767 ordering gates, but ACK
+  reconstruction exposed two skipped transactions (`864->866` and `1016->1018`).  An NMI could
+  overwrite an even direct snapshot after publication but before the worker claimed it.  Matching
+  endpoint counters were therefore insufficient, and v104 was rejected.
+- v105 adds an ownership guard: a zero renderer-busy word permits a direct snapshot only when the
+  published direct sequence at `$7E:1F1E` equals the acknowledged sequence at `$3302`.  Otherwise
+  the new image enters the retained queue.  The validator now reconstructs every ACK step and
+  rejects non-unit increments, queue drops, invalid queue state, or nonconserved true draws.
+
+### Uninterrupted production result
+
+`tools/recovery_baseline.py` booted v105 from power-on with `TESTFLAG=0`; no state, gate, tick, or
+mailbox injection was used.  Production pacing armed organically by frame 5,236.  The harness
+matched 150 real `$00:F5A3` (`$0818`) boundary hooks to 150 `$0760` counter increments, then sent
+coin and Start through Nexen port 0/manual `$4016` on exact game-tick boundaries.  It detected
+gameplay at frame 5,685/tick 278, held real Right+B with the injection word remaining zero, settled
+at frame 5,985/tick 428, and ran uninterrupted to frame 9,588/tick 2,230.
+
+| Formal production metric | v105 result |
+|---|---:|
+| Emulated SNES video frames | 3,603 |
+| Real game ticks / nominal game rate | 1,802 / **30.008326 Hz** |
+| SA-1 cycles / mean per tick | 643,822,163 / **357,281.999** |
+| Requests / unit ACK transactions / true draws | **1,802 / 1,802 / 1,802** |
+| Non-unit ACK steps / queue drops | **0 / 0** |
+| Maximum transaction debt / ACK silence | 3 / 3 video frames |
+| Final halt / task mask / initialized task contexts | `$0000` / `$FFA7` / 16 |
+| Minimum final saved-stack margin | 136 bytes |
+| Sound ring / real-input mailbox / injection | `$00F01C3B` / `$8100` / `$0000` |
+
+All 26 named uninterrupted-window checks passed, as did the separate 150-boundary hook/counter
+prerequisite.  The 30.008326 value is an end-to-end nominal game-tick rate against emulated SNES
+video time, not a local-span projection.  The 357,281.999 mean includes waits, IRQs, renderer
+publication/consumption, input, audio supervision, and the observed state transitions.  The
+maximum request/ACK transaction debt of three reflects the producer write plus the two owned queue
+positions; it does not permit sequence coalescing.
+
+Primary retained evidence is
+`build/playability-20260720/deadline-debt10-manifest-v105-direct-ownership-coldboot-uninterrupted-3600f-v1/`:
+
+- `baseline.jsonl` SHA-256
+  `ba5ad1079a5ca4a5d20b3f19f60a0d25588a3564ccb90dcf27a5b14e4d0d9399`;
+- `uninterrupted_gameplay_hooks.jsonl` SHA-256
+  `f3c5e8a9947063b01ab711451fa4b78189c3567f756728e31852d512a485db42`;
+- `renderer_debt_trace.jsonl` SHA-256
+  `ef85936834e9f3bdd068efd155eedca964449fbcbeb83af3a9d63ae457fa7030`;
+- `final.mss` SHA-256
+  `99dd545572eaaed566ac33fe6976a565bc6187ce9e8893bc911b0ebd3a94af62`;
+- settled screenshot SHA-256
+  `1657fe7bf5a5ae9482f909db448a0d00d153ed8f0b7b050202dee4bc761528b5`.
+
+An independent same-ROM checkpoint profile began at gameplay tick 278 and completed 950 intervals
+through tick 1,229, crossing the historical ordering event.  Its frame deltas were 13 one-frame,
+924 two-frame, and 13 three-frame intervals: exactly 1,900 video frames, with frame debt reaching
+ten and returning to zero.  Mean/median/min/max were 357,366.195 / 357,366 / 257,536 / 543,765
+SA-1 cycles.  Renderer ACK advanced 951, halt remained zero, task mask was `$FFA7`, real input was
+active, and the ROM/WRAM supervisor mirror remained exact.  This is corroborating checkpoint
+evidence, not the formal rate claim.  Its `profile.jsonl` SHA-256 is
+`a0a997b2cf6658e4d9df3557cf64eddd5b667e59b9f8ca9f8f344ff3bb72e01f`.
+
+Fresh final-ROM semantic gates were run serially against MAME 0.287: `optest.py` passed 160/160
+groups and `opsweep.py` passed 782/782 cells / 1,564/1,564 vectors.  Their retained log hashes are
+`93470844f97da4f349f14c2a273673f5b9a5705139691e7ebb5739a42acfda41` and
+`f0e935df41e7fb7ab344ea4fc576cf2840fb2d3e23bfd4c47fa8ccff2f05e2d6` respectively.
+
+The exact v105 hash therefore clears this repository's representative 30 Hz and sustained
+tick-765/767 ordering gates and may be called an **evidence-backed playable production candidate**.
+It is not yet a shippable release: full-game path coverage, a completed playthrough, aligned MAME
+pixel comparison, real-hardware timing, audio listening/classification, and placeholder-SFX work
+remain open.  Because the cycle margin is only about 718 cycles/tick, any relevant source or layout
+change must earn a new verdict with another production cold-boot run.

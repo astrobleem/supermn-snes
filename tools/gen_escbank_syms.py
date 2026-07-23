@@ -15,6 +15,7 @@ NEEDED = ["inext", "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
           "rdw_ea_l", "readbyte_l", "writeword_l", "writebyte_l", "usmul_l", "op_rts_sentinel", "ojmp_hook",
           "jsrabs_hook",  # jah2_ext (escbank extension chain) tail-calls the original miss handler
           "bhp_after",    # jah2_ext_bsr tail-calls back into bsr_hookpush's miss continuation
+          "entry_20e8",   # ibridge routes native $DA44's organic jsr(a0) into the existing guarded tile-strip body
           "ors_pre",      # an escbank escape's terminal rts routes here (bank-aware sentinel resume)
           "lh_sched",     # entry_swo (scheduler switch-OUT) tail-jumps into the native $074C scan
           "op_rte",       # entry_swin (scheduler switch-IN) tail: pop SR+PC + ors_rte resume dispatch
@@ -65,6 +66,17 @@ if esc3_sym.exists() and esc3_src.exists():
         m = re.match(r"\s*([0-9A-Fa-f]{2}):([0-9A-Fa-f]{4})\s+(entry_[0-9a-z_]+)", line)
         if m and m.group(3) in have and m.group(3) not in seen:
             lines.append("%s=$97%04X" % (m.group(3), int(m.group(2), 16)))
+# Focused bank-$99 callable imports.  These two bodies are deliberately pinned and
+# byte-guarded by build_interp_rom.py, so export the fixed addresses without requiring
+# escbank5.sym.  That removes the old escbank <-> escbank5 assembly-order cycle: bank $92
+# can now assemble first, then bank $99 imports a fresh ibridge/entry_ce58 from its .sym.
+bank5_dispatch_exports = {"entry_96a": 0xC200, "entry_9ea": 0xC500}
+n5 = 0
+seen = set(l.split("=")[0] for l in lines if "=" in l)
+for name, off in bank5_dispatch_exports.items():
+    if name not in seen:
+        lines.append("%s=$99%04X" % (name, off))
+        n5 += 1
 lines.append("; <<< ESCBANK_SYMS <<<")
 block = "\n".join(lines)
 
@@ -75,5 +87,6 @@ if pat.search(src):
 else:
     src = block + "\n\n" + src
 esc_path.write_text(src)
-print("gen_escbank_syms: wrote %d bank-$00 + %d escbank2 entry_X symbols%s" %
-      (len(NEEDED) - len(missing), n2, (" (MISSING: %s)" % missing) if missing else ""))
+print("gen_escbank_syms: wrote %d bank-$00 + %d escbank2 + %d escbank5 entry_X symbols%s" %
+      (len(NEEDED) - len(missing), n2, n5,
+       (" (MISSING: %s)" % missing) if missing else ""))

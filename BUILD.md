@@ -68,6 +68,10 @@ bash tools/build_interp.sh        # -> build/interp.sfc (32KB interp + 68K image
                                   #    automatically if build/audio-data.bin is missing — needs
                                   #    tad-compiler + the consolidated project; regen the real
                                   #    samples first per tools/sound/README.md §P3 pipeline)
+
+# Diagnostic build only: retain the per-fetch PC ring and PC-freeze checks.
+# The normal production pack replaces those calls with size-neutral NOPs.
+PC_RING=1 bash tools/build_interp.sh
 #    internally: dotnet $POPPY ... interp.pasm/video.pasm ; python3 tools/build_interp_rom.py
 
 # 2. Correctness sweep (needs MAME + Nexen MCP running):

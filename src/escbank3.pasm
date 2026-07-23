@@ -38,31 +38,51 @@ entry_25110:
     lda $42
     sta $56
     jsl.l push32_l
+    ; The production object lists are all A5-relative inside the first 16 KiB
+    ; of work RAM.  The generated body below used full 32-bit pointer bumps for
+    ; every 16-byte slot even though none can carry out of the low word.  Guard
+    ; that invariant before relying on the bounded low-word walk; a noncanonical
+    ; caller has had only its real JSR return installed, so it can restart the
+    ; untouched MC68000 routine in the interpreter.
     lda $34
-    clc
-    adc #$2932
-    tax
-    lda $400000,x
+    bne h25110_interp
+    lda $36
+    cmp #$00F0
+    beq h25110_canonical_a5
+h25110_interp:
+    lda #$5110
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l inext
+h25110_canonical_a5:
+    ldx $34
+    lda $402932,x
     xba
     sec
     sbc #$0002
     bne Lf25110_1
     jmp L25110_25774
 Lf25110_1:
-    lda #$001E
-    sta $1C
-    lda $34
-    clc
-    adc #$3A74
-    sta $20
-    lda $36
-    adc #$0000
-    sta $22
+    ; Guarded compact-active collision pass in the free tail of bank $95.  The
+    ; compact body now publishes the exact final X produced by the last
+    ; qualifying outer record, so both incoming-X states can use it.  Keep this
+    ; 17-byte seam size-neutral so every generated continuation below remains
+    ; fixed.  The old $95:F3E0 X-aware delegate remains as unreachable padding
+    ; and as an audited recovery seam.
+    lda $A2
+    bra h25110_compact_stage1
+    jml.l $95F3E0
+h25110_compact_stage1:
+    jml.l $95F000
+    nop
+    nop
+    nop
+    nop
+    nop
 L25110_25122:
-    lda $20
-    clc
-    adc #$0000
-    tax
+h25110_stage1_outer:
+    ldx $20
     lda $400000,x
     xba
     beq Lf25110_2
@@ -71,22 +91,16 @@ L25110_25122:
 Lf25110_2:
     jmp L25110_25322
 Lf25110_3:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$00BF
     bne Lf25110_4
     jmp L25110_25322
 Lf25110_4:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$00BD
@@ -99,6 +113,12 @@ Lf25110_5:
     sec
     sbc #$0001
     sta $18
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     bvs Lf25110_6
     bmi Lf25110_7
     bra Lf25110_8
@@ -113,15 +133,12 @@ Lf25110_8:
     adc #$0010
     sta $24
     lda $22
-    adc #$0000
     sta $26
     lda #$0000
     sta $14
 L25110_2514c:
-    lda $24
-    clc
-    adc #$0000
-    tax
+h25110_stage1_inner:
+    ldx $24
     lda $400000,x
     xba
     beq Lf25110_9
@@ -130,40 +147,28 @@ L25110_2514c:
 Lf25110_9:
     jmp L25110_25318
 Lf25110_10:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000A,x
     xba
     sec
     sbc #$00BF
     bne Lf25110_11
     jmp L25110_25318
 Lf25110_11:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000A,x
     xba
     sec
     sbc #$00BD
     bne Lf25110_12
     jmp L25110_25318
 Lf25110_12:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400002,x
     xba
     sta $00
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400004,x
     xba
     sta $9E
     lda $00
@@ -179,18 +184,12 @@ Lf25110_13:
 Lf25110_14:
     jmp L25110_25318
 Lf25110_15:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $00
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400002,x
     xba
     sta $9E
     lda $00
@@ -205,18 +204,12 @@ Lf25110_16:
 Lf25110_17:
     jmp L25110_25318
 Lf25110_18:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400006,x
     xba
     sta $00
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400008,x
     xba
     sta $9E
     lda $00
@@ -232,18 +225,12 @@ Lf25110_19:
 Lf25110_20:
     jmp L25110_25318
 Lf25110_21:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $00
-    lda $24
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400006,x
     xba
     sta $9E
     lda $00
@@ -258,18 +245,12 @@ Lf25110_22:
 Lf25110_23:
     jmp L25110_25318
 Lf25110_24:
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400002,x
     xba
     sta $00
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400002,x
     xba
     sta $9E
     lda $00
@@ -284,18 +265,12 @@ Lf25110_25:
 Lf25110_26:
     jmp L25110_251d6
 Lf25110_27:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400004,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $04
@@ -310,46 +285,46 @@ Lf25110_28:
 Lf25110_29:
     jmp L25110_25208
 Lf25110_30:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     sec
     sbc #$0001
     sta $00
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    ldx $20
+    lda $40000E,x
     xba
     beq Lf25110_31
     jmp L25110_251c4
 Lf25110_31:
     lda $00
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
 L25110_251c4:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000E,x
     xba
     beq Lf25110_32
     jmp L25110_252a8
@@ -357,619 +332,567 @@ Lf25110_32:
     lda $00
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_33
+    lda #$0001
+    bra Lf25110_34
+Lf25110_33:
+    lda #$0000
+Lf25110_34:
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
     jmp L25110_25220
 L25110_251d6:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400004,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    beq Lf25110_35
-    bvs Lf25110_33
-    bpl Lf25110_34
-    bra Lf25110_35
-Lf25110_33:
-    bmi Lf25110_34
-    bra Lf25110_35
-Lf25110_34:
-    jmp L25110_25208
+    beq Lf25110_37
+    bvs Lf25110_35
+    bpl Lf25110_36
+    bra Lf25110_37
 Lf25110_35:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    bmi Lf25110_36
+    bra Lf25110_37
+Lf25110_36:
+    jmp L25110_25208
+Lf25110_37:
+    ldx $20
+    lda $400002,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
     sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $04
     clc
     adc #$0001
-    sta $04
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_36
-    jmp L25110_251f6
-Lf25110_36:
-    lda $04
+    php
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    lda #$0000
+    rol a
+    sta $A2
     pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-L25110_251f6:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_37
-    jmp L25110_252a8
-Lf25110_37:
-    lda $04
-    eor #$FFFF
-    inc a
+    plp
     sta $04
-    lda $04
-    pha
-    lda $24
-    clc
-    adc #$000C
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    jmp L25110_25220
-L25110_25208:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
     beq Lf25110_38
-    jmp L25110_25214
+    jmp L25110_251f6
 Lf25110_38:
-    lda #$0000
+    lda $04
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
-L25110_25214:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+L25110_251f6:
+    ldx $24
+    lda $40000E,x
     xba
     beq Lf25110_39
     jmp L25110_252a8
 Lf25110_39:
-    lda #$0000
+    lda $04
+    eor #$FFFF
+    inc a
+    php
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    and #$FFFF
+    beq Lf25110_40
+    lda #$0001
+    bra Lf25110_41
+Lf25110_40:
+    lda #$0000
+Lf25110_41:
+    sta $A2
+    pla
+    plp
+    sta $04
+    lda $04
+    pha
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
+    rep #$20
+    jmp L25110_25220
+L25110_25208:
+    ldx $20
+    lda $40000E,x
+    xba
+    beq Lf25110_42
+    jmp L25110_25214
+Lf25110_42:
+    lda #$0000
+    pha
+    ldx $20
+    pla
+    sep #$20
+    sta $40000C,x
+    rep #$20
+L25110_25214:
+    ldx $24
+    lda $40000E,x
+    xba
+    beq Lf25110_43
+    jmp L25110_252a8
+Lf25110_43:
+    lda #$0000
+    pha
+    ldx $24
+    pla
+    sep #$20
+    sta $40000C,x
     rep #$20
 L25110_25220:
-    lda $24
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400006,x
     xba
     sta $00
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400006,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_40
-    bmi Lf25110_41
-    bra Lf25110_42
-Lf25110_40:
-    bpl Lf25110_41
-    bra Lf25110_42
-Lf25110_41:
+    bvs Lf25110_44
+    bmi Lf25110_45
+    bra Lf25110_46
+Lf25110_44:
+    bpl Lf25110_45
+    bra Lf25110_46
+Lf25110_45:
     jmp L25110_2525e
-Lf25110_42:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+Lf25110_46:
+    ldx $24
+    lda $400008,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    bvs Lf25110_43
-    bmi Lf25110_44
-    bra Lf25110_45
-Lf25110_43:
-    bpl Lf25110_44
-    bra Lf25110_45
-Lf25110_44:
+    bvs Lf25110_47
+    bmi Lf25110_48
+    bra Lf25110_49
+Lf25110_47:
+    bpl Lf25110_48
+    bra Lf25110_49
+Lf25110_48:
     jmp L25110_25290
-Lf25110_45:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+Lf25110_49:
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     sec
     sbc #$0001
     sta $00
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_46
+    beq Lf25110_50
     jmp L25110_2524c
-Lf25110_46:
+Lf25110_50:
     lda $00
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_2524c:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000E,x
     xba
-    beq Lf25110_47
+    beq Lf25110_51
     jmp L25110_252a8
-Lf25110_47:
+Lf25110_51:
     lda $00
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_52
+    lda #$0001
+    bra Lf25110_53
+Lf25110_52:
+    lda #$0000
+Lf25110_53:
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
     jmp L25110_252a8
 L25110_2525e:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400008,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    beq Lf25110_50
-    bvs Lf25110_48
-    bpl Lf25110_49
-    bra Lf25110_50
-Lf25110_48:
-    bmi Lf25110_49
-    bra Lf25110_50
-Lf25110_49:
+    beq Lf25110_56
+    bvs Lf25110_54
+    bpl Lf25110_55
+    bra Lf25110_56
+Lf25110_54:
+    bmi Lf25110_55
+    bra Lf25110_56
+Lf25110_55:
     jmp L25110_25290
-Lf25110_50:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+Lf25110_56:
+    ldx $20
+    lda $400006,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
     sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $04
     clc
     adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $04
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_51
+    beq Lf25110_57
     jmp L25110_2527e
-Lf25110_51:
+Lf25110_57:
     lda $04
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_2527e:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000E,x
     xba
-    beq Lf25110_52
+    beq Lf25110_58
     jmp L25110_252a8
-Lf25110_52:
+Lf25110_58:
     lda $04
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_59
+    lda #$0001
+    bra Lf25110_60
+Lf25110_59:
+    lda #$0000
+Lf25110_60:
+    sta $A2
+    pla
+    plp
     sta $04
     lda $04
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
     jmp L25110_252a8
 L25110_25290:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_53
+    beq Lf25110_61
     jmp L25110_2529c
-Lf25110_53:
+Lf25110_61:
     lda #$0000
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_2529c:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000E,x
     xba
-    beq Lf25110_54
+    beq Lf25110_62
     jmp L25110_252a8
-Lf25110_54:
+Lf25110_62:
     lda #$0000
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_252a8:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8001
-    bne Lf25110_55
+    bne Lf25110_63
     jmp L25110_252d0
-Lf25110_55:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$8002
-    bne Lf25110_56
-    jmp L25110_252d0
-Lf25110_56:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$8001
-    bne Lf25110_57
-    jmp L25110_252d0
-Lf25110_57:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$8002
-    beq Lf25110_58
-    jmp L25110_252e4
-Lf25110_58:
-L25110_252d0:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$00A0
-    bvs Lf25110_59
-    bpl Lf25110_60
-    bra Lf25110_61
-Lf25110_59:
-    bmi Lf25110_60
-    bra Lf25110_61
-Lf25110_60:
-    jmp L25110_25318
-Lf25110_61:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$00A0
-    bvs Lf25110_62
-    bpl Lf25110_63
-    bra Lf25110_64
-Lf25110_62:
-    bmi Lf25110_63
-    bra Lf25110_64
 Lf25110_63:
-    jmp L25110_25318
+    ldx $20
+    lda $40000A,x
+    xba
+    sec
+    sbc #$8002
+    bne Lf25110_64
+    jmp L25110_252d0
 Lf25110_64:
-L25110_252e4:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000A,x
     xba
     sec
-    sbc #$00A0
-    bvs Lf25110_65
-    bpl Lf25110_66
-    bra Lf25110_67
+    sbc #$8001
+    bne Lf25110_65
+    jmp L25110_252d0
 Lf25110_65:
-    bmi Lf25110_66
-    bra Lf25110_67
+    ldx $24
+    lda $40000A,x
+    xba
+    sec
+    sbc #$8002
+    beq Lf25110_66
+    jmp L25110_252e4
 Lf25110_66:
-    jmp L25110_252f8
-Lf25110_67:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+L25110_252d0:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$00A0
-    bvs Lf25110_68
-    bpl Lf25110_69
-    bra Lf25110_70
+    bvs Lf25110_67
+    bpl Lf25110_68
+    bra Lf25110_69
+Lf25110_67:
+    bmi Lf25110_68
+    bra Lf25110_69
 Lf25110_68:
-    bmi Lf25110_69
-    bra Lf25110_70
+    jmp L25110_25318
 Lf25110_69:
-    jmp L25110_252fe
+    ldx $24
+    lda $40000A,x
+    xba
+    sec
+    sbc #$00A0
+    bvs Lf25110_70
+    bpl Lf25110_71
+    bra Lf25110_72
 Lf25110_70:
+    bmi Lf25110_71
+    bra Lf25110_72
+Lf25110_71:
+    jmp L25110_25318
+Lf25110_72:
+L25110_252e4:
+    ldx $20
+    lda $40000A,x
+    xba
+    sec
+    sbc #$00A0
+    bvs Lf25110_73
+    bpl Lf25110_74
+    bra Lf25110_75
+Lf25110_73:
+    bmi Lf25110_74
+    bra Lf25110_75
+Lf25110_74:
+    jmp L25110_252f8
+Lf25110_75:
+    ldx $24
+    lda $40000E,x
+    xba
+    sec
+    sbc #$00A0
+    bvs Lf25110_76
+    bpl Lf25110_77
+    bra Lf25110_78
+Lf25110_76:
+    bmi Lf25110_77
+    bra Lf25110_78
+Lf25110_77:
+    jmp L25110_252fe
+Lf25110_78:
 L25110_252f8:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000A,x
     xba
     pha
-    lda $24
-    clc
-    adc #$000E
-    tax
+    ldx $24
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
 L25110_252fe:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000A,x
     xba
     sec
     sbc #$00A0
-    bvs Lf25110_71
-    bpl Lf25110_72
-    bra Lf25110_73
-Lf25110_71:
-    bmi Lf25110_72
-    bra Lf25110_73
-Lf25110_72:
+    bvs Lf25110_79
+    bpl Lf25110_80
+    bra Lf25110_81
+Lf25110_79:
+    bmi Lf25110_80
+    bra Lf25110_81
+Lf25110_80:
     jmp L25110_25312
-Lf25110_73:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+Lf25110_81:
+    ldx $20
+    lda $40000E,x
     xba
     sec
     sbc #$00A0
-    bvs Lf25110_74
-    bpl Lf25110_75
-    bra Lf25110_76
-Lf25110_74:
-    bmi Lf25110_75
-    bra Lf25110_76
-Lf25110_75:
+    bvs Lf25110_82
+    bpl Lf25110_83
+    bra Lf25110_84
+Lf25110_82:
+    bmi Lf25110_83
+    bra Lf25110_84
+Lf25110_83:
     jmp L25110_25318
-Lf25110_76:
+Lf25110_84:
 L25110_25312:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000A,x
     xba
     pha
-    lda $20
-    clc
-    adc #$000E
-    tax
+    ldx $20
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
 L25110_25318:
+h25110_stage1_inner_next:
     lda $24
     clc
     adc #$0010
     sta $24
-    lda $26
-    adc #$0000
-    sta $26
     lda $18
     dec a
     sta $18
     cmp #$FFFF
-    beq Lf25110_77
+    beq Lf25110_85
     jmp L25110_2514c
-Lf25110_77:
+Lf25110_85:
 L25110_25322:
+h25110_stage1_outer_next:
     lda $20
     clc
     adc #$0010
     sta $20
-    lda $22
-    adc #$0000
-    sta $22
     lda $1C
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lf25110_78
+    beq Lf25110_86
     jmp L25110_25122
-Lf25110_78:
-    lda #$0001
-    sta $1C
+Lf25110_86:
+h25110_stage1_done:
+    ; Stage 2's production shape is a single active outer object whose
+    ; qualifying inner rectangles do not overlap it.  Bank $9D proves that
+    ; whole no-write domain before skipping the generated nested scan.  This
+    ; five-byte redirect is size-neutral; the generated setup remains a
+    ; fallback target immediately below it.
+    jml.l $9D8000
+    nop
+h25110_stage2_generated_setup:
     lda $34
     clc
     adc #$3A54
     sta $20
     lda $36
-    adc #$0000
     sta $22
     jmp L25110_25338
 L25110_25338:
-    lda $20
-    clc
-    adc #$0000
-    tax
+h25110_stage2_outer:
+    ldx $20
     lda $400000,x
     xba
-    beq Lf25110_79
-    bmi Lf25110_79
-    bra Lf25110_80
-Lf25110_79:
+    beq Lf25110_87
+    bmi Lf25110_87
+    bra Lf25110_88
+Lf25110_87:
     jmp L25110_254ae
-Lf25110_80:
+Lf25110_88:
     lda #$001F
     sta $18
     lda $34
@@ -977,681 +900,614 @@ Lf25110_80:
     adc #$3A74
     sta $24
     lda $36
-    adc #$0000
     sta $26
     lda #$0000
     sta $14
 L25110_2534a:
-    lda $24
-    clc
-    adc #$0000
-    tax
+    ldx $24
     lda $400000,x
     xba
-    beq Lf25110_81
-    bmi Lf25110_81
-    bra Lf25110_82
-Lf25110_81:
+    beq Lf25110_89
+    bmi Lf25110_89
+    bra Lf25110_90
+Lf25110_89:
     jmp L25110_254a4
-Lf25110_82:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_90:
+    ldx $24
+    lda $40000A,x
     xba
     sec
     sbc #$00BF
-    bne Lf25110_83
+    bne Lf25110_91
     jmp L25110_254a4
-Lf25110_83:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_91:
+    ldx $24
+    lda $40000A,x
     xba
     sec
     sbc #$00BF
-    bne Lf25110_84
+    bne Lf25110_92
     jmp L25110_254a4
-Lf25110_84:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_92:
+    ldx $24
+    lda $40000A,x
     xba
     sec
     sbc #$00BE
-    bne Lf25110_85
+    bne Lf25110_93
     jmp L25110_254a4
-Lf25110_85:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+Lf25110_93:
+    ldx $24
+    lda $40000E,x
     xba
     sec
     sbc #$00A0
-    bvs Lf25110_86
-    bpl Lf25110_87
-    bra Lf25110_88
-Lf25110_86:
-    bmi Lf25110_87
-    bra Lf25110_88
-Lf25110_87:
-    jmp L25110_254a4
-Lf25110_88:
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    bpl Lf25110_89
-    jmp L25110_254a4
-Lf25110_89:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    beq Lf25110_92
-    bvs Lf25110_90
-    bpl Lf25110_91
-    bra Lf25110_92
-Lf25110_90:
-    bmi Lf25110_91
-    bra Lf25110_92
-Lf25110_91:
-    jmp L25110_254a4
-Lf25110_92:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    bvs Lf25110_93
-    bmi Lf25110_94
-    bra Lf25110_95
-Lf25110_93:
-    bpl Lf25110_94
-    bra Lf25110_95
+    bvs Lf25110_94
+    bpl Lf25110_95
+    bra Lf25110_96
 Lf25110_94:
-    jmp L25110_254a4
+    bmi Lf25110_95
+    bra Lf25110_96
 Lf25110_95:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    beq Lf25110_98
-    bvs Lf25110_96
-    bpl Lf25110_97
-    bra Lf25110_98
+    jmp L25110_254a4
 Lf25110_96:
-    bmi Lf25110_97
-    bra Lf25110_98
+    ldx $24
+    lda $40000E,x
+    xba
+    bpl Lf25110_97
+    jmp L25110_254a4
 Lf25110_97:
-    jmp L25110_254a4
+    ldx $20
+    lda $400002,x
+    xba
+    sta $00
+    ldx $24
+    lda $400004,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq Lf25110_100
+    bvs Lf25110_98
+    bpl Lf25110_99
+    bra Lf25110_100
 Lf25110_98:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    bvs Lf25110_99
-    bmi Lf25110_100
-    bra Lf25110_101
+    bmi Lf25110_99
+    bra Lf25110_100
 Lf25110_99:
-    bpl Lf25110_100
-    bra Lf25110_101
-Lf25110_100:
     jmp L25110_254a4
-Lf25110_101:
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+Lf25110_100:
+    ldx $20
+    lda $400004,x
     xba
     sta $00
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400002,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_102
-    bmi Lf25110_103
-    bra Lf25110_104
+    bvs Lf25110_101
+    bmi Lf25110_102
+    bra Lf25110_103
+Lf25110_101:
+    bpl Lf25110_102
+    bra Lf25110_103
 Lf25110_102:
-    bpl Lf25110_103
-    bra Lf25110_104
+    jmp L25110_254a4
 Lf25110_103:
-    jmp L25110_253e6
+    ldx $20
+    lda $400006,x
+    xba
+    sta $00
+    ldx $24
+    lda $400008,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq Lf25110_106
+    bvs Lf25110_104
+    bpl Lf25110_105
+    bra Lf25110_106
 Lf25110_104:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    bmi Lf25110_105
+    bra Lf25110_106
+Lf25110_105:
+    jmp L25110_254a4
+Lf25110_106:
+    ldx $20
+    lda $400008,x
+    xba
+    sta $00
+    ldx $24
+    lda $400006,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_107
+    bmi Lf25110_108
+    bra Lf25110_109
+Lf25110_107:
+    bpl Lf25110_108
+    bra Lf25110_109
+Lf25110_108:
+    jmp L25110_254a4
+Lf25110_109:
+    ldx $24
+    lda $400002,x
+    xba
+    sta $00
+    ldx $20
+    lda $400002,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_110
+    bmi Lf25110_111
+    bra Lf25110_112
+Lf25110_110:
+    bpl Lf25110_111
+    bra Lf25110_112
+Lf25110_111:
+    jmp L25110_253e6
+Lf25110_112:
+    ldx $24
+    lda $400004,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    bvs Lf25110_105
-    bmi Lf25110_106
-    bra Lf25110_107
-Lf25110_105:
-    bpl Lf25110_106
-    bra Lf25110_107
-Lf25110_106:
+    bvs Lf25110_113
+    bmi Lf25110_114
+    bra Lf25110_115
+Lf25110_113:
+    bpl Lf25110_114
+    bra Lf25110_115
+Lf25110_114:
     jmp L25110_25410
-Lf25110_107:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+Lf25110_115:
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     sec
     sbc #$0001
     sta $00
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_108
+    beq Lf25110_116
     jmp L25110_253dc
-Lf25110_108:
+Lf25110_116:
     lda $00
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
 L25110_253dc:
     lda $00
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_117
+    lda #$0001
+    bra Lf25110_118
+Lf25110_117:
+    lda #$0000
+Lf25110_118:
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
     jmp L25110_25420
 L25110_253e6:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400004,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    beq Lf25110_111
-    bvs Lf25110_109
-    bpl Lf25110_110
-    bra Lf25110_111
-Lf25110_109:
-    bmi Lf25110_110
-    bra Lf25110_111
-Lf25110_110:
+    beq Lf25110_121
+    bvs Lf25110_119
+    bpl Lf25110_120
+    bra Lf25110_121
+Lf25110_119:
+    bmi Lf25110_120
+    bra Lf25110_121
+Lf25110_120:
     jmp L25110_25410
-Lf25110_111:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+Lf25110_121:
+    ldx $20
+    lda $400002,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
     sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $04
     clc
     adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $04
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_112
+    beq Lf25110_122
     jmp L25110_25406
-Lf25110_112:
+Lf25110_122:
     lda $04
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
 L25110_25406:
     lda $04
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_123
+    lda #$0001
+    bra Lf25110_124
+Lf25110_123:
+    lda #$0000
+Lf25110_124:
+    sta $A2
+    pla
+    plp
     sta $04
     lda $04
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
     jmp L25110_25420
 L25110_25410:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_113
+    beq Lf25110_125
     jmp L25110_2541c
-Lf25110_113:
+Lf25110_125:
     lda #$0000
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
 L25110_2541c:
     lda #$0000
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
 L25110_25420:
-    lda $24
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400006,x
     xba
     sta $00
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400006,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_114
-    bmi Lf25110_115
-    bra Lf25110_116
-Lf25110_114:
-    bpl Lf25110_115
-    bra Lf25110_116
-Lf25110_115:
+    bvs Lf25110_126
+    bmi Lf25110_127
+    bra Lf25110_128
+Lf25110_126:
+    bpl Lf25110_127
+    bra Lf25110_128
+Lf25110_127:
     jmp L25110_25456
-Lf25110_116:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+Lf25110_128:
+    ldx $24
+    lda $400008,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    bvs Lf25110_117
-    bmi Lf25110_118
-    bra Lf25110_119
-Lf25110_117:
-    bpl Lf25110_118
-    bra Lf25110_119
-Lf25110_118:
+    bvs Lf25110_129
+    bmi Lf25110_130
+    bra Lf25110_131
+Lf25110_129:
+    bpl Lf25110_130
+    bra Lf25110_131
+Lf25110_130:
     jmp L25110_25480
-Lf25110_119:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+Lf25110_131:
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     sec
     sbc #$0001
     sta $00
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_120
+    beq Lf25110_132
     jmp L25110_2544c
-Lf25110_120:
+Lf25110_132:
     lda $00
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_2544c:
     lda $00
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_133
+    lda #$0001
+    bra Lf25110_134
+Lf25110_133:
+    lda #$0000
+Lf25110_134:
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
     jmp L25110_25490
 L25110_25456:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400008,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    beq Lf25110_123
-    bvs Lf25110_121
-    bpl Lf25110_122
-    bra Lf25110_123
-Lf25110_121:
-    bmi Lf25110_122
-    bra Lf25110_123
-Lf25110_122:
+    beq Lf25110_137
+    bvs Lf25110_135
+    bpl Lf25110_136
+    bra Lf25110_137
+Lf25110_135:
+    bmi Lf25110_136
+    bra Lf25110_137
+Lf25110_136:
     jmp L25110_25480
-Lf25110_123:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+Lf25110_137:
+    ldx $20
+    lda $400006,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
     sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $04
     clc
     adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $04
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_124
+    beq Lf25110_138
     jmp L25110_25476
-Lf25110_124:
+Lf25110_138:
     lda $04
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_25476:
     lda $04
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_139
+    lda #$0001
+    bra Lf25110_140
+Lf25110_139:
+    lda #$0000
+Lf25110_140:
+    sta $A2
+    pla
+    plp
     sta $04
     lda $04
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
     jmp L25110_25490
 L25110_25480:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_125
+    beq Lf25110_141
     jmp L25110_2548c
-Lf25110_125:
+Lf25110_141:
     lda #$0000
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_2548c:
     lda #$0000
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_25490:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000A,x
     xba
     pha
-    lda $24
-    clc
-    adc #$000E
-    tax
+    ldx $24
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_126
+    beq Lf25110_142
     jmp L25110_254a4
-Lf25110_126:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_142:
+    ldx $24
+    lda $40000A,x
     xba
     pha
-    lda $20
-    clc
-    adc #$000E
-    tax
+    ldx $20
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
 L25110_254a4:
+h25110_stage2_next:
     lda $24
     clc
     adc #$0010
     sta $24
-    lda $26
-    adc #$0000
-    sta $26
     lda $18
     dec a
     sta $18
     cmp #$FFFF
-    beq Lf25110_127
+    beq Lf25110_143
     jmp L25110_2534a
-Lf25110_127:
+Lf25110_143:
 L25110_254ae:
     lda $20
     clc
     adc #$0010
     sta $20
-    lda $22
-    adc #$0000
-    sta $22
     lda $1C
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lf25110_128
+    beq Lf25110_144
     jmp L25110_25338
-Lf25110_128:
+Lf25110_144:
     lda #$0001
     sta $1C
     lda $34
@@ -1659,22 +1515,19 @@ Lf25110_128:
     adc #$3A54
     sta $20
     lda $36
-    adc #$0000
     sta $22
     jmp L25110_254c4
 L25110_254c4:
-    lda $20
-    clc
-    adc #$0000
-    tax
+h25110_stage3_outer:
+    ldx $20
     lda $400000,x
     xba
-    beq Lf25110_129
-    bmi Lf25110_129
-    bra Lf25110_130
-Lf25110_129:
+    beq Lf25110_145
+    bmi Lf25110_145
+    bra Lf25110_146
+Lf25110_145:
     jmp L25110_25602
-Lf25110_130:
+Lf25110_146:
     lda #$0003
     sta $18
     lda $34
@@ -1682,718 +1535,337 @@ Lf25110_130:
     adc #$3C74
     sta $24
     lda $36
-    adc #$0000
     sta $26
     lda #$0000
     sta $14
 L25110_254d6:
-    lda $24
-    clc
-    adc #$0000
-    tax
+    ldx $24
     lda $400000,x
     xba
-    beq Lf25110_131
-    bmi Lf25110_131
-    bra Lf25110_132
-Lf25110_131:
-    jmp L25110_255f8
-Lf25110_132:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    beq Lf25110_135
-    bvs Lf25110_133
-    bpl Lf25110_134
-    bra Lf25110_135
-Lf25110_133:
-    bmi Lf25110_134
-    bra Lf25110_135
-Lf25110_134:
-    jmp L25110_255f8
-Lf25110_135:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    bvs Lf25110_136
-    bmi Lf25110_137
-    bra Lf25110_138
-Lf25110_136:
-    bpl Lf25110_137
-    bra Lf25110_138
-Lf25110_137:
-    jmp L25110_255f8
-Lf25110_138:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    beq Lf25110_141
-    bvs Lf25110_139
-    bpl Lf25110_140
-    bra Lf25110_141
-Lf25110_139:
-    bmi Lf25110_140
-    bra Lf25110_141
-Lf25110_140:
-    jmp L25110_255f8
-Lf25110_141:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    bvs Lf25110_142
-    bmi Lf25110_143
-    bra Lf25110_144
-Lf25110_142:
-    bpl Lf25110_143
-    bra Lf25110_144
-Lf25110_143:
-    jmp L25110_255f8
-Lf25110_144:
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    bvs Lf25110_145
-    bmi Lf25110_146
-    bra Lf25110_147
-Lf25110_145:
-    bpl Lf25110_146
-    bra Lf25110_147
-Lf25110_146:
-    jmp L25110_25542
+    beq Lf25110_147
+    bmi Lf25110_147
+    bra Lf25110_148
 Lf25110_147:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    jmp L25110_255f8
+Lf25110_148:
+    ldx $20
+    lda $400002,x
+    xba
+    sta $00
+    ldx $24
+    lda $400004,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq Lf25110_151
+    bvs Lf25110_149
+    bpl Lf25110_150
+    bra Lf25110_151
+Lf25110_149:
+    bmi Lf25110_150
+    bra Lf25110_151
+Lf25110_150:
+    jmp L25110_255f8
+Lf25110_151:
+    ldx $20
+    lda $400004,x
+    xba
+    sta $00
+    ldx $24
+    lda $400002,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_152
+    bmi Lf25110_153
+    bra Lf25110_154
+Lf25110_152:
+    bpl Lf25110_153
+    bra Lf25110_154
+Lf25110_153:
+    jmp L25110_255f8
+Lf25110_154:
+    ldx $20
+    lda $400006,x
+    xba
+    sta $00
+    ldx $24
+    lda $400008,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq Lf25110_157
+    bvs Lf25110_155
+    bpl Lf25110_156
+    bra Lf25110_157
+Lf25110_155:
+    bmi Lf25110_156
+    bra Lf25110_157
+Lf25110_156:
+    jmp L25110_255f8
+Lf25110_157:
+    ldx $20
+    lda $400008,x
+    xba
+    sta $00
+    ldx $24
+    lda $400006,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_158
+    bmi Lf25110_159
+    bra Lf25110_160
+Lf25110_158:
+    bpl Lf25110_159
+    bra Lf25110_160
+Lf25110_159:
+    jmp L25110_255f8
+Lf25110_160:
+    ldx $24
+    lda $400002,x
+    xba
+    sta $00
+    ldx $20
+    lda $400002,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_161
+    bmi Lf25110_162
+    bra Lf25110_163
+Lf25110_161:
+    bpl Lf25110_162
+    bra Lf25110_163
+Lf25110_162:
+    jmp L25110_25542
+Lf25110_163:
+    ldx $24
+    lda $400004,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    bvs Lf25110_148
-    bmi Lf25110_149
-    bra Lf25110_150
-Lf25110_148:
-    bpl Lf25110_149
-    bra Lf25110_150
-Lf25110_149:
+    bvs Lf25110_164
+    bmi Lf25110_165
+    bra Lf25110_166
+Lf25110_164:
+    bpl Lf25110_165
+    bra Lf25110_166
+Lf25110_165:
     jmp L25110_2556c
-Lf25110_150:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+Lf25110_166:
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     sec
     sbc #$0001
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000E,x
     xba
-    beq Lf25110_151
+    beq Lf25110_167
     jmp L25110_255ec
-Lf25110_151:
+Lf25110_167:
     lda $00
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_168
+    lda #$0001
+    bra Lf25110_169
+Lf25110_168:
+    lda #$0000
+Lf25110_169:
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
     jmp L25110_2557c
 L25110_25542:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400004,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    beq Lf25110_154
-    bvs Lf25110_152
-    bpl Lf25110_153
-    bra Lf25110_154
-Lf25110_152:
-    bmi Lf25110_153
-    bra Lf25110_154
-Lf25110_153:
+    beq Lf25110_172
+    bvs Lf25110_170
+    bpl Lf25110_171
+    bra Lf25110_172
+Lf25110_170:
+    bmi Lf25110_171
+    bra Lf25110_172
+Lf25110_171:
     jmp L25110_2556c
-Lf25110_154:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+Lf25110_172:
+    ldx $20
+    lda $400002,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
     sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $04
     clc
     adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $04
     lda $04
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000E,x
     xba
-    beq Lf25110_155
+    beq Lf25110_173
     jmp L25110_255ec
-Lf25110_155:
+Lf25110_173:
     lda $04
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_174
+    lda #$0001
+    bra Lf25110_175
+Lf25110_174:
+    lda #$0000
+Lf25110_175:
+    sta $A2
+    pla
+    plp
     sta $04
     lda $04
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
     jmp L25110_2557c
 L25110_2556c:
     lda #$0000
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000E,x
     xba
-    beq Lf25110_156
+    beq Lf25110_176
     jmp L25110_255ec
-Lf25110_156:
+Lf25110_176:
     lda #$0000
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
     rep #$20
 L25110_2557c:
-    lda $24
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400006,x
     xba
     sta $00
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400006,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_157
-    bmi Lf25110_158
-    bra Lf25110_159
-Lf25110_157:
-    bpl Lf25110_158
-    bra Lf25110_159
-Lf25110_158:
-    jmp L25110_255b2
-Lf25110_159:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $04
-    sec
-    sbc $9E
-    bvs Lf25110_160
-    bmi Lf25110_161
-    bra Lf25110_162
-Lf25110_160:
-    bpl Lf25110_161
-    bra Lf25110_162
-Lf25110_161:
-    jmp L25110_255dc
-Lf25110_162:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    sta $00
-    lda $00
-    sec
-    sbc #$0001
-    sta $00
-    lda $00
-    pha
-    lda $20
-    clc
-    adc #$000D
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_163
-    jmp L25110_255ec
-Lf25110_163:
-    lda $00
-    eor #$FFFF
-    inc a
-    sta $00
-    lda $00
-    pha
-    lda $24
-    clc
-    adc #$000D
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    jmp L25110_255ec
-L25110_255b2:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $04
-    sec
-    sbc $9E
-    beq Lf25110_166
-    bvs Lf25110_164
-    bpl Lf25110_165
-    bra Lf25110_166
-Lf25110_164:
-    bmi Lf25110_165
-    bra Lf25110_166
-Lf25110_165:
-    jmp L25110_255dc
-Lf25110_166:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $04
-    sec
-    sbc $9E
-    sta $04
-    lda $04
-    clc
-    adc #$0001
-    sta $04
-    lda $04
-    pha
-    lda $20
-    clc
-    adc #$000D
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_167
-    jmp L25110_255ec
-Lf25110_167:
-    lda $04
-    eor #$FFFF
-    inc a
-    sta $04
-    lda $04
-    pha
-    lda $24
-    clc
-    adc #$000D
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    jmp L25110_255ec
-L25110_255dc:
-    lda #$0000
-    pha
-    lda $20
-    clc
-    adc #$000D
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    lda $24
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_168
-    jmp L25110_255ec
-Lf25110_168:
-    lda #$0000
-    pha
-    lda $24
-    clc
-    adc #$000D
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-L25110_255ec:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    pha
-    lda $24
-    clc
-    adc #$000E
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    pha
-    lda $20
-    clc
-    adc #$000E
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-L25110_255f8:
-    lda $24
-    clc
-    adc #$0010
-    sta $24
-    lda $26
-    adc #$0000
-    sta $26
-    lda $18
-    dec a
-    sta $18
-    cmp #$FFFF
-    beq Lf25110_169
-    jmp L25110_254d6
-Lf25110_169:
-L25110_25602:
-    lda $20
-    clc
-    adc #$0010
-    sta $20
-    lda $22
-    adc #$0000
-    sta $22
-    lda $1C
-    dec a
-    sta $1C
-    cmp #$FFFF
-    beq Lf25110_170
-    jmp L25110_254c4
-Lf25110_170:
-    lda #$0003
-    sta $1C
-    lda $34
-    clc
-    adc #$3C74
-    sta $20
-    lda $36
-    adc #$0000
-    sta $22
-    jmp L25110_25618
-L25110_25618:
-    lda $20
-    clc
-    adc #$0000
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_171
-    bmi Lf25110_171
-    bra Lf25110_172
-Lf25110_171:
-    jmp L25110_2576a
-Lf25110_172:
-    lda #$001F
-    sta $18
-    lda $34
-    clc
-    adc #$3A74
-    sta $24
-    lda $36
-    adc #$0000
-    sta $26
-    lda #$0000
-    sta $14
-L25110_2562a:
-    lda $24
-    clc
-    adc #$0000
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_173
-    bmi Lf25110_173
-    bra Lf25110_174
-Lf25110_173:
-    jmp L25110_25760
-Lf25110_174:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$8001
-    bne Lf25110_175
-    jmp L25110_25760
-Lf25110_175:
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$8002
-    bne Lf25110_176
-    jmp L25110_25760
-Lf25110_176:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    beq Lf25110_179
     bvs Lf25110_177
-    bpl Lf25110_178
-    bra Lf25110_179
-Lf25110_177:
     bmi Lf25110_178
     bra Lf25110_179
+Lf25110_177:
+    bpl Lf25110_178
+    bra Lf25110_179
 Lf25110_178:
-    jmp L25110_25760
+    jmp L25110_255b2
 Lf25110_179:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400008,x
     xba
-    sta $00
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    sta $04
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
-    lda $00
+    lda $04
     sec
     sbc $9E
     bvs Lf25110_180
@@ -2403,314 +1875,304 @@ Lf25110_180:
     bpl Lf25110_181
     bra Lf25110_182
 Lf25110_181:
-    jmp L25110_25760
+    jmp L25110_255dc
 Lf25110_182:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    beq Lf25110_185
-    bvs Lf25110_183
-    bpl Lf25110_184
-    bra Lf25110_185
-Lf25110_183:
-    bmi Lf25110_184
-    bra Lf25110_185
-Lf25110_184:
-    jmp L25110_25760
-Lf25110_185:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $24
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    bvs Lf25110_186
-    bmi Lf25110_187
-    bra Lf25110_188
-Lf25110_186:
-    bpl Lf25110_187
-    bra Lf25110_188
-Lf25110_187:
-    jmp L25110_25760
-Lf25110_188:
-    lda $24
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $00
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $00
-    sec
-    sbc $9E
-    bvs Lf25110_189
-    bmi Lf25110_190
-    bra Lf25110_191
-Lf25110_189:
-    bpl Lf25110_190
-    bra Lf25110_191
-Lf25110_190:
-    jmp L25110_256aa
-Lf25110_191:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
-    xba
-    sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
-    xba
-    sta $9E
-    lda $04
-    sec
-    sbc $9E
-    bvs Lf25110_192
-    bmi Lf25110_193
-    bra Lf25110_194
-Lf25110_192:
-    bpl Lf25110_193
-    bra Lf25110_194
-Lf25110_193:
-    jmp L25110_256d4
-Lf25110_194:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     sec
     sbc #$0001
     sta $00
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_195
-    jmp L25110_256a0
-Lf25110_195:
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
-L25110_256a0:
+    ldx $24
+    lda $40000E,x
+    xba
+    beq Lf25110_183
+    jmp L25110_255ec
+Lf25110_183:
     lda $00
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_184
+    lda #$0001
+    bra Lf25110_185
+Lf25110_184:
+    lda #$0000
+Lf25110_185:
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
-    jmp L25110_256e4
-L25110_256aa:
-    lda $24
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    jmp L25110_255ec
+L25110_255b2:
+    ldx $24
+    lda $400008,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    beq Lf25110_198
-    bvs Lf25110_196
-    bpl Lf25110_197
-    bra Lf25110_198
-Lf25110_196:
-    bmi Lf25110_197
-    bra Lf25110_198
-Lf25110_197:
-    jmp L25110_256d4
-Lf25110_198:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    beq Lf25110_188
+    bvs Lf25110_186
+    bpl Lf25110_187
+    bra Lf25110_188
+Lf25110_186:
+    bmi Lf25110_187
+    bra Lf25110_188
+Lf25110_187:
+    jmp L25110_255dc
+Lf25110_188:
+    ldx $20
+    lda $400006,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
     sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $04
     clc
     adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $04
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    beq Lf25110_199
-    jmp L25110_256ca
-Lf25110_199:
     lda $04
     pha
-    lda $20
-    clc
-    adc #$000C
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
-L25110_256ca:
+    ldx $24
+    lda $40000E,x
+    xba
+    beq Lf25110_189
+    jmp L25110_255ec
+Lf25110_189:
     lda $04
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_190
+    lda #$0001
+    bra Lf25110_191
+Lf25110_190:
+    lda #$0000
+Lf25110_191:
+    sta $A2
+    pla
+    plp
     sta $04
     lda $04
     pha
-    lda $24
-    clc
-    adc #$000C
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
-    jmp L25110_256e4
-L25110_256d4:
+    jmp L25110_255ec
+L25110_255dc:
+    lda #$0000
+    pha
+    ldx $20
+    pla
+    sep #$20
+    sta $40000D,x
+    rep #$20
+    ldx $24
+    lda $40000E,x
+    xba
+    beq Lf25110_192
+    jmp L25110_255ec
+Lf25110_192:
+    lda #$0000
+    pha
+    ldx $24
+    pla
+    sep #$20
+    sta $40000D,x
+    rep #$20
+L25110_255ec:
+    ldx $20
+    lda $40000A,x
+    xba
+    pha
+    ldx $24
+    pla
+    xba
+    sta $40000E,x
+    xba
+    ldx $24
+    lda $40000A,x
+    xba
+    pha
+    ldx $20
+    pla
+    xba
+    sta $40000E,x
+    xba
+L25110_255f8:
+    lda $24
+    clc
+    adc #$0010
+    sta $24
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lf25110_193
+    jmp L25110_254d6
+Lf25110_193:
+L25110_25602:
     lda $20
     clc
-    adc #$000E
-    tax
+    adc #$0010
+    sta $20
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lf25110_194
+    jmp L25110_254c4
+Lf25110_194:
+h25110_stage4_setup:
+    lda #$0003
+    sta $1C
+    lda $34
+    clc
+    adc #$3C74
+    sta $20
+    lda $36
+    sta $22
+    jmp L25110_25618
+L25110_25618:
+h25110_stage4_outer:
+    ldx $20
     lda $400000,x
     xba
-    beq Lf25110_200
-    jmp L25110_256e0
-Lf25110_200:
+    beq Lf25110_195
+    bmi Lf25110_195
+    bra Lf25110_196
+Lf25110_195:
+    jmp L25110_2576a
+Lf25110_196:
+    lda #$001F
+    sta $18
+    lda $34
+    clc
+    adc #$3A74
+    sta $24
+    lda $36
+    sta $26
     lda #$0000
-    pha
-    lda $20
-    clc
-    adc #$000C
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-L25110_256e0:
-    lda #$0000
-    pha
-    lda $24
-    clc
-    adc #$000C
-    tax
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-L25110_256e4:
-    lda $24
-    clc
-    adc #$0006
-    tax
+    sta $14
+L25110_2562a:
+    ldx $24
     lda $400000,x
+    xba
+    beq Lf25110_197
+    bmi Lf25110_197
+    bra Lf25110_198
+Lf25110_197:
+    jmp L25110_25760
+Lf25110_198:
+    ldx $24
+    lda $40000A,x
+    xba
+    sec
+    sbc #$8001
+    bne Lf25110_199
+    jmp L25110_25760
+Lf25110_199:
+    ldx $24
+    lda $40000A,x
+    xba
+    sec
+    sbc #$8002
+    bne Lf25110_200
+    jmp L25110_25760
+Lf25110_200:
+    ldx $20
+    lda $400002,x
     xba
     sta $00
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400004,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
+    beq Lf25110_203
     bvs Lf25110_201
-    bmi Lf25110_202
-    bra Lf25110_203
-Lf25110_201:
     bpl Lf25110_202
     bra Lf25110_203
+Lf25110_201:
+    bmi Lf25110_202
+    bra Lf25110_203
 Lf25110_202:
-    jmp L25110_2571a
+    jmp L25110_25760
 Lf25110_203:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400004,x
     xba
-    sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    sta $00
+    ldx $24
+    lda $400002,x
     xba
     sta $9E
-    lda $04
+    lda $00
     sec
     sbc $9E
     bvs Lf25110_204
@@ -2720,228 +2182,512 @@ Lf25110_204:
     bpl Lf25110_205
     bra Lf25110_206
 Lf25110_205:
-    jmp L25110_25744
+    jmp L25110_25760
 Lf25110_206:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400006,x
+    xba
+    sta $00
+    ldx $24
+    lda $400008,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    beq Lf25110_209
+    bvs Lf25110_207
+    bpl Lf25110_208
+    bra Lf25110_209
+Lf25110_207:
+    bmi Lf25110_208
+    bra Lf25110_209
+Lf25110_208:
+    jmp L25110_25760
+Lf25110_209:
+    ldx $20
+    lda $400008,x
+    xba
+    sta $00
+    ldx $24
+    lda $400006,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_210
+    bmi Lf25110_211
+    bra Lf25110_212
+Lf25110_210:
+    bpl Lf25110_211
+    bra Lf25110_212
+Lf25110_211:
+    jmp L25110_25760
+Lf25110_212:
+    ldx $24
+    lda $400002,x
+    xba
+    sta $00
+    ldx $20
+    lda $400002,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_213
+    bmi Lf25110_214
+    bra Lf25110_215
+Lf25110_213:
+    bpl Lf25110_214
+    bra Lf25110_215
+Lf25110_214:
+    jmp L25110_256aa
+Lf25110_215:
+    ldx $24
+    lda $400004,x
+    xba
+    sta $04
+    ldx $20
+    lda $400004,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs Lf25110_216
+    bmi Lf25110_217
+    bra Lf25110_218
+Lf25110_216:
+    bpl Lf25110_217
+    bra Lf25110_218
+Lf25110_217:
+    jmp L25110_256d4
+Lf25110_218:
+    ldx $20
+    lda $400004,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     sec
     sbc #$0001
     sta $00
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_207
-    jmp L25110_25710
-Lf25110_207:
+    beq Lf25110_219
+    jmp L25110_256a0
+Lf25110_219:
     lda $00
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000C,x
+    rep #$20
+L25110_256a0:
+    lda $00
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_220
+    lda #$0001
+    bra Lf25110_221
+Lf25110_220:
+    lda #$0000
+Lf25110_221:
+    sta $A2
+    pla
+    plp
+    sta $00
+    lda $00
+    pha
+    ldx $24
+    pla
+    sep #$20
+    sta $40000C,x
+    rep #$20
+    jmp L25110_256e4
+L25110_256aa:
+    ldx $24
+    lda $400004,x
+    xba
+    sta $04
+    ldx $20
+    lda $400004,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    beq Lf25110_224
+    bvs Lf25110_222
+    bpl Lf25110_223
+    bra Lf25110_224
+Lf25110_222:
+    bmi Lf25110_223
+    bra Lf25110_224
+Lf25110_223:
+    jmp L25110_256d4
+Lf25110_224:
+    ldx $20
+    lda $400002,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    lda $04
+    clc
+    adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $04
+    ldx $20
+    lda $40000E,x
+    xba
+    beq Lf25110_225
+    jmp L25110_256ca
+Lf25110_225:
+    lda $04
+    pha
+    ldx $20
+    pla
+    sep #$20
+    sta $40000C,x
+    rep #$20
+L25110_256ca:
+    lda $04
+    eor #$FFFF
+    inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_226
+    lda #$0001
+    bra Lf25110_227
+Lf25110_226:
+    lda #$0000
+Lf25110_227:
+    sta $A2
+    pla
+    plp
+    sta $04
+    lda $04
+    pha
+    ldx $24
+    pla
+    sep #$20
+    sta $40000C,x
+    rep #$20
+    jmp L25110_256e4
+L25110_256d4:
+    ldx $20
+    lda $40000E,x
+    xba
+    beq Lf25110_228
+    jmp L25110_256e0
+Lf25110_228:
+    lda #$0000
+    pha
+    ldx $20
+    pla
+    sep #$20
+    sta $40000C,x
+    rep #$20
+L25110_256e0:
+    lda #$0000
+    pha
+    ldx $24
+    pla
+    sep #$20
+    sta $40000C,x
+    rep #$20
+L25110_256e4:
+    ldx $24
+    lda $400006,x
+    xba
+    sta $00
+    ldx $20
+    lda $400006,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    bvs Lf25110_229
+    bmi Lf25110_230
+    bra Lf25110_231
+Lf25110_229:
+    bpl Lf25110_230
+    bra Lf25110_231
+Lf25110_230:
+    jmp L25110_2571a
+Lf25110_231:
+    ldx $24
+    lda $400008,x
+    xba
+    sta $04
+    ldx $20
+    lda $400008,x
+    xba
+    sta $9E
+    lda $04
+    sec
+    sbc $9E
+    bvs Lf25110_232
+    bmi Lf25110_233
+    bra Lf25110_234
+Lf25110_232:
+    bpl Lf25110_233
+    bra Lf25110_234
+Lf25110_233:
+    jmp L25110_25744
+Lf25110_234:
+    ldx $20
+    lda $400008,x
+    xba
+    sta $9E
+    lda $00
+    sec
+    sbc $9E
+    sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    lda $00
+    sec
+    sbc #$0001
+    sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    ldx $20
+    lda $40000E,x
+    xba
+    beq Lf25110_235
+    jmp L25110_25710
+Lf25110_235:
+    lda $00
+    pha
+    ldx $20
+    pla
+    sep #$20
+    sta $40000D,x
     rep #$20
 L25110_25710:
     lda $00
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_236
+    lda #$0001
+    bra Lf25110_237
+Lf25110_236:
+    lda #$0000
+Lf25110_237:
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
     jmp L25110_25754
 L25110_2571a:
-    lda $24
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $24
+    lda $400008,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400008,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
-    beq Lf25110_210
-    bvs Lf25110_208
-    bpl Lf25110_209
-    bra Lf25110_210
-Lf25110_208:
-    bmi Lf25110_209
-    bra Lf25110_210
-Lf25110_209:
+    beq Lf25110_240
+    bvs Lf25110_238
+    bpl Lf25110_239
+    bra Lf25110_240
+Lf25110_238:
+    bmi Lf25110_239
+    bra Lf25110_240
+Lf25110_239:
     jmp L25110_25744
-Lf25110_210:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+Lf25110_240:
+    ldx $20
+    lda $400006,x
     xba
     sta $9E
     lda $04
     sec
     sbc $9E
     sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $04
     clc
     adc #$0001
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $04
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_211
+    beq Lf25110_241
     jmp L25110_2573a
-Lf25110_211:
+Lf25110_241:
     lda $04
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_2573a:
     lda $04
     eor #$FFFF
     inc a
+    php
+    pha
+    and #$FFFF
+    beq Lf25110_242
+    lda #$0001
+    bra Lf25110_243
+Lf25110_242:
+    lda #$0000
+Lf25110_243:
+    sta $A2
+    pla
+    plp
     sta $04
     lda $04
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
     jmp L25110_25754
 L25110_25744:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
-    beq Lf25110_212
+    beq Lf25110_244
     jmp L25110_25750
-Lf25110_212:
+Lf25110_244:
     lda #$0000
     pha
-    lda $20
-    clc
-    adc #$000D
-    tax
+    ldx $20
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_25750:
     lda #$0000
     pha
-    lda $24
-    clc
-    adc #$000D
-    tax
+    ldx $24
     pla
     sep #$20
-    sta $400000,x
+    sta $40000D,x
     rep #$20
 L25110_25754:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000A,x
     xba
     pha
-    lda $24
-    clc
-    adc #$000E
-    tax
+    ldx $24
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
-    lda $24
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $24
+    lda $40000A,x
     xba
     pha
-    lda $20
-    clc
-    adc #$000E
-    tax
+    ldx $20
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
 L25110_25760:
     lda $24
     clc
     adc #$0010
     sta $24
-    lda $26
-    adc #$0000
-    sta $26
     lda $18
     dec a
     sta $18
     cmp #$FFFF
-    beq Lf25110_213
+    beq Lf25110_245
     jmp L25110_2562a
-Lf25110_213:
+Lf25110_245:
 L25110_2576a:
+h25110_stage4_next:
     lda $20
     clc
     adc #$0010
     sta $20
-    lda $22
-    adc #$0000
-    sta $22
     lda $1C
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lf25110_214
+    beq Lf25110_246
     jmp L25110_25618
-Lf25110_214:
+Lf25110_246:
 L25110_25774:
     lda #$000B
     sta $1C
@@ -2950,37 +2696,29 @@ L25110_25774:
     adc #$3734
     sta $20
     lda $36
-    adc #$0000
     sta $22
     lda $34
     clc
     adc #$3C74
     sta $24
     lda $36
-    adc #$0000
     sta $26
 L25110_25780:
-    lda $20
-    clc
-    adc #$0000
-    tax
+    ldx $20
     lda $400000,x
     xba
-    beq Lf25110_215
-    bmi Lf25110_215
-    bra Lf25110_216
-Lf25110_215:
+    beq Lf25110_247
+    bmi Lf25110_247
+    bra Lf25110_248
+Lf25110_247:
     jmp L25110_257f2
-Lf25110_216:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+Lf25110_248:
+    ldx $20
+    lda $40000E,x
     xba
-    bpl Lf25110_217
+    bpl Lf25110_249
     jmp L25110_257f2
-Lf25110_217:
+Lf25110_249:
     lda $24
     sta $28
     lda $26
@@ -2988,215 +2726,164 @@ Lf25110_217:
     lda #$0003
     sta $18
 L25110_25796:
-    lda $28
-    clc
-    adc #$0000
-    tax
+    ldx $28
     lda $400000,x
     xba
-    beq Lf25110_218
-    bmi Lf25110_218
-    bra Lf25110_219
-Lf25110_218:
+    beq Lf25110_250
+    bmi Lf25110_250
+    bra Lf25110_251
+Lf25110_250:
     jmp L25110_257e8
-Lf25110_219:
-    lda $28
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+Lf25110_251:
+    ldx $28
+    lda $40000E,x
     xba
-    bpl Lf25110_220
+    bpl Lf25110_252
     jmp L25110_257e8
-Lf25110_220:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+Lf25110_252:
+    ldx $20
+    lda $400002,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400004,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    beq Lf25110_223
-    bvs Lf25110_221
-    bpl Lf25110_222
-    bra Lf25110_223
-Lf25110_221:
-    bmi Lf25110_222
-    bra Lf25110_223
-Lf25110_222:
+    beq Lf25110_255
+    bvs Lf25110_253
+    bpl Lf25110_254
+    bra Lf25110_255
+Lf25110_253:
+    bmi Lf25110_254
+    bra Lf25110_255
+Lf25110_254:
     jmp L25110_257e8
-Lf25110_223:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+Lf25110_255:
+    ldx $20
+    lda $400004,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400002,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_224
-    bmi Lf25110_225
-    bra Lf25110_226
-Lf25110_224:
-    bpl Lf25110_225
-    bra Lf25110_226
-Lf25110_225:
+    bvs Lf25110_256
+    bmi Lf25110_257
+    bra Lf25110_258
+Lf25110_256:
+    bpl Lf25110_257
+    bra Lf25110_258
+Lf25110_257:
     jmp L25110_257e8
-Lf25110_226:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+Lf25110_258:
+    ldx $20
+    lda $400006,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400008,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    beq Lf25110_229
-    bvs Lf25110_227
-    bpl Lf25110_228
-    bra Lf25110_229
-Lf25110_227:
-    bmi Lf25110_228
-    bra Lf25110_229
-Lf25110_228:
+    beq Lf25110_261
+    bvs Lf25110_259
+    bpl Lf25110_260
+    bra Lf25110_261
+Lf25110_259:
+    bmi Lf25110_260
+    bra Lf25110_261
+Lf25110_260:
     jmp L25110_257e8
-Lf25110_229:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+Lf25110_261:
+    ldx $20
+    lda $400008,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400006,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_230
-    bmi Lf25110_231
-    bra Lf25110_232
-Lf25110_230:
-    bpl Lf25110_231
-    bra Lf25110_232
-Lf25110_231:
+    bvs Lf25110_262
+    bmi Lf25110_263
+    bra Lf25110_264
+Lf25110_262:
+    bpl Lf25110_263
+    bra Lf25110_264
+Lf25110_263:
     jmp L25110_257e8
-Lf25110_232:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_264:
+    ldx $20
+    lda $40000A,x
     xba
     pha
-    lda $28
-    clc
-    adc #$000E
-    tax
+    ldx $28
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
-    lda $28
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $28
+    lda $40000A,x
     xba
     pha
-    lda $20
-    clc
-    adc #$000E
-    tax
+    ldx $20
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
-    lda $20
-    clc
-    adc #$000C
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000C,x
     xba
     pha
-    lda $28
-    clc
-    adc #$000C
-    tax
+    ldx $28
     pla
     xba
-    sta $400000,x
+    sta $40000C,x
     xba
 L25110_257e8:
     lda $28
     clc
     adc #$0010
     sta $28
-    lda $2A
-    adc #$0000
-    sta $2A
     lda $18
     dec a
     sta $18
     cmp #$FFFF
-    beq Lf25110_233
+    beq Lf25110_265
     jmp L25110_25796
-Lf25110_233:
+Lf25110_265:
 L25110_257f2:
     lda $20
     clc
     adc #$0010
     sta $20
-    lda $22
-    adc #$0000
-    sta $22
     lda $1C
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lf25110_234
+    beq Lf25110_266
     jmp L25110_25780
-Lf25110_234:
+Lf25110_266:
     lda #$0001
     sta $14
 L25110_25800:
-    lda $14
-    beq Lf25110_235
+h25110_stage5_select:
+    ; Bank $9D proves the common all-inactive 44-outer shape and reconstructs
+    ; both DBRA passes.  The redirect exactly replaces LDA D5.W / BEQ; on a
+    ; miss the helper routes to the retained wide or narrow setup below.
+    jml.l $9D8200
     jmp L25110_25816
-Lf25110_235:
+Lf25110_267:
     lda #$000B
     sta $1C
     lda $34
@@ -3204,17 +2891,16 @@ Lf25110_235:
     adc #$3734
     sta $20
     lda $36
-    adc #$0000
     sta $22
     lda $34
     clc
     adc #$3A74
     sta $24
     lda $36
-    adc #$0000
     sta $26
     jmp L25110_2582a
 L25110_25816:
+h25110_stage5_wide:
     lda #$001F
     sta $1C
     lda $34
@@ -3222,14 +2908,12 @@ L25110_25816:
     adc #$37F4
     sta $20
     lda $36
-    adc #$0000
     sta $22
     lda $34
     clc
     adc #$39F4
     sta $24
     lda $36
-    adc #$0000
     sta $26
     lda $24
     sta $2C
@@ -3239,436 +2923,323 @@ L25110_25816:
     clc
     adc #$0030
     sta $2C
-    lda $2E
-    adc #$0000
-    sta $2E
 L25110_2582a:
-    lda $20
-    clc
-    adc #$0000
-    tax
+h25110_stage5_outer:
+    ldx $20
     lda $400000,x
     xba
-    beq Lf25110_236
-    bmi Lf25110_236
-    bra Lf25110_237
-Lf25110_236:
+    beq Lf25110_268
+    bmi Lf25110_268
+    bra Lf25110_269
+Lf25110_268:
     jmp L25110_259ba
-Lf25110_237:
+Lf25110_269:
     lda $24
     sta $28
     lda $26
     sta $2A
     lda $14
-    beq Lf25110_238
+    beq Lf25110_270
     jmp L25110_25842
-Lf25110_238:
+Lf25110_270:
     lda #$001F
     sta $18
     jmp L25110_25850
 L25110_25842:
     lda #$0005
     sta $18
-    lda $34
-    clc
-    adc #$3CB4
-    tax
-    lda $400000,x
+    ldx $34
+    lda $403CB4,x
     xba
-    bne Lf25110_239
+    bne Lf25110_271
     jmp L25110_25850
-Lf25110_239:
+Lf25110_271:
     lda $2C
     sta $28
     lda $2E
     sta $2A
 L25110_25850:
     lda $14
-    bne Lf25110_240
+    bne Lf25110_272
     jmp L25110_25868
-Lf25110_240:
-    lda $34
-    clc
-    adc #$3CB4
-    tax
-    lda $400000,x
+Lf25110_272:
+    ldx $34
+    lda $403CB4,x
     xba
-    bne Lf25110_241
+    bne Lf25110_273
     jmp L25110_25868
-Lf25110_241:
+Lf25110_273:
     lda $18
     sec
     sbc #$0002
-    beq Lf25110_242
+    beq Lf25110_274
     jmp L25110_25868
-Lf25110_242:
+Lf25110_274:
     lda $24
     sta $28
     lda $26
     sta $2A
 L25110_25868:
-    lda $28
-    clc
-    adc #$0000
-    tax
+    ldx $28
     lda $400000,x
     xba
-    beq Lf25110_243
-    bmi Lf25110_243
-    bra Lf25110_244
-Lf25110_243:
+    beq Lf25110_275
+    bmi Lf25110_275
+    bra Lf25110_276
+Lf25110_275:
     jmp L25110_259b0
-Lf25110_244:
-    lda $28
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_276:
+    ldx $28
+    lda $40000A,x
     xba
     sec
     sbc #$00BE
-    bne Lf25110_245
+    bne Lf25110_277
     jmp L25110_259b0
-Lf25110_245:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_277:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$00BF
-    beq Lf25110_246
+    beq Lf25110_278
     jmp L25110_25898
-Lf25110_246:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_278:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8030
-    bne Lf25110_247
+    bne Lf25110_279
     jmp L25110_259b0
-Lf25110_247:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_279:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8050
-    bne Lf25110_248
+    bne Lf25110_280
     jmp L25110_259b0
-Lf25110_248:
+Lf25110_280:
 L25110_25898:
-    lda $28
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $28
+    lda $40000E,x
     xba
-    bpl Lf25110_249
+    bpl Lf25110_281
     jmp L25110_259b0
-Lf25110_249:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+Lf25110_281:
+    ldx $20
+    lda $400002,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400004,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    beq Lf25110_252
-    bvs Lf25110_250
-    bpl Lf25110_251
-    bra Lf25110_252
-Lf25110_250:
-    bmi Lf25110_251
-    bra Lf25110_252
-Lf25110_251:
+    beq Lf25110_284
+    bvs Lf25110_282
+    bpl Lf25110_283
+    bra Lf25110_284
+Lf25110_282:
+    bmi Lf25110_283
+    bra Lf25110_284
+Lf25110_283:
     jmp L25110_259b0
-Lf25110_252:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+Lf25110_284:
+    ldx $20
+    lda $400004,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400002,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_253
-    bmi Lf25110_254
-    bra Lf25110_255
-Lf25110_253:
-    bpl Lf25110_254
-    bra Lf25110_255
-Lf25110_254:
+    bvs Lf25110_285
+    bmi Lf25110_286
+    bra Lf25110_287
+Lf25110_285:
+    bpl Lf25110_286
+    bra Lf25110_287
+Lf25110_286:
     jmp L25110_259b0
-Lf25110_255:
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+Lf25110_287:
+    ldx $20
+    lda $400006,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400008,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    beq Lf25110_258
-    bvs Lf25110_256
-    bpl Lf25110_257
-    bra Lf25110_258
-Lf25110_256:
-    bmi Lf25110_257
-    bra Lf25110_258
-Lf25110_257:
+    beq Lf25110_290
+    bvs Lf25110_288
+    bpl Lf25110_289
+    bra Lf25110_290
+Lf25110_288:
+    bmi Lf25110_289
+    bra Lf25110_290
+Lf25110_289:
     jmp L25110_259b0
-Lf25110_258:
-    lda $20
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
+Lf25110_290:
+    ldx $20
+    lda $400008,x
     xba
     sta $00
-    lda $28
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $28
+    lda $400006,x
     xba
     sta $9E
     lda $00
     sec
     sbc $9E
-    bvs Lf25110_259
-    bmi Lf25110_260
-    bra Lf25110_261
-Lf25110_259:
-    bpl Lf25110_260
-    bra Lf25110_261
-Lf25110_260:
+    bvs Lf25110_291
+    bmi Lf25110_292
+    bra Lf25110_293
+Lf25110_291:
+    bpl Lf25110_292
+    bra Lf25110_293
+Lf25110_292:
     jmp L25110_259b0
-Lf25110_261:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_293:
+    ldx $20
+    lda $40000A,x
     xba
     pha
-    lda $28
-    clc
-    adc #$000E
-    tax
+    ldx $28
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
-    lda $28
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $28
+    lda $40000A,x
     xba
     pha
-    lda $20
-    clc
-    adc #$000E
-    tax
+    ldx $20
     pla
     xba
-    sta $400000,x
+    sta $40000E,x
     xba
-    lda $20
-    clc
-    adc #$000C
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000C,x
     xba
     pha
-    lda $28
-    clc
-    adc #$000C
-    tax
+    ldx $28
     pla
     xba
-    sta $400000,x
+    sta $40000C,x
     xba
-    lda $28
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $28
+    lda $40000A,x
     xba
     sec
     sbc #$00A0
-    bvs Lf25110_262
-    bpl Lf25110_263
-    bra Lf25110_264
-Lf25110_262:
-    bmi Lf25110_263
-    bra Lf25110_264
-Lf25110_263:
+    bvs Lf25110_294
+    bpl Lf25110_295
+    bra Lf25110_296
+Lf25110_294:
+    bmi Lf25110_295
+    bra Lf25110_296
+Lf25110_295:
     jmp L25110_259ba
-Lf25110_264:
-    lda $20
-    clc
-    adc #$000D
-    tax
-    lda $400000,x
+Lf25110_296:
+    ldx $20
+    lda $40000D,x
     and #$00FF
-    bne Lf25110_265
+    bne Lf25110_297
     jmp L25110_259ba
-Lf25110_265:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_297:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8050
-    bne Lf25110_266
+    bne Lf25110_298
     jmp L25110_25944
-Lf25110_266:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_298:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8051
-    bne Lf25110_267
+    bne Lf25110_299
     jmp L25110_25944
-Lf25110_267:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_299:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8053
-    bne Lf25110_268
+    bne Lf25110_300
     jmp L25110_25944
-Lf25110_268:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_300:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8030
-    bne Lf25110_269
+    bne Lf25110_301
     jmp L25110_25944
-Lf25110_269:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_301:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8031
-    bne Lf25110_270
+    bne Lf25110_302
     jmp L25110_25944
-Lf25110_270:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_302:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8033
-    bne Lf25110_271
+    bne Lf25110_303
     jmp L25110_25944
-Lf25110_271:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_303:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8034
-    bne Lf25110_272
+    bne Lf25110_304
     jmp L25110_25944
-Lf25110_272:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_304:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8054
-    beq Lf25110_273
+    beq Lf25110_305
     jmp L25110_259ba
-Lf25110_273:
+Lf25110_305:
 L25110_25944:
-    lda $34
-    clc
-    adc #$1CCC
-    tax
-    lda $400000,x
+    ldx $34
+    lda $401CCC,x
     xba
     sec
     sbc #$0008
-    bne Lf25110_274
+    bne Lf25110_306
     jmp L25110_259ba
-Lf25110_274:
-    lda $20
-    clc
-    adc #$0002
-    tax
-    lda $400000,x
+Lf25110_306:
+    ldx $20
+    lda $400002,x
     xba
     sta $00
-    lda $20
-    clc
-    adc #$0006
-    tax
-    lda $400000,x
+    ldx $20
+    lda $400006,x
     xba
     sta $04
-    lda $20
-    clc
-    adc #$000C
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000C,x
     and #$00FF
     sep #$20
     sta $08
@@ -3676,48 +3247,74 @@ Lf25110_274:
     lda $08
     clc
     adc #$0040
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $08
     lda $08
-    bpl Lf25110_275
+    bpl Lf25110_307
     jmp L25110_25974
-Lf25110_275:
-    lda $20
-    clc
-    adc #$0004
-    tax
-    lda $400000,x
+Lf25110_307:
+    ldx $20
+    lda $400004,x
     xba
     sta $08
     lda $08
     sec
     sbc $00
     sta $08
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     lda $00
     clc
     adc $08
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
     sta $00
     lda $00
     sec
     sbc #$0010
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
     jmp L25110_25978
 L25110_25974:
     lda $00
     sec
     sbc #$0008
     sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
 L25110_25978:
-    lda $20
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000E,x
     xba
     sec
     sbc #$0068
-    beq Lf25110_276
+    beq Lf25110_308
     jmp L25110_25992
-Lf25110_276:
+Lf25110_308:
     lda $04
     pha
     lda $3C
@@ -3769,28 +3366,22 @@ br25110_1:
     sta $3E
     jmp L25110_259ba
 L25110_25992:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8034
-    bne Lf25110_277
+    bne Lf25110_309
     jmp L25110_259ba
-Lf25110_277:
-    lda $20
-    clc
-    adc #$000A
-    tax
-    lda $400000,x
+Lf25110_309:
+    ldx $20
+    lda $40000A,x
     xba
     sec
     sbc #$8054
-    bne Lf25110_278
+    bne Lf25110_310
     jmp L25110_259ba
-Lf25110_278:
+Lf25110_310:
     ; CALL-BRIDGE jsr $25a40.l -> ojmp_hook (callee --table escape, else interpret), resume br25110_2
     lda #br25110_2
     sta $54
@@ -3805,42 +3396,64 @@ Lf25110_278:
 br25110_2:
     jmp L25110_259ba
 L25110_259b0:
+h25110_stage5_inner_next:
     lda $28
     clc
     adc #$0010
     sta $28
-    lda $2A
-    adc #$0000
-    sta $2A
     lda $18
     dec a
     sta $18
     cmp #$FFFF
-    beq Lf25110_279
+    beq Lf25110_311
     jmp L25110_25850
-Lf25110_279:
+Lf25110_311:
 L25110_259ba:
+h25110_stage5_outer_next:
     lda $20
     clc
     adc #$0010
     sta $20
-    lda $22
-    adc #$0000
-    sta $22
     lda $1C
     dec a
     sta $1C
     cmp #$FFFF
-    beq Lf25110_280
+    beq Lf25110_312
     jmp L25110_2582a
-Lf25110_280:
+Lf25110_312:
     lda $14
     dec a
     sta $14
     cmp #$FFFF
-    beq Lf25110_281
+    beq Lf25110_313
     jmp L25110_25800
-Lf25110_281:
+Lf25110_313:
+    ; DBRA does not alter the 68000 CCR.  On the common final outer-slot edge,
+    ; $02582A's TST.W is therefore still the architecturally visible flag
+    ; producer at RTS.  The generated branch consumed native N/Z but never
+    ; published them to the interpreter's CCR words (caught by the organic
+    ; tick-852 MAME differential, whose incoming Z was zero).  Reconstruct the
+    ; exact TST result when that final slot is nonpositive; a positive slot
+    ; executes later flag producers and retains the generated path below.
+h25110_final_tst_rebuild:
+    ldx $34
+    lda $4037E4,x
+    xba
+    beq h25110_final_tst_zero
+    bpl h25110_final_tst_done
+    stz $60                  ; negative TST: N=1, Z=V=C=0; X untouched
+    lda #$0001
+    sta $70
+    stz $72
+    stz $6E
+    bra h25110_final_tst_done
+h25110_final_tst_zero:
+    lda #$0001              ; zero TST: Z=1, N=V=C=0; X untouched
+    sta $60
+    stz $70
+    stz $72
+    stz $6E
+h25110_final_tst_done:
     ldx $3C
     lda $400000,x
     xba
@@ -6607,6 +6220,8 @@ Lcc80_ccd6:
     .org $D800
 ; --- transpiled from $00CAF6 (50 instrs) by tools/transpile.py [bank1] ---
 entry_caf6:
+    jmp hcaf6_fast
+caf6_generated:
     rep #$30
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
@@ -6995,19 +6610,9 @@ brcaf6_1:
     beq Lfcaf6_9
     jmp Lcaf6_cb46
 Lfcaf6_9:
-    php
-    sep #$20
-    pla
-    rep #$30
-    and #$00FF
-    sta $50
-    and #$0002
-    sta $60
-    lda $50
-    and #$0080
-    sta $70
-    stz $72
-    stz $6E
+    ; DBRA preserves every 68K CCR bit.  The callable $CB9E body immediately
+    ; before it has already materialized its result in $60/$6E/$70/$72/$A2;
+    ; do not leak the 65816 `cmp #$FFFF` loop-control flags into that state.
     jmp Lcaf6_cb9c
     lda #$2D16
     sta $20
@@ -7156,13 +6761,1198 @@ Lcaf6_cb9c:
     sta $3C
     jml.l ors_pre
 
+caf6_generated_end:
+
+; ============================================================================
+; Guarded production-shape $00CAF6 sprite-list builder.
+;
+; The settled gameplay paths select immutable ROM lists $032F78 or $032FCA:
+; five records whose A1-table offsets are 0,4,8,12,16.  The generated body
+; spends most of its time routing those known-ROM/known-work accesses through
+; generic EA helpers.  This path proves the complete address shape before
+; making any emulated-state change and performs the same writes in the same
+; record order.  Every other branch/list/address shape falls back to
+; caf6_generated.
+; ============================================================================
+    .org $DD00
+hcaf6_guard_fail0:
+    .a16
+    .i16
+    jmp hcaf6_fallback
+hcaf6_fast:
+    rep #$30
+    .a16
+    .i16
+
+    ; A6 is the established task-frame arena.  This also bounds every local
+    ; read from A6-$54 through A6-$04 inside work RAM without bank wrapping.
+    lda $3A
+    cmp #$00F0
+    bne hcaf6_guard_fail0
+    lda $38
+    cmp #$1000
+    bcc hcaf6_guard_fail0
+    cmp #$2000
+    bcs hcaf6_guard_fail0
+
+    ; Production selector family.  The direct branch resolves either of the
+    ; two immutable five-record lists used in settled gameplay:
+    ;   1. D2 != [A6-$04] and D2 is 4 or 8.  The original $032578+D2
+    ;      selector table resolves those values to $032F78 and $032FCA,
+    ;      respectively.  This transition shape does not modify D0 or D1.
+    ;   2. D2 == [A6-$04], [A6-$16] in 2..$7FFF, and [A6-$18] is
+    ;      $000C/$0124 (list $032F78) or $0010/$0014 (list $032FCA).
+    ;   3. The same equality with D2=4 and [A6-$16]=1.  Input D1=0 takes the
+    ;      negative-D1 cb00 branch; ROM $03257C->$0326B2 yields $000C.  Input
+    ;      D1=1 uses exact frame pointer $0326B8, whose word is $0124.  Both
+    ;      selectors therefore reach the same list.
+    ; All conditional branches below target nearby backward trampolines so
+    ; Poppy cannot silently wrap a short branch while laying out this guard.
+    lda $38
+    sec
+    sbc #$001A
+    tax
+    lda $400000,x
+    xba
+    sta $8E
+    stz $94                  ; 0=direct, 1=negative-D1, 2=frame, 3=D2 table
+    stz $96                  ; 0=list $032F78, 1=list $032FCA
+    lda $38
+    sec
+    sbc #$0004
+    tax
+    lda $400000,x
+    xba
+    cmp $8E
+    beq hcaf6_selector_equal
+
+    ; Unequal selectors use the immutable longword table at $032578.  Only
+    ; the two transition values observed in production are admitted:
+    ;   D2=4: $03257C->$0326B2->$000C->$032F78
+    ;   D2=8: $032580->$0326BC->$0010->$032FCA
+    ; Unlike the equal selector tree, this route leaves D0/D1 untouched.
+    lda #$0003
+    sta $94
+    lda $8E
+    cmp #$0004
+    beq hcaf6_selector_table_done
+    cmp #$0008
+    bne hcaf6_guard_fail0
+    inc $96
+hcaf6_selector_table_done:
+    .a16
+    .i16
+    jmp hcaf6_guard_a2
+
+hcaf6_selector_equal:
+    .a16
+    .i16
+
+    jmp hcaf6_selector_check
+hcaf6_selector_fail:
+    .a16
+    .i16
+    jmp hcaf6_fallback
+hcaf6_selector_special:
+    .a16
+    .i16
+    jmp hcaf6_selector_special_body
+hcaf6_selector_check:
+    .a16
+    .i16
+    lda #$0002
+    sta $90                  ; fixed bound keeps post-branch CMP size stable
+    lda $38
+    sec
+    sbc #$0016
+    tax
+    lda $400000,x
+    xba
+    sta $92
+    cmp #$0001
+    beq hcaf6_selector_special
+    cmp $90
+    bcc hcaf6_selector_fail
+    lda $92
+    bmi hcaf6_selector_fail
+    jmp hcaf6_selector_direct_body
+
+hcaf6_selector_special_body:
+    .a16
+    .i16
+    lda $8E
+    cmp #$0004
+    beq hcaf6_selector_special_d2_ready
+    cmp #$0008
+    bne hcaf6_selector_fail
+    inc $96                  ; D2=8 boundary paths resolve immutable $032FCA
+hcaf6_selector_special_d2_ready:
+    .a16
+    .i16
+    lda $38
+    sec
+    sbc #$0014
+    tax
+    lda $400000,x
+    xba
+    sta $90
+    jmp hcaf6_selector_special_d1_check
+hcaf6_selector_special_negative:
+    .a16
+    .i16
+    inc $94
+    jmp hcaf6_guard_a2
+hcaf6_selector_special_d1_check:
+    .a16
+    .i16
+    lda $90
+    beq hcaf6_selector_special_negative
+    cmp $92                  ; $92 is still the input D0 value $0001
+    bne hcaf6_selector_fail
+    jmp hcaf6_selector_special_frame
+
+hcaf6_selector_special_frame:
+    .a16
+    .i16
+    lda #$26B8
+    sta $90
+    lda $96
+    beq hcaf6_selector_special_frame_ptr_ready
+    lda #$26C2              ; D2=8 frame word is $0014 -> list $032FCA
+    sta $90
+hcaf6_selector_special_frame_ptr_ready:
+    .a16
+    .i16
+    lda $38
+    sec
+    sbc #$0012
+    tax
+    lda $400000,x
+    xba
+    cmp #$0003
+    bne hcaf6_selector_direct_fail
+    inx
+    inx
+    lda $400000,x
+    xba
+    cmp $90
+    bne hcaf6_selector_direct_fail
+    inc $94
+    inc $94
+    jmp hcaf6_guard_a2
+
+hcaf6_selector_direct_body:
+    .a16
+    .i16
+    jmp hcaf6_selector_direct_check
+hcaf6_selector_direct_fail:
+    .a16
+    .i16
+    jmp hcaf6_fallback
+hcaf6_selector_direct_ok:
+    .a16
+    .i16
+    jmp hcaf6_guard_a2
+hcaf6_selector_direct_check:
+    .a16
+    .i16
+    lda $38
+    sec
+    sbc #$0018
+    tax
+    lda $400000,x
+    xba
+    cmp #$000C
+    beq hcaf6_selector_direct_ok
+    cmp #$0010
+    beq hcaf6_selector_direct_ok
+    cmp #$0014
+    beq hcaf6_selector_direct_ok
+    cmp #$0124
+    bne hcaf6_selector_direct_fail
+    jmp hcaf6_selector_direct_ok
+
+    ; [A6-$54] is the active-object record written by each normal CB9E call.
+hcaf6_guard_fail_a2:
+    .a16
+    .i16
+    jmp hcaf6_fallback
+hcaf6_guard_a2:
+    .a16
+    .i16
+    lda $38
+    sec
+    sbc #$0054
+    tax
+    lda $400000,x
+    xba
+    cmp #$00F0
+    bne hcaf6_guard_fail_a2
+    inx
+    inx
+    lda $400000,x
+    xba
+    cmp #$3000
+    bcc hcaf6_guard_fail_a2
+    cmp #$FFFB
+    bcs hcaf6_guard_fail_a2
+
+    ; A second nearby failure trampoline keeps every conditional branch
+    ; backward and in range; Poppy has silently misencoded forward shorts.
+    jmp hcaf6_guard_a1_setup
+hcaf6_guard_fail1:
+    .a16
+    .i16
+    jmp hcaf6_fallback
+
+    ; Preflight the five contiguous A1 pointer slots.  Keeping both the frame
+    ; and target pools disjoint makes this scan stable under the later writes;
+    ; duplicate/aliasing A1/A2 records still execute sequentially as on 68K.
+hcaf6_guard_a1_setup:
+    .a16
+    .i16
+    lda $38
+    sec
+    sbc #$0038
+    tax
+    ldy #$0005
+hcaf6_guard_a1:
+    .a16
+    .i16
+    lda $400000,x
+    xba
+    cmp #$00F0
+    bne hcaf6_guard_fail1
+    inx
+    inx
+    lda $400000,x
+    xba
+    cmp #$3000
+    bcc hcaf6_guard_fail1
+    cmp #$3FF1
+    bcs hcaf6_guard_fail1
+    inx
+    inx
+    dey
+    bne hcaf6_guard_a1
+
+hcaf6_guard_done:
+    .a16
+    .i16
+    ; Both boundary selectors execute SUBQ.W on D0 and D1 before choosing the
+    ; same list.  Recreate those observable register lows only after every
+    ; guard is green, so a late failure enters caf6_generated untouched.
+    jmp hcaf6_selector_state_check
+hcaf6_selector_state_special:
+    .a16
+    .i16
+    stz $00
+    lda $94
+    sec
+    sbc #$0002              ; selector 1 -> D1=$FFFF; selector 2 -> D1=$0000
+    sta $04
+    jmp hcaf6_selector_state_done
+hcaf6_selector_state_check:
+    .a16
+    .i16
+    lda $94
+    beq hcaf6_selector_state_done
+    cmp #$0003              ; D2-table route does not execute SUBQ on D0/D1
+    beq hcaf6_selector_state_done
+    jmp hcaf6_selector_state_special
+hcaf6_selector_state_done:
+    .a16
+    .i16
+    ; Re-simulate the skipped outer BSR exactly as the callable generated body
+    ; does.  Its sentinel return remains the sole intentionally synthetic word.
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+
+hcaf6_after_push:
+    .a16
+    .i16
+    ; Observable register state at the canonical loop head.
+    lda $38
+    sec
+    sbc #$001A
+    tax
+    lda $400000,x
+    xba
+    sta $08                  ; D2.W = [A6-$1A]
+    lda #$0004
+    sta $1C                  ; D7.W = list count (DBRA executes five times)
+    lda #$2F7A
+    sta $20
+    lda #$0003
+    sta $22                  ; default A0: first record after $032F78 count word
+    ; The direct $0010 selector instead names list $032FCA.  Re-read the
+    ; already-proved frame word here so no speculative state survives a guard
+    ; miss and the two constant bodies receive the exact original A0.
+    lda $94
+    beq hcaf6_direct_list_select
+    lda $96
+    beq hcaf6_d6_select      ; established D2=4 boundary list is $032F78
+    jmp hcaf6_use_32fca
+hcaf6_direct_list_select:
+    .a16
+    .i16
+    lda $38
+    sec
+    sbc #$0018
+    tax
+    lda $400000,x
+    xba
+    cmp #$0010
+    beq hcaf6_use_32fca
+    cmp #$0014
+    bne hcaf6_d6_select
+hcaf6_use_32fca:
+    .a16
+    .i16
+    lda #$2FCC
+    sta $20                  ; first record after $032FCA count word
+    jmp hcaf6_d6_select
+hcaf6_d6_zero:
+    .a16
+    .i16
+    lda #$0020
+    sta $18
+    jmp hcaf6_loop
+hcaf6_d6_select:
+    .a16
+    .i16
+    lda $38
+    sec
+    sbc #$0050
+    tax
+    lda $400000,x
+    xba
+    beq hcaf6_d6_zero
+    lda #$0040
+    sta $18
+    jmp hcaf6_loop
+
+hcaf6_loop:
+    .a16
+    .i16
+    ; The guard proved one of the two immutable lists.  Route $032F78 to the
+    ; established bank-$95 body and the live $032FCA shape to its bank-$9D
+    ; body.  The retained generic loop below remains dead on a guard hit but is
+    ; kept as fallback history.
+    lda $20
+    cmp #$2FCC
+    beq hcaf6_loop_32fca
+    jml.l $95FA00
+hcaf6_loop_32fca:
+    jml.l $9DA200
+    lda $38
+    clc
+    adc #$FFC8
+    clc
+    adc $00
+    tax
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+
+    ; move.w $E(A0),(A1); clr.w $E(A1).
+    ldy #$000E
+    jsr hcb_rdw_a0
+    ldx $24
+    jsr hcb_wrw40
+    lda $24
+    clc
+    adc #$000E
+    tax
+    lda #$0000
+    jsr hcb_wrw40
+
+    ; move.l $A(A0),$A(A1), preserving the arcade big-endian word order.
+    ldy #$000A
+    jsr hcb_rdw_a0
+    sta $8E
+    ldy #$000C
+    jsr hcb_rdw_a0
+    sta $90
+    lda $24
+    clc
+    adc #$000A
+    tax
+    lda $8E
+    jsr hcb_wrw40
+    inx
+    inx
+    lda $90
+    jsr hcb_wrw40
+
+    ; add.w D6,$A(A1).  Record X now so a CB9E TST early-return retains the
+    ; same extend bit; normal CB9E records overwrite X with their final ADD.W.
+    lda $8E
+    clc
+    adc $18
+    sta $8E
+    lda #$0000
+    adc #$0000
+    sta $A2
+    lda $24
+    clc
+    adc #$000A
+    tax
+    lda $8E
+    jsr hcb_wrw40
+
+    ; Native-call the same semantic core used by the generic callable entry;
+    ; the enclosing CAF6 owns the single emulated return frame.
+hcaf6_before_core:
+    .a16
+    .i16
+    jsr hcb_core
+hcaf6_after_core:
+    .a16
+    .i16
+
+    ; ADDA.L #$10,A0 and DBRA D7.  Neither changes 68K CCR, so the CB9E words
+    ; remain authoritative at function return.
+    jmp hcaf6_loop_check
+hcaf6_loop_again:
+    .a16
+    .i16
+    jmp hcaf6_loop
+hcaf6_loop_check:
+    .a16
+    .i16
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    bne hcaf6_loop_again
+    jmp Lcaf6_cb9c
+
+hcaf6_fallback:
+    .a16
+    .i16
+    jmp caf6_generated
+
+hcaf6_end:
+    .a16
+    .i16
+
+; ============================================================================
+; h1e7c0_hot — guarded common object/render iteration for $01E7C0.
+;
+; entry_1e7c0's existing bank-$98 guard has already proved canonical A5/A6,
+; all eight object pointers, and all three sub-record pointers.  This helper
+; performs the real $3518->$351E prologue once, then keeps the common records
+; in one bank instead of executing the large generated address-rebuild body.
+;
+; Each record is checked before its first architectural write.  A miss jumps
+; to the unchanged generated L1e7c0_1e7cc with A1 still pointing at that slot
+; and D5 still holding its DBRA index, so mixed animation/edge ticks retain the
+; exact old path for an unsupported current record.  Its generated DBRA
+; backedge returns here to reconsider the next record, so one uncommon slot
+; no longer forces every remaining slot through the large generated body.
+; Supported calls
+; are the two organic renderer callbacks ($000D96 and $00111A), both entered
+; with a real $00FC bank-$97 sentinel.  Their table-convention RTS returns here
+; through ors_pre.  If a callback changes the mode word, its post-call state is
+; handed to the unchanged bank-$98 br1e7c0_10 continuation.
+;
+; Fixed cross-bank seams (asserted by tools/build_interp_rom.py):
+;   $98:AEFA = L1e7c0_1e7cc       $98:CE0D = L1e7c0_1ee3a
+;   $98:B7FD = L1e7c0_1e94a
+;   $98:DDE7 = br1e7c0_10
+;   $98:E1B3 = Lf1e7c0_227        $98:E348 = entry_d96t
+;   $95:A700 = entry_111at
+; ============================================================================
+    .org $E000
+h1e7c0_hot:
+    rep #$30
+    .a16
+    .i16
+    jmp h1e7c0_hot_entry
+
+h1e7c0_hot_cold:
+    ; Prologue is already committed; generated loop reloads this current slot.
+    jml.l $98AEFA
+h1e7c0_hot_done:
+    ; D5 already fell through to $FFFF, exactly as DBRA; run the unchanged tail.
+    jml.l $98E1B3
+h1e7c0_hot_post_cold:
+    ; Callback returned with A7 at the fourteen-byte argument frame, exactly
+    ; the state expected by the generated post-call continuation.
+    jml.l $98DDE7
+
+h1e7c0_hot_entry:
+    ; move.w $3518(a5),$351e(a5)
+    lda $403518
+    sta $40351E
+
+    ; lea -$20(a6),a1 / moveq #7,d5
+    lda $38
+    sec
+    sbc #$0020
+    sta $24
+    lda $3A
+    sbc #$0000
+    sta $26
+    lda #$0007
+    sta $14
+    stz $16
+
+h1e7c0_hot_reentry:
+    ; The generated current-record body enters here only after its DBRA has
+    ; advanced A1 and decremented D5.  Recheck the global invariants without
+    ; replaying the one-time prologue or resetting the live loop registers.
+    ; The common post-render mode is one.  A7 must hold the callback frame in
+    ; canonical work RAM with room for its sentinel and renderer save image.
+    lda $402A4A
+    xba
+    cmp #$0001
+    beq h1e7c0_hot_mode_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_mode_ok:
+    lda $3E
+    cmp #$00F0
+    beq h1e7c0_hot_spbank_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_spbank_ok:
+    lda $3C
+    cmp #$0040
+    bcs h1e7c0_hot_splow_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_splow_ok:
+    cmp #$FFE0
+    bcc h1e7c0_hot_sphigh_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_sphigh_ok:
+    ; Any armed per-slot special bit takes the unchanged path from slot seven.
+    lda $403522
+    and #$00FF
+    beq h1e7c0_hot_loop
+    jmp h1e7c0_hot_cold
+
+h1e7c0_hot_loop:
+    .a16
+    .i16
+    ; Peek (A1) without changing architectural A1/D7/A0 until every guard for
+    ; this record has passed.  This makes the cold edge restart-exact.
+    ldx $24
+    lda $400000,x
+    xba
+    sta $82                         ; pointer high
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $80                         ; pointer low
+    ora $82
+    bne h1e7c0_hot_nonnull
+
+    ; Null record: MOVE.L loaded zero into D7 and (A1)+ still advanced.
+    stz $1C
+    stz $1E
+    lda $24
+    clc
+    adc #$0004
+    sta $24
+    jmp h1e7c0_hot_decrement
+
+h1e7c0_hot_nonnull:
+    lda $82
+    cmp #$00F0
+    beq h1e7c0_hot_objbank_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_objbank_ok:
+    ldx $80
+
+    ; Common no-motion/no-script record class.
+    lda $400004,x
+    and #$00FF
+    beq h1e7c0_hot_b4_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_b4_ok:
+    lda $400066,x
+    and #$00FF
+    beq h1e7c0_hot_b66_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_b66_ok:
+    lda $40000A,x
+    and #$00FF
+    beq h1e7c0_hot_ba_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_ba_ok:
+    lda $400005,x
+    and #$00FF
+    beq h1e7c0_hot_b5_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_b5_ok:
+
+    ; Negative countdowns retain the restart-exact whole-record fallback.
+    ; Counts zero and one are safe to commit through the common transform:
+    ; immediately before SUBQ below they rejoin the unchanged generated
+    ; animation-script interpreter at its exact $01EE3A instruction seam.
+    lda $40000E,x
+    xba
+    cmp #$8000
+    bcc h1e7c0_hot_count_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_count_ok:
+
+    ; Cache the three guarded sub-record lows.  Zero script states take the
+    ; fully native common transform.  A nonzero state is not a whole-record
+    ; miss: after the shared camera/visibility prefix is committed below, hand
+    ; it to the unchanged generated body at original $01E94A.  That seam owns
+    ; every animation/script opcode while avoiding the expensive generated
+    ; prefix which is identical for this guarded no-motion record class.
+    stz $94                         ; nonzero script-state flag
+    lda $400048,x
+    xba
+    sta $84                         ; A2 low
+    tax
+    lda $40000E,x
+    xba
+    ora #$0000                     ; XBA exposes only byte N/Z; test full word
+    beq h1e7c0_hot_a2e_ok
+    lda #$0001
+    sta $94
+h1e7c0_hot_a2e_ok:
+    ldx $80
+    lda $40004C,x
+    xba
+    sta $86                         ; A3 low
+    tax
+    lda $40000E,x
+    xba
+    ora #$0000                     ; XBA exposes only byte N/Z; test full word
+    beq h1e7c0_hot_a3e_ok
+    lda #$0001
+    sta $94
+h1e7c0_hot_a3e_ok:
+    ldx $80
+    lda $400050,x
+    xba
+    sta $88                         ; A4/sub-record low
+
+    ; Horizontal signs must select the additive common transform.
+    lda $400036,x
+    xba
+    sta $8A
+    lda $40003C,x
+    xba
+    eor $8A
+    and #$8000
+    beq h1e7c0_hot_sign_ok
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_sign_ok:
+
+    ; d1 = obj.x - global camera x.  The original body keeps the near-
+    ; offscreen intervals -$EF..$0B and $175..$26F alive, sets visibility bit
+    ; zero, and then joins the same vertical/transform path as an on-screen
+    ; record.  Retain only the far ranges (<= -$F0 or >= $270) for the
+    ; destructive generated removal path.
+    lda $40002E,x
+    xba
+    sta $8A
+    lda $402A32
+    xba
+    sta $8E                         ; camera delta
+    lda $8A
+    sec
+    sbc $8E
+    sta $8A                         ; new d1.w
+    stz $92                         ; final visibility-bit contribution
+    bmi h1e7c0_hot_d1_negative
+    cmp #$000C
+    bcc h1e7c0_hot_d1_offscreen
+    cmp #$0175
+    bcc h1e7c0_hot_d1_ok
+    cmp #$0270
+    bcc h1e7c0_hot_d1_offscreen
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_d1_negative:
+    cmp #$FF11
+    bcs h1e7c0_hot_d1_offscreen
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_d1_offscreen:
+    lda #$0001
+    sta $92
+h1e7c0_hot_d1_ok:
+
+    ; Keep the original unclamped vertical arms: signed 0..160, plus the
+    ; near-negative interval -127..-1.  The latter remains a live object but
+    ; sets visibility bit zero at $01E92A.  Values <= -128 take the destructive
+    ; $01E8D6 removal path, so retain the generated body for those records.
+    ldx $80
+    lda $400032,x
+    xba
+    sta $8C                         ; new d2.w
+    cmp #$00A1
+    bcc h1e7c0_hot_d2_ok
+    cmp #$FF81
+    bcs h1e7c0_hot_d2_negative
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_d2_negative:
+    ; Mark the accepted negative arm for the commit-time BSET #0,$8(A0).
+    lda #$0001
+    sta $92
+    bra h1e7c0_hot_d2_ready
+h1e7c0_hot_d2_ok:
+h1e7c0_hot_d2_ready:
+
+    ; Prove the organic callback before the first architectural write.
+    lda $400036,x
+    xba
+    ora #$0000                     ; TST.W semantics, not XBA's byte flags
+    bmi h1e7c0_hot_cb_negative
+    lda $403514
+    xba
+    ora #$0000
+    bne h1e7c0_hot_cb_bad
+    lda $403516
+    xba
+    bra h1e7c0_hot_cb_check
+h1e7c0_hot_cb_negative:
+    lda $403510
+    xba
+    ora #$0000
+    bne h1e7c0_hot_cb_bad
+    lda $403512
+    xba
+h1e7c0_hot_cb_check:
+    cmp #$0D96
+    beq h1e7c0_hot_cb_ok
+    cmp #$111A
+    beq h1e7c0_hot_cb_ok
+h1e7c0_hot_cb_bad:
+    jmp h1e7c0_hot_cold
+h1e7c0_hot_cb_ok:
+    sta $90                         ; callback low
+
+    ; ---- Commit the proven record in original MC68000 order. ----
+    lda $80
+    sta $1C                         ; D7/A0 = loaded object pointer
+    sta $20
+    lda #$00F0
+    sta $1E
+    sta $22
+    lda $24
+    clc
+    adc #$0004
+    sta $24                         ; (A1)+ (guard proved no carry)
+
+    lda $8A
+    sta $04                         ; D1.w
+    lda $8C
+    sta $08                         ; D2.w
+    lda $8E
+    sta $1C                         ; MOVE.W camera delta,D7
+
+    ldx $80
+    lda $40005E,x                   ; SUB.W D7,$5e(A0)
+    xba
+    sec
+    sbc $8E
+    xba
+    sta $40005E,x
+    xba
+    ; SUB.W also publishes the MC68000 X bit.  The fully native path replaces
+    ; X during its later coordinate subtraction, but the $01E94A generated
+    ; script handoff inherits this value before any other X-writing opcode.
+    ; 65816 C=1 means no borrow; MC68000 X=1 means borrow.
+    bcs h1e7c0_hot_camera_no_borrow
+    lda #$0001
+    sta $A2
+    bra h1e7c0_hot_camera_x_ready
+h1e7c0_hot_camera_no_borrow:
+    stz $A2
+h1e7c0_hot_camera_x_ready:
+
+    sep #$20                        ; BCLR/BSET #0,$8(A0)
+    lda $400008,x
+    and #$FE
+    ora $92
+    sta $400008,x
+    rep #$20
+    .a16
+    .i16
+
+    ; The original $01E94A seam begins by loading A2/A3 and testing their
+    ; script words, so no CCR value or sub-record register materialization is
+    ; live across this handoff.  A0/A1, D1/D2/D7, the camera subtraction, and
+    ; visibility bit now exactly match the original prefix.  Crucially, do not
+    ; clear object byte $6 here: the generated script selector owns that write
+    ; at $01EBAE when its selected path requires it.
+    lda $94
+    beq h1e7c0_hot_no_script
+    jml.l $98B7FD                   ; L1e7c0_1e94a
+h1e7c0_hot_no_script:
+
+    sep #$20
+    lda #$00
+    sta $400006,x                   ; CLR.B $6(A0)
+    rep #$20
+    .a16
+    .i16
+
+    lda $84
+    sta $28                         ; A2
+    lda #$00F0
+    sta $2A
+    lda $86
+    sta $2C                         ; A3
+    lda #$00F0
+    sta $2E
+    lda $88
+    sta $30                         ; A4 sub-record
+    lda #$00F0
+    sta $32
+
+    ; Store current coordinates, then apply Y delta to all three records.
+    ldx $80
+    lda $04
+    xba
+    sta $40002E,x
+    xba
+    lda $08
+    xba
+    sta $400032,x
+    xba
+    lda $40003A,x
+    xba
+    sta $9A
+    lda $08
+    sec
+    sbc $9A
+    sta $8E                         ; delta Y
+    ldx $84
+    jsr h1e7c0_hot_add68
+    ldx $86
+    jsr h1e7c0_hot_add68
+    ldx $88
+    jsr h1e7c0_hot_add68
+
+    ; Matching signs select the additive X delta and CLR.W D0 arm.
+    ldx $80
+    lda $400038,x
+    xba
+    sta $9A
+    lda $04
+    sec
+    sbc $9A
+    sta $8E                         ; delta X
+    ldx $84
+    jsr h1e7c0_hot_add24
+    ldx $86
+    jsr h1e7c0_hot_add24
+    ldx $88
+    jsr h1e7c0_hot_add24
+    stz $00                         ; CLR.W D0 (high word unchanged)
+
+    ; The generated body owns every expired-script operation.  All common
+    ; record writes and live D/A registers now match its state immediately
+    ; before SUBQ.W #1,$E(A0), so this preserves the complete opcode table
+    ; without replaying the expensive transform from L1E7CC.
+    ldx $80
+    lda $40000E,x
+    xba
+    cmp #$0002
+    bcs h1e7c0_hot_steady_animation
+    jml.l $98CE0D                   ; L1e7c0_1ee3a
+h1e7c0_hot_steady_animation:
+
+    ; SUBQ.W #1,$e(A0), then load the render capacity into D6.w.
+    ; A still holds the big-endian countdown loaded above.
+    dec a
+    xba
+    sta $40000E,x
+    xba
+    lda $40001A,x
+    xba
+    sta $18
+
+    ; Materialize the fourteen-byte argument frame.  Raw words copied from
+    ; work RAM remain byte-identical; computed words are byte-swapped once.
+    lda $40351E
+    sta $82                         ; raw arg0: output cursor
+    lda $400018,x
+    sta $84                         ; raw arg2
+    lda $400044,x
+    xba
+    sta $9A
+    lda $08
+    sec
+    sbc $9A
+    sta $86                         ; arg4 = d2-obj44
+    lda $400042,x
+    xba
+    sta $9A
+    lda $04
+    sec
+    sbc $9A
+    sta $88                         ; arg6 = d1-obj42
+    lda $400014,x
+    sta $8A                         ; raw arg8 high word
+    lda $400016,x
+    sta $8C                         ; raw arg8 low word
+    lda $18
+    dec a
+    sta $8E                         ; arg12 = d6-1
+    stz $1E                         ; prior CLR.L D7 makes its high word zero
+    sta $1C                         ; MOVE.W result,D7
+
+    lda $3C
+    sec
+    sbc #$000E
+    sta $3C
+    tax
+    lda $82
+    sta $400000,x
+    inx
+    inx
+    lda $84
+    sta $400000,x
+    inx
+    inx
+    lda $86
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $88
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $8A
+    sta $400000,x
+    inx
+    inx
+    lda $8C
+    sta $400000,x
+    inx
+    inx
+    lda $8E
+    xba
+    sta $400000,x
+
+    lda $90
+    sta $30                         ; A4 = selected callback
+    stz $32
+    lda #h1e7c0_hot_return
+    sta $54
+    lda #$00FC
+    sta $56
+    jsl.l push32_l
+    lda $30
+    cmp #$0D96
+    beq h1e7c0_hot_call_d96
+    jml.l $95A700                   ; entry_111at
+h1e7c0_hot_call_d96:
+    jml.l $98E348                   ; entry_d96t
+
+h1e7c0_hot_return:
+    rep #$30
+    .a16
+    .i16
+    ; A callback is allowed to change the mode.  Let the generated continuation
+    ; own every non-common result before this helper changes A7 or game state.
+    lda $402A4A
+    xba
+    cmp #$0001
+    beq h1e7c0_hot_post
+    jmp h1e7c0_hot_post_cold
+h1e7c0_hot_post:
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C                         ; ADDA.W #$e,A7
+    lda $3E
+    adc #$0000
+    sta $3E
+
+    lda $18                         ; ADD.W D6,D6
+    clc
+    adc $18
+    sta $18
+    sta $8E
+    lda $40351E                     ; ADD.W D6,$351e(A5)
+    xba
+    clc
+    adc $8E
+    xba
+    sta $40351E
+    xba
+
+    ldx $20                         ; BCLR #1,$8(A0)
+    sep #$20
+    lda $400008,x
+    and #$FD
+    sta $400008,x
+    lda #$00
+    sta $400007,x                   ; MOVE.B #0,$7(A0)
+    rep #$20
+    .a16
+    .i16
+
+    ; Table mode one loads displacement $0008 into D7.w.
+    lda #$0008
+    sta $1C
+
+    lda $402A50                     ; SUB.W cameraX,D1
+    xba
+    sta $8E
+    lda $04
+    sec
+    sbc $8E
+    sta $04
+
+    lda $402A4E                     ; SUB.W cameraY,D2; retain X/borrow
+    xba
+    sta $8E
+    lda $08
+    sec
+    sbc $8E
+    sta $08
+    bcs h1e7c0_hot_x0
+    lda #$0001
+    sta $80
+    bra h1e7c0_hot_x_saved
+h1e7c0_hot_x0:
+    stz $80
+h1e7c0_hot_x_saved:
+    lda #$2A4C
+    sta $30                         ; LEA $2a4c(A5),A4
+    lda #$00F0
+    sta $32
+    lda $402A4C
+    xba
+    sta $1C                         ; MOVE.W (A4),D7
+    and #$0800
+    bne h1e7c0_hot_setbit
+    lda $1C
+    and #$00FF
+    cmp #$0005
+    bne h1e7c0_hot_store_pos
+    lda $08                         ; SUBI.W #$10,D2
+    sec
+    sbc #$0010
+    sta $08
+    bcs h1e7c0_hot_x0b
+    lda #$0001
+    sta $80
+    bra h1e7c0_hot_store_pos
+h1e7c0_hot_x0b:
+    stz $80
+    bra h1e7c0_hot_store_pos
+h1e7c0_hot_setbit:
+    ldx $20
+    sep #$20
+    lda $400008,x
+    ora #$02
+    sta $400008,x
+    rep #$20
+    .a16
+    .i16
+
+h1e7c0_hot_store_pos:
+    ldx $20
+    lda $04
+    xba
+    sta $40003E,x
+    xba
+    lda $08
+    xba
+    sta $400040,x
+    xba
+
+    ; Final MOVE.W D2,$40(A0) flags.  X remains the last D2 subtraction.
+    stz $6E
+    stz $72
+    lda $80
+    sta $A2
+    lda $08
+    beq h1e7c0_hot_final_z
+    stz $60
+    and #$8000
+    sta $70
+    bra h1e7c0_hot_decrement
+h1e7c0_hot_final_z:
+    lda #$0001
+    sta $60
+    stz $70
+
+h1e7c0_hot_decrement:
+    lda $14
+    dec a
+    sta $14                         ; DBRA does not alter emulated CCR
+    cmp #$FFFF
+    beq h1e7c0_hot_all_done
+    jmp h1e7c0_hot_loop
+h1e7c0_hot_all_done:
+    jmp h1e7c0_hot_done
+
+; Add signed word $8E to the big-endian +6/+8 pair at X.
+h1e7c0_hot_add68:
+    lda $400006,x
+    xba
+    clc
+    adc $8E
+    xba
+    sta $400006,x
+    xba
+    lda $400008,x
+    xba
+    clc
+    adc $8E
+    xba
+    sta $400008,x
+    xba
+    rts
+
+; Add signed word $8E to the big-endian +2/+4 pair at X.
+h1e7c0_hot_add24:
+    lda $400002,x
+    xba
+    clc
+    adc $8E
+    xba
+    sta $400002,x
+    xba
+    lda $400004,x
+    xba
+    clc
+    adc $8E
+    xba
+    sta $400004,x
+    xba
+    rts
+
+h1e7c0_hot_end:
+    .a16
+    .i16
+
 ; --- entry_cb9e — same-convention (re-sim-push, $00FC-sentinel rts) native cb9e for the direct
 ; links above; the OLD bank-$00 leaf entry_cb9e still serves the interp's bhp chain. --video
 ; (writes the $41 video shadow). ---
     .org $E800
 ; --- transpiled from $00CB9E (31 instrs) by tools/transpile.py [bank1] ---
 entry_cb9e:
-    rep #$30
+    jmp hcb9e_fast
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     lda $40
     sta $54
@@ -9148,3 +9938,778 @@ Ltj1d5f0_1d5ee:
     lda #$0001
     sta $42
     jml.l inext
+
+; ============================================================================
+; Guarded semantic fast path for the bank-$97 callable $00CB9E sprite helper.
+;
+; The generated body at $E800 is retained as historical/fallback material, but
+; its entry redirects here.  Production $CAF6 calls use a ROM A0 and work-RAM
+; A1/A6/A2; generic rdw_ea_l/writeword_l calls made that canonical case cost
+; ~23K cycles/tick across five draws.  Direct accesses below preserve the 68K
+; register/CCR/stack contract.  Any other address shape is interpreted from
+; the original $00CB9E after the skipped BSR return has been materialized.
+;
+; Fixed after entry_1d5f0 (currently ends below $F920).  Keep the zero seam and
+; bank-end assertions in tools/build_interp_rom.py green.
+; ============================================================================
+    .org $FA00
+hcb9e_fast:
+    rep #$30
+    .a16
+    .i16
+
+    ; Re-simulate the BSR return skipped by the direct native call bridge.
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+
+    jsr hcb_guard
+    bcs hcb_fast_guarded
+    jmp hcb_slow
+hcb_fast_guarded:
+    jsr hcb_core
+    jmp hcb_return
+
+    ; Canonical fast-path shape: A6 and A1 are non-wrapping work-RAM pointers,
+    ; A0 is flat arcade ROM, and [A6-$54] names a bounded work-RAM A2 record.
+hcb_guard:
+    lda $3A
+    cmp #$00F0
+    beq hcb_g_a6bank
+    jmp hcb_guard_fail
+hcb_g_a6bank:
+    lda $38
+    cmp #$0080
+    bcs hcb_g_a6low
+    jmp hcb_guard_fail
+hcb_g_a6low:
+    lda $26
+    cmp #$00F0
+    beq hcb_g_a1bank
+    jmp hcb_guard_fail
+hcb_g_a1bank:
+    lda $24
+    cmp #$FFF4
+    bcc hcb_g_a1range
+    jmp hcb_guard_fail
+hcb_g_a1range:
+    lda $22
+    cmp #$0008
+    bcc hcb_g_a0rom
+    jmp hcb_guard_fail
+hcb_g_a0rom:
+    lda $38
+    clc
+    adc #$FFAC
+    tax
+    lda $400000,x
+    xba
+    cmp #$00F0
+    beq hcb_g_a2bank
+    jmp hcb_guard_fail
+hcb_g_a2bank:
+    inx
+    inx
+    lda $400000,x
+    xba
+    cmp #$FFFA
+    bcc hcb_guard_ok
+hcb_guard_fail:
+    clc
+    rts
+hcb_guard_ok:
+    sec
+    rts
+
+hcb_core:
+hcb_begin:
+    ; tst.w (a1); ble early return.
+    ldx $24
+    jsr hcb_rdw40
+    sta $80
+    cmp #$0000              ; XBA reports byte-N; TST.W needs bit 15
+    beq hcb_early_near
+    bmi hcb_early_near
+    bra hcb_normal
+hcb_early_near:
+    jmp hcb_early
+
+hcb_normal:
+    ; D0 = [A6-$22] + [A0+6]; [A1+6] = D0.
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    jsr hcb_rdw40
+    sta $82
+    ldy #$0006
+    jsr hcb_rdw_a0
+    clc
+    adc $82
+    sta $00
+    lda $24
+    clc
+    adc #$0006
+    tax
+    lda $00
+    jsr hcb_wrw40
+
+    ; D0 = [A6-$22] + [A0+8]; [A1+8] = D0.
+    ldy #$0008
+    jsr hcb_rdw_a0
+    clc
+    adc $82
+    sta $00
+    lda $24
+    clc
+    adc #$0008
+    tax
+    lda $00
+    jsr hcb_wrw40
+
+    ; Source position/attribute tuple.
+    ldy #$0002
+    jsr hcb_rdw_a0
+    sta $84
+    ldy #$0004
+    jsr hcb_rdw_a0
+    sta $86
+    ldy #$000C
+    jsr hcb_rdb_a0
+    sep #$20
+    sta $08
+    rep #$20
+
+    ; btst #7,[A6-$24]: mirrored sprites swap and negate X/Y and adjust D2.B.
+    lda $38
+    clc
+    adc #$FFDC
+    tax
+    sep #$20
+    lda $400000,x
+    and #$80
+    rep #$20
+    bne hcb_mirrored
+    lda $84
+    sta $00
+    lda $86
+    sta $04
+    bra hcb_position_ready
+hcb_mirrored:
+    lda $86
+    eor #$FFFF
+    inc a
+    sta $00
+    lda $84
+    eor #$FFFF
+    inc a
+    sta $04
+    lda $08
+    eor #$FFFF
+    inc a
+    sta $08
+    sep #$20
+    lda $08
+    clc
+    adc #$80
+    sta $08
+    rep #$20
+
+hcb_position_ready:
+    ; [A1+2/+4] = [A6-$1E] + D0/D1; D3 retains the second sum.
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    jsr hcb_rdw40
+    sta $8A
+    clc
+    adc $00
+    sta $0C
+    lda $24
+    clc
+    adc #$0002
+    tax
+    lda $0C
+    jsr hcb_wrw40
+    lda $8A
+    clc
+    adc $04
+    sta $0C
+    bcc hcb_addx_clear
+    lda #$0001
+    sta $A2                 ; final ADD.W carry is the preserved X result
+    bra hcb_addx_done
+hcb_addx_clear:
+    stz $A2
+hcb_addx_done:
+    lda $24
+    clc
+    adc #$0004
+    tax
+    lda $0C
+    jsr hcb_wrw40
+
+    ; [A1+C].B = D2.B.
+    lda $24
+    clc
+    adc #$000C
+    tax
+    sep #$20
+    lda $08
+    sta $400000,x
+    rep #$20
+
+    ; A2=[A6-$54]; publish active flag and the computed pair.
+    lda $38
+    clc
+    adc #$FFAC
+    tax
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    ldx $28
+    lda #$0001
+    jsr hcb_wrw40
+    lda $24
+    clc
+    adc #$0004
+    tax
+    jsr hcb_rdw40
+    pha
+    lda $28
+    clc
+    adc #$0004
+    tax
+    pla
+    jsr hcb_wrw40
+    lda $24
+    clc
+    adc #$0002
+    tax
+    jsr hcb_rdw40
+    sta $8C
+    pha
+    lda $28
+    clc
+    adc #$0002
+    tax
+    pla
+    jsr hcb_wrw40
+
+    ; MOVE.W exit flags: N/Z from [A1+2], V=C=0, X preserved.
+    lda $8C
+    bne hcb_norm_nonzero
+    lda #$0001
+    sta $60
+    bra hcb_norm_n
+hcb_norm_nonzero:
+    stz $60
+hcb_norm_n:
+    lda $8C
+    and #$8000
+    sta $70
+    stz $6E
+    stz $72
+    bra hcb_core_return
+
+hcb_early:
+    ; TST.W exit flags; no emulated register is changed on this path.
+    lda $80
+    bne hcb_early_nonzero
+    lda #$0001
+    sta $60
+    bra hcb_early_n
+hcb_early_nonzero:
+    stz $60
+hcb_early_n:
+    lda $80
+    and #$8000
+    sta $70
+    stz $6E
+    stz $72
+
+hcb_core_return:
+    rts
+
+hcb_return:
+    ; Pop the callable bridge sentinel and resume its native continuation.
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+hcb_slow:
+    ; The return is already on the emulated stack.  Entering through inext
+    ; interprets the original leaf directly; native BSR matching is not rerun.
+    lda #$CB9E
+    sta $40
+    stz $42
+    jml.l inext
+
+; Local big-endian work-RAM and direct flat-ROM primitives.
+hcb_rdw40:
+    lda $400000,x
+    xba
+    rts
+
+hcb_wrw40:
+    xba
+    sta $400000,x
+    xba
+    rts
+
+hcb_rdw_a0:
+    tya
+    clc
+    adc $20
+    sta $96
+    lda $22
+    adc #$00C1
+    sta $98
+    lda [$96]
+    xba
+    rts
+
+hcb_rdb_a0:
+    tya
+    clc
+    adc $20
+    sta $96
+    lda $22
+    adc #$00C1
+    sta $98
+    sep #$20
+    lda [$96]
+    rep #$20
+    and #$00FF
+    rts
+
+; --- entry_1f1c0t: rts/table-convention native leaf.
+; Existing bank-$98 object paths reach $01F1C0 through ojmp_hook with the real
+; 68K return already on the stack; the xlat table therefore owns dispatch.
+; Generated exactly with:
+;   tools/transpile.py 01F1C0 --bank2 --table --bail --xflag
+; then the lowercase label namespace was suffixed `t` for table convention.
+.org $FC60
+; --- transpiled from $01F1C0 (29 instrs) by tools/transpile.py [bank1] ---
+entry_1f1c0t:
+    ; Guarded direct mapped-memory implementation in bank $9D.  Its miss edge
+    ; returns to the untouched generated table body immediately below.
+    jml.l $9DAB00
+entry_1f1c0_generated:
+    rep #$30
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda #$0001
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $1C
+    bmi Lf1f1c0t_1
+    jmp L1f1c0t_1f1d6
+Lf1f1c0t_1:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    clc
+    adc $04
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $1C
+    lda $1C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    clc
+    adc $04
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $1C
+    lda $1C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    jmp L1f1c0t_1f1e2
+L1f1c0t_1f1d6:
+    lda $04
+    sta $1C
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $9E
+    lda $1C
+    sec
+    sbc $9E
+    sta $1C
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    lda $04
+    sta $18
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $9E
+    lda $18
+    sec
+    sbc $9E
+    sta $18
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+    lda $18
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $1C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+L1f1c0t_1f1e2:
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    clc
+    adc $08
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $1C
+    lda $1C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    clc
+    adc $08
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $1C
+    lda $1C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $30
+    clc
+    adc #$0002
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    pla
+    sta $1C
+    lda $1C
+    sep #$20
+    sec
+    sbc #$80
+    rep #$20
+    beq Lf1f1c0t_2
+    jmp L1f1c0t_1f1fa
+Lf1f1c0t_2:
+    php
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    plp
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L1f1c0t_1f1fc
+L1f1c0t_1f1fa:
+    lda $1C
+    pha
+    lda $2C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    lda $1C
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $1C
+    bne Lf1f1c0t_3
+    inc $60
+Lf1f1c0t_3:
+L1f1c0t_1f1fc:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre

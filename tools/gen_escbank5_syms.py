@@ -22,7 +22,11 @@ XBANK = [("entry_23342", "src/escbank4.sym", 0x98),
          ("entry_25110", "src/escbank3.sym", 0x97)] + [
          (n, "src/escbank3.sym", 0x97) for n in    # the $011752 contiguous-tree callees
          ("entry_12e56", "entry_12c1a", "entry_129c6", "entry_12a92", "entry_12af6",
-          "entry_117b4", "entry_cc44", "entry_cc80", "entry_caf6")]
+          "entry_117b4", "entry_cc44", "entry_cc80", "entry_caf6")] + [
+         # Round-start initial coroutine roots use the proven bank-$92 callable bridge and
+         # tail into the already deployed $CE58 continuation.
+         ("ibridge", "src/escbank.sym", 0x92),
+         ("entry_ce58", "src/escbank.sym", 0x92)]
 
 sym_path = Path("src/interp.sym")
 esc_path = Path("src/escbank5.pasm")

@@ -22,6 +22,8 @@ import capstone
 
 ROM = open('build/interp.sfc', 'rb').read()
 IMG = 0x10000                                  # 68K ROM at file offset $10000
+CODE_BASE = None                               # optional RAM/C-Chip code override for decode only
+CODE_BYTES = b''
 MD = capstone.Cs(capstone.CS_ARCH_M68K, capstone.CS_MODE_BIG_ENDIAN)
 
 # per-function lockstep hit counter (TRANSPILER_TOOL_SCOPE) ; add a slot per new target
@@ -40,14 +42,33 @@ def reg_dp(name):
 TMP = 0x9E                                      # transpiler compare/store scratch (avoids rdw_ea $90)
 VIDEO = False                                   # --video: route non-frame stores via writeword/writebyte
                                                 # (IO-aware: video $B0/$D0/$E0 -> $41 shadow). For $002xxx.
+VIDEO_DIRECT_E0 = set()                         # --video-direct-e0=a0,a2: these An are PROVEN $E0xxxx
+                                                # video pointers; write their words straight to the
+                                                # bank-$41 shadow instead of remapping every store.
+ROM_DIRECT = set()                              # --rom=a3: these An are PROVEN 68K ROM pointers
+                                                # ($000000-$07FFFF); read via $C10000+addr directly.
 BANK5 = False                                   # --bank5: body lives in escbank5 ($99:8000); host resume
                                                 # sentinel = $00FA (ors_pre -> ors_99chk -> ors_pre_99).
+BANK6 = False                                   # --bank6: body lives in escbank6 ($95:8000); host resume
+                                                # sentinel = $00F9 (ors_pre -> ors_95chk -> ors_pre_95).
+BANK7 = False                                   # --bank7: body lives in escbank7 ($9D:8000); host resume
+                                                # sentinel = $00F8 (ors_pre -> ors_9dchk -> ors_pre_9d).
 BANK2 = False                                   # --bank2: body lives in the 2nd escape bank ($94:8000,
                                                 # file $2A0000). ibridge ($92) is unreachable + its $00FE
                                                 # resume lands in $92, so INLINE the interpret-bridge with
                                                 # a $00FD sentinel (ors_pre -> ors_94chk -> bank $94).
 ESCAPED = set()                                 # --escapes=hex,..: callee addrs with an ESCBANK escape;
                                                 # gen_call dispatches a bridge-TO-escape (run native) to them
+RESTORE_INDIRECT_RESIDUE = False                # --restore-indirect-residue: materialize the genuine
+                                                # 68K JSR return bytes after a jsr(An) sentinel bridge.
+                                                # Opt-in preserves fixed layouts of older generated banks.
+RESTORE_STATIC_RESIDUE = False                  # --restore-static-residue: same correction for a
+                                                # static interpreted-call bridge. Kept separately opt-in
+                                                # so existing packed escape layouts remain byte-stable.
+REAL_RETURN_CALLS = set()                       # --real-return-calls=PC,...: bridge these JSR/BSR
+                                                # instructions with their genuine 68K return on the
+                                                # stack, then resume at an xlat-mapped entry_<return>.
+                                                # Required when a callee observes its live return slot.
 JT = {}                                         # --jt=BASE:MIN:MAX,..: pc-rel jump tables (self-relative
                                                 # BE16 word offsets at BASE, signed byte-offset domain
                                                 # [MIN,MAX] step 2). Enables the fused 68K idiom
@@ -82,16 +103,24 @@ def parse_ea(tok, pc=None):
     if m: return ('(d16,An)', s16(int(m.group(1), 16)), 'a'+m.group(2))
     m = re.fullmatch(r'\$([0-9a-f]+)\(pc\)', t)
     if m: return ('abs', int(m.group(1), 16))   # capstone already RESOLVED pc+disp -> absolute address
+    m = re.fullmatch(r'\$([0-9a-f]+)\(pc, d([0-7])\.(w|l)\)', t)
+    if m:
+        return (
+            '(PC,DnL)' if m.group(3) == 'l' else '(PC,Dn)',
+            int(m.group(1), 16),
+            'd' + m.group(2),
+        )
     m = re.fullmatch(r'#\$?(-?[0-9a-f]+)', t)
     if m: return ('imm', int(t[1:].replace('$', '0x'), 0) & 0xFFFFFFFF)
     m = re.fullmatch(r'\$([0-9a-f]+)\.[lw]', t)             # absolute long/short ($XXXXXX.l)
     if m: return ('abs', int(m.group(1), 16))
     m = re.fullmatch(r'\$([0-9a-f]+)', t)
     if m: return ('abs', int(m.group(1), 16))
-    m = re.fullmatch(r'(?:(-?)\$([0-9a-f]+))?\(a([0-7]), d([0-7])\.w\)', t)   # d8(An, Dn.w) brief indexed
+    m = re.fullmatch(r'(?:(-?)\$([0-9a-f]+))?\(a([0-7]), d([0-7])\.(w|l)\)', t)  # d8(An,Dn.w/.l) brief indexed
     if m:
         disp = 0 if m.group(2) is None else int(m.group(2), 16) * (-1 if m.group(1) else 1)
-        return ('(d8,An,Dn)', disp, 'a'+m.group(3), 'd'+m.group(4))
+        kind = '(d8,An,DnL)' if m.group(5) == 'l' else '(d8,An,Dn)'
+        return (kind, disp, 'a'+m.group(3), 'd'+m.group(4))
     raise Unsupported('EA %r' % tok)
 
 def s16(v): return v - 0x10000 if v & 0x8000 else v
@@ -100,7 +129,12 @@ def hx(v): return '$%04X' % (v & 0xFFFF)
 
 # ---- decode the function: entry -> rts, collect intra-fn branch targets as labels ----
 def _dis1(a):
-    ins = next(MD.disasm(ROM[IMG+a:IMG+a+8], a), None)
+    if CODE_BASE is not None and CODE_BASE <= a < CODE_BASE + len(CODE_BYTES):
+        offset = a - CODE_BASE
+        raw = CODE_BYTES[offset:offset + 8]
+    else:
+        raw = ROM[IMG+a:IMG+a+8]
+    ins = next(MD.disasm(raw, a), None)
     if ins is None: raise Unsupported('decode stalled @ $%06X' % a)
     return ins
 
@@ -115,7 +149,7 @@ def decode(entry):
         ins = _dis1(addr); insns.append(ins); addr = ins.address + ins.size
         base = ins.mnemonic.split('.')[0]
         btgt = None
-        if base in BCC or base in ('bra', 'dbra', 'dbf'):
+        if base in BCC or base in ('bra', 'dbra', 'dbf', 'dblt'):
             m = re.search(r'\$([0-9a-f]+)$', ins.op_str)
             if m:
                 btgt = int(m.group(1), 16)
@@ -176,7 +210,7 @@ def decode(entry):
     labels = set()
     for ins in insns:
         base = ins.mnemonic.split('.')[0]
-        if base in BCC or base in ('bra', 'dbra', 'dbf'):
+        if base in BCC or base in ('bra', 'dbra', 'dbf', 'dblt'):
             m = re.search(r'\$([0-9a-f]+)$', ins.op_str)
             if m:
                 t = int(m.group(1), 16)
@@ -206,7 +240,7 @@ class Emit:
 
 BCC = {'beq', 'bne', 'bmi', 'bpl', 'bge', 'blt', 'ble', 'bgt', 'bcc', 'bcs',
        'bhi', 'bls', 'bvs', 'bvc'}
-CTRLFLOW = BCC | {'bra', 'dbra', 'dbf', 'bsr', 'jsr', 'jmp', 'rte', 'rtr'}  # not straight-line (exit-frag reject)
+CTRLFLOW = BCC | {'bra', 'dbra', 'dbf', 'dblt', 'bsr', 'jsr', 'jmp', 'rte', 'rtr'}  # not straight-line (exit-frag reject)
 
 # ===================== memory address helpers =====================
 def is_frame(an): return an in ('a6', 'a7')
@@ -220,6 +254,7 @@ def is_frame(an): return an in ('a6', 'a7')
 # already assume work-RAM-or-video, and RMW already assumes work RAM (writable). Validate bit-exact.
 WORKRAM = set()                                  # --workram=<csv>: extra provably-work-RAM An regs
 XFLAG = False                                  # --xflag: emit X ($A2) at X-setters
+EXITCCR = False                                # --exitccr: preserve CCR across bounded tail exits
 FNFRAG = False                                 # --fnfrag: absorb FAR straight-line rts fragments
 STOPAT = None                                  # --stopat=HEX: hard decode bound (fall-through edge -> post-appended stub)
 def is_workram(an): return an in ('a5', 'a6', 'a7') or an in WORKRAM
@@ -242,11 +277,35 @@ def ea_load_A(e, ea, size):
     if kind == 'imm':
         if ea[1] is None: raise Unsupported('PC-relative immediate')
         e('lda %s' % imm16(ea[1])); return
+    if kind == '-(An)':
+        # Predecrement reads update the complete 32-bit address register before
+        # evaluating the memory operand.  A7 decrements by two for a byte on
+        # the 68000; every other byte EA decrements by one.
+        an = ea[-1]
+        predec_an(e, an, 2 if size == 'b' and an == 'a7' else (1 if size == 'b' else 2))
+        ea_load_A(e, ('(An)', an), size)
+        return
     if kind in ('(An)', '(An)+', '(d16,An)'):
         an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0
+        if an in ROM_DIRECT:
+            if size != 'w':
+                raise Unsupported('direct-ROM load size %s through %s' % (size, an))
+            # 68K ROM $000000-$07FFFF is packed at SNES flat $C10000+addr.  Build a
+            # 24-bit long-indirect pointer in $66-$68, load the two ROM bytes at once,
+            # then swap the native little-endian word into the 68K big-endian value.
+            dp = reg_dp(an)
+            e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('sta $66')
+            e('lda $%02X' % (dp+2)); e('adc %s' % hi_ext(disp)); e('clc'); e('adc #$00C1'); e('sta $68')
+            e('lda [$66]'); e('xba')
+            if kind == '(An)+':
+                e('pha'); bump_an(e, an, 2); e('pla')
+            return
         if is_workram(an):                                       # provably work RAM -> fast $40-direct
             dp = reg_dp(an)
-            e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')
+            if disp == 0:
+                e('ldx $%02X' % dp)
+            else:
+                e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')
             e('jsr rdb40' if size == 'b' else 'jsr rdw40')
         else:
             ea_setup_romaware(e, an, disp)
@@ -264,14 +323,48 @@ def ea_load_A(e, ea, size):
         # handled via the hi adc constant). ROM-aware read ($012E94 move.b (a0,d2.w),d0: a0 = a
         # bank-$00 ROM table from lea $36b2.w).
         disp, an, dn = ea[1], ea[2], ea[3]
-        if disp: raise Unsupported('(d8,An,Dn) with nonzero disp (two-stage hi-carry chain not emitted)')
         adp, ddp = reg_dp(an), reg_dp(dn)
         neg, pos = e.fresh(), e.fresh()
         e('lda $%02X' % ddp); e('sta $8C')
         e('and #$8000'); e('bne %s' % neg); e('lda #$0000'); e('bra %s' % pos)
         e.lbl(neg); e('lda #$FFFF'); e.lbl(pos); e('sta $8E')
-        e('lda $%02X' % adp); e('clc'); e('adc $8C'); e('sta $54')
-        e('lda $%02X' % (adp+2)); e('adc $8E'); e('sta $52')
+        # Two complete 32-bit additions are required: folding both the signed
+        # displacement and the signed word index into one low-word ADC loses
+        # the first carry before the high word is updated.
+        e('lda $%02X' % adp); e('clc'); e('adc %s' % imm16(disp)); e('sta $54')
+        e('lda $%02X' % (adp+2)); e('adc %s' % hi_ext(disp)); e('sta $52')
+        e('lda $54'); e('clc'); e('adc $8C'); e('sta $54')
+        e('lda $52'); e('adc $8E'); e('sta $52')
+        e('jsr readbyte' if size == 'b' else 'jsr rdw_ea'); return
+    if kind in ('(PC,Dn)', '(PC,DnL)'):
+        # Capstone has already resolved the PC-relative displacement into an
+        # absolute 68K ROM base.  Add either the sign-extended word index or
+        # the complete long index, then use the ordinary ROM-aware reader.
+        # This form occurs in small constant tables such as $01E716(D7.w).
+        base_addr, dn = ea[1], ea[2]
+        ddp = reg_dp(dn)
+        if kind == '(PC,Dn)':
+            neg, ready = e.fresh(), e.fresh()
+            e('lda $%02X' % ddp); e('sta $8C')
+            e('and #$8000'); e('bne %s' % neg)
+            e('lda #$0000'); e('bra %s' % ready)
+            e.lbl(neg); e('lda #$FFFF'); e.lbl(ready); e('sta $8E')
+        else:
+            e('lda $%02X' % ddp); e('sta $8C')
+            e('lda $%02X' % (ddp + 2)); e('sta $8E')
+        e('lda #%s' % hx(base_addr & 0xFFFF)); e('clc'); e('adc $8C'); e('sta $54')
+        e('lda #%s' % hx((base_addr >> 16) & 0xFFFF)); e('adc $8E'); e('sta $52')
+        e('jsr readbyte' if size == 'b' else 'jsr rdw_ea'); return
+    if kind == '(d8,An,DnL)':
+        # Brief indexed long form: An + signed disp8 + Dn.l.  Keep the two
+        # 32-bit additions distinct so the base+disp low carry is consumed by
+        # its high half before the index addition begins.
+        disp, an, dn = ea[1], ea[2], ea[3]
+        adp, ddp = reg_dp(an), reg_dp(dn)
+        e('lda $%02X' % adp); e('clc'); e('adc %s' % imm16(disp)); e('sta $54')
+        e('lda $%02X' % (adp + 2)); e('adc %s' % hi_ext(disp)); e('sta $52')
+        e('lda $54'); e('clc'); e('adc $%02X' % ddp); e('sta $54')
+        e('lda $52'); e('adc $%02X' % (ddp + 2)); e('sta $52')
         e('jsr readbyte' if size == 'b' else 'jsr rdw_ea'); return
     raise Unsupported('load EA %r' % (ea,))
 
@@ -313,7 +406,10 @@ def ea_rmw(e, ea, size, modify):
             e('jsr writebyte' if size == 'b' else 'jsr writeword')
             if kind == '(An)+': bump_an(e, an, step)
             return
-        e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')   # X = work-RAM offset
+        if disp == 0:
+            e('ldx $%02X' % dp)                                 # X = work-RAM offset
+        else:
+            e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')
         e('jsr %s' % rd); modify(e); e('jsr %s' % wr)                        # X preserved across both
         if kind == '(An)+': bump_an(e, an, step)
         return
@@ -324,7 +420,10 @@ def ea_addr_to_X(e, ea):
     kind = ea[0]
     if kind in ('(An)', '(An)+', '(d16,An)'):
         an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0
-        e('lda $%02X' % reg_dp(an)); e('clc'); e('adc %s' % imm16(disp)); e('tax'); return
+        dp = reg_dp(an)
+        if disp == 0: e('ldx $%02X' % dp)
+        else: e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')
+        return
     raise Unsupported('addr_to_X EA %r' % (ea,))
 
 def ea_store_A_from(e, ea, size, load_value):
@@ -349,6 +448,18 @@ def ea_store_A_from(e, ea, size, load_value):
         return
     if kind in ('(An)', '(An)+', '(d16,An)'):
         an = ea[-1]; disp = ea[1] if kind == '(d16,An)' else 0; dp = reg_dp(an)
+        if an in VIDEO_DIRECT_E0:
+            if size != 'w':
+                raise Unsupported('direct-E0 store size %s through %s' % (size, an))
+            # The selected routine proves An.high == $00E0.  map_snes routes that arcade
+            # video bank to SHADOW_COD+$low16 in the $41 shadow, so write the BE word
+            # directly through the $41:4000 base.  This removes the generic
+            # map_snes/writeword call from tight tile loops.
+            load_value(e); e('pha')
+            e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')
+            e('pla'); e('xba'); e('sta $414000,x'); e('xba')
+            if kind == '(An)+': bump_an(e, an, 2)
+            return
         if VIDEO and not is_workram(an):                         # work-RAM regs (a5/a6/a7/--workram) -> fast wrw40, skip video routing
             # IO-aware store: writeword/writebyte route video $B0/$D0/$E0 -> $41 shadow, $F0 -> $40.
             # in: $52=An.hi16, $54=An.lo16+disp, $80=value (lo/$80, hi/$81). value MUST be in $80 first.
@@ -360,7 +471,10 @@ def ea_store_A_from(e, ea, size, load_value):
             e('jsr writebyte' if size == 'b' else 'jsr writeword')
         else:
             load_value(e); e('pha')                          # value first (may clobber X via mem read)
-            e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')   # X = dest offset
+            if disp == 0:
+                e('ldx $%02X' % dp)                         # X = dest offset
+            else:
+                e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('tax')
             e('pla'); e('jsr wrb40' if size == 'b' else 'jsr wrw40')             # work-RAM byte/word
         if kind == '(An)+': bump_an(e, an, 1 if size == 'b' else 2)
         return
@@ -375,7 +489,7 @@ def ea_store_A_from(e, ea, size, load_value):
     raise Unsupported('store EA %r' % (ea,))
 
 # ===================== branch idiom =====================
-def branch_label(e, tgt):
+def branch_label(e, tgt, fsrc=None):
     """Resolve a conditional-branch target to a local jmp label. In-function -> the normal per-fn
     label (placed in the main loop). Out-of-function -> register a TAIL-JUMP stub (emitted after the
     body by emit_tailjump_stubs) and return its label; the stub sets PC=tgt and jmp inext so the
@@ -383,6 +497,12 @@ def branch_label(e, tgt):
     if getattr(e, 'entry', None) is None or (e.entry <= tgt < e.end):
         return e.L(tgt)
     e.tailjumps.add(tgt)
+    if EXITCCR and fsrc is not None:
+        old = e.tailjump_ccr.get(tgt)
+        if old is not None and old != fsrc:
+            raise Unsupported('tail target $%06X reached with conflicting CCR sources %s/%s'
+                              % (tgt, old, fsrc))
+        e.tailjump_ccr[tgt] = fsrc
     return 'Ltj%s_%x' % (e.pfx, tgt)
 
 def emit_tailjump(e, tgt):
@@ -397,7 +517,8 @@ def emit_tailjump(e, tgt):
     e('lda %s' % imm16(tgt & 0xFFFF)); e('sta $40')
     e('lda %s' % imm16((tgt >> 16) & 0xFFFF)); e('sta $42')
     if tgt in ESCAPED:
-        nm = 'entry_%x' % tgt; home = (0x99 if BANK5 else 0x94 if BANK2 else 0x92)
+        nm = 'entry_%x' % tgt
+        home = 0x9D if BANK7 else (0x95 if BANK6 else (0x99 if BANK5 else 0x94 if BANK2 else 0x92))
         if (escbank_bank_of(nm) or home) == home: e('jmp %s' % nm)
         else: e('jml.l %s' % nm)
     else:
@@ -405,9 +526,15 @@ def emit_tailjump(e, tgt):
 
 def emit_tailjump_stubs(e):
     """Emit the out-of-function tail-jump stubs collected by branch_label. Placed after the body
-    (only reached via jmp). ESCAPED target -> direct native jump (contiguous); else jmp inext."""
+    (only reached via jmp). With --exitccr, a flag-producing conditional edge materializes its
+    live flags here before setting PC. A BTST edge is already materialized before its branch because
+    BTST changes only Z and must preserve the prior N/V/C. ESCAPED target -> direct native jump
+    (contiguous); else jmp inext."""
     for tgt in sorted(getattr(e, 'tailjumps', ())):
-        e.lbl('Ltj%s_%x' % (e.pfx, tgt)); emit_tailjump(e, tgt)
+        e.lbl('Ltj%s_%x' % (e.pfx, tgt))
+        fsrc = getattr(e, 'tailjump_ccr', {}).get(tgt)
+        if fsrc is not None and fsrc != 'btst': emit_ccr_native(e, fsrc)
+        emit_tailjump(e, tgt)
 
 def emit_ccr_native(e, fsrc):
     """Materialize the 68K CCR MEMORY ($60=Z $6E=C $70=N $72=V $A2=X) that the interp-CALLER's
@@ -429,6 +556,16 @@ def emit_ccr_native(e, fsrc):
     else:                                          # 'tst': move/logic/tst -> V=0, C=0, X untouched
         e('stz $72'); e('stz $6E')
 
+def emit_ccr_z_native(e):
+    """Materialize only the 68K Z variable from the live native Z flag while preserving native P.
+
+    BTST changes Z alone: N/V/C/X must retain their prior emulated values. Two PHPs leave one status
+    byte to inspect and one to restore after the accumulator-width changes and DP store. This lets
+    the immediately following native BEQ/BNE consume the original BTST result unchanged.
+    """
+    e('php'); e('php'); e('sep #$20'); e('pla'); e('rep #$30')
+    e('and #$0002'); e('sta $60'); e('plp')
+
 def emit_ccr_from_value(e, val):
     """Materialize the 68K CCR (N,Z; V=0,C=0; X untouched) from a MOVE's result VALUE (not the native
     flags). Used at a dbra-loop fall-through to a function exit: 68K `dbra`/`dbf` PRESERVE the CCR, so
@@ -440,36 +577,63 @@ def emit_ccr_from_value(e, val):
     kind = val[0]
     if kind == 'imm':
         _, c, sz = val
-        n = (c >> (31 if sz == 'l' else 15)) & 1
-        z = 1 if (c & (0xFFFFFFFF if sz == 'l' else 0xFFFF)) == 0 else 0
+        bits = {'b': 8, 'w': 16, 'l': 32}[sz]
+        n = (c >> (bits - 1)) & 1
+        z = 1 if (c & ((1 << bits) - 1)) == 0 else 0
         e('lda #$%04X' % (0x8000 if n else 0)); e('sta $70')   # N
         e('stz $72'); e('stz $6E')                             # V=0, C=0
         e('lda #$%04X' % (1 if z else 0)); e('sta $60')        # Z (const)
         return
     dp, sz = val
     hi = dp + 2 if sz == 'l' else dp
-    e('lda $%02X' % hi); e('and #$8000'); e('sta $70')         # N = bit(msb) of the moved value
+    nmask = 0x0080 if sz == 'b' else 0x8000
+    e('lda $%02X' % hi); e('and #$%04X' % nmask); e('sta $70') # N = bit(msb) of the moved value
     e('stz $72')                                                # V = 0
     e('stz $6E')                                                # C = 0
     e('stz $60')                                                # Z = 0 (assume nonzero)
     if sz == 'l': e('lda $%02X' % dp); e('ora $%02X' % (dp + 2))
+    elif sz == 'b': e('lda $%02X' % dp); e('and #$00FF')
     else: e('lda $%02X' % dp)
     s = e.fresh(); e('bne %s' % s); e('inc $60'); e.lbl(s)      # Z = 1 iff value == 0
 
-def dbra_exit_ccr_val(prev):
-    """The (dp,size)/('imm',..) whose N/Z the caller reads after a dbra loop whose body's last op is
-    `prev` (a move). None if not determinable -> leave the CCR unmaterialized (the pre-existing
-    behaviour; only matters if the caller branches on it, which is exactly the case this closes)."""
+def move_result_ccr_val(prev):
+    """Return a stable reference to a MOVE result for exit-CCR materialization.
+
+    This covers both DBRA fall-through and a straight-line final MOVE before a flag-neutral
+    epilogue/rts.  Returning None makes the caller fail loud instead of silently exporting stale
+    CCR memory.  The common memory-destination form is recoverable from a Dn/An/immediate source;
+    a Dn destination is recoverable after any source load.
+    """
     if prev is None: return None
     b, sz = split_mn(prev)
-    if b != 'move' or sz not in ('w', 'l'): return None
+    if b != 'move' or sz not in ('b', 'w', 'l'): return None
     ops = operands(prev)
     if len(ops) != 2: return None
     src, dst = ops
     if sz == 'l' and src[0] == '(An)+' and dst[0] == '(An)+': return (0x9A, 'l')  # gen_movel scratch
-    if src[0] == 'Dn': return (reg_dp(src[1]), sz)                                 # move Dn,<mem>: value = Dn
+    if dst[0] == 'Dn': return (reg_dp(dst[1]), sz)                                 # stored result is stable in Dn
+    if src[0] in ('Dn', 'An'): return (reg_dp(src[1]), sz)                         # move Dn/An,<mem>
     if src[0] == 'imm': return ('imm', src[1], sz)                                 # move #imm,<mem>
     return None
+
+def enters_exit_epilogue(e, nxt):
+    """True when ``nxt`` preserves CCR through this function's terminal RTS.
+
+    In addition to a straight-line MOVEM/UNLK/RTS epilogue, MC68000 code often
+    converges on that epilogue through an unconditional BRA.  BRA preserves
+    CCR, so a MOVE immediately before that edge is just as observable at the
+    caller as a MOVE immediately before MOVEM.  Missing the BRA form left
+    $01F2E4's successful ``move.w d0,d7; bra $1f440`` exporting stale Z.
+    """
+
+    if nxt is None:
+        return False
+    exits = getattr(e, 'exit_addrs', ())
+    if nxt.address in exits:
+        return True
+    if split_mn(nxt)[0] == 'bra':
+        return branch_target(nxt) in exits
+    return False
 
 def _branch32(e, base, jmp, fsrc, low):
     """Emit a branch off a FULL 32-bit compare/tst. State on entry: processor N,V,C valid for the
@@ -546,9 +710,14 @@ def emit_branch(e, base, tgt, fsrc):
     e._live_fsrc = fsrc if fsrc in ('tst', 'signed') else None
 
 def _emit_branch_inner(e, base, tgt, fsrc):
-    L = branch_label(e, tgt)
+    L = branch_label(e, tgt, fsrc if EXITCCR else None)
     def jmp():
-        if tgt in getattr(e, 'exit_addrs', ()):    # branch to the epilogue/rts: sync CCR for the caller
+        if tgt in getattr(e, 'exit_addrs', ()) and fsrc not in (None, 'btst'):
+            # A flag-producing conditional branch to the epilogue/rts must sync CCR for the
+            # caller. An unconditional 68K BRA has no flag source and preserves the CCR that the
+            # preceding native callee/op already materialized; treating None as the old fallback
+            # 'tst' source corrupts N/Z at neutral exit seams (notably $02A2B6 -> $02A2C2).
+            # BTST already synced its one observable flag (Z) before reaching this edge.
             emit_ccr_native(e, fsrc)
         e('jmp %s' % L)
     def over(short_skip_cc):                       # `cc _s ; jmp L ; _s:`  (cc skips the jmp)
@@ -659,6 +828,24 @@ def emit_signed_cmp(e, dest_ea, src_ea, size, store_dp=None):
         if store_dp is not None: e('sta $%02X' % (store_dp+2))                 # sub.l: store the high result too
         e._cmp32_low = '$%02X' % low
         return
+    if size == 'b':
+        # Run byte subtraction in native 8-bit accumulator mode. Zero-extending
+        # operands and subtracting in 16-bit mode gives the wrong N/V/C for a
+        # real 68K .b operation (and used to make cmpi.b #$80,$AB80 compare the
+        # whole $AB80 word). REP restores M without changing arithmetic flags.
+        k = src_ea[0]
+        if k == 'imm':
+            ea_load_A(e, dest_ea, size); e('sep #$20'); e('sec')
+            e('sbc #$%02X' % (src_ea[1] & 0xFF))
+        elif k in ('Dn', 'An'):
+            ea_load_A(e, dest_ea, size); e('sep #$20'); e('sec')
+            e('sbc $%02X' % reg_dp(src_ea[1]))
+        else:
+            ea_load_A_to_tmp(e, src_ea, size)
+            ea_load_A(e, dest_ea, size); e('sep #$20'); e('sec'); e('sbc $%02X' % TMP)
+        if store_dp is not None: e('sta $%02X' % store_dp)
+        e('rep #$20')
+        return
     k = src_ea[0]
     if k == 'imm':
         ea_load_A(e, dest_ea, size); e('sec'); e('sbc %s' % imm16(src_ea[1]))
@@ -671,6 +858,21 @@ def emit_signed_cmp(e, dest_ea, src_ea, size, store_dp=None):
 
 def ea_load_A_to_tmp(e, ea, size):
     ea_load_A(e, ea, size); e('sta $%02X' % TMP)
+
+def normalize_tst_nz(e, size):
+    """Normalize A so native N/Z match a 68K TST of `size`.
+
+    The 65816 runs with a 16-bit accumulator here.  A byte EA load only
+    guarantees A.lo; in particular, `tst.b dN` used to test bit 15 of the
+    containing word instead of bit 7 of the byte.  Sign-extending the byte
+    makes the existing TST branch lowering consume the correct N and Z.
+    The EOR/SBC range is [-128,127], so it also leaves V clear as TST does.
+    """
+    if size == 'b':
+        e('and #$00FF')
+        e('eor #$0080')
+        e('sec')
+        e('sbc #$0080')
 
 _CCR_NEUTRAL = {'movea', 'adda', 'suba', 'lea', 'pea', 'exg', 'nop', 'link', 'unlk', 'movem'}
 _SCC = {'st', 'sf', 'shi', 'sls', 'scc', 'scs', 'sne', 'seq', 'svc', 'svs', 'spl', 'smi',
@@ -728,17 +930,33 @@ def gen(e, ins, nxt):
                    and o3[0] == ('(An)', an):
                     gen_jtstatic(e, src[1] & 0xFFFFFF, an, o1[0])
                     return 4
+
+    # The interpreter models SR as the interrupt mask in $7C plus the five CCR words.  Some task
+    # roots use ANDI/ORI solely to change the mask while preserving every low-byte CCR bit.  Handle
+    # exactly that class here before normal EA parsing (Capstone's literal `sr` is not a data EA).
+    # Any form that can alter CCR still fails loud and remains interpreted.
+    if base in ('andi', 'ori') and size == 'w':
+        sr_op = re.fullmatch(r'#\$?([0-9a-f]+),\s*sr', ins.op_str.strip())
+        if sr_op:
+            imm = int(sr_op.group(1), 16) & 0xFFFF
+            low = imm & 0xFF
+            if (base == 'andi' and low != 0xFF) or (base == 'ori' and low != 0x00):
+                raise Unsupported('%s.w #$%x,sr alters CCR' % (base, imm))
+            e('lda $7C')
+            e('%s #$%04X' % ('and' if base == 'andi' else 'ora', (imm >> 8) & 0x0007))
+            e('sta $7C')
+            return 1
     ops = operands(ins)
 
     # ---- frame / structural ----
     if base == 'link':
-        an, disp = ops[0][1], ops[1][1]
+        an, disp = ops[0][1], s16(ops[1][1] & 0xFFFF)
         dp = reg_dp(an)
         e('lda $%02X' % dp); e('sta $54'); e('lda $%02X' % (dp+2)); e('sta $56'); e('jsr push32')
         e('lda $3C'); e('sta $%02X' % dp); e('lda $3E'); e('sta $%02X' % (dp+2))   # An = a7
         if disp:                                                                    # a7 += disp (signed)
             e('lda $3C'); e('clc'); e('adc %s' % imm16(disp)); e('sta $3C')
-            e('lda $3E'); e('adc #$0000'); e('sta $3E')
+            e('lda $3E'); e('adc %s' % hi_ext(disp)); e('sta $3E')
         return 1
     if base == 'unlk':
         an = ops[0][1]; dp = reg_dp(an)
@@ -775,13 +993,33 @@ def gen(e, ins, nxt):
                 e._cmp32_low = '$%02X' % dp              # _branch32 reconstructs full Z from the low word
                 emit_branch(e, nb, branch_target(nxt), 'tst32'); return 2
             return 1
-        ea_store_A_from(e, dst, size, lambda e: ea_load_A(e, src, size))
+        final_move = enters_exit_epilogue(e, nxt)
+        final_val = move_result_ccr_val(ins) if final_move else None
+        if final_move and final_val is None:
+            # A memory-to-memory MOVE still exports the moved value's N/Z/V/C across a
+            # flag-neutral epilogue.  Keep the loaded value in transpiler scratch before
+            # the destination-address/store machinery clobbers A.  This is required by
+            # $008E90 `move.w $8(a1),$2934(a5); unlk; rts`.
+            def load_final_move(e):
+                ea_load_A(e, src, size)
+                e('sta $%02X' % TMP)
+            ea_store_A_from(e, dst, size, load_final_move)
+            final_val = (TMP, size)
+        else:
+            ea_store_A_from(e, dst, size, lambda e: ea_load_A(e, src, size))
         if fuses:                                        # move sets N,Z (V cleared) -> reload + branch
             if dst[0] == 'Dn': e('lda $%02X' % reg_dp(dst[1]))
             elif dst[0] in ('(An)', '(d16,An)', 'abs'):  # re-readable w/o side effects: reload stored val
                 ea_load_A(e, dst, size)                  # the just-stored value carries the move's N,Z
             else: raise Unsupported('move-to-mem feeding branch (non-reloadable dst %s)' % dst[0])
             emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+        if final_move:
+            # A final MOVE exports N/Z/V/C to its caller even when a flag-neutral epilogue
+            # (or the rts itself) follows.  Native stores/address bumps destroy the host flags,
+            # so materialize the 68K CCR from the actual moved value before that epilogue.
+            if final_val is None:
+                raise Unsupported('final move result unavailable for exit CCR')
+            emit_ccr_from_value(e, final_val)
         return 1
     if base == 'movea':
         src, dst = ops; dp = reg_dp(dst[1])
@@ -802,21 +1040,72 @@ def gen(e, ins, nxt):
         elif src[0] == 'abs':
             e('lda #%s' % hx(src[1] & 0xFFFF)); e('sta $%02X' % dp)
             e('lda #%s' % hx((src[1] >> 16) & 0xFFFF)); e('sta $%02X' % (dp+2))
+        elif src[0] == '(PC,Dn)':                    # resolved PC base + signed Dn.w index
+            base_addr, index = src[1], reg_dp(src[2])
+            # LEA is flag-neutral on 68K.  Preserve the host P while deriving
+            # the signed high half and adding the index to the resolved base.
+            e('php')
+            e('lda $%02X' % index); e('sta $9A'); e('asl a')
+            e('lda #$0000'); e('sbc #$0000'); e('eor #$FFFF'); e('sta $9C')
+            e('lda #%s' % hx(base_addr & 0xFFFF)); e('clc'); e('adc $9A'); e('sta $%02X' % dp)
+            e('lda #%s' % hx((base_addr >> 16) & 0xFFFF)); e('adc $9C'); e('sta $%02X' % (dp + 2))
+            e('plp')
+        elif src[0] == '(PC,DnL)':
+            raise Unsupported('lea PC-indexed long register')
         elif src[0] == '(An)':                       # lea (An),Am = copy An (disp 0)
             s = reg_dp(src[1])
             e('lda $%02X' % s); e('sta $%02X' % dp)
             e('lda $%02X' % (s+2)); e('sta $%02X' % (dp+2))
+        elif src[0] == '(d8,An,DnL)':                # brief indexed: An + signed d8 + Dn.l
+            disp, an, dn = src[1], src[2], src[3]
+            s, ix = reg_dp(an), reg_dp(dn)
+            # First add the full 32-bit base/index pair, then add the signed displacement
+            # as a second 32-bit operation.  Feeding the first low-word carry into another
+            # low-word ADC would add it twice and is incorrect.
+            e('lda $%02X' % s); e('clc'); e('adc $%02X' % ix); e('sta $%02X' % dp)
+            e('lda $%02X' % (s+2)); e('adc $%02X' % (ix+2)); e('sta $%02X' % (dp+2))
+            if disp:
+                e('lda $%02X' % dp); e('clc'); e('adc %s' % imm16(disp)); e('sta $%02X' % dp)
+                e('lda $%02X' % (dp+2)); e('adc %s' % hi_ext(disp)); e('sta $%02X' % (dp+2))
         else:
             raise Unsupported('lea src %r' % (src,))
         return 1
 
     # ---- arithmetic / logic (.w) ----
     if base in ('add', 'addi', 'addq', 'adda', 'sub', 'subi', 'subq', 'suba'):
-        return gen_addsub(e, base, size, ops, nxt, fuses, nb)
+        return gen_addsub(e, base, size, ops, nxt, fuses, nb, live)
     if base in ('and', 'andi', 'or', 'ori', 'eor', 'eori'):
         src, dst = ops; opn = {'and': 'and', 'andi': 'and', 'or': 'ora', 'ori': 'ora',
                                'eor': 'eor', 'eori': 'eor'}[base]
         memsrc = src[0] in ('(An)', '(An)+', '(d16,An)', 'abs')
+        if size == 'l' and dst[0] == 'Dn':
+            # A long register destination spans both DP words.  The old fall-
+            # through to word-sized ea_rmw updated only Dn.lo, silently losing
+            # the high half (`or.l d2,d1` in the signed $024D28 record path).
+            # Stage a memory source first so destination/source aliasing cannot
+            # change the second read.
+            ddp = reg_dp(dst[1])
+            if memsrc:
+                load_long_to(e, src, 0x9A)
+            for half in (0, 2):
+                e('lda $%02X' % (ddp + half))
+                if memsrc:
+                    operand = '$%02X' % (0x9A + half)
+                elif src[0] in ('Dn', 'An'):
+                    operand = '$%02X' % (reg_dp(src[1]) + half)
+                elif src[0] == 'imm':
+                    operand = imm16(src[1] if half == 0 else src[1] >> 16)
+                else:
+                    raise Unsupported('logic.l Dn-dst src %r' % (src,))
+                e('%s %s' % (opn, operand)); e('sta $%02X' % (ddp + half))
+            if fuses:
+                if nb not in ('beq', 'bne', 'bmi', 'bpl'):
+                    raise Unsupported('logic.l feeding %s (needs C/V)' % nb)
+                e('lda $%02X' % (ddp + 2))
+                e._cmp32_low = '$%02X' % ddp
+                emit_branch(e, nb, branch_target(nxt), 'tst32')
+                return 2
+            return 1
         # .l RMW to MEMORY = two independent word ops (ea_rmw is word-only). High word @ EA uses the
         # source's hi16, low word @ EA+2 uses its lo16 (68K big-endian). Was silently truncated to a
         # single word OR'd with the wrong half -> e.g. `or.l d0,$1b12(a5)` corrupted the dirty-palette
@@ -830,6 +1119,17 @@ def gen(e, ins, nxt):
                 else: raise Unsupported('logic.l mem-dst src %r' % (src,))
                 ea_rmw(e, ('(d16,An)', disp + woff, an), 'w', (lambda o, a: lambda e: e('%s %s' % (o, a)))(*mk))
             if fuses: raise Unsupported('logic.l mem-dst feeding branch')
+            if EXITCCR and nxt is not None and nxt.mnemonic == 'rts':
+                # A terminal 68K long logic op exports N/Z from the complete 32-bit result,
+                # clears V/C, and preserves X.  The two native word RMWs above leave only the
+                # low-word host flags live, so reconstruct the architectural CCR explicitly.
+                hi_ea = ('(d16,An)', disp, an)
+                lo_ea = ('(d16,An)', disp + 2, an)
+                ea_load_A(e, hi_ea, 'w'); e('sta $%02X' % TMP)
+                e('and #$8000'); e('sta $70')
+                e('stz $72'); e('stz $6E'); e('stz $60')
+                ea_load_A(e, lo_ea, 'w'); e('ora $%02X' % TMP)
+                nz = e.fresh(); e('bne %s' % nz); e('inc $60'); e.lbl(nz)
             return 1
         if memsrc: ea_load_A_to_tmp(e, src, size)    # memory src -> $TMP BEFORE the RMW (X is set
         def modify(e):                               # only inside ea_rmw, so loading src here is safe)
@@ -859,6 +1159,11 @@ def gen(e, ins, nxt):
                 an = dst[-1]; predec_an(e, an, 4); dp = reg_dp(an)
                 e('lda $%02X' % dp); e('tax'); e('lda #$0000')
                 e('jsr wrw40'); e('inx'); e('inx'); e('jsr wrw40')
+            elif dst[0] == '(An)+':                      # clear long, then postincrement once by four
+                an = dst[-1]
+                ea_store_A_from(e, ('(An)', an), 'w', lambda e: e('lda #$0000'))
+                ea_store_A_from(e, ('(d16,An)', 2, an), 'w', lambda e: e('lda #$0000'))
+                bump_an(e, an, 4)
             else: raise Unsupported('clr.l %r' % (dst,))
             return 1
         ea_store_A_from(e, dst, size, lambda e: e('lda #$0000'))
@@ -877,6 +1182,8 @@ def gen(e, ins, nxt):
         e('lda #$%04X' % lo); e('sta $%02X' % dp)
         e('lda #$%04X' % (0xFFFF if n & 0x80 else 0)); e('sta $%02X' % (dp+2))
         if fuses: e('lda $%02X' % dp); emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+        if enters_exit_epilogue(e, nxt):
+            emit_ccr_from_value(e, (dp, 'l'))
         return 1
     if base in ('lsl', 'lsr', 'asl', 'asr'):             # shift Dn by #imm OR by Dm (.w)
         cnt, dst = ops
@@ -913,6 +1220,20 @@ def gen(e, ins, nxt):
             if fuses: raise Unsupported('dynamic shift feeding branch — add if needed')
             return 1
         if cnt[0] != 'imm': raise Unsupported('%s count mode %s' % (base, cnt[0]))
+        if size == 'l':                                  # full 32-bit immediate register shift
+            if base not in ('lsl', 'lsr', 'asl'):
+                raise Unsupported('%s.l immediate — add exact arithmetic-right lowering' % base)
+            if fuses:
+                raise Unsupported('%s.l feeding branch — full N/Z/V/C lowering required' % base)
+            dp = reg_dp(dst[1]); n = cnt[1] & 0xFFFF
+            for _ in range(n):
+                if base in ('lsl', 'asl'):               # lo << 1, carry into hi; C = old bit31
+                    e('asl $%02X' % dp); e('rol $%02X' % (dp + 2))
+                else:                                    # hi >> 1, carry into lo; C = old bit0
+                    e('lsr $%02X' % (dp + 2)); e('ror $%02X' % dp)
+            if n:
+                emit_xflag_c(e)                          # X = final bit shifted out (count is nonzero)
+            return 1
         def lv(e):
             ea_load_A(e, dst, size)
             for _ in range(cnt[1] & 0xFFFF): one(e)
@@ -964,6 +1285,26 @@ def gen(e, ins, nxt):
             if nb not in ('beq', 'bne', 'bmi', 'bpl'): raise Unsupported('ext feeding %s' % nb)
             e('lda $%02X' % dp); emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
         return 1
+    if base == 'exg':                                    # exchange two full 68K registers; CCR/X untouched
+        src, dst = ops
+        if src[0] not in ('Dn', 'An') or dst[0] not in ('Dn', 'An'):
+            raise Unsupported('exg operands %r, %r' % (src, dst))
+        sdp, ddp = reg_dp(src[1]), reg_dp(dst[1])
+        # The 65816 loads used for the swap alter host N/Z, while 68K EXG is
+        # flag-neutral.  Preserve P so a following conditional branch still
+        # observes the preceding 68K producer; emulated X lives in $A2 and is
+        # deliberately untouched.
+        e('php')
+        e('lda $%02X' % sdp); e('sta $9A')
+        e('lda $%02X' % ddp); e('sta $%02X' % sdp)
+        e('lda $9A'); e('sta $%02X' % ddp)
+        e('lda $%02X' % (sdp + 2)); e('sta $9A')
+        e('lda $%02X' % (ddp + 2)); e('sta $%02X' % (sdp + 2))
+        e('lda $9A'); e('sta $%02X' % (ddp + 2))
+        e('plp')
+        if fuses:
+            raise Unsupported('exg unexpectedly feeding branch')
+        return 1
     if base == 'swap':                                   # swap Dn.hi16 <-> Dn.lo16 (32-bit; NZ from result, V=C=0)
         dp = reg_dp(ops[0][1])
         e('lda $%02X' % dp); e('tax'); e('lda $%02X' % (dp+2)); e('sta $%02X' % dp); e('txa'); e('sta $%02X' % (dp+2))
@@ -1001,6 +1342,35 @@ def gen(e, ins, nxt):
         e('lda $96'); e('sta $%02X' % (reg_dp(dst[1]) + 2))
         if fuses: raise Unsupported('mulu feeding branch')
         return 1
+    if base == 'muls':                                   # MULS.W <ea>,Dn : signed 16x16 -> signed 32
+        src, dst = ops
+        if dst[0] != 'Dn': raise Unsupported('muls dst not Dn')
+        if size not in (None, 'w'): raise Unsupported('muls.%s' % size)
+        if fuses: raise Unsupported('muls feeding branch — full 32-bit N/Z lowering required')
+        # usmul is unsigned, so multiply the two absolute 16-bit magnitudes and negate the
+        # 32-bit product iff the input signs differ.  -32768 remains $8000 as an unsigned
+        # magnitude, which is exactly what the unsigned helper needs.  $8E is escape scratch;
+        # usmul uses $50/$52/$94/$96/$98/$9A and leaves $8E alone.
+        e('stz $8E')
+        ea_load_A(e, src, 'w')
+        sp = e.fresh(); sd = e.fresh()
+        e('bpl %s' % sp); e('eor #$FFFF'); e('inc a'); e('sta $52')
+        e('lda #$0001'); e('sta $8E'); e('bra %s' % sd)
+        e.lbl(sp); e('sta $52'); e.lbl(sd)
+        dp = reg_dp(dst[1]); dp_pos = e.fresh(); dp_done = e.fresh()
+        e('lda $%02X' % dp); e('bpl %s' % dp_pos)
+        e('eor #$FFFF'); e('inc a'); e('sta $50')
+        e('lda $8E'); e('eor #$0001'); e('sta $8E'); e('bra %s' % dp_done)
+        e.lbl(dp_pos); e('sta $50'); e.lbl(dp_done)
+        e('jsr usmul')
+        positive = e.fresh()
+        e('lda $8E'); e('beq %s' % positive)
+        e('lda #$0000'); e('sec'); e('sbc $94'); e('sta $94')
+        e('lda #$0000'); e('sbc $96'); e('sta $96')
+        e.lbl(positive)
+        e('lda $94'); e('sta $%02X' % dp)
+        e('lda $96'); e('sta $%02X' % (dp + 2))
+        return 1
     if base == 'divu':                                   # DIVU.W <ea>,Dn : Dn.lo=Dn(32)/ea.w, Dn.hi=rem
         src, dst = ops
         if dst[0] != 'Dn': raise Unsupported('divu dst not Dn')
@@ -1031,12 +1401,51 @@ def gen(e, ins, nxt):
             if fuses: emit_branch(e, nb, branch_target(nxt), 'tst32'); return 2
             return 1
         ea_load_A(e, ops[0], size)
-        if fuses: emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+        normalize_tst_nz(e, size)
+        if fuses:
+            emit_branch(e, nb, branch_target(nxt), 'tst')
+            if EXITCCR:
+                # The taken out-of-body edge captures these live flags in its tail stub. Capture
+                # the fall-through too: a following BTST changes only Z and must inherit TST's N/V/C.
+                emit_ccr_native(e, 'tst')
+                e._live_fsrc = None
+            return 2
         return 1
     if base == 'nop':
         return 1
     if base in ('bset', 'bclr', 'bchg'):                 # bit set/clear/change <bit>,<ea> (in place)
         bitop, dst = ops
+        if bitop[0] == 'Dn' and dst[0] == 'Dn' and base == 'bset':
+            # Dynamic register BSET uses a 32-bit destination (bit mod 32),
+            # irrespective of Capstone's misleading `.b` suffix.  Preserve
+            # the original selected word long enough to leave host Z equal to
+            # the old bit, which is exactly the flag consumed by a fused
+            # BEQ/BNE (`bset d1,d0; beq ...` in the TRAP #1 allocator).
+            bdp, ddp = reg_dp(bitop[1]), reg_dp(dst[1])
+            mask_loop, mask_done = e.fresh(), e.fresh()
+            high_word, tested = e.fresh(), e.fresh()
+            e('lda $%02X' % bdp); e('and #$001F'); e('sta $8C')
+            e('and #$000F'); e('tax'); e('lda #$0001')
+            e.lbl(mask_loop)
+            e('cpx #$0000'); e('beq %s' % mask_done)
+            e('asl a'); e('dex'); e('bra %s' % mask_loop)
+            e.lbl(mask_done); e('sta $8E')
+            e('lda $8C'); e('and #$0010'); e('bne %s' % high_word)
+            e('lda $%02X' % ddp); e('sta $8C'); e('ora $8E'); e('sta $%02X' % ddp)
+            e('lda $8C'); e('and $8E'); e('bra %s' % tested)
+            e.lbl(high_word)
+            e('lda $%02X' % (ddp + 2)); e('sta $8C'); e('ora $8E'); e('sta $%02X' % (ddp + 2))
+            e('lda $8C'); e('and $8E')
+            e.lbl(tested)
+            if fuses:
+                if nb not in ('beq', 'bne'):
+                    raise Unsupported('dynamic register bset feeding %s' % nb)
+                emit_branch(e, nb, branch_target(nxt), 'tst')
+                return 2
+            # No deployed non-fused user currently needs BSET's isolated Z
+            # materialized; retain fail-loud behavior until that contract is
+            # implemented and differentially exercised.
+            raise Unsupported('dynamic register bset without fused beq/bne')
         if fuses: raise Unsupported('%s feeding branch (Z = original bit, not modeled)' % base)
         op = {'bset': 'ora', 'bclr': 'and', 'bchg': 'eor'}[base]
         if bitop[0] == 'Dn' and dst[0] in ('abs', '(An)', '(d16,An)'):
@@ -1122,7 +1531,14 @@ def gen(e, ins, nxt):
             raise Unsupported('btst bit operand %s' % bitop[0])
         if fuses:
             if nb not in ('beq', 'bne'): raise Unsupported('btst feeding %s' % nb)
-            emit_branch(e, nb, branch_target(nxt), 'tst'); return 2
+            if EXITCCR:
+                # Unlike TST, BTST changes only Z. Persist that one bit on both branch edges while
+                # retaining the prior emulated N/V/C/X, and tag the tail so it does not overwrite them.
+                emit_ccr_z_native(e)
+                emit_branch(e, nb, branch_target(nxt), 'btst')
+            else:
+                emit_branch(e, nb, branch_target(nxt), 'tst')
+            return 2
         raise Unsupported('btst not feeding beq/bne')
     if base in ('cmp', 'cmpi', 'cmpa'):
         src, dst = ops
@@ -1167,6 +1583,31 @@ def gen(e, ins, nxt):
         dp = reg_dp(ops[0][1]); tgt = branch_target(ins)
         e('lda $%02X' % dp); e('dec a'); e('sta $%02X' % dp); e('cmp #$FFFF')
         s = e.fresh(); e('beq %s' % s); e('jmp ' + branch_label(e, tgt)); e.lbl(s); return 1
+    if base == 'dblt':
+        # DBLT consumes the preceding 68000 CCR.  Support only the mechanically
+        # proven shape where the immediately preceding instruction is a native
+        # SEC:SBC sub/compare producer; anything else remains fail-loud.
+        insns = getattr(e, '_insns', None)
+        index = getattr(e, '_i', None)
+        if insns is None or index is None or index == 0:
+            raise Unsupported('dblt without an adjacent flag producer')
+        producer, producer_size = split_mn(insns[index - 1])
+        if producer not in ('sub', 'subi', 'subq', 'cmp', 'cmpi', 'cmpa') \
+           or producer_size == 'l':
+            raise Unsupported('dblt producer is not a word/byte SEC:SBC compare')
+        dp = reg_dp(ops[0][1]); tgt = branch_target(ins)
+        overflow = e.fresh(); count = e.fresh(); done = e.fresh()
+        # LT is N!=V.  When true DBcc falls through without touching Dn;
+        # otherwise decrement Dn.w and branch unless the result is -1.
+        e('bvs %s' % overflow)
+        e('bmi %s' % done)
+        e('bra %s' % count)
+        e.lbl(overflow)
+        e('bpl %s' % done)
+        e.lbl(count)
+        e('lda $%02X' % dp); e('dec a'); e('sta $%02X' % dp); e('cmp #$FFFF')
+        e('beq %s' % done); e('jmp ' + branch_label(e, tgt)); e.lbl(done)
+        return 1
     if base in BCC:
         # BRANCH CHAIN: `<producer>; Bcc1; Bcc2 ...` — the 68K CCR is untouched by branches, and our
         # 'tst'/'signed' lowerings preserve the 65816 source flags on the fall-through path, so a Bcc
@@ -1195,6 +1636,14 @@ def sext_hi(e, dp):
 
 def load_long_to(e, src, dp):
     """32-bit load src -> reg at dp (no flags)."""
+    if src[0] == '-(An)':
+        # Evaluate the predecrement before either half of the long read.  The
+        # ordinary (An) loader stages both words before writing ``dp``, so this
+        # remains alias-safe for MOVEA.L -(An),An.
+        an = src[-1]
+        predec_an(e, an, 4)
+        load_long_to(e, ('(An)', an), dp)
+        return
     if src[0] in ('(d16,An)', '(An)', '(An)+'):
         an = src[-1]; disp = src[1] if src[0] == '(d16,An)' else 0
         if is_workram(an):                                       # provably work RAM -> fast (X-held EA = aliasing-safe)
@@ -1218,14 +1667,33 @@ def load_long_to(e, src, dp):
         # Address built in $8C(lo)/$8E(hi-ext) exactly like ea_load_A's indexed path; result staged
         # via TMP so dp may alias An/Dn ($02335E move.l (a0,d0.w),d0).
         disp, an, dn = src[1], src[2], src[3]
-        if disp: raise Unsupported('(d8,An,Dn) long load with nonzero disp')
         adp, ddp = reg_dp(an), reg_dp(dn)
         neg, pos = e.fresh(), e.fresh()
         e('lda $%02X' % ddp); e('sta $8C')
         e('and #$8000'); e('bne %s' % neg); e('lda #$0000'); e('bra %s' % pos)
         e.lbl(neg); e('lda #$FFFF'); e.lbl(pos); e('sta $8E')
-        e('lda $%02X' % adp); e('clc'); e('adc $8C'); e('sta $54'); e('sta $8C')
-        e('lda $%02X' % (adp+2)); e('adc $8E'); e('sta $52'); e('sta $8E')   # $8C/$8E = the EA (survives helpers)
+        e('lda $%02X' % adp); e('clc'); e('adc %s' % imm16(disp)); e('sta $54')
+        e('lda $%02X' % (adp+2)); e('adc %s' % hi_ext(disp)); e('sta $52')
+        e('lda $54'); e('clc'); e('adc $8C'); e('sta $54'); e('sta $8C')
+        e('lda $52'); e('adc $8E'); e('sta $52'); e('sta $8E')   # $8C/$8E = the EA (survives helpers)
+        e('jsr rdw_ea'); e('sta $%02X' % TMP)                                # hi16
+        e('lda $8C'); e('clc'); e('adc #$0002'); e('sta $54')
+        e('lda $8E'); e('adc #$0000'); e('sta $52')
+        e('jsr rdw_ea'); e('sta $%02X' % dp)                                 # lo16
+        e('lda $%02X' % TMP); e('sta $%02X' % (dp+2))
+        return
+    if src[0] == '(d8,An,DnL)':
+        # Brief indexed long-index load: addr = An + signed disp8 + Dn.l.  Unlike the
+        # .w form above, the index contributes all 32 bits (no sign-extension step).
+        # Stage the complete EA in $8C/$8E before either ROM-aware read so this remains
+        # alias-safe for `movea.l (a1,d0.l),a1` ($000980): the destination overwrites
+        # the base register only after both source words have been fetched.
+        disp, an, dn = src[1], src[2], src[3]
+        adp, ddp = reg_dp(an), reg_dp(dn)
+        e('lda $%02X' % adp); e('clc'); e('adc %s' % imm16(disp)); e('sta $8C')
+        e('lda $%02X' % (adp+2)); e('adc %s' % hi_ext(disp)); e('sta $8E')
+        e('lda $8C'); e('clc'); e('adc $%02X' % ddp); e('sta $8C'); e('sta $54')
+        e('lda $8E'); e('adc $%02X' % (ddp+2)); e('sta $8E'); e('sta $52')
         e('jsr rdw_ea'); e('sta $%02X' % TMP)                                # hi16
         e('lda $8C'); e('clc'); e('adc #$0002'); e('sta $54')
         e('lda $8E'); e('adc #$0000'); e('sta $52')
@@ -1252,6 +1720,32 @@ def store_long_from(e, dst, dp):
         an = dst[-1]; predec_an(e, an, 4)                     # An -= 4 (now points at the push slot)
         ea_store_A_from(e, ('(d16,An)', 0, an), 'w', lambda e: e('lda $%02X' % (dp+2)))  # hi16 @ An
         ea_store_A_from(e, ('(d16,An)', 2, an), 'w', lambda e: e('lda $%02X' % dp))      # lo16 @ An+2
+        return
+    if dst[0] in ('(d8,An,Dn)', '(d8,An,DnL)'):
+        # Indexed long store: evaluate the complete EA once into $8C/$8E,
+        # then issue two big-endian, IO-aware word stores.  Staging the source
+        # in gen_movel's $9A/$9C pair keeps this alias-safe when either address
+        # register participates in the destination expression.
+        disp, an, dn = dst[1], dst[2], dst[3]
+        adp, idp = reg_dp(an), reg_dp(dn)
+        e('lda $%02X' % adp); e('clc'); e('adc %s' % imm16(disp)); e('sta $8C')
+        e('lda $%02X' % (adp + 2)); e('adc %s' % hi_ext(disp)); e('sta $8E')
+        if dst[0] == '(d8,An,Dn)':
+            # Derive the word index's signed high half before the low-word
+            # addition; that addition's carry must flow directly into the
+            # subsequent high-word ADC.
+            e('lda $%02X' % idp); e('asl a')
+            e('lda #$0000'); e('sbc #$0000'); e('eor #$FFFF'); e('sta $9E')
+        e('lda $8C'); e('clc'); e('adc $%02X' % idp); e('sta $8C')
+        if dst[0] == '(d8,An,DnL)':
+            e('lda $8E'); e('adc $%02X' % (idp + 2)); e('sta $8E')
+        else:
+            e('lda $8E'); e('adc $9E'); e('sta $8E')
+        e('lda $%02X' % (dp + 2)); e('sta $80')
+        e('lda $8C'); e('sta $54'); e('lda $8E'); e('sta $52'); e('jsr writeword')
+        e('lda $%02X' % dp); e('sta $80')
+        e('lda $8C'); e('clc'); e('adc #$0002'); e('sta $54')
+        e('lda $8E'); e('adc #$0000'); e('sta $52'); e('jsr writeword')
         return
     raise Unsupported('store_long dst %r' % (dst,))
 
@@ -1326,7 +1820,8 @@ def gen_jumptable(e, ins, dI, dT, base):
 # constant carries the real bank). A same-bank `jml.l` would resolve the file-local $00 origin and jump
 # to bank $00 = the WRONG bank (the P2 d226/d522 same-bank-jml.l derail, root-caused 2026-07-06).
 _ESCBANK_SYM_BANK = {'src/escbank.sym': 0x92, 'src/escbank2.sym': 0x94, 'src/escbank3.sym': 0x97,
-                     'src/escbank4.sym': 0x98, 'src/escbank5.sym': 0x99}
+                     'src/escbank4.sym': 0x98, 'src/escbank5.sym': 0x99,
+                     'src/escbank6.sym': 0x95, 'src/escbank7.sym': 0x9D}
 _ESCBANK_BANKS = None
 def escbank_bank_of(name):
     global _ESCBANK_BANKS
@@ -1359,7 +1854,7 @@ def gen_jtstatic(e, base, an, idx_ea):
     a0 set leaked the prior handler's stale a0 -> a 2-byte divergence (proven both-class GREEN as
     the hand-authored entry_d226, commit daf2e97; see [[coroutine-bridge-retarget-derails]])."""
     tgts = JTSTATIC[base]
-    home = (0x99 if BANK5 else 0x94 if BANK2 else 0x92)                          # the escape's own execute bank (--bank1=$92, --bank2=$94)
+    home = 0x9D if BANK7 else (0x95 if BANK6 else (0x99 if BANK5 else 0x94 if BANK2 else 0x92))       # the escape's own execute bank
     e.cmt('JTSTATIC $%06X(%s jmp-table, %d cases): static index switch, movea/ojmp_hook default' % (base, an, len(tgts)))
     ea_load_A(e, idx_ea, 'w'); e('sta $9A')                 # A = $9A = runtime dispatch index memory[idx_ea]
     for off in sorted(tgts):
@@ -1383,6 +1878,21 @@ def gen_jtstatic(e, base, an, idx_ea):
     e('lda $20'); e('sta $40'); e('lda $22'); e('sta $42')   # jmp (a0): PC = a0
     e('jmp ojmp_hook')                                      # bank1_transform -> jml.l ojmp_hook
 
+def emit_call_return_residue(e, ret):
+    """Restore the real 68K JSR/BSR return bytes below the post-call A7.
+
+    A direct native bridge uses a synthetic $00Fx:continuation return to resume the host escape.
+    The callee pops it, so architectural A7 is correct, but the popped four bytes remain observable
+    stack residue on a real 68000. Replace the synthetic bytes at [A7-4,A7) with the real 24-bit
+    return in big-endian 32-bit form. Native escape stacks are proven work RAM, hence the $40 alias.
+    """
+    ret &= 0xFFFFFF
+    e.cmt('restore real 68K call return residue below A7: $%06X' % ret)
+    e('lda $3C'); e('sec'); e('sbc #$0004'); e('tax')
+    e('lda #$%04X' % ((ret >> 16) & 0xFFFF)); e('xba'); e('sta $400000,x'); e('xba')
+    e('inx'); e('inx')
+    e('lda #$%04X' % (ret & 0xFFFF)); e('xba'); e('sta $400000,x'); e('xba')
+
 def gen_call(e, ins):
     """CALL-BRIDGE (CALL_BRIDGE_DESIGN.md): push a $00FF:cont sentinel return, set PC=callee,
     jmp inext (interpreter runs the callee). The callee's rts pops the sentinel -> op_rts_sentinel
@@ -1395,6 +1905,35 @@ def gen_call(e, ins):
          or re.fullmatch(r'\$([0-9a-f]+)\(pc\)', t) or re.fullmatch(r'\$([0-9a-f]+)\.w', t))
     if m and t.endswith('.w') and int(m.group(1), 16) & 0x8000:
         raise Unsupported('jsr abs.w with sign bit (%s)' % t)   # would sign-extend to $FFxxxx; fail loud
+    if ins.address in REAL_RETURN_CALLS:
+        # A synthetic host-bank sentinel is not architecturally invisible while the callee is
+        # running: some arcade routines inspect the live JSR return slot (the $01762E helper loads
+        # -4(saved A7) and calls it). Push the genuine return and end this native span in the
+        # interpreter. When the callee pops that return, op_rts_norm/xlat dispatches the bare
+        # entry_<return> label below and native execution resumes with an already-correct A7 and
+        # byte-exact stack residue. With xlat gated off, the real return simply interprets, which is
+        # also faithful. Deliberately bypass ibridge/native callees here: the real-return/table
+        # convention is the only proven contract for this observable-return class.
+        ret = (ins.address + ins.size) & 0xFFFFFF
+        e.cmt('REAL-RETURN BRIDGE %s %s: push $%06X, resume through xlat entry_%x'
+              % (ins.mnemonic, t, ret, ret))
+        e('lda #%s' % hx(ret & 0xFFFF)); e('sta $54')
+        e('lda #%s' % hx((ret >> 16) & 0xFFFF)); e('sta $56'); e('jsr push32')
+        if m:
+            a = int(m.group(1), 16) & 0xFFFFFF
+            e('lda #%s' % hx(a & 0xFFFF)); e('sta $40')
+            e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
+        else:
+            ea = parse_ea(t)
+            if ea[0] != '(An)': raise Unsupported('real-return call form %r' % t)
+            dp = reg_dp(ea[1])
+            e('lda $%02X' % dp); e('sta $40')
+            e('lda $%02X' % (dp + 2)); e('sta $42')
+        e('jmp inext')
+        e.cmt('xlat continuation transpiled from $%06X' % ret)
+        e.lbl('entry_%x' % ret)
+        e.lbl(cont)
+        return 1
     # BRIDGE-TO-ESCAPE: callee has an escbank escape -> run it NATIVELY (no interpret) and resume the
     # parent. Set $40=cont/$42=$00FE (sentinel), jmp entry_C: entry_C's prologue pushes $00FE:cont, its
     # body runs native, its terminal rts pops $00FE:cont -> ors_pre -> resume here ($92:cont). The
@@ -1404,10 +1943,16 @@ def gen_call(e, ins):
         e.cmt('CALL-BRIDGE %s %s -> entry_%x (NATIVE escape), resume %s' % (ins.mnemonic, t, a, cont))
         # sentinel = the HOST bank so the callee's rts (pops $42:$40) resumes cont IN THE HOST bank:
         # $00FE -> ors_pre_92 ($92); $00FD -> ors_94chk ($94). Was hardcoded $00FE (bank-$92 only).
-        esc_sent = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')
+        esc_sent = '$00F8' if BANK7 else ('$00F9' if BANK6 else ('$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')))
         e('lda #%s' % cont); e('sta $40'); e('lda #%s' % esc_sent); e('sta $42')
-        e('jmp entry_%x' % a)
+        nm = 'entry_%x' % a
+        home = 0x9D if BANK7 else (0x95 if BANK6 else (0x99 if BANK5 else (0x94 if BANK2 else 0x92)))
+        if (escbank_bank_of(nm) or home) == home:
+            e('jmp %s' % nm)
+        else:
+            e('jml.l %s' % nm)
         e.lbl(cont)
+        emit_call_return_residue(e, ins.address + ins.size)
         return 1
     if not m:
         # INDIRECT-BRIDGE-TO-ESCAPE: jsr (An) with a RUNTIME target -> ibridge (escbank) scans An at
@@ -1427,16 +1972,37 @@ def gen_call(e, ins):
             # callee re-simulating the push; a --table callee doesn't, and a standard-convention
             # OLD body like the $92 entry_d96 exits via popped-PC jml inext, which would fetch the
             # sentinel as a 68K address. The A2 deploy hang taught this.) Miss -> generic bridge.
-            esc_sent = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')
+            esc_sent = '$00F8' if BANK7 else ('$00F9' if BANK6 else ('$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FE')))
             for a in sorted(ESCAPED):
                 nxtl = e.fresh()
                 e.cmt('GUARDED DIRECT-LINK %s %s: An==$%06X -> entry_%xt native (pushed-sentinel return), resume %s' % (ins.mnemonic, t, a, a, cont))
                 e('lda $%02X' % dp); e('cmp #%s' % hx(a & 0xFFFF)); e('bne %s' % nxtl)
                 e('lda $%02X' % (dp+2)); e('cmp #%s' % hx((a >> 16) & 0xFF)); e('bne %s' % nxtl)
                 e('lda #%s' % cont); e('sta $54'); e('lda #%s' % esc_sent); e('sta $56'); e('jsr push32')
-                e('jmp entry_%xt' % a)
+                nm = 'entry_%xt' % a
+                home = 0x9D if BANK7 else (0x95 if BANK6 else (0x99 if BANK5 else 0x94 if BANK2 else 0x92))
+                if (escbank_bank_of(nm) or home) == home:
+                    e('jmp %s' % nm)
+                else:
+                    e('jml.l %s' % nm)
                 e.lbl(nxtl)
-        if BANK2 or BANK5:
+        if BANK5 or BANK6 or BANK7:
+            ib_sent = '$00F8' if BANK7 else ('$00F9' if BANK6 else '$00FA')
+            host_name = '$9D' if BANK7 else ('$95' if BANK6 else '$99')
+            # Banks $99/$95 can reuse the proven bank-$92 `ibridge` scan directly.  Unlike the
+            # xlat-only path, this reaches standard-convention callable escapes such as
+            # $002742.  Keep the bridge return in $40/$42; ibridge either
+            # jumps to a native body whose prologue pushes it, or pushes it itself on a miss
+            # before interpreting the runtime target.  Both paths resume the host-bank label.
+            e.cmt('INDIRECT-BRIDGE %s %s -> bank-$92 ibridge (standard escape or interpret); %s sentinel for bank %s, resume %s' % (ins.mnemonic, t, ib_sent, host_name, cont))
+            e('lda #%s' % cont); e('sta $40'); e('lda #%s' % ib_sent); e('sta $42')
+            e('lda $%02X' % dp); e('sta $52'); e('lda $%02X' % (dp+2)); e('sta $50')
+            e('jml.l ibridge')
+            e.lbl(cont)
+            if RESTORE_INDIRECT_RESIDUE:
+                emit_call_return_residue(e, ins.address + ins.size)
+            return 1
+        if BANK2:
             # ibridge is a $92 label (unreachable from $94/$99) and its ib_miss resumes in bank $92. INLINE
             # the interpret-bridge: push the $00FD sentinel:cont, set PC=An, jml inext. The callee's rts
             # pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont. (No native draw dispatch
@@ -1445,59 +2011,112 @@ def gen_call(e, ins):
             # via jml.l): xlat HIT -> dispatch the callee's --table native escape (the per-jsr(An) native-
             # draw win, e.g. c172's $295A/$29B6 renderers); MISS/gate-off -> jml inext (interpret, as before).
             # Either way the callee's rts pops $00FD:cont -> ors_pre -> ors_94chk -> bank-$94 resume at cont.
-            ib_sent = '$00FA' if BANK5 else '$00FD'  # bank-correct sentinel: bank5:$00FA($99) else $00FD($94)
+            ib_sent = '$00FD'
             e.cmt('INDIRECT-BRIDGE %s %s -> ojmp_hook (a0 --table escape, else interpret); %s sentinel, resume %s' % (ins.mnemonic, t, ib_sent, cont))
             e('lda #%s' % cont); e('sta $54'); e('lda #%s' % ib_sent); e('sta $56'); e('jsr push32')
             e('lda $%02X' % dp); e('sta $40'); e('lda $%02X' % (dp+2)); e('sta $42')
             e('jmp ojmp_hook')
             e.lbl(cont)
+            if RESTORE_INDIRECT_RESIDUE:
+                emit_call_return_residue(e, ins.address + ins.size)
             return 1
         e.cmt('INDIRECT-BRIDGE %s %s -> ibridge (a0 escape or interpret), resume %s' % (ins.mnemonic, t, cont))
         e('lda #%s' % cont); e('sta $40'); e('lda #$00FE'); e('sta $42')
         e('lda $%02X' % dp); e('sta $52'); e('lda $%02X' % (dp+2)); e('sta $50')
         e('jmp ibridge')
         e.lbl(cont)
+        if RESTORE_INDIRECT_RESIDUE:
+            emit_call_return_residue(e, ins.address + ins.size)
         return 1
     # route the (static-target) callee through ojmp_hook (xlat): a --table escape of the callee
     # dispatches NATIVELY (cross-bank-safe; e.g. entry_25110's $184E8/$25A40), a MISS falls back to
     # jml inext (interpret, as before). Same size as `jmp inext` -> safe in-place swap for bank-$00
     # escapes. The pushed $00FF/$00FD sentinel + faithful-rts callee resume cont either way.
     e.cmt('CALL-BRIDGE %s %s -> ojmp_hook (callee --table escape, else interpret), resume %s' % (ins.mnemonic, t, cont))
-    sentinel = '$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FF')  # bank5:$00FA($99) bank2:$00FD($94) else $00FF
+    sentinel = '$00F8' if BANK7 else ('$00F9' if BANK6 else ('$00FA' if BANK5 else ('$00FD' if BANK2 else '$00FF')))
     e('lda #%s' % cont); e('sta $54'); e('lda #%s' % sentinel); e('sta $56'); e('jsr push32')
     a = int(m.group(1), 16)                              # jsr.l absolute / bsr (capstone resolves PC-rel)
     e('lda #%s' % hx(a & 0xFFFF)); e('sta $40'); e('lda #%s' % hx((a >> 16) & 0xFFFF)); e('sta $42')
     e('jmp ojmp_hook')
     e.lbl(cont)
+    if RESTORE_STATIC_RESIDUE:
+        emit_call_return_residue(e, ins.address + ins.size)
     return 1
 
 def gen_movem(e, ins, size, ops):
-    # capstone gives "<reglist>, -(a7)" (save) or "(a7)+, <reglist>" (restore).
-    # the reglist is the operand WITHOUT parens (the other is the -(a7)/(a7)+ memory operand).
+    # Capstone gives "<reglist>, -(An)" (save) or "(An)+, <reglist>" (restore).
+    # The old lowering tested only for ``-(a7)`` and treated every other form as
+    # an A7 restore.  That silently turned $000466's MOVEM stores to the new
+    # task's A4 stack into pops from the live A7 exception frame.  Preserve the
+    # established compact A7 lowering, support an explicit arbitrary An, and
+    # reject every other addressing mode rather than emitting plausible damage.
     txt = ins.op_str
     parts = [p.strip() for p in txt.split(',')]
     reglist = [p for p in parts if '(' not in p]
-    if len(reglist) != 1: raise Unsupported('movem operands %r (only (a7) frame supported)' % txt)
+    if len(reglist) != 1:
+        raise Unsupported('movem operands %r (cannot identify register list)' % txt)
     regs = expand_reglist(reglist[0])
-    if '-(a7)' in txt or '-(sp)' in txt:                 # SAVE (predecrement): high reg first
+    pre = re.search(r'-\((a[0-7]|sp)\)', txt)
+    post = re.search(r'\((a[0-7]|sp)\)\+', txt)
+    if bool(pre) == bool(post):
+        raise Unsupported('movem operands %r (only -(An)/(An)+ supported)' % txt)
+    an = (pre or post).group(1)
+    if an == 'sp':
+        an = 'a7'
+    if an in regs:
+        raise Unsupported(
+            'movem base register %s is in %r (68000 model-specific alias)' %
+            (an, txt)
+        )
+    if pre:                                               # SAVE (predecrement): high reg first
         for r in reversed(regs):
             dp = reg_dp(r)
-            if size == 'l':
+            if an == 'a7' and size == 'l':
                 e('lda $%02X' % dp); e('sta $54'); e('lda $%02X' % (dp+2)); e('sta $56'); e('jsr push32')
-            else:
+            elif an == 'a7' and size == 'w':
                 e('lda $3C'); e('sec'); e('sbc #$0002'); e('sta $3C')
                 e('ldx $3C'); e('lda $%02X' % dp); e('jsr wrw40')
+            elif size == 'l':
+                # 68K memory is big-endian: high register word at [An], low
+                # register word at [An+2], after one full long predecrement.
+                predec_an(e, an, 4)
+                ea_store_A_from(
+                    e, ('(An)', an), 'w',
+                    lambda e, dp=dp: e('lda $%02X' % (dp + 2)),
+                )
+                ea_store_A_from(
+                    e, ('(d16,An)', 2, an), 'w',
+                    lambda e, dp=dp: e('lda $%02X' % dp),
+                )
+            elif size == 'w':
+                predec_an(e, an, 2)
+                ea_store_A_from(
+                    e, ('(An)', an), 'w',
+                    lambda e, dp=dp: e('lda $%02X' % dp),
+                )
+            else:
+                raise Unsupported('movem.%s save' % size)
         return 1
-    else:                                                # RESTORE (postincrement): low reg first
+    else:                                                 # RESTORE (postincrement): low reg first
         for r in regs:
             dp = reg_dp(r)
-            if size == 'l':
+            if an == 'a7' and size == 'l':
                 e('ldx $3C'); e('jsr rdw40'); e('sta $%02X' % (dp+2))
                 e('inx'); e('inx'); e('jsr rdw40'); e('sta $%02X' % dp)
                 e('lda $3C'); e('clc'); e('adc #$0004'); e('sta $3C')
-            else:                                        # movem.w restore SIGN-EXTENDS each word
+            elif an == 'a7' and size == 'w':              # movem.w restore SIGN-EXTENDS each word
                 e('ldx $3C'); e('jsr rdw40'); e('sta $%02X' % dp); sext_hi(e, dp)
                 e('lda $3C'); e('clc'); e('adc #$0002'); e('sta $3C')
+            elif size == 'l':
+                ea_load_A(e, ('(An)', an), 'w'); e('sta $%02X' % (dp + 2))
+                bump_an(e, an, 2)
+                ea_load_A(e, ('(An)', an), 'w'); e('sta $%02X' % dp)
+                bump_an(e, an, 2)
+            elif size == 'w':
+                ea_load_A(e, ('(An)', an), 'w'); e('sta $%02X' % dp); sext_hi(e, dp)
+                bump_an(e, an, 2)
+            else:
+                raise Unsupported('movem.%s restore' % size)
         return 1
 
 def expand_reglist(s):
@@ -1535,10 +2154,12 @@ def emit_xflag_nz(e, size):
     e.lbl(z); e('lda #$0000')
     e.lbl(d2); e('sta $A2'); e('pla'); e('plp')
 
-def gen_addsub(e, base, size, ops, nxt, fuses, nb):
+def gen_addsub(e, base, size, ops, nxt, fuses, nb, live):
     is_sub = base.startswith('sub')
     src, dst = ops
     if base in ('adda', 'suba') or dst[0] == 'An':       # address-register arithmetic: no flags
+        if live is not None:
+            e('php')                                     # preserve the prior 68K flag producer's host flags
         dp = reg_dp(dst[1])
         if size == 'l':
             if src[0] in ('Dn', 'An'):
@@ -1551,10 +2172,41 @@ def gen_addsub(e, base, size, ops, nxt, fuses, nb):
         op = 'sbc' if is_sub else 'adc'
         e('lda $%02X' % dp); e('clc' if not is_sub else 'sec'); e('%s %s' % (op, lo)); e('sta $%02X' % dp)
         e('lda $%02X' % (dp+2)); e('%s %s' % (op, hi)); e('sta $%02X' % (dp+2))
+        if live is not None:
+            e('plp')
+            e._live_fsrc = live                          # a following Bcc/bra-to-exit still consumes it
         return 1
     # add/sub on Dn (or mem) .w
     src, dst = ops
     store_dp = reg_dp(dst[1]) if dst[0] == 'Dn' else None
+    # Full 32-bit ADD into Dn.  The generic ea_rmw path below intentionally
+    # operates on one native word; using it for ADD.L silently updated only
+    # Dn.lo16 and discarded the carry into Dn.hi16.  $01C1D2/$01C1D4 then
+    # fed those truncated vectors into object-position SUB.L operations,
+    # producing the repeatable one-byte high-word drift caught by the
+    # $01C11A whole-function differential.
+    if size == 'l' and not is_sub and dst[0] == 'Dn':
+        dp = reg_dp(dst[1])
+        if src[0] in ('Dn', 'An'):
+            s = reg_dp(src[1]); slo, shi = '$%02X' % s, '$%02X' % (s + 2)
+        elif src[0] == 'imm':
+            slo, shi = imm16(src[1] & 0xFFFF), imm16((src[1] >> 16) & 0xFFFF)
+        elif src[0] in ('(An)', '(An)+', '(d16,An)'):
+            load_long_to(e, src, CMP32_PAIR)
+            slo, shi = '$%02X' % CMP32_PAIR, '$%02X' % (CMP32_PAIR + 2)
+        else:
+            raise Unsupported('add.l Dn-dst src %r' % (src,))
+        e('lda $%02X' % dp); e('clc'); e('adc %s' % slo); e('sta $%02X' % dp)
+        e('lda $%02X' % (dp + 2)); e('adc %s' % shi); e('sta $%02X' % (dp + 2))
+        emit_xflag_c(e, invert=False)
+        if fuses:
+            if nb not in ('beq', 'bne', 'bmi', 'bpl'):
+                raise Unsupported('add.l feeding %s (needs full C/V lowering)' % nb)
+            e('lda $%02X' % (dp + 2))
+            e._cmp32_low = '$%02X' % dp
+            emit_branch(e, nb, branch_target(nxt), 'tst32')
+            return 2
+        return 1
     # .l RMW to MEMORY for add/sub: ea_rmw is word-only, and unlike the logic family these need
     # inter-word CARRY/BORROW. 68K big-endian -> HIGH word @ disp+0, LOW word @ disp+2. Do the LOW
     # word first (clc/sec then adc/sbc -> sets C), preserve C across the high-word ADDRESS calc (its
@@ -1687,18 +2339,48 @@ def inline_mem_ops(lines):
     return out
 
 def main():
-    global VIDEO, ESCAPED, BANK2, BANK5, WORKRAM, XFLAG, FNFRAG, STOPAT
+    global VIDEO, VIDEO_DIRECT_E0, ROM_DIRECT, ESCAPED, BANK2, BANK5, BANK6, BANK7, RESTORE_INDIRECT_RESIDUE, RESTORE_STATIC_RESIDUE, REAL_RETURN_CALLS, WORKRAM, XFLAG, EXITCCR, FNFRAG, STOPAT, CODE_BASE, CODE_BYTES
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     BANK2 = '--bank2' in sys.argv
     BANK5 = '--bank5' in sys.argv                     # body -> escbank5 ($99); host sentinel $00FA
-    bank1 = '--bank1' in sys.argv or BANK2 or BANK5   # bank2/5 reuse all of bank1's jsl.l/jml.l transforms
+    BANK6 = '--bank6' in sys.argv                     # body -> escbank6 ($95); host sentinel $00F9
+    BANK7 = '--bank7' in sys.argv                     # body -> escbank7 ($9D); host sentinel $00F8
+    if sum((BANK2, BANK5, BANK6, BANK7)) > 1:
+        raise SystemExit('choose at most one of --bank2/--bank5/--bank6/--bank7')
+    bank1 = '--bank1' in sys.argv or BANK2 or BANK5 or BANK6 or BANK7
     VIDEO = '--video' in sys.argv
     XFLAG = '--xflag' in sys.argv
+    EXITCCR = '--exitccr' in sys.argv
     FNFRAG = '--fnfrag' in sys.argv
+    RESTORE_INDIRECT_RESIDUE = '--restore-indirect-residue' in sys.argv
+    RESTORE_STATIC_RESIDUE = '--restore-static-residue' in sys.argv
     for a in sys.argv:
         if a.startswith('--stopat='): STOPAT = int(a.split('=',1)[1], 16)
+    code_file = None
+    for a in sys.argv:
+        if a.startswith('--code-base='):
+            CODE_BASE = int(a.split('=', 1)[1], 16)
+        elif a.startswith('--code-file='):
+            code_file = a.split('=', 1)[1]
+    if (CODE_BASE is None) != (code_file is None):
+        raise SystemExit('--code-base and --code-file must be supplied together')
+    if code_file is not None:
+        CODE_BYTES = open(code_file, 'rb').read()
     for a in sys.argv:                                # --workram=a0,a1: extra provably-work-RAM An regs (EA fast path)
         if a.startswith('--workram='): WORKRAM |= {r.strip() for r in a.split('=',1)[1].split(',') if r.strip()}
+    for a in sys.argv:                                # --video-direct-e0=a0,a2: proven $E0 video pointers
+        if a.startswith('--video-direct-e0='):
+            VIDEO_DIRECT_E0 |= {r.strip() for r in a.split('=',1)[1].split(',') if r.strip()}
+    for a in sys.argv:                                # --rom=a3: proven 68K ROM pointer registers
+        if a.startswith('--rom='):
+            ROM_DIRECT |= {r.strip() for r in a.split('=',1)[1].split(',') if r.strip()}
+    for a in sys.argv:                                # call-instruction PCs whose live return is observable
+        if a.startswith('--real-return-calls='):
+            REAL_RETURN_CALLS |= {
+                int(pc, 16) & 0xFFFFFF
+                for pc in a.split('=', 1)[1].split(',')
+                if pc
+            }
     coroutine = '--coroutine' in sys.argv                 # task-BODY escape (see main-loop-coroutine-arch):
     # entered by the $07E4/op_rte resume hook (reg file already restored, a7 already past the trap
     # frame), NOT by a jsr -> NO re-simulate-push prologue. Decode ends at the yield `bra` (target <
@@ -1737,6 +2419,7 @@ def main():
     e = Emit(pfx='%x' % entry)                       # per-function label namespace (global Poppy syms)
     e.entry, e.end = fn_lo, fn_hi                    # function bounds (for tail-jump detection in gen)
     e.tailjumps = set()                              # out-of-fn conditional-branch targets -> stubs
+    e.tailjump_ccr = {}                              # --exitccr: target -> live flag source at its stub
     # exit_addrs: the STRAIGHT-LINE flag-preserving epilogue run(s) ending at each rts (movem/unlk/
     # lea/pea/nop/movea/link/adda/suba + the rts). movem/unlk/rts DON'T touch the 68K CCR, so the CCR
     # is constant across the epilogue -> a branch to any of these reaches the caller's rts with NO
@@ -1805,7 +2488,7 @@ def main():
             # Bcc-to-exit edges; the dbra fall-through is neither a branch nor flag-preserving.)
             if ins.mnemonic.split('.')[0] in ('dbra', 'dbf') and i < len(insns) \
                and insns[i].address in e.exit_addrs:
-                v = dbra_exit_ccr_val(insns[i0-1] if i0 > 0 else None)
+                v = move_result_ccr_val(insns[i0-1] if i0 > 0 else None)
                 if v is not None: emit_ccr_from_value(e, v)
         except Unsupported as ex:
             b0 = ins.mnemonic.split('.')[0]

@@ -9,16 +9,17 @@ hardware, while hot paths are migrated to native 65816 over time. Every componen
 validated **differentially against ground truth** — MAME for the arcade side, a real
 SNES PPU (via Nexen) for the target side.
 
-> ## Release status (July 19, 2026) — technical demo, final
+> ## Production status (July 22, 2026) — playable candidate, not a release
 >
-> This project ships as an **honestly-scoped technical demo**: the full original game
-> logic runs on SNES/SA-1 hardware, with real graphics, input, and now a fully organic
-> music path — at **sub-realtime speed** (canonical post-arm rate 1.3237 game-fps,
-> ~22.7x short of the 30 Hz target). R5 closed the performance question: 87.7% of a
-> settled gameplay tick is the shipped idle clamp, and both faster pacing designs
-> reproduced the `$080100`/`$DEAD` coroutine-ordering failure. Details in
-> [docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md). Read
-> [CONFESSION.md](CONFESSION.md) for the July 12 status correction that led here.
+> Exact production candidate v105 now clears the project's evidence contract from a clean
+> power-on: **1,802 game ticks in 3,603 uninterrupted SNES frames = 30.0083 game-fps**, with
+> rendering, real input, audio supervision, transitions, and waits included. Mean SA-1 work is
+> **357,281.999 cycles/tick**. It also survives through tick 2,230 with halt zero and every task
+> stack above its floor; 1,802 requests produced 1,802 unit ACKs and 1,802 true draws with no
+> queue overflow. ROM SHA-256: `72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3`.
+> This is an **evidence-backed playable candidate**, not a shippable or full-playthrough-validated
+> release. See [RECOVERY.md](RECOVERY.md) R6 and [CONFESSION.md](CONFESSION.md). The R5 document
+> remains the negative record for the older unsafe lab designs, not the current verdict.
 >
 > **R4 (sound truth) closed July 19**: two interpreter fast-path bank bugs — silently
 > killing *every* organic sound trigger since the beginning — were found and fixed
@@ -38,10 +39,10 @@ SNES PPU (via Nexen) for the target side.
 | Area | State |
 |---|---|
 | **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Correctness gates **opsweep 782/782 + optest 154/154**. |
-| Graphics pipeline | ⚠️ level background now reproduces after a long production fade; early Nexen/Mesen states match, but exact same-state MAME fidelity and a long-settle canonical Nexen capture remain open |
+| Graphics pipeline | ✅ current Nexen cold boot renders the settled level and conserves every formal-window draw; ⚠️ exact aligned same-state MAME pixel fidelity remains open |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **Realtime budget** | ❌ **not solved** — canonical post-arm rate is **1.3237 game-fps**, about **45.3x short of 60 Hz / 22.7x short of 30 Hz**; R5 reconciled the missing cost as the `$0818` wait, but the 0.927M-cycle NMI and conservative 2.17M-cycle supervisor labs both failed with `$080100` in gameplay |
+| **30 Hz playability budget** | ✅ **cleared by exact v105 candidate** — formal power-on gameplay window is **30.0083 game-fps / 357,281.999 mean SA-1 cycles/tick**, with unit renderer conservation and survival past tick 2,230; the margin is small and any relevant change must rerun the full gate |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
 | Audio (YM2610 → SNES TAD) | ✅ **music organic end-to-end** (R4, 2026-07-19): all 21 tracks byte/oracle-validated AND the real game triggers fire organically (boot/attract/coin/round-start, arcade parity); 21 side-by-side listening pairs recorded (by-ear sign-off pending). SFX remain placeholder (2 mapped; authoring never scoped) |
@@ -78,8 +79,10 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 
 - **[CONFESSION.md](CONFESSION.md)** — highest-authority correction to project status
 - **[RECOVERY.md](RECOVERY.md)** — active consolidation and baseline campaign
-- **[docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md)** — continuous
-  production profile, rejected pacing labs, and technical-demo decision
+- **[docs/PROFILE_CAMPAIGN.md](docs/PROFILE_CAMPAIGN.md)** — native/render campaign and the R6
+  production playability evidence
+- **[docs/R5_PERFORMANCE_ARCHITECTURE.md](docs/R5_PERFORMANCE_ARCHITECTURE.md)** — historical
+  continuous profile and the two rejected pre-R6 pacing labs
 - **[STATUS.md](STATUS.md)** — detailed historical state (superseded where noted)
 - **[ROADMAP.md](ROADMAP.md)** — next steps and milestones
 - **[BUILD.md](BUILD.md)** — toolchain (the "Game Garden" suite: Poppy/Peony), dependencies, and **migration guide**

@@ -117,6 +117,10 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   the stop-at-each-hook distortion that invalidated older phase accounting. It rejects cross-loads
   that do not preserve the production gate block; `--drive-gameplay` reaches and settles gameplay
   through the documented mailbox before installing hooks.
+- **`profile_tick_ring.py`** [S] — checkpoint-only whole-tick attribution from the diagnostic
+  per-fetch PC ring. It fails loud on the normal production ROM; first build with
+  `PC_RING=1 bash tools/build_interp.sh`, and restore the normal build afterward. Ring-instrumented
+  cycle totals are diagnostic overhead measurements, never production performance evidence.
 - **`build_idle_vsync_lab.py`** [S] — builds a marked, isolated `$0818` pacing experiment without
   touching canonical assembly, objects, or ROM. `--nmi-wake` uses a WRAM-resident 5A22 NMI to wake
   a masked SA-1 `WAI` only after active coroutine work reaches the main idle context.
@@ -143,7 +147,8 @@ tools are evidence harnesses, not a production build path.
 
 ## Notes
 - **Debugging the interp / Poppy / harness traps: see `../docs/INTERP_DEBUG_AND_GOTCHAS.md`**
-  (flight recorder, PC-freeze, `$07xx`-counter rule, `.org` overlap guards, MAME/Mesen gotchas).
+  (diagnostic-build flight recorder, PC-freeze, `$07xx`-counter rule, `.org` overlap guards,
+  MAME/Mesen gotchas).
 - 68K is big-endian: read words (`read_u16`), not byte lanes.
 - MAME 0.287 Lua: keep taps/notifier subscriptions in GLOBALS (else GC'd);
   `register_frame_done` not `add_machine_frame_notifier`; `-debug -debugger none`

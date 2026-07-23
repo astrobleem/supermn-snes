@@ -8,56 +8,94 @@ independent oracles: MAME 0.287 for arcade truth and the MCP-enabled Nexen fork 
 
 Project-state documents conflict. Use this precedence order:
 
-1. `CONFESSION.md` — highest-authority correction to optimistic status claims. Where it
-   conflicts with any banner, believe the confession. It was recovered from the old
-   `sound-p3` worktree during repository consolidation.
-2. The newest branch/worktree-specific handoff and evidence (`docs/PROFILE_CAMPAIGN.md`,
+1. `CONFESSION.md` — highest-authority correction to optimistic status claims. Treat its July 12
+   accounting as the baseline. Only a later dated `RECOVERY.md` result that explicitly supersedes
+   an individual claim can replace it; otherwise, where documents conflict, believe the confession.
+   It was recovered from the old `sound-p3` worktree during repository consolidation.
+2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R6 results
+   supersede the older campaign projections they explicitly close.
+3. The newest branch/worktree-specific handoff and evidence (`docs/PROFILE_CAMPAIGN.md`,
    `MAIN_PLANNING_HANDOFF.md`, `supersoundhandoff.md`, and focused `docs/handoff/*`).
-3. `STATUS.md` and `README.md` — useful history and architecture, but their playable,
-   performance, rendering, and sound wording is too optimistic.
-4. Older plans and risk documents — design/history only when superseded by later verdicts.
+4. `STATUS.md` and `README.md` — current summary layers, but defer to the evidence ledgers above
+   whenever their playable, performance, rendering, or sound wording drifts.
+5. Older plans and risk documents — design/history only when superseded by later verdicts.
 
 Before changing code, also read `BUILD.md`, `METHODOLOGY.md`, `tools/README.md`, and the focused
 design document for the subsystem being touched. The interpreter debugging reference is
 `docs/INTERP_DEBUG_AND_GOTCHAS.md`.
 
-The canonical recovery base is `origin/main` at the PR #15 merge (`73f1839` when consolidation
-started). The previous local tips were preserved under `archive/*-pre-recovery-20260712`, including
-the old stash tip. Inspect `git status`, branches, worktrees, and refs before choosing a base. Never
-merge, rebase, delete branches, or switch away from user work without explicit instruction.
+The historical recovery base was `origin/main` at the PR #15 merge (`73f1839` when consolidation
+started); the completed recovery line subsequently became `main`. The previous local tips were
+preserved under `archive/*-pre-recovery-20260712`, including the old stash tip. Inspect `git status`,
+branches, worktrees, refs, and the current `RECOVERY.md` before choosing a base rather than trusting
+an old handoff's branch name. Never merge, rebase, delete branches, or switch away from user work
+without explicit instruction.
 
 ## Honest project state
 
-- The port is interactive in controlled tests, but it is not playable or shippable.
-- The canonical recovery cold boot measures **1.3237 game-fps after production arming** and 0.8665
-  across power-on, about 8.10M SA-1 cycles per tick (45.3x short of 60 Hz; 22.7x short of 30 Hz).
-  Its `$0760` counter matched the real `$0818` boundary hook 32-for-32, and legacy Mesen reproduced
-  the rate within 1%. Older 3–10x or 8–15 fps claims measure partial injected windows and exclude
-  important end-to-end work. Use `RECOVERY.md` and the raw baseline, not those projections.
-- R5's uninterrupted cycle-stamped trace explains the excluded work: the `$AC=$2000` wait consumes
-  6.46M of a 7.36M settled gameplay tick (87.7%; attract is 6.47M/7.26M, 89.1%). An isolated
-  NMI/WAI lab reduced the same *short* interval to 0.927M cycles, but it reproduced the exact
-  `$080100`/`$DEAD` producer-ordering derail at gameplay tick 767 despite positive task-stack
-  margins. A conservative 5A22-supervisor wake measured 2.17M in a short window and failed
-  identically at tick 765. Both are rejected, not architectural proofs or production rates. See
-  `docs/R5_PERFORMANCE_ARCHITECTURE.md`.
-- The legal MC68000 interpreter and shipped per-function native escapes have strong differential
-  evidence: opsweep 782/782 and MAME lockstep work are real. The performance problem is not solved.
-- The level background is now reproducible from a production cold boot after its palette fade. A
-  12/13-tick post-detection state is legitimately near-black, byte/pixel-matches across Nexen and
-  Mesen, and must not be called a persistent renderer defect. A Mesen same-boot run continued 108
-  ticks and rendered the tan wall/pillar with 75 CGRAM colors. Exact MAME pixel fidelity and a
-  long-settle canonical Nexen capture remain unproven; see `RECOVERY.md` R3.
-- The TAD sound port is merged upstream and its data/blob/trigger paths are byte- and
-  oracle-validated, but it has never received a by-ear listening pass. Most SFX are placeholders;
-  pitch bends/LFO/portamento remain untranscribed; organic trigger firing is not fully proven.
-- The `$0818` `$AC=$2000` clamp is a mitigation for coroutine/IRQ ordering hazards, not a root-cause
-  fix or crash-free proof.
+- The exact R6 v105 production candidate is **playable at the project's 30 Hz gate**, but it is
+  not shippable and has not completed a full-game playthrough or real-hardware qualification. Its
+  ROM SHA-256 is `72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3`;
+  do not transfer this verdict to another build without rerunning the production evidence gate.
+- The v105 fresh-power-on, `TESTFLAG=0` run armed production organically, used the real controller
+  path, and sustained **30.008326 game ticks/s** over 3,603 SNES video frames / 1,802 game ticks.
+  It averaged **357,281.999 SA-1 cycles/tick**, below the 358K gate, and reached gameplay tick
+  2,230 with halt zero, task mask `$FFA7`, all 16 task stacks initialized, and a 136-byte minimum
+  stack margin. The real `$0818` hook and game counter matched 150-for-150.
+- Renderer conservation is part of that verdict: 1,802 requests, 1,802 unit-step ACK transactions,
+  1,802 true render completions, zero queue drops, bounded transaction debt, and empty queues at
+  the endpoint. v104 met the timing and ordering gates but silently coalesced two direct snapshots;
+  it is rejected. v105 adds the missing direct-snapshot ownership guard.
+- The July 12 recovery ROM's **1.3237 game-fps after production arming** and roughly 8.10M SA-1
+  cycles/tick remain the correct historical baseline for that ROM. R6 supersedes that performance
+  verdict only for the exact v105 hash. Older 3-10x or 8-15 fps projections remain invalid because
+  they measured partial injected windows and excluded end-to-end work.
+- R5's negative scheduler result also remains valid history: its NMI/WAI and supervisor-wake labs
+  failed the producer-ordering event at ticks 765-767. R6 is materially different: it reduces
+  active work, retains at least one real vblank per tick, delivers an ordered ordinary virtual IRQ,
+  and uses bounded primary/secondary renderer ownership. The same-ROM checkpoint profile crossed
+  ticks 765-767 and the uninterrupted cold boot continued through tick 2,230 without the derail.
+- The legal MC68000 interpreter and shipped native escapes have strong differential evidence. On
+  v105, fresh MAME gates passed optest 160/160 and opsweep 782/782 cells (1,564/1,564 shots). This
+  is still not proof of every whole-program address-space path; R4's bank-assumption bugs are the
+  standing warning against promoting focused vectors into universal correctness.
+- A settled production-cold-boot Nexen capture now renders the recognizable level background, HUD,
+  and player scene while the formal run conserves every render transaction. Exact aligned MAME
+  pixel fidelity remains open; visual plausibility alone is not the fidelity oracle.
+- The TAD sound port is merged upstream and its data/blob paths are byte- and oracle-validated.
+  R4's final no-injection production cold boot proved the organic boot, attract, coin, and
+  round-start command chain end-to-end after the two interpreter bank fixes. The 21 comparison
+  pairs are recorded, but the by-ear listening/classification pass is still open; most SFX are
+  placeholders, and pitch bends/LFO/portamento remain untranscribed.
+- The `$0818` `$AC=$2000` clamp remains the gate-off fallback. The organically armed v105 path uses
+  the paced scheduler above; neither path by itself proves a full playthrough crash-free.
 - C-Chip work is genuinely resolved for the observed game contract: deterministic boot replay,
   status gate, and input mailbox. Read `CCHIP_BOOT_HANDSHAKE.md` and `CCHIP_FIRMWARE.md`.
 
 Do not describe a lab interaction as playable, a byte match as listened-to audio, an injected
 tick cost as end-to-end fps, or an old reference capture as current behavior.
+
+## Performance and completion evidence contract
+
+The word `fps` is reserved for an end-to-end production measurement. A credible performance claim
+must identify the source commit and ROM hash; start from power-on with `TESTFLAG=0`; prove the
+production gates armed organically; use the real input mailbox; validate the game-tick counter
+against the actual `$0818` boundary hook; measure against emulated SNES video time; include waits,
+IRQs, rendering, and state transitions; and retain the raw log. Otherwise report only the local
+span in cycles and label it injected, checkpointed, isolated, or lab as appropriate.
+
+- A same-run local speedup is evidence about that span only. Do not multiply it into a projected
+  project fps or call it progress toward realtime until the production cold-boot gate is rerun.
+- Save-state interaction, forced gates, mailbox-triggered audio, and short isolated ticks can prove
+  specific behavior. None of them proves playability, stability, or end-to-end speed.
+- Any pacing or scheduler replacement must survive the known gameplay ordering event beyond ticks
+  765-767 with halt, PC, task mask, sound ring, gate values, and every initialized task-stack floor
+  checked. A short green soak is not enough.
+- The 30 Hz gate is a representative whole gameplay tick at or below 358K SA-1 cycles with pacing
+  and rendering included. Exact v105 clears both that budget and the ordering gate and may be called
+  a playable candidate. Any relevant code or ROM change must rerun the full cold-boot contract;
+  until it does, describe the changed build as an unqualified technical demo rather than inheriting
+  v105's verdict.
 
 ## Repository and private inputs
 
@@ -110,7 +148,9 @@ has a damaged git pack/source object from the failing system drive; do not build
   bodies execute at `$92+`; a bare bank-$00 HOOKTEST can falsely report zero. Calibrate with a
   known-firing same-bank hook.
 - Do not trust `$07xx` IRAM counters unless their ownership was proven; game state can overwrite
-  them. The always-on PC ring is at IRAM `$0400-$05FF`, pointer `$48`.
+  them. The diagnostic PC ring is at IRAM `$0400-$05FF`, pointer `$48`, but production ROM packing
+  NOPs its per-fetch calls. Build with `PC_RING=1 bash tools/build_interp.sh` only when the recorder
+  or PC-freeze is required; that instrumented ROM is not valid for production performance claims.
 - Pause Nexen before coherent multi-read inspection. Use fresh ports after wedged runs. Long scripts
   may need `socket_timeout=120` and background execution with output polling.
 - MAME Lua taps must be retained in globals. Snap MAME cannot read `.claude` paths; keep runnable

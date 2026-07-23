@@ -23,8 +23,8 @@ Scratch (68K addresses, shared logical space):
   operand     $F03800  (work RAM, within MAME's 16KB $F00000-$F03FFF)
   stack A7    $F03F00
 
-Limitation: PC-relative source operands ((d16,PC)/(d8,PC,Xn)) are NOT covered
-(the two engines run the op at different PCs); validate those in-trajectory.
+PC-relative operands use ``same_pc=True`` vectors: both engines execute the
+instruction from work RAM at $F03000, so their architectural PC base matches.
 
 MAME A7/USP readback is unreliable: do not assert A7; for stack ops set A7 going
 in and assert on the memory written.
@@ -39,7 +39,7 @@ CFG = os.path.join(REPO, ".mame_mcp/cfg")
 INTERP_SFC = os.path.join(REPO, "build/interp.sfc")
 MESEN = os.environ.get(
     "SNES_ORACLE_EXE",
-    "/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen",
+    "/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen",
 )
 
 # scratch
@@ -244,7 +244,7 @@ def _configure_oracle_environment():
         import mesen_mcp.session as _session
         _session.validate_mesen_build = lambda *_args, **_kwargs: None
 
-def interp_run(opwords, oplen, vecs):
+def interp_run(opwords, oplen, vecs, same_pc=False):
     sys.path.insert(0,"/home/chad/Mesen2/python")
     _configure_oracle_environment()
     from mesen_mcp import McpSession
@@ -256,7 +256,17 @@ def interp_run(opwords, oplen, vecs):
             for v in vecs:
                 # Poke vector state directly into the paused test-idle interpreter.
                 m.write_memory(DP_SPACE, 0x00, _regblk(v).hex())
-                pc=INTERP_CODE_68K
+                pc=MAME_CODE if same_pc else INTERP_CODE_68K
+                if same_pc:
+                    # The R4 bank-aware opcode/ext-word path permits executable
+                    # 68K work RAM. Keep the logical PC identical to MAME so
+                    # PC-relative EA results are directly comparable.
+                    opbytes=b"".join(int(w).to_bytes(2,"big") for w in opwords)
+                    m.write_memory(
+                        OPND_SPACE,
+                        0x400000 | (MAME_CODE & 0xFFFF),
+                        opbytes.hex(),
+                    )
                 m.write_memory(DP_SPACE, 0x40,
                                bytes([pc&0xFF,(pc>>8)&0xFF,(pc>>16)&0xFF,(pc>>24)&0xFF]).hex())
                 Z=(v.ccr>>2)&1; C=v.ccr&1; N=(v.ccr>>3)&1; V=(v.ccr>>1)&1; X=(v.ccr>>4)&1
@@ -294,7 +304,8 @@ def interp_run(opwords, oplen, vecs):
     return out
 
 # ---------------------------------------------------------------------------
-def compare(mame, interp, check_regs, check_ccr=True, check_opnd=False, ccr_mask=0x1F):
+def compare(mame, interp, check_regs, check_ccr=True, check_opnd=False,
+            ccr_mask=0x1F, interp_pc=INTERP_CODE_68K):
     """returns (passed, list_of_failure_strings)"""
     fails=[]
     for i,(mr,ir) in enumerate(zip(mame,interp)):
@@ -309,7 +320,7 @@ def compare(mame, interp, check_regs, check_ccr=True, check_opnd=False, ccr_mask
                 # MAME exposes the 68000 prefetch PC (one word ahead) while spinning
                 # on the bra* landing pad, so subtract 2 to get the true next-PC.
                 mo=(mr["PC"]-MAME_CODE-2)&0xFFFFFFFF
-                io=(ir["PC"]-INTERP_CODE_68K)&0xFFFFFFFF
+                io=(ir["PC"]-interp_pc)&0xFFFFFFFF
                 if mo!=io:
                     fails.append(f"vec{i}: PC off mame=+{mo:X} interp=+{io:X}")
                 continue
@@ -324,13 +335,16 @@ def compare(mame, interp, check_regs, check_ccr=True, check_opnd=False, ccr_mask
 
 _FILTER=os.environ.get("OPTEST_FILTER")   # substring; when set, run only matching ops
 def run_test(name, opwords, oplen, vecs, check_regs, check_ccr=True,
-             check_opnd=False, ccr_mask=0x1F):
+             check_opnd=False, ccr_mask=0x1F, same_pc=False):
     if _FILTER and _FILTER.lower() not in name.lower():
         return True
     print(f"=== {name}  ({len(vecs)} vectors) ===")
     mame=mame_run(opwords, oplen, vecs)
-    interp=interp_run(opwords, oplen, vecs)
-    ok,fails=compare(mame,interp,check_regs,check_ccr,check_opnd,ccr_mask)
+    interp=interp_run(opwords, oplen, vecs, same_pc=same_pc)
+    ok,fails=compare(
+        mame, interp, check_regs, check_ccr, check_opnd, ccr_mask,
+        interp_pc=MAME_CODE if same_pc else INTERP_CODE_68K,
+    )
     if ok:
         print(f"  PASS  ({len(vecs)}/{len(vecs)})")
     else:
@@ -345,6 +359,24 @@ if __name__=="__main__":
     r.append(run_test("CMPI.W #3,D0", [0x0C40,0x0003], 4,
         [Vec({"D0":3}),Vec({"D0":5}),Vec({"D0":2}),Vec({"D0":0x8000}),Vec({"D0":0})],
         check_regs=["D0"], ccr_mask=0x0F))
+
+    # PC-relative LEA executes at the same work-RAM PC on both engines. These
+    # cover the live $01F4B2 encoding plus signed word/long Dn and An indexes.
+    r.append(run_test("LEA (d16,PC),A4", [0x49FA,0x0120], 4,
+        [Vec({"A4":0},ccr=c) for c in (0x00,0x1F)],
+        check_regs=["A4","PC"], ccr_mask=0x1F, same_pc=True))
+    r.append(run_test("LEA (d8,PC,D7.W),A4", [0x49FB,0x7026], 4,
+        [Vec({"D7":v,"A4":0},ccr=c) for v,c in
+         ((0x00000000,0x00),(0x00000010,0x1F),(0x0000FFFF,0x15),(0x12340020,0x0A))],
+        check_regs=["D7","A4","PC"], ccr_mask=0x1F, same_pc=True))
+    r.append(run_test("LEA (d8,PC,D7.L),A4", [0x49FB,0x7826], 4,
+        [Vec({"D7":v,"A4":0},ccr=c) for v,c in
+         ((0x00010000,0x1F),(0xFFFFFFFF,0x00),(0x00000020,0x15))],
+        check_regs=["D7","A4","PC"], ccr_mask=0x1F, same_pc=True))
+    r.append(run_test("LEA (d8,PC,A3.W),A4", [0x49FB,0xB026], 4,
+        [Vec({"A3":v,"A4":0},ccr=c) for v,c in
+         ((0x00000010,0x1F),(0x0000FFFF,0x00),(0x12340020,0x15))],
+        check_regs=["A3","A4","PC"], ccr_mask=0x1F, same_pc=True))
 
     # Batch 1: CCR/SR immediates (no reg change; full XNZVC). Vary CCR-in.
     ccrs=[0x00,0x01,0x04,0x0A,0x1F,0x10,0x15]
@@ -970,6 +1002,17 @@ if __name__=="__main__":
     r.append(run_test("B8:MOVEP.W (0,A0),D0", [0x0108,0x0000], 4,
         [Vec({"D0":0xAAAA0000,"A0":OPND},opnd=bytes([0x12,0,0x34]))],
         check_regs=["D0"], check_opnd=True))
+    # MOVEM postincrement preserves every CCR bit.  These vectors specifically
+    # catch the historical handler bug where the register-slot index was stored
+    # in DP $6E, which is also the interpreter's emulated carry flag.
+    r.append(run_test("B8:MOVEM.L (A2)+,D0/A1 preserves CCR", [0x4CDA,0x0201], 4,
+        [Vec({"A2":OPND},opnd=bytes.fromhex("1122334489ABCDEF"),ccr=c)
+         for c in (0,FULL)],
+        check_regs=["D0","A1","A2"], ccr_mask=0x1F))
+    r.append(run_test("B8:MOVEM.W (A2)+,D0-D1 preserves CCR", [0x4C9A,0x0003], 4,
+        [Vec({"A2":OPND},opnd=bytes.fromhex("80017FFF"),ccr=c)
+         for c in (0,FULL)],
+        check_regs=["D0","D1","A2"], ccr_mask=0x1F))
     # Trap ops (interp single-steps cleanly; compared to MAME-captured truth).
     #   ILLEGAL -> vec4 ($0010011A), retPC=instr addr (offset 0), CCR kept.
     #   TRAPV(V=1) -> vec7 ($00100186), retPC=next (offset 2), CCR kept.

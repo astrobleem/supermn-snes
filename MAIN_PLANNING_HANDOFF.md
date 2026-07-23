@@ -1,8 +1,27 @@
 # MAIN_PLANNING_HANDOFF.md
 
+> ## R6 PLAYABILITY OVERRIDE (2026-07-22)
+>
+> The historical R5 task below is complete and superseded for one exact production candidate.
+> v105, ROM SHA-256
+> `72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3`, starts from power-on
+> with `TESTFLAG=0`, arms production organically, and sustains 1,802 game ticks across 3,603
+> emulated SNES video frames: **30.008326 game ticks/s at 357,281.999 mean SA-1 cycles/tick**.
+> The same uninterrupted run conserves 1,802 renderer requests / 1,802 unit ACKs / 1,802 true
+> draws with zero queue drops, uses the real input path, retains a valid sound ring, and reaches
+> tick 2,230 with halt zero and all 16 task stacks above their floors. Fresh MAME gates pass
+> optest 160/160 and opsweep 782/782.
+>
+> Current engineering truth is in `CONFESSION.md`, `RECOVERY.md` R6, `AGENTS.md`, and the
+> 2026-07-22 section of `docs/PROFILE_CAMPAIGN.md`. The candidate is playable under the project's
+> representative 30 Hz evidence contract, not yet shippable or full-playthrough validated.
+> Aligned MAME pixel fidelity, hardware qualification, audio listening, and real SFX remain open.
+> Do not transfer the verdict to another ROM hash without rerunning the full cold-boot gate.
+>
 > ## RECOVERY OVERRIDE (2026-07-12)
 >
-> Do not start the historical "CURRENT TASK" below. Read `CONFESSION.md`, `AGENTS.md`, and
+> **Historical; superseded by R6 above.** Do not start the historical "CURRENT TASK" below.
+> Read `CONFESSION.md`, `AGENTS.md`, and
 > `RECOVERY.md`. The production cold-boot baseline is complete: 1.3237 game-fps post-arm, about
 > 8.10M SA-1 cycles/tick, with a 32/32 real-boundary hook check. The level background also reproduces
 > after a long same-boot palette fade. The immediate task is R5: attribute the continuous-run cycle

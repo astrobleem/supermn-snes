@@ -24,7 +24,12 @@ D=[be32(regs,i*4) for i in range(8)]; A=[be32(regs,(8+i)*4) for i in range(7)]
 SP=be32(regs,15*4); USP=be32(regs,16*4); SR=be32(regs,17*4)&0xFFFF
 Z=(SR>>2)&1;C=SR&1;N=(SR>>3)&1;V=(SR>>1)&1;X=(SR>>4)&1
 def le32(v): return '%02x%02x%02x%02x'%(v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF)
-WN=len(wramA); NEXEN='/home/chad/Nexen/bin/linux-x64/Release/linux-x64/publish/Nexen'; NAT='/tmp/b0_native.mss'
+WN=len(wramA)
+NEXEN=os.environ.get(
+    'NEXEN',
+    '/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen',
+)
+NAT=os.environ.get('NAT','/tmp/b0_native.mss')
 print("triple %s CHOKE=%d SWIN=%d SEL=%d ESC=%d NTICKS=%d"%(TD,CHOKE,SWIN,SEL,ESC,NTICKS),flush=True)
 with McpSession(rom='/home/chad/supermn-snes/build/interp.sfc',mesen=NEXEN,port=PORT,boot_wait=6.0,socket_timeout=300.0) as m:
     def r16(a): b=m.read_memory('Sa1Memory',a,2); return b[0]|(b[1]<<8)

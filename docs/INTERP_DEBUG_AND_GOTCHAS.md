@@ -7,9 +7,11 @@ READ THIS FIRST — each item below cost hours-to-days to discover.
 
 ## 1. The interpreter's built-in debug interface (SA-1 IRAM)
 
-The interp has an always-on flight recorder and a poke-driven freeze/trace facility.
-No MAME lockstep needed for most "where/why did it derail" questions. All addresses are
-SA-1 IRAM (Mesen memtype `Sa1Memory`), little-endian unless noted.
+The source contains a flight recorder and a poke-driven freeze/trace facility. The production ROM
+pack replaces their per-fetch calls with size-neutral NOPs because the recorder has a measurable
+whole-tick cost. Build an instrumented ROM with `PC_RING=1 bash tools/build_interp.sh` when these
+facilities are needed, then restore the production default with `bash tools/build_interp.sh`.
+All addresses are SA-1 IRAM (Mesen memtype `Sa1Memory`), little-endian unless noted.
 
 ### 68K register file (direct page)
 | Cell | Meaning |
@@ -26,10 +28,14 @@ SA-1 IRAM (Mesen memtype `Sa1Memory`), little-endian unless noted.
 | `$AA` | IRQ pending |
 | `$AC` | vblank countdown, instruction-paced; reload `$7000` = 28672 instr/frame |
 
-### Flight recorder (always on)
+### Flight recorder (diagnostic build only)
 Last 128 interpreted 68K PCs in a ring at IRAM `$0400-$05FF`, 4 bytes/entry
 (lo16, bank16), write pointer at `$48`. Read it after ANY derail/halt — it shows the
 final instruction cascade. Decode: entries at `(ptr - 4(i+1)) & $1FF` walking backwards.
+
+`tools/profile_tick_ring.py` verifies that both recorder calls are present and rejects a production
+ROM rather than silently attributing an inert ring. Its instrumented cycle totals include recorder
+overhead and therefore cannot support a production performance or fps claim.
 
 **Reading the wedge signature:** if the ring stops updating AND `$AC` freezes AND
 `$4E`=0, the SA-1 left the interp core and never came back (a native escape hung or

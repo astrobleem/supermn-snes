@@ -9,7 +9,8 @@ interpreter halt word, forward tick progress, and every initialized task's
 saved-stack pointer against the game's real floor table at 68K ROM $0882.
 
 The lab remains explicitly off-production: the ROM must contain the R5VSYNC1
-or R5VNMI01 marker and IRAM $0734 must already be one in the supplied checkpoint.
+or R5VNMI01/R5VNMI02/R5VNMI03 marker and IRAM $0734 must already be one in the
+supplied checkpoint.
 """
 
 from __future__ import annotations
@@ -58,7 +59,12 @@ DEFAULT_OUTPUT = ROOT / "build/recovery-20260712/r5-idle-vsync-nmi-soak"
 COIN = 0x2000
 START = 0x1000
 LAB_MARKER_OFFSET = 0x2CFF00
-LAB_MARKERS = (b"R5VSYNC1", b"R5VNMI01")
+LAB_MARKERS = (b"R5VSYNC1", b"R5VNMI01", b"R5VNMI02", b"R5VNMI03")
+VIDEO_WRAM_ROM_START = 0x298000
+VIDEO_WRAM_ROM_END = 0x29B000
+VIDEO_WRAM_OFFSET = 0x18000
+SOUND_RING_START = 0x00F01C20
+SOUND_RING_END = 0x00F01C40
 HISTORICAL_WINDOW_START = 0x9E00
 HISTORICAL_EVENT = 0x9F05
 HISTORICAL_DERAIL = 0xA005
@@ -78,6 +84,11 @@ def le32(data: bytes) -> int:
 
 def modular_delta(now: int, before: int, bits: int) -> int:
     return (now - before) & ((1 << bits) - 1)
+
+
+def valid_sound_ring_pointer(value: str) -> bool:
+    pointer = int(value, 16)
+    return SOUND_RING_START <= pointer <= SOUND_RING_END
 
 
 def git_value(*args: str) -> str:
@@ -125,6 +136,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gap-ticks", type=int, default=7)
     parser.add_argument("--prestart-gap-ticks", type=int, default=12)
     parser.add_argument("--start-hold-ticks", type=int, default=10)
+    parser.add_argument(
+        "--refresh-wram-code",
+        action="store_true",
+        help=(
+            "LAB ONLY: after loading an older checkpoint, copy the selected ROM's "
+            "$E9:8000-$A3FF supervisor into $7F:8000, invalidate renderer caches, "
+            "and arm the first NMI snapshot. The intervention is logged."
+        ),
+    )
+    parser.add_argument(
+        "--real-controller",
+        action="store_true",
+        help=(
+            "Drive Nexen controller port 0 with persistent Select/Start holds "
+            "instead of writing the $41:0002 virtual-injection word. This "
+            "proves the manual $4016 -> WRAM cache -> ordered mailbox path."
+        ),
+    )
+    parser.add_argument(
+        "--trap-wram-code-write",
+        action="store_true",
+        help=(
+            "LAB DIAGNOSTIC: stop on the first 5A22 write to the WRAM-resident "
+            "$7F:8000-$A3FF supervisor and retain the instruction trace."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -197,6 +234,13 @@ def main() -> int:
             "prestart_gap_ticks": args.prestart_gap_ticks,
             "start_hold_ticks": args.start_hold_ticks,
         },
+        refresh_wram_code=args.refresh_wram_code,
+        trap_wram_code_write=args.trap_wram_code_write,
+        input_transport=(
+            "nexen_port0_manual_4016"
+            if args.real_controller
+            else "virtual_injection_410002"
+        ),
     )
 
     try:
@@ -212,6 +256,129 @@ def main() -> int:
             m.pause()
             load_result = m.load_state(checkpoint)
             m.pause()
+
+            if args.refresh_wram_code:
+                supervisor = rom_data[VIDEO_WRAM_ROM_START:VIDEO_WRAM_ROM_END]
+                if len(supervisor) != 0x3000:
+                    raise RuntimeError(
+                        f"expected a 0x3000-byte WRAM supervisor, got {len(supervisor):#x}"
+                    )
+                m.write_memory("snesWorkRam", VIDEO_WRAM_OFFSET, supervisor.hex())
+                # Checkpoints captured before the open-addressed BG/OBJ caches
+                # contain the old packed-linear layout in $7E:A000-$AFFF.
+                # Refreshing only the WRAM code leaves that incompatible data
+                # looking full to bg_slot/obj_slot, so this migration must reset
+                # the persistent cache storage and its direct-page counts too.
+                m.write_memory("snesWorkRam", 0xA000, "00" * 0x1000)
+                m.write_u16(0x00DC, 0, "snesWorkRam")
+                m.write_u16(0x00DE, 0, "snesWorkRam")
+                for marker_offset in (0x8980, 0x8982, 0x8984, 0x8988, 0x898A, 0x899A):
+                    m.write_u16(marker_offset, 0, "snesWorkRam")
+                m.write_u16(0x1F12, 0, "snesWorkRam")
+                m.write_u16(0x410122, 2, "snesMemory")
+                m.write_memory("snesMemory", 0x41012A, "00000000")
+                irq_refresh = None
+                if marker in (b"R5VNMI02", b"R5VNMI03"):
+                    cpu_before = dict(m.get_cpu_state("Snes"))
+                    allowed_cpu_fields = {
+                        "cpuType",
+                        "pc",
+                        "k",
+                        "a",
+                        "x",
+                        "y",
+                        "sp",
+                        "d",
+                        "dbr",
+                        "ps",
+                        "emulationMode",
+                    }
+                    cpu_update = {
+                        key: cpu_before[key]
+                        for key in allowed_cpu_fields
+                        if key in cpu_before
+                    }
+                    if "ps" not in cpu_update:
+                        raise RuntimeError("5A22 CPU state did not expose the status register")
+                    cpu_update["ps"] = int(cpu_update["ps"]) & ~0x04
+                    old_linear_pc = (int(cpu_before.get("k", 0)) << 16) | int(
+                        cpu_before.get("pc", 0)
+                    )
+                    redirected_supervisor_loop = (
+                        int(cpu_before.get("k", 0)) == 0x7E
+                        and 0xF000 <= int(cpu_before.get("pc", 0)) < 0xF100
+                    )
+                    if redirected_supervisor_loop:
+                        cpu_update["pc"] = 0xF000
+                        cpu_update["k"] = 0x7E
+                        cpu_update["dbr"] = 0
+                        cpu_update["ps"] = int(cpu_update["ps"]) & ~(0x20 | 0x10)
+                    m.tool("set_cpu_state", cpu_update)
+                    m.write_memory("snesMemory", 0x2202, "80")
+                    m.write_memory("snesMemory", 0x2201, "80")
+                    m.write_memory("snesMemory", 0x4200, "80")
+                    cpu_after = dict(m.get_cpu_state("Snes"))
+                    irq_refresh = {
+                        "enabled_coprocessor_irq": {"address": "00:2201", "value": 0x80},
+                        "cleared_coprocessor_irq": {"address": "00:2202", "value": 0x80},
+                        "enabled_nmi": {"address": "00:4200", "value": 0x80},
+                        "status_before": int(cpu_before["ps"]),
+                        "status_after": int(cpu_after["ps"]),
+                        "old_linear_pc": f"{old_linear_pc:06X}",
+                        "new_linear_pc": (
+                            f"{((int(cpu_after.get('k', 0)) << 16) | int(cpu_after.get('pc', 0))):06X}"
+                        ),
+                        "redirected_supervisor_loop": redirected_supervisor_loop,
+                    }
+                readback = m.read_memory(
+                    "snesWorkRam", VIDEO_WRAM_OFFSET, len(supervisor)
+                )
+                if readback != supervisor:
+                    raise RuntimeError("WRAM supervisor refresh did not verify byte-for-byte")
+                log.emit(
+                    "lab_intervention",
+                    kind="refresh_wram_code",
+                    rom_file_span=[VIDEO_WRAM_ROM_START, VIDEO_WRAM_ROM_END],
+                    wram_span=[VIDEO_WRAM_OFFSET, VIDEO_WRAM_OFFSET + len(supervisor)],
+                    bytes=len(supervisor),
+                    supervisor_sha256=hashlib.sha256(supervisor).hexdigest(),
+                    invalidated_cache_markers=[
+                        0x8980,
+                        0x8982,
+                        0x8984,
+                        0x8988,
+                        0x898A,
+                    ],
+                    cleared_render_cache_tables={
+                        "span": ["7E:A000", "7E:AFFF"],
+                        "bytes": 0x1000,
+                        "count_words": ["7E:00DC", "7E:00DE"],
+                    },
+                    cleared_snapshot_generation=0x899A,
+                    cleared_input_cache=0x1F12,
+                    initial_snapshot_arm={"address": "41:0122", "value": 2},
+                    cleared_cadence_state={
+                        "span": ["41:012A", "41:012D"],
+                        "value": "00000000",
+                    },
+                    irq_refresh=irq_refresh,
+                )
+
+            code_write_hook: int | None = None
+            if args.trap_wram_code_write:
+                # The first call enables Nexen's instruction-trace ring.  Install
+                # the write hook only after the intentional checkpoint migration.
+                m.trace_log(count=1, cpu_type="Snes")
+                code_write_hook = m.add_write_hook(
+                    0x7F8000, 0x7FA3FF, cpu_type="Snes"
+                )
+                m.drain_notifications(timeout=0.05)
+                log.emit(
+                    "wram_code_write_trap_armed",
+                    hook=code_write_hook,
+                    cpu="Snes",
+                    span=["7F:8000", "7F:A3FF"],
+                )
 
             floor_bytes = m.read_memory("snesMemory", 0xC10882, 16 * 4)
             stack_floors = [
@@ -287,8 +454,35 @@ def main() -> int:
             def set_input(value: int) -> None:
                 nonlocal input_word
                 input_word = value
-                m.write_u16(0x410002, value, "snesMemory")
-                log.emit("input", stage=stage, tick_total=total_ticks, value=value)
+                controller_buttons = 0
+                if args.real_controller:
+                    controller_buttons = {
+                        0: 0,
+                        COIN: McpSession.BTN_SELECT,
+                        START: McpSession.BTN_START,
+                    }[value]
+                    # Keep the virtual path provably idle.  hold=true is Nexen's
+                    # TAS-style override: it persists across run_frames calls and
+                    # is replaced/released by the next call here.
+                    m.write_u16(0x410002, 0, "snesMemory")
+                    m.tool(
+                        "set_input",
+                        {"port": 0, "buttons": controller_buttons, "hold": True},
+                    )
+                else:
+                    m.write_u16(0x410002, value, "snesMemory")
+                log.emit(
+                    "input",
+                    stage=stage,
+                    tick_total=total_ticks,
+                    value=value,
+                    transport=(
+                        "nexen_port0_manual_4016"
+                        if args.real_controller
+                        else "virtual_injection_410002"
+                    ),
+                    controller_buttons=controller_buttons,
+                )
 
             def take_screenshot(label: str) -> None:
                 shot = m.take_screenshot(format="path")
@@ -335,17 +529,40 @@ def main() -> int:
                         name: r16(address) for name, address in GATE_ADDRS.items()
                     },
                     "idle_vsync_lab_gate": r16(0x0734),
+                    "snapshot_arm": r16(0x410122, "snesMemory"),
+                    "pacing_epoch": m.read_memory(
+                        "snesMemory", 0x41012A, 1
+                    )[0],
+                    "pacing_last_release": m.read_memory(
+                        "snesMemory", 0x41012B, 1
+                    )[0],
+                    "pacing_initialized": m.read_memory(
+                        "snesMemory", 0x41012C, 1
+                    )[0],
+                    "snapshot_generation": r16(0x899A, "snesWorkRam"),
                     "sa1_cycles": int(cpu.get("cycleCount", 0)),
                     "sa1_pc": (int(cpu.get("k", 0)) << 16)
                     | int(cpu.get("pc", 0)),
                     "stage": stage,
                     "input": input_word,
+                    "input_mailbox": f"{r16(0x410000, 'snesMemory'):04x}",
+                    "input_injection": f"{r16(0x410002, 'snesMemory'):04x}",
+                    "input_real_cache": f"{r16(0x1F12, 'snesWorkRam'):04x}",
+                    "cchip_phase": r16(0x00A8),
+                    "game_input_state": m.read_memory(
+                        "snesMemory", 0x401C50, 8
+                    ).hex(),
                     "stack": stack,
                 }
                 log.emit("sample", **snap)
                 samples += 1
                 return snap
 
+            # A later same-ROM checkpoint can have been captured during a held
+            # coin/start pulse.  The preinput stage promises an idle real
+            # mailbox, so establish that state instead of only initializing the
+            # host-side input_word variable to zero.
+            set_input(0)
             first = sample("loaded_checkpoint")
             if first["gates"] != EXPECTED_GATES:
                 raise RuntimeError(
@@ -353,7 +570,9 @@ def main() -> int:
                 )
             if first["idle_vsync_lab_gate"] != 1:
                 raise RuntimeError("checkpoint does not have the explicit $0734 lab gate set")
-            if first["halt"] != 0 or first["sound_ring_ptr"] != "00f01c20":
+            if first["halt"] != 0 or not valid_sound_ring_pointer(
+                first["sound_ring_ptr"]
+            ):
                 raise RuntimeError("checkpoint is not a healthy production-armed state")
             log.emit("emulator_ready", load=load_result, start=first)
 
@@ -386,9 +605,38 @@ def main() -> int:
 
                 tick_before = total_ticks
                 frame_before = last_frame
-                run_result = m.run_frames(run_frames)
+                if code_write_hook is None:
+                    run_result = m.run_frames(run_frames)
+                else:
+                    run_result = m.run_until(
+                        max_frames=run_frames, hook_handle=code_write_hook
+                    )
                 if not bool(run_result.get("isPaused", False)):
                     raise RuntimeError(f"run_frames did not pause: {run_result}")
+                if code_write_hook is not None and run_result.get("reason") == "hookFired":
+                    notifications = m.drain_notifications(timeout=0.5)
+                    hits = [
+                        row.get("params", {})
+                        for row in notifications
+                        if row.get("method") == "notifications/mesen/hookFired"
+                        and int(row.get("params", {}).get("handle", -1))
+                        == code_write_hook
+                    ]
+                    trace = m.trace_log(count=1000, cpu_type="Snes")
+                    log.emit(
+                        "wram_code_write_trap_fired",
+                        hook=code_write_hook,
+                        run_result=run_result,
+                        notifications=hits,
+                        snes_cpu=m.get_cpu_state("Snes"),
+                        sa1_cpu=m.get_cpu_state("Sa1"),
+                        trace=trace,
+                    )
+                    m.remove_hook(code_write_hook)
+                    code_write_hook = None
+                    result = "wram_code_write"
+                    failure = "5A22 wrote into the WRAM-resident supervisor"
+                    break
                 frame_now = int(m.get_state().get("frameCount", 0))
                 tick16 = r16(0x0760)
                 tick_delta = modular_delta(tick16, last_tick16, 16)
@@ -465,9 +713,11 @@ def main() -> int:
                     result = "gate_corruption"
                     failure = f"gate mismatch: production={gates}, lab={lab_gate}"
                     break
-                if ring != "00f01c20":
+                if not valid_sound_ring_pointer(ring):
                     result = "sound_ring_corruption"
-                    failure = f"sound ring pointer changed to {ring}"
+                    failure = (
+                        f"sound ring pointer left $F01C20-$F01C40: {ring}"
+                    )
                     break
                 if snap is not None and snap["stack"]["below_floor"]:
                     result = "stack_floor_violation"

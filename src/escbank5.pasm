@@ -34,7 +34,18 @@ entry_117b4=$97C800
 entry_cc44=$97D000
 entry_cc80=$97D400
 entry_caf6=$97D800
+ibridge=$92F828
+entry_ce58=$92E787
 ; <<< ESCBANK5_SYMS <<<
+h158_dma_1020=$94FE00  ; escbank2 tail: staged BW-RAM -> IRAM -> BW-RAM copy
+h158_set_ccr=$94FF00   ; escbank2 tail: final MOVE.L N/Z/V/C materialization
+h158_dma_residue=$94FF80 ; escbank2 tail: exact four-byte below-SP BSR residue
+h158_esc7=$9D8800      ; relocated full $00158E body; production retains the proven SA-1 copy
+swo_movem_done=$92FA32 ; bank-$92 switch-out continuation after the unrolled save
+rdw_rom_8d72_addr=$99E6EF ; explicit long target: Poppy local-label JSL otherwise encodes bank $00
+hle_2742_addr=$99E6FF ; explicit long target for the size-neutral entry_2742t wrapper
+entry_2742_generated_resume_addr=$99DE12 ; first instruction after the size-neutral wrapper
+h2742_generated_return_addr=$99E900 ; CCR-correct return shim for guarded generic fallback
 
 .snes
 
@@ -526,6 +537,9 @@ br24bc2_5:
     beq Lf24bc2_20
     jmp Ltj24bc2_24eb2
 Lf24bc2_20:
+; Public no-push continuation used by the bank-$9E signed-record path after
+; TRAP #1 returns.  It is the original generated loop seam, not a duplicate.
+entry_24cb6:
 L24bc2_24cb6:
     lda $34
     clc
@@ -625,29 +639,50 @@ Lf24bc2_26:
     bne Lf24bc2_27
     jmp Ltj24bc2_24e1a
 Lf24bc2_27:
-    bpl Lf24bc2_28
+    ; Original 68K is `tst.b d0` / `blt $24d28`.  The transpiler's byte
+    ; load left D0 as $00xx and tested the 16-bit 65816 N flag, so record
+    ; byte $88 looked positive and indexed 120 entries *before* $046780.
+    ; Test the actual byte sign bit.  Keep this whole replacement
+    ; byte-neutral so every later escbank5 entry remains pinned.
+    and #$0080
+    beq Lf24bc2_28
     jmp Ltj24bc2_24d28
 Lf24bc2_28:
     lda #$6780
     sta $24
     lda #$0004
     sta $26
-    lda $00
-    and #$00FF
-    eor #$0080
-    sec
-    sbc #$0080
-    sta $00
-    lda $00
-    asl a
-    lda #$0000
-    sbc #$0000
-    eor #$FFFF
-    sta $02
+    ; Only $01-$7f reaches this path now, so the table offset is positive.
+    ; The old generic sign extension was both unnecessary and part of the
+    ; bad-path accommodation.  Pad back to the old seam after the shift.
     lda $00
     asl a
     asl a
     sta $00
+    stz $02
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     lda $24
     clc
     adc $00
@@ -789,7 +824,9 @@ Ltj24bc2_24d28:
     sta $40
     lda #$0002
     sta $42
-    jml.l inext
+    ; $024D28 lives in the compact sparse dispatcher because another dense
+    ; bank-$02 xlat page would overflow bank $96.
+    jml.l $9DDA00
 Ltj24bc2_24e1a:
     lda #$4E1A
     sta $40
@@ -819,12 +856,20 @@ entry_2429c:
     bne Lf2429c_1
     jmp L2429c_242b2
 Lf2429c_1:
-    ; CALL-BRIDGE jsr $23342.l -> entry_23342 (NATIVE escape), resume br2429c_1
-    lda #br2429c_1
-    sta $40
-    lda #$00FA
-    sta $42
-    jml.l entry_23342
+    ; Size-neutral guarded fusion of the three consecutive no-work helpers.
+    ; A miss recreates this exact $23342 call bridge; a hit writes only the
+    ; final observable MOVEM/return residue and resumes at br2429c_3.
+    jml.l $988E53
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 br2429c_1:
     ; CALL-BRIDGE jsr $23e34.l -> entry_23e34 (NATIVE escape), resume br2429c_2
     lda #br2429c_2
@@ -1505,13 +1550,20 @@ Lf2429c_23:
 ; --- entry_23e34 — jsr.l callee wrapper; bsr $23e42 static-linked same-bank ---
 ; --- transpiled from $023E34 (4 instrs) by tools/transpile.py [bank1] ---
 entry_23e34:
-    rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
-    sta $54
-    lda $42
-    sta $56
-    jsl.l push32_l
+    ; Size-neutral guarded empty-record route in the bank-$98 $8E50-$91FF
+    ; seam. Its miss arm replays the original 14-byte entry sequence.
+    jml.l $988F80
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+entry_23e34_after_return:
     lda $30
     sta $54
     lda $32
@@ -3820,6 +3872,285 @@ entry_24d98:
     lda $42
     sta $56
     jsl.l push32_l
+
+    ; Hot semantic path for the complete four-slot $3702 scan.  The generated
+    ; escape below handles only the first slot, then bails back through the
+    ; interpreter for the $24E0E DBRA tail; that costs ~16K SA-1 cycles in the
+    ; settled gameplay tick.  Execute all four records directly when A5 is the
+    ; canonical work-RAM base and no slot would take the trap-#1 edge.  Trap
+    ; cases, aliased task stacks, and noncanonical bases retain the generated
+    ; implementation untouched.
+    ;
+    ; Scratch: $80 delta, $82 flag word, $84 slot pointer, $88 subtract/result,
+    ; $8A bit index, $8C bit-test source, $8E f8 original/result.
+.a16
+.i16
+    lda $34
+    beq h24d98_a5_lo_ok
+    jmp h24d98_cold
+h24d98_a5_lo_ok:
+    lda $36
+    cmp #$00F0
+    beq h24d98_a5_ok
+    jmp h24d98_cold
+h24d98_a5_ok:
+    lda $3E
+    cmp #$00F0
+    beq h24d98_sp_bank_ok
+    jmp h24d98_cold
+h24d98_sp_bank_ok:
+    ; The simulated return occupies [A7,A7+4) now.  Keep it disjoint from the
+    ; four records [$3702,$3732) so the preflight and direct writes cannot hide
+    ; stack/data aliasing that the original instruction order would expose.
+    lda $3C
+    cmp #$36FF
+    bcc h24d98_sp_ok
+    cmp #$3732
+    bcs h24d98_sp_ok
+    jmp h24d98_cold
+h24d98_sp_ok:
+    lda $402A32
+    xba
+    sta $80
+    lda $400002
+    xba
+    sta $82
+    lda #$3702
+    sta $84
+    ldy #$0004
+
+    ; Preflight before changing architectural state.  An active, positive-
+    ; timer slot with a clear flag bit and f8==0 executes trap #1; leave that
+    ; complete call on the cold implementation.
+h24d98_preflight:
+    ldx $84
+    lda $400004,x
+    ora $400006,x
+    bne h24d98_pre_active
+    jmp h24d98_pre_next
+h24d98_pre_active:
+    lda $400002,x
+    xba
+    sec
+    sbc $80
+    beq h24d98_pre_next
+    bmi h24d98_pre_next
+    lda $400000,x
+    xba
+    and #$001F
+    sta $8A
+    and #$000F
+    tax
+    lda $8A
+    and #$0010
+    beq h24d98_pre_bit_low
+    lda $0A              ; D2 high word is preserved by MOVE.W flags,D2
+    bra h24d98_pre_shift
+h24d98_pre_bit_low:
+    lda $82
+h24d98_pre_shift:
+    cpx #$0000
+    beq h24d98_pre_bit_ready
+    lsr a
+    dex
+    bra h24d98_pre_shift
+h24d98_pre_bit_ready:
+    and #$0001
+    bne h24d98_pre_next
+    ldx $84
+    lda $400008,x
+    bne h24d98_pre_next
+    jmp h24d98_cold
+h24d98_pre_next:
+    lda $84
+    clc
+    adc #$000C
+    sta $84
+    dey
+    bne h24d98_preflight
+
+    lda #$3702
+    sta $84
+    ldy #$0004
+h24d98_hot_loop:
+    ldx $84
+    lda $400004,x
+    ora $400006,x
+    bne h24d98_hot_active
+    ; Final flags for an inactive record are TST.L zero.  X is untouched.
+    lda #$0001
+    sta $60
+    stz $6E
+    stz $70
+    stz $72
+    jmp h24d98_hot_next
+
+h24d98_hot_active:
+    ; CLR.L D1 / CLR.L D0 followed by the two MOVE.W loads.
+    stz $00
+    stz $02
+    stz $04
+    stz $06
+    lda $400000,x
+    xba
+    sta $00
+    lda $400002,x
+    xba
+    sta $04
+    sec
+    sbc $80
+    sta $04
+    sta $88
+    ; 68K SUB C/X are borrow; native C is no-borrow.
+    bcc h24d98_hot_sub_borrow
+    stz $A2
+    bra h24d98_hot_sub_done
+h24d98_hot_sub_borrow:
+    lda #$0001
+    sta $A2
+h24d98_hot_sub_done:
+    lda $88
+    bne h24d98_hot_sub_nonzero
+    jmp h24d98_hot_clear
+h24d98_hot_sub_nonzero:
+    bpl h24d98_hot_positive
+    jmp h24d98_hot_clear
+h24d98_hot_positive:
+
+    ; Positive timer: store it, load the flag word into D2.w, and perform
+    ; BTST.L D0,D2 (dynamic bit number is modulo 32).
+    xba
+    ldx $84
+    sta $400002,x
+    lda $82
+    sta $08
+    lda $00
+    and #$001F
+    sta $8A
+    and #$000F
+    tax
+    lda $8A
+    and #$0010
+    beq h24d98_hot_bit_low
+    lda $0A
+    bra h24d98_hot_shift
+h24d98_hot_bit_low:
+    lda $08
+h24d98_hot_shift:
+    cpx #$0000
+    beq h24d98_hot_bit_ready
+    lsr a
+    dex
+    bra h24d98_hot_shift
+h24d98_hot_bit_ready:
+    and #$0001
+    beq h24d98_hot_bit_clear
+    ; BTST bit set: Z=0, while N/V/C remain zero from TST.W positive.
+    stz $60
+    stz $6E
+    stz $70
+    stz $72
+    ldx $84
+    lda #$B400           ; logical big-endian word $00B4
+    sta $400008,x
+    jmp h24d98_hot_next
+
+h24d98_hot_bit_clear:
+    ; Preflight proved f8!=0, so SUBQ.W #1 cannot borrow.  Materialize its
+    ; complete X/N/Z/V/C result, including the $8000->$7FFF overflow case.
+    ldx $84
+    lda $400008,x
+    xba
+    sta $8E
+    sec
+    sbc #$0001
+    sta $8E
+    xba
+    sta $400008,x
+    stz $6E
+    stz $A2
+    stz $60
+    stz $70
+    stz $72
+    lda $8E
+    bne h24d98_hot_dec_nonzero
+    lda #$0001
+    sta $60
+h24d98_hot_dec_nonzero:
+    lda $8E
+    and #$8000
+    beq h24d98_hot_dec_nonnegative
+    lda #$0001
+    sta $70
+h24d98_hot_dec_nonnegative:
+    lda $8E
+    cmp #$7FFF
+    bne h24d98_hot_next
+    ; Result $7FFF overflows only when the nonzero input was $8000.
+    lda #$0001
+    sta $72
+    jmp h24d98_hot_next
+
+h24d98_hot_clear:
+    ; The final CLR.W supplies Z=1,N=V=C=0; X remains the SUB borrow above.
+    ldx $84
+    ; STZ has no absolute-long indexed encoding on 65816; use a zero A value
+    ; so these stores really target bank-$40 work RAM rather than truncating to
+    ; bank $00.
+    lda #$0000
+    sta $400004,x
+    sta $400006,x
+    sta $400000,x
+    sta $400002,x
+    sta $400008,x
+    lda #$0001
+    sta $60
+    stz $6E
+    stz $70
+    stz $72
+
+h24d98_hot_next:
+    lda $84
+    clc
+    adc #$000C
+    sta $84
+    dey
+    beq h24d98_hot_done
+    jmp h24d98_hot_loop
+
+h24d98_hot_done:
+    ; DBRA exhausts D6.w while preserving its high word; A1 advances past all
+    ; four twelve-byte records.  Pop the actual bridge return generically so
+    ; this path remains valid for every native caller convention.
+    lda #$FFFF
+    sta $18
+    lda #$3732
+    sta $24
+    lda #$00F0
+    sta $26
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    jml.l ors_pre
+
+h24d98_cold:
+    rep #$30
+.a16
+.i16
     lda #$0003
     sta $18
     lda $34
@@ -6838,16 +7169,23 @@ br11752_4:
     sta $42
     jmp entry_cc10
 br11752_5:
-    ; SPLIT at the hle_12b6c callee (a bridge would DEMOTE the hle -> interpreted): bail to the
-    ; interp AT the bsr instr ($011778), zero pushes (idempotent). bhp_bank_ext dispatches the hle
-    ; natively; its rts pops the REAL $01177C return -> op_rts_norm -> ojmp_hook -> xlat ->
-    ; entry_1177c (the second spine half). Everything emitted after this stub in THIS body is
-    ; dead (the resume path re-enters via entry_1177c) — left in place, harmless.
-    lda #$1778
-    sta $40
-    lda #$0001
-    sta $42
-    jml.l inext
+    ; Link the hot $012B6C HLE directly while retaining the one emulated-
+    ; instruction $AC charge that the old $011778 interpreter handoff paid.
+    ; The guarded tail yields to that exact old handoff when an IRQ/frame
+    ; boundary is due.  Pad this replacement to the old 14-byte footprint so
+    ; all downstream bank-$99 entry addresses remain fixed.
+    jmp h11752_charge_12b6c
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 br11752_6:
     ; CALL-BRIDGE bsr.w $12a92 -> entry_12a92 (NATIVE escape), resume br11752_7
     lda #br11752_7
@@ -8430,6 +8768,4868 @@ Ltj77a_74c:
     sta $42
     jml.l inext
 
+; =============================================================================
+; entry_96a — palette-transition stepper ($00096A, hot during gameplay entry).
+;
+; Mechanized callable escape: tools/transpile.py 00096A --bank5 --workram=a0
+; --exitccr --xflag.  The only direct caller is jsr.l $00096A at $008B6C.  A0 is
+; provably A5+$1952 (work RAM); A1 remains ROM-aware because the selected
+; target palette comes through the $03065C pointer table.  Fixed at $99:C200
+; in the audited gap after entry_77a and before the separately pinned $EB00
+; entry_d232 body.
+; =============================================================================
+    .org $C200
+; --- transpiled from $00096A (41 instrs) by tools/transpile.py [bank1] ---
+entry_96a:
+    ; Size-neutral redirect into the guarded exact bank-$95 HLE.  A rejected
+    ; state reloads the overwritten LDA $40 and resumes at the next byte.
+    jml.l $95A000
+h96a_generated_resume:
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$003F
+    sta $1C
+    lda $34
+    clc
+    adc #$2930
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $34
+    clc
+    adc #$2932
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda #$000C
+    sta $52
+    lda $00
+    sta $50
+    jsl.l usmul_l
+    lda $94
+    sta $00
+    lda $96
+    sta $02
+    lda $04
+    asl a
+    asl a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $04
+    lda $00
+    clc
+    adc $04
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    lda #$065C
+    sta $24
+    lda #$0003
+    sta $26
+    lda $24
+    clc
+    adc #$0000
+    sta $8C
+    lda $26
+    adc #$0000
+    sta $8E
+    lda $8C
+    clc
+    adc $00
+    sta $8C
+    sta $54
+    lda $8E
+    adc $02
+    sta $8E
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $8C
+    clc
+    adc #$0002
+    sta $54
+    lda $8E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $24
+    lda $9E
+    sta $26
+    lda $24
+    clc
+    adc #$000A
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    lda $34
+    clc
+    adc #$1952
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+L96a_994:
+    lda $20
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $20
+    clc
+    adc #$0002
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    pla
+    sta $00
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $24
+    clc
+    adc #$0002
+    sta $24
+    lda $26
+    adc #$0000
+    sta $26
+    pla
+    sta $0C
+    lda $0C
+    sec
+    sbc $00
+    bne Lf96a_1
+    jmp L96a_9dc
+Lf96a_1:
+    lda $00
+    sta $04
+    lda $04
+    and #$001E
+    sta $04
+    lda $0C
+    sta $10
+    lda $10
+    and #$001E
+    sta $10
+    lda $10
+    sec
+    sbc $04
+    bne Lf96a_2
+    jmp L96a_9ae
+Lf96a_2:
+    lda $04
+    clc
+    adc #$0002
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $04
+L96a_9ae:
+    lda $00
+    sta $08
+    lda $08
+    and #$03C0
+    sta $08
+    lda $0C
+    sta $14
+    lda $14
+    and #$03C0
+    sta $14
+    lda $14
+    sec
+    sbc $08
+    bne Lf96a_3
+    jmp L96a_9c2
+Lf96a_3:
+    lda $08
+    clc
+    adc #$0040
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $08
+L96a_9c2:
+    lda $00
+    and #$7800
+    sta $00
+    lda $0C
+    and #$7800
+    sta $0C
+    lda $0C
+    sec
+    sbc $00
+    bne Lf96a_4
+    jmp L96a_9d2
+Lf96a_4:
+    lda $00
+    clc
+    adc #$0800
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $00
+L96a_9d2:
+    lda $04
+    ora $08
+    sta $04
+    lda $00
+    ora $04
+    sta $00
+    lda $00
+    pha
+    lda $20
+    sec
+    sbc #$0002
+    sta $20
+    lda $22
+    sbc #$0000
+    sta $22
+    lda $20
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+L96a_9dc:
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lf96a_5
+    jmp L96a_994
+Lf96a_5:
+    lda $34
+    clc
+    adc #$1B12
+    tax
+    lda $400000,x
+    xba
+    ora #$003C
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1B14
+    tax
+    lda $400000,x
+    xba
+    ora #$0000
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1B12
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $34
+    clc
+    adc #$1B14
+    tax
+    lda $400000,x
+    xba
+    ora $9E
+    bne Lf96a_6
+    inc $60
+Lf96a_6:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; =============================================================================
+; entry_9ea — 496-word round-transition tile-attribute shifter ($0009EA).
+;
+; Mechanized callable escape: tools/transpile.py 0009EA --bank5 --workram=a0
+; --exitccr --xflag.  The only direct caller is jsr.l $0009EA at $008BCE.
+; A0 is always A5+$1732 in the mapped low-16K work-RAM window.  This loop owns
+; the 4.1M-6.3M-cycle spikes during round start when interpreted.  Fixed at
+; $99:C500, after entry_96a and before the separately pinned $EB00 body.  The
+; four-byte prologue now redirects to the guarded compact implementation in
+; bank $95.  A rejected state recreates REP/LDA and resumes this generated
+; body at the first untouched instruction.
+; =============================================================================
+    .org $C500
+; --- transpiled from $0009EA (22 instrs) by tools/transpile.py [bank1] ---
+entry_9ea:
+    jml.l $95A600
+h9ea_generated_resume:
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$01EF
+    sta $1C
+    lda $34
+    clc
+    adc #$1732
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+L9ea_9f2:
+    lda $20
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    bne Lf9ea_1
+    jmp L9ea_a1c
+Lf9ea_1:
+    lda $00
+    sta $04
+    lda $04
+    and #$001E
+    sta $04
+    lda $04
+    bne Lf9ea_2
+    jmp L9ea_a00
+Lf9ea_2:
+    lda $04
+    sec
+    sbc #$0002
+    sta $04
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+L9ea_a00:
+    lda $00
+    sta $08
+    lda $08
+    and #$03C0
+    sta $08
+    lda $08
+    bne Lf9ea_3
+    jmp L9ea_a0c
+Lf9ea_3:
+    lda $08
+    sec
+    sbc #$0040
+    sta $08
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+L9ea_a0c:
+    lda $00
+    and #$7800
+    sta $00
+    lda $00
+    bne Lf9ea_4
+    jmp L9ea_a16
+Lf9ea_4:
+    lda $00
+    sec
+    sbc #$0800
+    sta $00
+    php
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    plp
+L9ea_a16:
+    lda $04
+    ora $08
+    sta $04
+    lda $00
+    ora $04
+    sta $00
+    lda $00
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+L9ea_a1c:
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $1C
+    dec a
+    sta $1C
+    cmp #$FFFF
+    beq Lf9ea_5
+    jmp L9ea_9f2
+Lf9ea_5:
+    lda $34
+    clc
+    adc #$1B12
+    tax
+    lda $400000,x
+    xba
+    ora #$FFFF
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1B14
+    tax
+    lda $400000,x
+    xba
+    ora #$FFFE
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1B12
+    tax
+    lda $400000,x
+    xba
+    sta $9E
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $34
+    clc
+    adc #$1B14
+    tax
+    lda $400000,x
+    xba
+    ora $9E
+    bne Lf9ea_6
+    inc $60
+Lf9ea_6:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; =============================================================================
+; Production round-start initial coroutine roots.
+;
+; Captured production transition interval 39 dispatched these five cold roots in one
+; game tick.  All bodies use the op_rte/coroutine convention (no synthetic return push).
+; C262 keeps A1 ROM-aware and only specializes A4 as work RAM; $8D72's A0-A4
+; are all derived from the fixed $006AB4 ROM table, so its ten word reads use the
+; bank-local rdw_rom_8d72_l path below.  C3F6 keeps mixed A0
+; ROM/work accesses address-aware and specializes only invariant A2/A4.  $CE48 is the
+; bounded frame-clear prefix and then tail-enters the already validated bank-$92
+; entry_ce58 continuation.  Keep the whole packed group below the pinned $99:EB00 body.
+; =============================================================================
+    .org $C900
+; --- transpiled from $00C262 (38 instrs) by tools/transpile.py [bank1] ---
+entry_c262:
+    ; Guarded whole-root HLE in the otherwise-free bank $95.  Six bytes are
+    ; replaced so the rejected path can recreate REP/LDA/PHA and resume at the
+    ; first untouched instruction without moving any following round root.
+    jml.l $95A300
+    nop
+    nop
+entry_c262_generated_resume:
+    lda $34
+    clc
+    adc #$2A32
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$01A0
+    pha
+    lda $34
+    clc
+    adc #$2A34
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    pha
+    lda $34
+    clc
+    adc #$2A37
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$29B2
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda #$707C
+    sta $20
+    lda #$0005
+    sta $22
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$2A38
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$2A3A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    sta $00
+    lda #$0000
+    sta $04
+    lda #$0000
+    sta $08
+    lda #$000D
+    sta $18
+    lda #$0000
+    sta $0C
+    sta $0E
+Lc262_c294:
+    lda $34
+    clc
+    adc #$2A38
+    tax
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+    lda $34
+    clc
+    adc #$2A3C
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $24
+    clc
+    adc #$0002
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $24
+    lda $9E
+    sta $26
+    lda $24
+    clc
+    adc $0C
+    sta $24
+    lda $26
+    adc $0E
+    sta $26
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $24
+    clc
+    adc #$0000
+    sta $54
+    lda $26
+    adc #$0000
+    sta $56
+    jsl.l push32_l
+    lda $00
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    pha
+    lda $30
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$9000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    pha
+    lda $30
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $08
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1CBA
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    ; The production pointer is $002742.  Its new bank-$99 table-convention body
+    ; receives a real pushed sentinel and returns directly here.  Keep the proven
+    ; bank-$92 callable bridge as the exact generic fallback for every other target.
+    lda $20
+    cmp #$2742
+    bne c262_ibridge
+    lda $22
+    bne c262_ibridge
+    lda #brc262_1
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    jmp entry_2742t
+c262_ibridge:
+    ; INDIRECT-BRIDGE jsr (a0) -> bank-$92 ibridge (standard escape or interpret); $00FA sentinel, resume brc262_1
+    lda #brc262_1
+    sta $40
+    lda #$00FA
+    sta $42
+    lda $20
+    sta $52
+    lda $22
+    sta $50
+    jml.l ibridge
+brc262_1:
+    lda $3C
+    clc
+    adc #$000E
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$2A3C
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0038
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$2A3C
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$00E0
+    beq Lfc262_1
+    jmp Lc262_c2e4
+Lfc262_1:
+    lda #$0000
+    pha
+    lda $34
+    clc
+    adc #$2A3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$2A3A
+    tax
+    lda $400000,x
+    xba
+    clc
+    adc #$0004
+    php
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$2A38
+    tax
+    lda $400000,x
+    xba
+    plp
+    adc #$0000
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    xba
+    sta $400000,x
+    xba
+Lc262_c2e4:
+    lda $00
+    clc
+    adc #$0020
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $00
+    lda $08
+    clc
+    adc #$0040
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $08
+    lda $30
+    clc
+    adc #$0008
+    sta $30
+    lda $32
+    adc #$0000
+    sta $32
+    lda $18
+    dec a
+    sta $18
+    cmp #$FFFF
+    beq Lfc262_2
+    jmp Lc262_c294
+Lfc262_2:
+    ; Finish through a fixed bank-$95 shim.  Besides retaining the original
+    ; PC=$00:C2F6 tail, it replaces the native $00FA return marker left below
+    ; A7 by the final indirect call with the real MC68000 JSR return $00:C2C2
+    ; whenever that residue is disjoint from the routine's live work fields.
+    jml.l $95AF00
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+round_c262_end:
+
+; --- transpiled from $008D72 (83 instrs) by tools/transpile.py [bank1] ---
+entry_8d72:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda #$6AB4
+    sta $20
+    lda #$0000
+    sta $22
+    lda $20
+    clc
+    adc $00
+    sta $24
+    lda $22
+    adc $02
+    sta $26
+    lda $24
+    clc
+    adc #$0004
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    pha
+    lda $34
+    clc
+    adc #$2930
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    asl $04
+    rol $06
+    asl $04
+    rol $06
+    asl $04
+    rol $06
+    asl $04
+    rol $06
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda $20
+    clc
+    adc $04
+    sta $28
+    lda $22
+    adc $06
+    sta $2A
+    lda $28
+    clc
+    adc #$0006
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    pha
+    lda $34
+    clc
+    adc #$2932
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0A
+    asl $08
+    rol $0A
+    asl $08
+    rol $0A
+    asl $08
+    rol $0A
+    asl $08
+    rol $0A
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda $20
+    clc
+    adc $08
+    sta $2C
+    lda $22
+    adc $0A
+    sta $2E
+    lda $2C
+    clc
+    adc #$0002
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    pha
+    lda $34
+    clc
+    adc #$292E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $0C
+    lda $0C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0E
+    asl $0C
+    rol $0E
+    asl $0C
+    rol $0E
+    asl $0C
+    rol $0E
+    asl $0C
+    rol $0E
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda $20
+    clc
+    adc $0C
+    sta $30
+    lda $22
+    adc $0E
+    sta $32
+    lda $30
+    clc
+    adc #$000E
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    pha
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$292E
+    tax
+    lda $400000,x
+    xba
+    sta $10
+    stz $8E
+    lda #$0002
+    bpl Lf8d72_1
+    eor #$FFFF
+    inc a
+    sta $52
+    lda #$0001
+    sta $8E
+    bra Lf8d72_2
+Lf8d72_1:
+    sta $52
+Lf8d72_2:
+    lda $10
+    bpl Lf8d72_3
+    eor #$FFFF
+    inc a
+    sta $50
+    lda $8E
+    eor #$0001
+    sta $8E
+    bra Lf8d72_4
+Lf8d72_3:
+    sta $50
+Lf8d72_4:
+    jsl.l usmul_l
+    lda $8E
+    beq Lf8d72_5
+    lda #$0000
+    sec
+    sbc $94
+    sta $94
+    lda #$0000
+    sbc $96
+    sta $96
+Lf8d72_5:
+    lda $94
+    sta $10
+    lda $96
+    sta $12
+    lda $10
+    pha
+    lda $38
+    clc
+    adc #$FFFE
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $34
+    clc
+    adc #$293A
+    tax
+    lda $400000,x
+    and #$00FF
+    sta $9E
+    lda $10
+    sep #$20
+    sec
+    sbc $9E
+    rep #$20
+    bcc Lf8d72_6
+    beq Lf8d72_6
+    bra Lf8d72_7
+Lf8d72_6:
+    jmp L8d72_8dd8
+Lf8d72_7:
+    lda $10
+    pha
+    lda $34
+    clc
+    adc #$293A
+    tax
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+L8d72_8dd8:
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $14
+    lda $14
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $16
+    asl $14
+    rol $16
+    asl $14
+    rol $16
+    asl $14
+    rol $16
+    asl $14
+    rol $16
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda #$6AB4
+    sta $24
+    lda #$0000
+    sta $26
+    lda $24
+    clc
+    adc $14
+    sta $28
+    lda $26
+    adc $16
+    sta $2A
+    lda $34
+    clc
+    adc #$2934
+    tax
+    lda $400000,x
+    xba
+    sta $18
+    lda $28
+    clc
+    adc #$0008
+    sta $54
+    lda $2A
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    sta $9E
+    lda $18
+    sec
+    sbc $9E
+    bne Lf8d72_8
+    jmp L8d72_8e16
+Lf8d72_8:
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda $24
+    clc
+    adc $00
+    sta $2C
+    lda $26
+    adc $02
+    sta $2E
+    lda $2C
+    clc
+    adc #$0008
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    sta $04
+    lda $04
+    sec
+    sbc #$FFFF
+    bne Lf8d72_9
+    jmp L8d72_8e16
+Lf8d72_9:
+    lda $34
+    clc
+    adc #$1CCA
+    tax
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    sec
+    sbc #$0004
+    beq Lf8d72_10
+    jmp L8d72_8e16
+Lf8d72_10:
+    jmp L8d72_8e18
+L8d72_8e16:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L8d72_8e96
+L8d72_8e18:
+    lda #$0032
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.l -> ojmp_hook (callee --table escape, else interpret), resume br8d72_1
+    lda #br8d72_1
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br8d72_1:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda #$6AB4
+    sta $20
+    lda #$0000
+    sta $22
+    lda $20
+    clc
+    adc $00
+    sta $24
+    lda $22
+    adc $02
+    sta $26
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.l -> ojmp_hook (callee --table escape, else interpret), resume br8d72_2
+    lda #br8d72_2
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br8d72_2:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda #$6AB4
+    sta $20
+    lda #$0000
+    sta $22
+    lda $20
+    clc
+    adc $00
+    sta $24
+    lda $22
+    adc $02
+    sta $26
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.l -> ojmp_hook (callee --table escape, else interpret), resume br8d72_3
+    lda #br8d72_3
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br8d72_3:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda #$6AB4
+    sta $20
+    lda #$0000
+    sta $22
+    lda $20
+    clc
+    adc $00
+    sta $24
+    lda $22
+    adc $02
+    sta $26
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $2d8a.l -> ojmp_hook (callee --table escape, else interpret), resume br8d72_4
+    lda #br8d72_4
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$2D8A
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br8d72_4:
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    lda $34
+    clc
+    adc #$292C
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    asl $00
+    rol $02
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
+    lda #$6AB4
+    sta $20
+    lda #$0000
+    sta $22
+    lda $20
+    clc
+    adc $00
+    sta $24
+    lda $22
+    adc $02
+    sta $26
+    lda $24
+    clc
+    adc #$0008
+    sta $54
+    lda $26
+    adc #$0000
+    sta $52
+    jsl.l rdw_rom_8d72_addr
+    sta $9E
+    pha
+    lda $34
+    clc
+    adc #$2934
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9E
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $9E
+    bne Lf8d72_11
+    inc $60
+Lf8d72_11:
+L8d72_8e96:
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+round_8d72_end:
+
+; --- transpiled from $00C3F6 (129 instrs) by tools/transpile.py [bank1] ---
+entry_c3f6:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $3C
+    clc
+    adc #$FF8A
+    sta $3C
+    lda $3E
+    adc #$FFFF
+    sta $3E
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda $1C
+    pha
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$2A4C
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $34
+    clc
+    adc #$3A54
+    sta $28
+    lda $36
+    adc #$0000
+    sta $2A
+    lda #$4A60
+    sta $24
+    lda #$0002
+    sta $26
+    lda $1C
+    bne Lfc3f6_1
+    jmp Lc3f6_c422
+Lfc3f6_1:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda $34
+    clc
+    adc #$2A58
+    sta $30
+    lda $36
+    adc #$0000
+    sta $32
+    lda $34
+    clc
+    adc #$3A64
+    sta $28
+    lda $36
+    adc #$0000
+    sta $2A
+    lda #$4A84
+    sta $24
+    lda #$0002
+    sta $26
+Lc3f6_c422:
+    lda $38
+    sta $9A
+    lda $3A
+    sta $9C
+    lda $9C
+    pha
+    lda $30
+    clc
+    adc #$0008
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $30
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$0006
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; Production selects one of the two bank-$02 single-slot allocators here.
+    ; Give their table-convention bodies the caller return they expect.  Retain
+    ; the exact bank-$92 callable bridge for every unrecognized target.
+    lda $26
+    cmp #$0002
+    bne c3f6_a1_ibridge
+    lda $24
+    cmp #$4A60
+    beq c3f6_call_24a60t
+    cmp #$4A84
+    beq c3f6_call_24a84t
+c3f6_a1_ibridge:
+    ; INDIRECT-BRIDGE jsr (a1) -> bank-$92 ibridge (standard escape or interpret); $00FA sentinel, resume brc3f6_1
+    lda #brc3f6_1
+    sta $40
+    lda #$00FA
+    sta $42
+    lda $24
+    sta $52
+    lda $26
+    sta $50
+    jml.l ibridge
+c3f6_call_24a60t:
+    lda #brc3f6_1
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    jmp entry_24a60t
+c3f6_call_24a84t:
+    lda #brc3f6_1
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    jmp entry_24a84t
+brc3f6_1:
+    lda $1C
+    sta $9A
+    lda $1E
+    sta $9C
+    lda $9C
+    pha
+    lda $38
+    clc
+    adc #$FFAC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $38
+    clc
+    adc #$FFAE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFC8
+    sta $20
+    lda $3A
+    adc #$FFFF
+    sta $22
+    ; CALL-BRIDGE jsr $24920.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_2
+    lda #brc3f6_2
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$4920
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l ojmp_hook
+brc3f6_2:
+    lda $1C
+    sta $9A
+    lda $1E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFCC
+    sta $20
+    lda $3A
+    adc #$FFFF
+    sta $22
+    ; CALL-BRIDGE jsr $24956.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_3
+    lda #brc3f6_3
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$4956
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l ojmp_hook
+brc3f6_3:
+    lda $1C
+    sta $9A
+    lda $1E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0006
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $24956.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_4
+    lda #brc3f6_4
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$4956
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l ojmp_hook
+brc3f6_4:
+    lda $1C
+    sta $9A
+    lda $1E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $24956.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_5
+    lda #brc3f6_5
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$4956
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l ojmp_hook
+brc3f6_5:
+    lda $1C
+    sta $9A
+    lda $1E
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$0008
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$000A
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $28
+    sta $9A
+    lda $2A
+    sta $9C
+    lda $9C
+    pha
+    lda $20
+    clc
+    adc #$000C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1CCA
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0003
+    bne Lfc3f6_2
+    jmp Lc3f6_c48c
+Lfc3f6_2:
+    lda $34
+    clc
+    adc #$1CEA
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    bne Lfc3f6_3
+    jmp Lc3f6_c47e
+Lfc3f6_3:
+    lda $34
+    clc
+    adc #$1CEE
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+Lc3f6_c47e:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $c8e0.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_6
+    lda #brc3f6_6
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$C8E0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+brc3f6_6:
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+Lc3f6_c48c:
+    lda $38
+    clc
+    adc #$FFD0
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFCC
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFD4
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFD8
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFC8
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1C4C
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    and #$0030
+    sta $00
+    lda #$C606
+    sta $20
+    lda #$0000
+    sta $22
+    lda $00
+    lsr a
+    lsr a
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $38
+    clc
+    adc #$FFB4
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1CCE
+    tax
+    lda $400000,x
+    xba
+    beq Lfc3f6_4
+    jmp Lc3f6_c4d4
+Lfc3f6_4:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda #$0100
+    pha
+    lda $38
+    clc
+    adc #$FFB4
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+Lc3f6_c4d4:
+    lda #$FFD0
+    pha
+    lda $38
+    clc
+    adc #$FFDE
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$FFD0
+    pha
+    lda $30
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0040
+    pha
+    lda $38
+    clc
+    adc #$FFE2
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0040
+    pha
+    lda $30
+    clc
+    adc #$0004
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda $34
+    clc
+    adc #$2A4B
+    tax
+    lda $400000,x
+    and #$00FF
+    pha
+    lda $04
+    and #$0007
+    tax
+    pla
+Lfc3f6_5:
+    cpx #$0000
+    beq Lfc3f6_6
+    lsr a
+    dex
+    bra Lfc3f6_5
+Lfc3f6_6:
+    and #$0001
+    php
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$0002
+    sta $60
+    plp
+    beq Lfc3f6_7
+    jmp Lc3f6_c4fc
+Lfc3f6_7:
+    ; CALL-BRIDGE jsr $c722.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_7
+    lda #brc3f6_7
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$C722
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+brc3f6_7:
+Lc3f6_c4fc:
+    lda $34
+    clc
+    adc #$1CCA
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0003
+    bne Lfc3f6_8
+    jmp Lc3f6_c524
+Lfc3f6_8:
+    lda $34
+    clc
+    adc #$1CEA
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    bne Lfc3f6_9
+    jmp Lc3f6_c512
+Lfc3f6_9:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda $34
+    clc
+    adc #$1CEE
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+Lc3f6_c512:
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9E
+    lda $20
+    clc
+    adc #$0002
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $9A
+    lda $9E
+    sta $9C
+    lda $9C
+    bne Lfc3f6_10
+    lda $9A
+    bne Lfc3f6_10
+    jmp Lc3f6_c524
+Lfc3f6_10:
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $bba4.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_8
+    lda #brc3f6_8
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$BBA4
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+brc3f6_8:
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+Lc3f6_c524:
+    lda #$0014
+    pha
+    lda $38
+    clc
+    adc #$FFB2
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFB6
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFB8
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0001
+    pha
+    lda $38
+    clc
+    adc #$FFBA
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $30
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFDC
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1CCA
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0003
+    bne Lfc3f6_11
+    jmp Lc3f6_c560
+Lfc3f6_11:
+    lda #$FFFE
+    sta $54
+    lda #$0007
+    sta $52
+    jsl.l rdw_ea_l
+    beq Lfc3f6_12
+    jmp Lc3f6_c560
+Lfc3f6_12:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda $34
+    clc
+    adc #$1CEA
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    bne Lfc3f6_13
+    jmp Lc3f6_c55e
+Lfc3f6_13:
+    lda $34
+    clc
+    adc #$1CEE
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+Lc3f6_c55e:
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+Lc3f6_c560:
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ; CALL-BRIDGE jsr $c8e0.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_9
+    lda #brc3f6_9
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$C8E0
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+brc3f6_9:
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    lda $38
+    clc
+    adc #$FFB2
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    ; CALL-BRIDGE jsr $c60e.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_10
+    lda #brc3f6_10
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$C60E
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+brc3f6_10:
+    lda $38
+    clc
+    adc #$FFB4
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    ; CALL-BRIDGE jsr $c6bc.l -> ojmp_hook (callee --table escape, else interpret), resume brc3f6_11
+    lda #brc3f6_11
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$C6BC
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+brc3f6_11:
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FFA0
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FF8E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    pha
+    lda $38
+    clc
+    adc #$FF98
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $34
+    clc
+    adc #$1CCC
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda #$3206
+    sta $2C
+    lda #$0001
+    sta $2E
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    bne Lfc3f6_14
+    jmp Lc3f6_c5ac
+Lfc3f6_14:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda #$3206
+    sta $2C
+    lda #$0001
+    sta $2E
+Lc3f6_c5ac:
+    lda $00
+    sec
+    sbc #$0006
+    bne Lfc3f6_15
+    jmp Ltjc3f6_1252a
+Lfc3f6_15:
+    lda $00
+    sec
+    sbc #$0008
+    bne Lfc3f6_16
+    jmp Ltjc3f6_1252a
+Lfc3f6_16:
+    lda #$2318
+    sta $2C
+    lda #$0003
+    sta $2E
+    lda $38
+    clc
+    adc #$FFB0
+    tax
+    lda $400000,x
+    xba
+    bne Lfc3f6_17
+    jmp Lc3f6_c5ce
+Lfc3f6_17:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda #$2318
+    sta $2C
+    lda #$0003
+    sta $2E
+Lc3f6_c5ce:
+    lda $00
+    sec
+    sbc #$0012
+    bne Lfc3f6_18
+    jmp Ltjc3f6_11420
+Lfc3f6_18:
+    lda $00
+    sec
+    sbc #$0003
+    bne Lfc3f6_19
+    jmp Ltjc3f6_11420
+Lfc3f6_19:
+    lda $00
+    sec
+    sbc #$0004
+    bne Lfc3f6_20
+    jmp Ltjc3f6_11576
+Lfc3f6_20:
+    lda $00
+    sec
+    sbc #$0005
+    bne Lfc3f6_21
+    jmp Ltjc3f6_11420
+Lfc3f6_21:
+    lda $00
+    sec
+    sbc #$0007
+    beq Lfc3f6_22
+    jmp Lc3f6_c602
+Lfc3f6_22:
+    lda $34
+    clc
+    adc #$2930
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0001
+    bne Lfc3f6_23
+    jmp Ltjc3f6_11420
+Lfc3f6_23:
+    lda #$1576
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Lc3f6_c602:
+    lda #$C602
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+Ltjc3f6_11420:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    lda #$1420
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltjc3f6_11576:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    lda #$1576
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+Ltjc3f6_1252a:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    sta $A2
+    lda #$252A
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+round_c3f6_end:
+
+; --- transpiled from $007C22 (8 instrs) by tools/transpile.py [bank1] ---
+entry_7c22:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $3C
+    clc
+    adc #$000A
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    ; CALL-BRIDGE jsr $8b46(pc) -> ojmp_hook (callee --table escape, else interpret), resume br7c22_1
+    lda #br7c22_1
+    sta $54
+    lda #$00FA
+    sta $56
+    jsl.l push32_l
+    lda #$8B46
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l ojmp_hook
+br7c22_1:
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    lda #$0000
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    xba
+    sta $400000,x
+    xba
+    lda #$0010
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$6516
+    sta $20
+    lda #$0002
+    sta $22
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9A
+    sta $00
+    lda $9C
+    sta $02
+    lda $00
+    sta $9A
+    lda $02
+    sta $9C
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $9C
+    pha
+    lda $3C
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $3C
+    clc
+    adc #$0002
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$7C3C
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+round_7c22_end:
+
+; --- transpiled from $00CE48 (5 instrs) by tools/transpile.py [bank1] ---
+entry_ce48:
+    rep #$30
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $3C
+    clc
+    adc #$FF1C
+    sta $3C
+    lda $3E
+    adc #$FFFF
+    sta $3E
+    lda $38
+    sta $20
+    lda $3A
+    sta $22
+    lda #$0071
+    sta $00
+Lce48_ce52:
+    lda #$0000
+    pha
+    lda $20
+    sec
+    sbc #$0002
+    sta $20
+    lda $22
+    sbc #$0000
+    sta $22
+    lda $20
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lfce48_1
+    jmp Lce48_ce52
+Lfce48_1:
+    ; $00CE58 is the exact fall-through after the bounded five-instruction prefix.
+    ; Tail-enter the deployed continuation with the live frame/register state intact.
+    jml.l entry_ce58
+round_ce48_end:
+
+; =============================================================================
+; entry_2742t — round-start tilemap writer, table/call-return convention.
+;
+; C262 calls this 14 times through a real pushed $00FA sentinel.  A0/A1 are
+; proven $E0 video pointers constructed inside the original routine, so the
+; generated body writes their BE words directly to the identical bank-$41
+; shadow offsets.  The four-byte entry prologue is now a size-neutral jump to
+; the guarded exact HLE at $99:E6FF.  Rejected inputs resume the address-space-
+; generic generated body with the caller's real return still on its stack.
+; Command: tools/transpile.py 002742 --bank5 --table --video
+;          --video-direct-e0=a0,a1 --rom=a3 --exitccr --xflag
+; The two A3 reads below are deliberately patched back to rdw_ea_l for fallback.
+; =============================================================================
+; --- transpiled from $002742 (47 instrs) by tools/transpile.py [bank1] ---
+entry_2742t:
+    jml.l hle_2742_addr
+entry_2742_generated_resume:
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $30
+    sta $54
+    lda $32
+    sta $56
+    jsl.l push32_l
+    lda $2C
+    sta $54
+    lda $2E
+    sta $56
+    jsl.l push32_l
+    lda $28
+    sta $54
+    lda $2A
+    sta $56
+    jsl.l push32_l
+    lda $24
+    sta $54
+    lda $26
+    sta $56
+    jsl.l push32_l
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $18
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $14
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $10
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $0C
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $08
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $04
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    ldx $3C
+    lda $00
+    xba
+    sta $400000,x
+    xba
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda #$0800
+    sta $30
+    lda #$00E0
+    sta $32
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $30
+    clc
+    adc $9A
+    sta $30
+    lda $32
+    adc $9C
+    sta $32
+    lda #$0C00
+    sta $28
+    lda #$00E0
+    sta $2A
+    lda $1C
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $28
+    clc
+    adc $9A
+    sta $28
+    lda $2A
+    adc $9C
+    sta $2A
+    lda $38
+    clc
+    adc #$0010
+    tax
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda #$0004
+    sta $1C
+    lda #$0000
+    sta $1E
+    lda $38
+    clc
+    adc #$000A
+    tax
+    lda $400000,x
+    xba
+    sta $00
+    lda #$1FFF
+    sta $08
+    lda #$F800
+    sta $14
+    lda $30
+    sta $20
+    lda $32
+    sta $22
+    lda $28
+    sta $24
+    lda $2A
+    sta $26
+    lda #$000D
+    sta $0C
+L2742_277c:
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    nop                              ; retain generated-body/layout addresses
+    nop
+    nop
+    pha
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    pla
+    sta $04
+    lda $04
+    sta $10
+    lda $04
+    and $08
+    sta $04
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $414000,x
+    xba
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $10
+    lsr a
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $10
+    lda $10
+    and $14
+    sta $10
+    lda $10
+    clc
+    adc $00
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $10
+    lda $10
+    pha
+    lda $24
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $414000,x
+    xba
+    lda $24
+    clc
+    adc $1C
+    sta $24
+    lda $26
+    adc $1E
+    sta $26
+    lda $0C
+    dec a
+    sta $0C
+    cmp #$FFFF
+    beq Lf2742_1
+    jmp L2742_277c
+Lf2742_1:
+    lda $30
+    sta $20
+    lda $32
+    sta $22
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda $28
+    sta $24
+    lda $2A
+    sta $26
+    lda #$0002
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $24
+    clc
+    adc $9A
+    sta $24
+    lda $26
+    adc $9C
+    sta $26
+    lda #$000D
+    sta $0C
+L2742_27a4:
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    nop                              ; retain generated-body/layout addresses
+    nop
+    nop
+    pha
+    lda $2C
+    clc
+    adc #$0002
+    sta $2C
+    lda $2E
+    adc #$0000
+    sta $2E
+    pla
+    sta $04
+    lda $04
+    sta $10
+    lda $04
+    and $08
+    sta $04
+    lda $04
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $414000,x
+    xba
+    lda $20
+    clc
+    adc $1C
+    sta $20
+    lda $22
+    adc $1E
+    sta $22
+    lda $10
+    lsr a
+    lsr a
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $10
+    lda $10
+    and $14
+    sta $10
+    lda $10
+    clc
+    adc $00
+    php
+    pha
+    lda #$0000
+    rol a
+    sta $A2
+    pla
+    plp
+    sta $10
+    lda $10
+    pha
+    lda $24
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $414000,x
+    xba
+    lda $24
+    clc
+    adc $1C
+    sta $24
+    lda $26
+    adc $1E
+    sta $26
+    lda $0C
+    dec a
+    sta $0C
+    cmp #$FFFF
+    beq Lf2742_2
+    jmp L2742_27a4
+Lf2742_2:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $00
+    lda $00
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $02
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $06
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $08
+    lda $08
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $0C
+    lda $0C
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $0E
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $10
+    lda $10
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $12
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $14
+    lda $14
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $16
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $18
+    lda $18
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $1A
+    lda $3C
+    clc
+    adc #$0002
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $26
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $24
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $28
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $32
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $30
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l h2742_generated_return_addr
+round_2742t_end:
+
+; =============================================================================
+; Round-start pool allocators, table/call-return convention.  A0 is constructed
+; from the work-RAM base inside each function, so its word accesses use the
+; direct bank-$40 path.  Commands:
+;   tools/transpile.py 024A60 --bank5 --table --workram=a0 --exitccr --xflag
+;   tools/transpile.py 024A84 --bank5 --table --workram=a0 --exitccr --xflag
+;   tools/transpile.py 024920 --bank5 --table --workram=a0 --exitccr --xflag
+;   tools/transpile.py 024956 --bank5 --table --workram=a0 --exitccr --xflag
+; =============================================================================
+; --- transpiled from $024A60 (10 instrs) by tools/transpile.py [bank1] ---
+entry_24a60t:
+    rep #$30
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$3574
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    beq Lf24a60_1
+    jmp L24a60_24a7c
+Lf24a60_1:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L24a60_24a7e
+L24a60_24a7c:
+    lda #$0000
+    sta $1C
+    sta $1E
+L24a60_24a7e:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- transpiled from $024A84 (10 instrs) by tools/transpile.py [bank1] ---
+entry_24a84t:
+    rep #$30
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$357C
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $20
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    beq Lf24a84_1
+    jmp L24a84_24aa0
+Lf24a84_1:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L24a84_24aa2
+L24a84_24aa0:
+    lda #$0000
+    sta $1C
+    sta $1E
+L24a84_24aa2:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- transpiled from $024920 (14 instrs) by tools/transpile.py [bank1] ---
+entry_24920t:
+    rep #$30
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda #$000B
+    sta $00
+    lda $34
+    clc
+    adc #$3734
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+L24920_2492c:
+    lda $20
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    beq Lf24920_1
+    jmp L24920_24944
+Lf24920_1:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L24920_24950
+L24920_24944:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lf24920_2
+    jmp L24920_2492c
+Lf24920_2:
+    lda #$0000
+    sta $1C
+    sta $1E
+L24920_24950:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+
+; --- transpiled from $024956 (14 instrs) by tools/transpile.py [bank1] ---
+entry_24956t:
+    rep #$30
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $00
+    sta $54
+    lda $02
+    sta $56
+    jsl.l push32_l
+    lda #$0005
+    sta $00
+    lda $34
+    clc
+    adc #$39F4
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+L24956_24962:
+    lda $20
+    clc
+    adc #$0000
+    tax
+    lda $400000,x
+    xba
+    beq Lf24956_1
+    jmp L24956_2497a
+Lf24956_1:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda #$0000
+    pha
+    lda $20
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda #$FFFF
+    pha
+    lda $20
+    clc
+    adc #$0000
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L24956_24986
+L24956_2497a:
+    lda $20
+    clc
+    adc #$0010
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda $00
+    dec a
+    sta $00
+    cmp #$FFFF
+    beq Lf24956_2
+    jmp L24956_24962
+Lf24956_2:
+    lda #$0000
+    sta $1C
+    sta $1E
+L24956_24986:
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $02
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $00
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+round_pool_alloc_end:
+
+; $8D72 constructs every pointer passed here from the immutable 68000 ROM table
+; rooted at $006AB4.  The generic rdw_ea_l mapper is deliberately retained for
+; all other bodies; this helper only replaces those ten proven ROM reads.  The
+; packed arcade image begins at SNES $C1:0000, so adding $00C1 to the 68K high
+; word forms the native 24-bit long-indirect pointer at $66-$68.
+rdw_rom_8d72_l:
+    lda $54
+    sta $66
+    lda $52
+    clc
+    adc #$00C1
+    sta $68
+    lda [$66]
+    xba
+    rtl
+rdw_rom_8d72_end:
+
+; =============================================================================
+; hle_2742 — guarded exact fast path for the round-start tilemap writer.
+;
+; The original saves A0-A4/D0-D6, copies 28 ROM words into two interleaved $E0
+; tilemap planes, restores the saved registers, leaves D7=4, and returns.  This
+; path performs the identical bank-$41 writes directly, reproduces the complete
+; below-SP LINK/MOVEM residue, sign-extends D0-D6 exactly as MC68000 MOVEM.W
+; restore does, and materializes X/N/Z/V/C from the final ADD.W.  Inputs outside
+; the packed ROM, bank-$F0 stack, or bank-$E0 destination contract resume the
+; address-space-generic generated body before any observable state is changed.
+; =============================================================================
+hle_2742:
+.a16
+.i16
+    rep #$30
+    jsl.l $9EDE80                    ; direct stores bypass map_snes; size-neutral below
+
+    ; The table body is only allowed to specialize a non-wrapping bank-$F0 stack.
+    lda $3E
+    cmp #$00F0
+    bne h2742_reject
+    lda $3C
+    cmp #$0026
+    bcs h2742_stack_low_ok
+    bra h2742_reject
+h2742_stack_low_ok:
+    cmp #$FFEF
+    bcs h2742_reject
+    tax
+
+    ; D7/row is sign-extended by ADDA.W.  Keep both destinations in bank $E0.
+    lda $400004,x
+    xba
+    sta $84
+    cmp #$8000
+    bcc h2742_row_ok
+    cmp #$F800
+    bcc h2742_reject
+h2742_row_ok:
+
+    ; The source must supply all 28 words from the packed 512 KiB arcade ROM.
+    lda $40000C,x
+    xba
+    sta $86
+    cmp #$0008
+    bcs h2742_reject
+    cmp #$0007
+    bne h2742_source_ok
+    lda $40000E,x
+    xba
+    cmp #$FFC9
+    bcs h2742_reject
+h2742_source_ok:
+    bra h2742_fast
+
+h2742_reject:
+    ; Keep this rejected-input stub seven bytes so the proven fast-body address
+    ; remains fixed.  The far relative branch reaches the address-space-generic
+    ; generated body without changing the live emulated frame.
+    brl h2742_generated_fallback
+
+h2742_fast:
+    ldx $3C
+    lda $400006,x
+    xba
+    sta $82                         ; tile-base argument
+    lda $40000E,x
+    xba
+    sta $66                         ; 68K ROM low word
+    lda $86
+    clc
+    adc #$00C1
+    sta $68                         ; packed-ROM long-indirect bank
+    lda $84
+    clc
+    adc #$0800
+    sta $84                         ; first bank-$41 shadow offset
+
+    ; Two columns, fourteen rows each.  Y advances through all 56 source bytes;
+    ; X advances by four bytes per row and is reset to base+2 for column two.
+    ldx $84
+    ldy #$0000
+    stz $8E
+h2742_column:
+    lda #$000D
+    sta $8C
+h2742_copy_word:
+    lda [$66],y
+    xba
+    sta $80
+    and #$1FFF
+    xba
+    sta $414000,x
+    lda $80
+    lsr a
+    lsr a
+    and #$F800
+    clc
+    adc $82
+    xba
+    sta $414400,x
+    inx
+    inx
+    inx
+    inx
+    iny
+    iny
+    dec $8C
+    bpl h2742_copy_word
+    lda $8E
+    bne h2742_copy_done
+    inc $8E
+    lda $84
+    inc a
+    inc a
+    tax
+    bra h2742_column
+h2742_copy_done:
+
+    ; LINK + MOVEM.L A0-A4 + MOVEM.W D0-D6 leave 38 bytes below entry SP.
+    ; Write the exact big-endian residue from low to high address.
+    lda $3C
+    sec
+    sbc #$0026
+    tax
+    lda $00
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $04
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $08
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $0C
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $10
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $14
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $18
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $22
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $20
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $26
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $24
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $2A
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $28
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $2E
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $2C
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $32
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $30
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $3A
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $38
+    xba
+    sta $400000,x
+
+    ; MC68000 MOVEM.W memory-to-Dn sign-extends each restored low word.
+    ldx #$0000
+    ldy #$0007
+h2742_sign_extend:
+    lda $00,x
+    bpl h2742_sign_positive
+    lda #$FFFF
+    bra h2742_sign_store
+h2742_sign_positive:
+    lda #$0000
+h2742_sign_store:
+    sta $02,x
+    inx
+    inx
+    inx
+    inx
+    dey
+    bne h2742_sign_extend
+    lda #$0004
+    sta $1C
+    stz $1E
+
+    ; Final observable CCR comes from the second column's last ADD.W d0,d4.
+    cld
+    ldy #$0036
+    lda [$66],y
+    xba
+    lsr a
+    lsr a
+    and #$F800
+    clc
+    adc $82
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60                         ; Z
+    lda $50
+    and #$0080
+    sta $70                         ; N
+    lda $50
+    and #$0040
+    sta $72                         ; V
+    lda $50
+    and #$0001
+    sta $6E                         ; C
+    sta $A2                         ; X = C for ADD.W
+
+    ; Faithful RTS: consume the caller's real return and use the sentinel router.
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $3E
+    adc #$0000
+    sta $3E
+    jml.l ors_pre
+
+h2742_generated_fallback:
+    rep #$30
+    lda $38                         ; recreate the overwritten generated prologue
+    jml.l entry_2742_generated_resume_addr
+h2742_generated_fallback_end:
+
+; The generic fallback restores registers and consumes the real return before
+; arriving here.  Recompute the final ADD.W from the caller-owned arguments so
+; X/N/Z/V/C match the original; then route the already-popped $00FA return.
+    .org $E900
+h2742_generated_return:
+.a16
+.i16
+    rep #$30
+    ldx $3C                         ; final A7 = entry A7 + four-byte return
+    lda $400002,x                   ; original tile-base argument at entry A7+6
+    xba
+    sta $82
+    lda $400008,x                   ; source long at entry A7+12
+    xba
+    sta $52
+    lda $40000A,x
+    xba
+    clc
+    adc #$0036                      ; final (28th) source word
+    sta $54
+    lda $52
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    lsr a
+    lsr a
+    and #$F800
+    clc
+    adc $82
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60                         ; Z
+    lda $50
+    and #$0080
+    sta $70                         ; N
+    lda $50
+    and #$0040
+    sta $72                         ; V
+    lda $50
+    and #$0001
+    sta $6E                         ; C
+    sta $A2                         ; X = C
+    jml.l ors_pre
+hle_2742_end:
+
+; Synthetic differential calls return through a production-style $00FA:EAF0
+; sentinel.  Nexen reports an exec-hook hit before its coherent pause catches
+; up, so spin here without touching state during that short hook-latency window.
+    .org $EAF0
+h2742_validation_spin:
+    bra h2742_validation_spin
+h2742_validation_spin_end:
+
 ; --- $00D232 sprite-build shared body (pt.22 P3b COVERAGE full, --bank5 $99 --coroutine no-push;
 ;     escbank2 $94 was full -> $99; .org $EB00 = free tail past op_rts_sentinel@$EA3A) ---
     .org $EB00
@@ -9747,3 +14947,446 @@ cw5_rom:
     sta $50              ; low byte
     rep #$20
     jml $009F5C
+
+; ============================================================================
+; hle_158e — guarded semantic implementation of the fixed $00158E sprite-shadow
+; transfer. The literal 68K routine performs three consecutive 1020-byte
+; `move.l (a0)+,(a1)+` streams:
+;
+;   (a5+$1CF6) -> $D00002 -> SNES shadow $41:3002
+;   (a5+$20F2) -> $E00402 -> SNES shadow $41:4402
+;   (a5+$24EE) -> $E00002 -> SNES shadow $41:4002
+;
+; The transpiled body called rdw_ea_l/writeword_l four times per long and cost
+; ~583K SA-1 cycles in a settled production gameplay tick. Here, guarded
+; bank-$F0 sources use the SA-1 DMA engine through otherwise-unused IRAM
+; $0100-$01FE.  The hardware cannot copy BW-RAM directly to BW-RAM, so each
+; 1020-byte stream is split into four exact 255-byte BW-RAM -> IRAM -> BW-RAM
+; transfers.  Physical IRAM $0300/$0302 is the live 5A22 frame mailbox and must
+; never be used as staging space.  Bytes retain their order, and map_snes's
+; fixed D0/E0 transforms are folded into the three destination constants.
+;
+; Contract details retained: push the skipped 68K JSR return (including its
+; below-SP residue), reproduce the final MOVE.L's N/Z/V/C result while preserving
+; X, set final A0/A1 to the post-increment values, pop the emulated return, and
+; route through ors_pre. If A5 is outside work RAM or the largest source range
+; would cross $F0:FFFF, emulate only the first LEA and resume the interpreter at
+; $001592; the already-pushed return makes that fallback a faithful cold path.
+;
+; Fixed at $99:F800. build_interp_rom.py asserts the preceding $F7C0-$F7FF
+; seam remains zero so Poppy's silent .org overlap cannot cover this body.
+; ============================================================================
+.org $F800
+hle_158e:
+    ; Keep the externally hooked entry fixed. The complete body moved to the
+    ; roomy seventh escape bank when paced capture gained a synchronous 5A22
+    ; DMA handoff; the old protected tail slot cannot safely hold that logic.
+    jml.l h158_esc7
+
+; ============================================================================
+; lea_pc5 — bank-$00 op_lea_pc's byte-neutral body. Handles both legal
+; PC-relative LEA encodings used by the 68000:
+;   mode $3A: (d16,PC)
+;   mode $3B: (d8,PC,Xn) with a word/long Dn/An brief index
+;
+; The PC-relative base is the extension-word address (PC+2). rdw_ea_l keeps
+; the extension fetch correct for both ROM- and RAM-resident PCs. LEA changes
+; no 68K CCR state. Fixed at $99:F900; the isolated pacing lab now owns $99:FB00.
+; ============================================================================
+.org $F900
+lea_pc5:
+    rep #$30
+
+    ; $52:$54 = PC+2, also the extension-word fetch address and LEA base.
+    lda $40
+    clc
+    adc #$0002
+    sta $54
+    lda $42
+    and #$00FF
+    adc #$0000
+    sta $52
+    ; rdw_ea_l advances its address by one while assembling the big-endian
+    ; word. Preserve the architectural PC+2 base separately for LEA math.
+    lda $54
+    sta $94
+    lda $52
+    sta $96
+    jsl.l rdw_ea_l
+    sta $90              ; d16 or brief index extension
+    lda $94
+    sta $54
+    lda $96
+    sta $52
+
+    lda $44
+    and #$0001
+    bne lp5_indexed      ; $...FB = (d8,PC,Xn)
+
+    ; $...FA = (d16,PC).
+    lda $90
+    bmi lp5_d16_neg
+    clc
+    adc $54
+    sta $54
+    lda $52
+    adc #$0000
+    sta $52
+    jmp lp5_store
+lp5_d16_neg:
+    clc
+    adc $54
+    sta $54
+    lda $52
+    adc #$FFFF
+    sta $52
+    jmp lp5_store
+
+lp5_indexed:
+    ; Add the signed 8-bit displacement to the PC+2 base.
+    lda $90
+    and #$00FF
+    cmp #$0080
+    bcs lp5_d8_neg
+    clc
+    adc $54
+    sta $54
+    lda $52
+    adc #$0000
+    sta $52
+    bra lp5_index_reg
+lp5_d8_neg:
+    ora #$FF00
+    clc
+    adc $54
+    sta $54
+    lda $52
+    adc #$FFFF
+    sta $52
+
+lp5_index_reg:
+    ; Brief extension bits 15/14-12 select An/Dn and register number.
+    lda $90
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    and #$001C           ; register number * four-byte DP stride
+    sta $92
+    lda $90
+    and #$8000
+    beq lp5_index_data
+    lda $92
+    clc
+    adc #$0020           ; address-register half of the emulated reg file
+    sta $92
+lp5_index_data:
+    ldx $92
+    lda $90
+    and #$0800
+    bne lp5_index_long
+
+    ; Word index: sign-extend the selected register's low word.
+    lda $00,x
+    bmi lp5_index_word_neg
+    clc
+    adc $54
+    sta $54
+    lda $52
+    adc #$0000
+    sta $52
+    bra lp5_store
+lp5_index_word_neg:
+    clc
+    adc $54
+    sta $54
+    lda $52
+    adc #$FFFF
+    sta $52
+    bra lp5_store
+
+lp5_index_long:
+    lda $00,x
+    clc
+    adc $54
+    sta $54
+    lda $02,x
+    adc $52
+    sta $52
+
+lp5_store:
+    ; Destination An = opcode bits 11-9, mapped to DP $20+$reg*4.
+    lda $44
+    and #$0E00
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    clc
+    adc #$0020
+    tax
+    lda $54
+    sta $00,x
+    lda $52
+    sta $02,x
+
+    lda $40
+    clc
+    adc #$0004
+    sta $40
+    lda $42
+    adc #$0000
+    sta $42
+    jml.l inext
+
+; ============================================================================
+; swo_movem_unrolled — hot half of entry_swo's $0536 MOVEM.L D0-A6,-(A7).
+;
+; entry_swo has already decremented emulated A7 by 60 and leaves its low word
+; in X.  Store the 15 registers as the exact big-endian frame the old X/Y loop
+; produced, using fixed offsets so there is no per-word index maintenance or
+; per-register loop branch.  All production task frames stay within bank $40.
+; The body occupies $99:FA00-$99:FAD5; the isolated pacing lab now starts at
+; $99:FB00.  Return to the byte-pinned bank-$92 continuation at $FA32.
+; ============================================================================
+.org $FA00
+swo_movem_unrolled:
+.a16
+.i16
+    lda $02               ; d0 high
+    xba
+    sta $400000,x
+    lda $00               ; d0 low
+    xba
+    sta $400002,x
+    lda $06               ; d1 high
+    xba
+    sta $400004,x
+    lda $04               ; d1 low
+    xba
+    sta $400006,x
+    lda $0A               ; d2 high
+    xba
+    sta $400008,x
+    lda $08               ; d2 low
+    xba
+    sta $40000A,x
+    lda $0E               ; d3 high
+    xba
+    sta $40000C,x
+    lda $0C               ; d3 low
+    xba
+    sta $40000E,x
+    lda $12               ; d4 high
+    xba
+    sta $400010,x
+    lda $10               ; d4 low
+    xba
+    sta $400012,x
+    lda $16               ; d5 high
+    xba
+    sta $400014,x
+    lda $14               ; d5 low
+    xba
+    sta $400016,x
+    lda $1A               ; d6 high
+    xba
+    sta $400018,x
+    lda $18               ; d6 low
+    xba
+    sta $40001A,x
+    lda $1E               ; d7 high
+    xba
+    sta $40001C,x
+    lda $1C               ; d7 low
+    xba
+    sta $40001E,x
+    lda $22               ; a0 high
+    xba
+    sta $400020,x
+    lda $20               ; a0 low
+    xba
+    sta $400022,x
+    lda $26               ; a1 high
+    xba
+    sta $400024,x
+    lda $24               ; a1 low
+    xba
+    sta $400026,x
+    lda $2A               ; a2 high
+    xba
+    sta $400028,x
+    lda $28               ; a2 low
+    xba
+    sta $40002A,x
+    lda $2E               ; a3 high
+    xba
+    sta $40002C,x
+    lda $2C               ; a3 low
+    xba
+    sta $40002E,x
+    lda $32               ; a4 high
+    xba
+    sta $400030,x
+    lda $30               ; a4 low
+    xba
+    sta $400032,x
+    lda $36               ; a5 high
+    xba
+    sta $400034,x
+    lda $34               ; a5 low
+    xba
+    sta $400036,x
+    lda $3A               ; a6 high
+    xba
+    sta $400038,x
+    lda $38               ; a6 low
+    xba
+    sta $40003A,x
+    jml.l swo_movem_done
+
+; =============================================================================
+; lh_0818_paced — production replacement for the $0818 idle clamp decision.
+;
+; $0734=0 preserves the canonical $2000 countdown clamp exactly. Once snd_vframe
+; has observed both the organic post-self-test signature and the 5A22-ready byte,
+; $0734=1 selects the event-driven two-vblank wait. The SA-1 masks IRQ vectoring,
+; publishes its stable-shadow ownership state, requests one S-CPU deadline check,
+; and sleeps. The WRAM NMI/IRQ supervisor snapshots renderer inputs and raises the
+; inter-CPU wake only after the two-vblank deadline. Returning carry tells the
+; size-neutral bank-$00 caller to count this real $0818 boundary exactly once.
+;
+; Fixed at $99:FB00. build_interp_rom.py guards the zero seam after the scheduler
+; MOVEM helper so Poppy's permissive .org behavior cannot hide an overlap.
+; =============================================================================
+.org $FB00
+.a16
+.i16
+lh_0818_paced:
+    lda $0734
+    bne lhp_wait
+    lda $AC
+    cmp #$2000
+    bcc lhp_no_clamp
+    lda #$2000
+    sta $AC
+    sec
+    rtl
+lhp_no_clamp:
+    clc
+    rtl
+
+lhp_wait:
+    php
+    sei                  ; an IRQ wakes WAI but cannot vector into the interpreter
+    sep #$20
+    lda $41012C
+    cmp #$A5
+    beq lhp_epoch_ready
+    lda $41012A
+    sta $41012B          ; first deadline starts from the current vblank epoch
+    lda #$00
+    sta $410130          ; no transition debt at organic cadence initialization
+    lda #$A5
+    sta $41012C
+lhp_epoch_ready:
+    lda #$80
+    sta $220B            ; discard a stale inter-CPU request before quiescing
+    sta $220A            ; enable S-CPU -> SA-1 IRQ as the masked-WAI wake source
+    rep #$20
+    ; Build the renderer manifest while the completed arcade shadow is stable,
+    ; but before publishing arm=1.  NMI is always live, so doing this after the
+    ; arm store would let the 5A22 claim a half-built manifest at a deadline.
+    ; The fixed bank-$9E helper preserves P/A/X/Y/DBR and uses only the private
+    ; $41:0200-$1EFF workspace.
+    jsl.l $9EDC00
+    lda #$0001
+    sta $410122          ; publish LAST: stable video shadow is quiescent
+    sep #$20
+    lda #$80
+    sta $2209            ; event-driven SA-1 -> S-CPU deadline check
+lhp_wai:
+    wai
+    stz $2209            ; retire a request left pending if NMI won the wake race
+    stz $220A            ; no asynchronous SA-1 IRQs during active interpreter work
+    lda #$80
+    sta $220B            ; acknowledge the request that woke us
+    ; Account elapsed video frames against the two-frame nominal cadence.
+    ; Transition overruns accumulate at most ten frames of debt; later light
+    ; ticks repay one frame apiece.  pacing_try_wake always requires at least
+    ; one new vblank, so even maximum debt cannot produce a zero-frame burst.
+    ; Ten is the smallest bound that retains the complete organic round-
+    ; transition burst measured by the v103 uninterrupted profile; the former
+    ; four-frame cap silently discarded six elapsed frames and left the long
+    ; run below the nominal 30 Hz cadence after the debt had otherwise cleared.
+    ; The arithmetic is intentionally 8-bit, matching the wrapping epoch.
+    lda $41012A
+    sec
+    sbc $41012B
+    pha
+    lda $41012A
+    sta $41012B          ; every deadline is measured from this actual release
+    pla
+    cmp #$02
+    beq lhp_release_epoch_done
+    bcc lhp_release_repay
+    sec
+    sbc #$02             ; frames beyond nominal add debt
+    clc
+    adc $410130
+    cmp #$0B
+    bcc lhp_release_store_debt
+    lda #$0A
+lhp_release_store_debt:
+    sta $410130
+    bra lhp_release_epoch_done
+lhp_release_repay:
+    lda $410130          ; delta=1 is possible only while debt is nonzero
+    beq lhp_release_epoch_done
+    dec a
+    sta $410130
+lhp_release_epoch_done:
+    rep #$20
+    lda #$0002
+    sta $410122          ; released; NMI must not touch the live video shadow
+    plp
+    rep #$30             ; loop_hook's documented 16-bit A/X contract
+    lda #$0001
+    sta $AC              ; iloop raises the virtual 68K IRQ at the next boundary
+    sec
+    rtl
+lh_0818_paced_end:
+
+; The old $011778 handoff interpreted exactly one BSR before bhp_bank_ext
+; entered hle_12b6c.  The direct native link must retain that single $AC
+; charge or it changes the coroutine/IRQ phase even though architectural 68K
+; state still matches.  When $AC<=1, preserve the original inext handoff so
+; iloop can raise a pending IRQ / run VID_FRAME *before* the BSR.  Clamping at
+; one and entering the HLE would move that boundary across the complete native
+; dispatcher.  Keep this in a guarded tail island so entry_11752's tightly
+; packed body remains size-neutral.
+.org $FBE0
+h11752_charge_12b6c:
+    rep #$30
+    lda $AC
+    cmp #$0002
+    bcc h11752_charge_boundary
+    dec a
+    sta $AC
+    jml.l $94E000
+h11752_charge_boundary:
+    lda #$1778
+    sta $40
+    lda #$0001
+    sta $42
+    jml.l inext
+h11752_charge_12b6c_end:

@@ -1,12 +1,16 @@
 # Project recovery — canonicalization and evidence baseline
 
-Started July 12, 2026. This is the active project-control document. It converts the repository
-from overlapping optimistic handoffs into one evidence-backed engineering line.
+Started July 12, 2026; latest evidence reconciliation July 22, 2026. This is the active
+project-control document. It converts the repository from overlapping optimistic handoffs into one
+evidence-backed engineering line. **R6 supersedes the R2/R5 performance verdict for the exact v105
+candidate it identifies; the older measurements remain authoritative for their older ROMs.**
 
 ## Canonical repository state
 
-- Canonical upstream base: `origin/main` at PR #15 merge `73f1839`.
-- Active recovery branch: `recovery/canonicalize-20260712`.
+- Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
+- The completed recovery line is now `main`. The current R6 production candidate is an uncommitted
+  working tree based at `f34fc4c`; its exact ROM and source hashes are recorded in R6. Do not
+  attribute that candidate to the clean base commit.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -15,9 +19,14 @@ from overlapping optimistic handoffs into one evidence-backed engineering line.
   untracked file was `CONFESSION.md`, now copied byte-for-byte to the root. Its gitignored final
   sound assets were also unique and have now been recovered into the canonical checkout.
 
-### Worktree policy during recovery
+### Historical worktree policy during consolidation (superseded)
 
-- Do all new work in `/home/chad/supermn-snes` on `recovery/canonicalize-20260712`.
+These rules governed the July 12 consolidation. They are retained to explain the archive layout,
+not as current branch instructions. The recovery line is now `main`, and the R6 candidate is the
+dirty `main` worktree identified above.
+
+- New recovery work was performed in `/home/chad/supermn-snes` on
+  `recovery/canonicalize-20260712` before that line became `main`.
 - Treat `.claude/worktrees/sound-p3` as a frozen source archive. Do not build, edit, merge, or
   launch emulators from it.
 - The worktree's tracked commits need no merge: `sound-p3` is already an ancestor of
@@ -35,6 +44,9 @@ from overlapping optimistic handoffs into one evidence-backed engineering line.
 - C-Chip observed boot response and input-mailbox contract.
 - TAD blob construction, ARAM fit, and byte-level transport/oracle checks.
 - Specific Poppy `.org` overlap and stale-cross-bank-address bugs already reproduced and fixed.
+- R6's v105 power-on production measurement: exact tick-hook/counter agreement, real input,
+  uninterrupted video-time cadence, cycle-stamped SA-1 work, request/ACK/true-render conservation,
+  queue overflow telemetry, sound-ring health, task-stack floors, and survival through tick 2,230.
 
 ### Partial evidence, not a project-level verdict
 
@@ -45,8 +57,11 @@ from overlapping optimistic handoffs into one evidence-backed engineering line.
 
 ### Unproven or contradicted
 
-- Playability or a credible 30/60 fps landing point.
-- Exact same-state MAME graphics fidelity and a long-settle canonical Nexen capture.
+- A complete playthrough, every stage/boss path, real-cartridge timing, or shippability. R6
+  supersedes the older statement that no credible 30 Hz landing point existed for the tested
+  representative gameplay path; it does not promote that result into full-game coverage.
+- Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
+  capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
 - Complete/faithful sound by ear.
 - Organic firing of every mapped music/SFX trigger.
 
@@ -321,11 +336,125 @@ below 358K with renderer/pacing included. Until then, the production clamp stays
 per-function performance sprints remain frozen. Full evidence and negative iterations are in
 `docs/R5_PERFORMANCE_ARCHITECTURE.md`.
 
+### R6 — Production playability recovery
+
+- [x] Reduce representative active game work below the 358K-cycle 30 Hz budget without removing
+  architected 68000 side effects, IRQ density, or scheduler charges.
+- [x] Move renderer comparison/preparation work to the SA-1 and retain immutable complete images
+  across asynchronous 5A22 drawing.
+- [x] Pace production from real vblank deadlines with no zero-frame tick and bounded repayment of
+  measured transition overruns.
+- [x] Start at power-on with `TESTFLAG=0`, arm only through production signatures, use the real
+  controller path, and validate `$0760` against `$00:F5A3`.
+- [x] Measure one uninterrupted gameplay window against emulated SNES video time with waits, IRQs,
+  rendering, sound supervision, input, transitions, and continuous hook evidence included.
+- [x] Prove request/ACK/true-render conservation, zero queue overflow, current ROM/WRAM mirror
+  identity, sound-ring health, all task-stack floors, and survival well past ticks 765-767.
+
+The recovery changed both halves of the machine before replacing the old clamp. Guarded native
+paths in the expanded escape banks retain cold interpreter fallbacks and the observed 68K
+CCR/register/stack/`$AC` contracts while removing the active object, scheduler, initializer, and
+round-transition residual. The renderer now consumes an SA-1-built exact manifest: packed visible
+OBJ records, an exact producer-unique BG change list, prepared large transitions, persistent
+BG/OBJ caches with bounded reclamation, direct native-tile DMA, and a two-entry compressed queue.
+The 5A22 never consumes a partial image.
+
+Production pacing arms only after the organic game and 5A22-ready signatures. At `$0818`, the SA-1
+finishes the manifest, publishes the stable shadow, masks hardware IRQ vectoring, and sleeps. The
+WRAM NMI/IRQ supervisor waits for a two-vblank deadline, snapshots or queues the image, publishes
+the real controller mailbox, wakes the SA-1, and lets the ordinary virtual-IRQ path run after the
+wake. Transition overruns accrue video-frame debt; light ticks repay one frame at a time, with at
+least one real vblank always required. The empirically necessary bound is ten frames.
+
+This is materially different from promoting R5's 0.927M-cycle lab. R5 removed delay while active
+work still exceeded the budget and failed the long ordering gate. R6 first reduced the work,
+retained a real-vblank minimum and virtual-IRQ ordering, made renderer ownership explicit, and then
+passed the exact gate that rejected R5.
+
+#### Formal production result — July 22, 2026
+
+Source base is `main` commit `f34fc4c8e0e16ac1d7792a881b18d5b3dd97ded0` with the current dirty
+R6 working tree. The exact 4 MiB production candidate is v105, SHA-256
+`72d925ac1817965f62ebcfdf8cb53a6ebb135423b7b6a97b37990254e46f85b3`, `TESTFLAG=0`. A source-hash
+manifest is retained beside the candidate ROM; this result must not be attributed to the clean
+base commit.
+
+The same run organically initialized production pacing by frame 5,236, matched 150 tick-hook
+events to 150 `$0760` increments, drove both coin pulses and Start on exact tick boundaries through
+Nexen port 0/manual `$4016`, detected gameplay at frame 5,685/tick 278, and held real Right+B with
+the injection word at zero. The formal window began after settling at frame 5,985/tick 428 and
+paused once at frame 9,588/tick 2,230.
+
+| Uninterrupted production gameplay metric | v105 result |
+|---|---:|
+| Emulated SNES video frames | 3,603 |
+| Real game ticks / nominal game rate | 1,802 / **30.008326 Hz** |
+| SA-1 cycles / mean per tick | 643,822,163 / **357,281.999** |
+| Frame requests / ACK transactions / true draws | **1,802 / 1,802 / 1,802** |
+| Non-unit ACK steps / queue overflows | **0 / 0** |
+| Maximum transaction request-ACK debt / ACK silence | 3 / 3 video frames |
+| Final halt / task mask / initialized task contexts | `$0000` / `$FFA7` / 16 |
+| Minimum final saved-stack margin | 136 bytes |
+| Final sound-ring pointer / input mailbox / injection | `$00F01C3B` / `$8100` / `$0000` |
+
+All 26 named uninterrupted-window checks passed, and the separate 150-boundary hook/counter
+prerequisite also passed. Together they cover the 30 Hz rate, mean representative cycle budget,
+tick-counter/hook match, frame-request-per-tick, unit ACK sequencing, render-completion
+conservation, zero queue drops, intact gates/pacing, exact ROM mirror/supervisor, real input,
+sound-ring bounds, halt, ordering window, and task-stack floors. The transaction debt bound is
+three because a request write is observed before NMI can place that candidate into either of the
+two retained queue slots; it is not permission to skip a sequence.
+
+Primary evidence directory:
+`build/playability-20260720/deadline-debt10-manifest-v105-direct-ownership-coldboot-uninterrupted-3600f-v1/`.
+Important retained hashes:
+
+- `baseline.jsonl`: `ba5ad1079a5ca4a5d20b3f19f60a0d25588a3564ccb90dcf27a5b14e4d0d9399`;
+- `uninterrupted_gameplay_hooks.jsonl`:
+  `f3c5e8a9947063b01ab711451fa4b78189c3567f756728e31852d512a485db42`;
+- `renderer_debt_trace.jsonl`:
+  `ef85936834e9f3bdd068efd155eedca964449fbcbeb83af3a9d63ae457fa7030`;
+- `final.mss`: `99dd545572eaaed566ac33fe6976a565bc6187ce9e8893bc911b0ebd3a94af62`;
+- settled screenshot: `1657fe7bf5a5ae9482f909db448a0d00d153ed8f0b7b050202dee4bc761528b5`.
+
+An independent same-ROM checkpoint profile began at gameplay tick 278 and collected 950 complete
+clamp intervals through tick 1,229. Its frame deltas were 13 one-frame, 924 two-frame, and 13
+three-frame intervals: exactly 1,900 video frames, with debt peaking at ten and returning to zero.
+Mean/median/min/max were 357,366.195 / 357,366 / 257,536 / 543,765 SA-1 cycles. Renderer ACK
+advanced 951, halt remained zero, task mask reached `$FFA7`, input was real, and the WRAM mirror
+remained exact. This is corroborating checkpoint evidence, not the formal fps result. Its
+`profile.jsonl` hashes to
+`a0a997b2cf6658e4d9df3557cf64eddd5b667e59b9f8ca9f8f344ff3bb72e01f`.
+
+The last v104 cold boot already met the tick/cycle/input/ordering gates, but two ACK writes skipped
+one sequence each (`864->866`, `1016->1018`) because an NMI could replace an even direct snapshot
+before the worker claimed it. v105 treats `$7E:1F1E != $3302` as queue-owned even when the renderer
+busy word is zero. That is why v105 has 1,802 unit ACKs and draws rather than merely a matching
+final ACK word. The validator now rejects non-unit ACK steps and persistent queue drops directly.
+
+Fresh final-ROM semantic gates are also retained in the candidate directory: `optest.py` passed
+160/160 groups (log SHA-256
+`93470844f97da4f349f14c2a273673f5b9a5705139691e7ebb5739a42acfda41`) and `opsweep.py` passed
+782/782 cells / 1,564 vectors against MAME 0.287 (log SHA-256
+`f0e935df41e7fb7ab344ea4fc576cf2840fb2d3e23bfd4c47fa8ccff2f05e2d6`). Focused MAME and
+whole-tick differentials for retained native candidates remain recorded under
+`build/playability-20260720/`; R6 does not claim unvisited whole-game paths are proven.
+
+#### R6 verdict
+
+The exact v105 candidate clears the repository's defined representative 30 Hz playability and
+tick-765/767 ordering gates. It may be called an **evidence-backed playable production candidate**.
+It may not yet be called shippable, full-playthrough validated, pixel-perfect to MAME, or musically
+accepted. The performance margin is small, so any change to interpreter work, native `$AC` charge,
+pacing, renderer ownership, input ordering, audio supervision, or layout must rerun the full cold-
+boot gate against its new ROM hash.
+
 ## Decision rule after the baseline
 
-Performance remains the project gate, and R5 has now fired the no-go rule for a playable 30 Hz port
-on the measured architecture. Preserve the project as an interactive technical demo and a reusable
-MC68000 interpreter/transpiler/differential toolchain. Graphics fidelity and the unfinished audio
-listening pass may be pursued only under that honest scope; they do not change the playability
-verdict. Reopening a full-port campaign requires new whole-system evidence that clears both the
-ordering and 358K-cycle gates above, not a projection from partial functions.
+R6 supersedes R5's technical-demo-only performance verdict for the exact v105 candidate. Preserve
+the production evidence contract: local/checkpoint improvements remain local evidence, while a new
+playability claim requires another power-on uninterrupted run. Continue full-game coverage,
+aligned MAME graphics validation, hardware timing, and audio listening/SFX work under the honest
+label **playable candidate, not shippable release**. If a later ROM misses either sustained 30 Hz or
+the ordering/renderer conservation gates, fall back to this exact hash or restore the technical-
+demo verdict rather than projecting a recovery.

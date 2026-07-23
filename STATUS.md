@@ -1,22 +1,21 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: July 12, 2026. Per-area detail lives in the linked docs.
+Last updated: July 22, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
-> ## ⚠️ RECOVERY OVERRIDE — July 12, 2026
+> ## ✅ R6 PLAYABILITY OVERRIDE — July 22, 2026
 >
-> [CONFESSION.md](CONFESSION.md) supersedes the optimistic banners below. The port is
-> interactive but not playable or shippable. A clean production cold boot now measures **1.3237
-> game-fps after arming** (22.7x short of the 30 Hz target), with the game counter validated against
-> its real frame boundary. The level background is reproducible after a sufficiently long same-boot
-> palette fade; exact MAME pixel fidelity is still open. Sound has automated byte/oracle evidence but
-> no completed listening pass. R5 found that the shipped idle wait is 87.7% of a settled gameplay
-> tick, but a fast 0.927M-cycle NMI/WAI lab reproduced the exact `$080100`/`$DEAD` ordering derail at
-> gameplay tick 767; a conservative 2.17M-cycle supervisor wake failed identically at tick 765.
-> Both are rejected; the production clamp remains canonical, and the project is now honestly
-> technical-demo scoped absent a safe whole-system 358K-cycle result. See
-> [RECOVERY.md](RECOVERY.md) and [the R5 verdict](docs/R5_PERFORMANCE_ARCHITECTURE.md).
-> The remainder of this file is retained as engineering history and partial evidence.
+> [CONFESSION.md](CONFESSION.md) and [RECOVERY.md](RECOVERY.md) R6 supersede the old performance
+> banners below. Exact production candidate v105 (ROM SHA-256 `72d925ac…`) now clears the defined
+> playability gate from power-on: 1,802 real game ticks in 3,603 uninterrupted SNES video frames =
+> **30.0083 game-fps**, at **357,281.999 mean SA-1 cycles/tick**. The same continuous trace observed
+> 1,802 requests, 1,802 unit ACKs, and 1,802 true draws with zero queue drops; real input, sound ring,
+> ROM/WRAM mirror, all 16 task stacks, and halt state remained healthy through tick 2,230—well past
+> the former 765/767 ordering failure. Final-ROM MAME gates are 160/160 optest and 782/782 opsweep.
+> This is an evidence-backed playable candidate, not yet a shippable/full-playthrough-validated
+> release. Exact MAME pixel fidelity, hardware timing, the 21-track listening pass, and real SFX
+> remain open. R5's failed labs remain valid negative evidence, not the v105 verdict. The remainder
+> of this file is retained as engineering history and partial evidence.
 
 > ## ⚠️ SOUND PORT — INTEGRATED, AUTOMATED GATES GREEN, MUSICAL VALIDATION INCOMPLETE
 > The full TAD/YM2610 sound port is done and verified end to end: real FM instruments

@@ -25,6 +25,7 @@ op_rts_sentinel=$00EA3A
 ojmp_hook=$00D1B3
 jsrabs_hook=$00E200
 bhp_after=$00E454
+entry_20e8=$00EDBA
 ors_pre=$00D16F
 lh_sched=$00F9B2
 op_rte=$00B3B8
@@ -41,18 +42,18 @@ entry_ce4t=$948F7C
 entry_d718=$9494EF
 entry_d3f6=$94980B
 entry_c172=$949D7E
-entry_295at=$94A36F
-entry_29b6t=$94A497
-entry_13bet=$94A950
-entry_8fat=$94ABE4
-entry_fd2t=$94AE55
-entry_c9a6=$94AF17
-entry_d6e6=$94E299
-entry_d64a=$94E305
-entry_d3de=$94E5CF
-entry_cfa4=$94E65F
-entry_cec2=$94E96B
-entry_d52e=$94EE0C
+entry_295at=$94A523
+entry_29b6t=$94A64B
+entry_13bet=$94AB04
+entry_8fat=$94AD98
+entry_fd2t=$94B009
+entry_c9a6=$94B0CB
+entry_d6e6=$94E2A7
+entry_d64a=$94E313
+entry_d3de=$94E5DD
+entry_cfa4=$94E66D
+entry_cec2=$94E979
+entry_d52e=$94EE1A
 entry_25110=$978000
 entry_12e56=$97A000
 entry_129c6=$97A800
@@ -65,8 +66,18 @@ entry_cc80=$97D400
 entry_caf6=$97D800
 entry_cb9e=$97E800
 entry_1d5f0=$97EC00
+entry_1f1c0t=$97FC60
+entry_1f1c0_generated=$97FC64
+entry_96a=$99C200
+entry_9ea=$99C500
 ; <<< ESCBANK_SYMS <<<
 entry_d232=$99EB00   ; pt.22 P3b: --bank5 $99 body, .org-fixed (gen_escbank_syms doesn't harvest $99; hand const)
+hle_158e=$99F800     ; guarded direct sprite-shadow bulk copy (fixed escbank5 tail slot)
+swo_movem_unrolled=$99FA00 ; fixed-offset scheduler switch-out register save (escbank5 tail)
+h8_clear_ccr_x=$94FEC4 ; escbank2 tail leaf; final $8C2 CLR/ADDQ C/N/V/X result
+h8_mark_palette_dirty=$94DB00 ; exact nonzero-$8C2 path: D1=$FFFF + renderer palette dirtiness
+hle_17b4=$959B00     ; guarded 3x140-byte sprite-shadow copy in the mostly-free bank $95
+hle_8fa=$959D00      ; guarded table-descriptor ROM -> work-RAM block copy in bank $95
 
     .org $8000
 escbank_jmptab:                  ; dispatcher jml's to $928000 + slot*3 (each jmp = 3 bytes)
@@ -906,187 +917,153 @@ Ld96_e42:
     sta $3C
     jml.l inext
 
-; --- transpiled from $000FB8 (12 instrs) by tools/transpile.py [bank1] ---
+; --- $000FB8 big-endian word fill -------------------------------------------
+; This twelve-instruction 68K helper is reached through the ordinary jsr-hook,
+; so the native body must materialize the skipped return push as well as LINK,
+; MOVEM, UNLK, and RTS residue.  The generated version did that correctly but
+; lowered every work-RAM word to two byte transactions and rebuilt four longs
+; through push32_l.  In late gameplay this function runs four times per tick,
+; with nineteen stores per call, making that mechanical lowering material.
+;
+; Keep the complete architectural frame.  Each 68K word is one swapped native
+; word access, and X/Y carry the output pointer/count while D7.lo still finishes
+; at $FFFF exactly as DBRA requires.  The body is valid for every 16-bit offset
+; and DBRA count accepted by the old direct-work-RAM lowering; no gameplay-shape
+; predicate is assumed.  The .org keeps every downstream bank-$92 symbol fixed.
 entry_fb8:
     rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
-    sta $54
+.a16
+.i16
+    ; Synthetic JSR return: push $42:$40 as one big-endian long.
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    tax
     lda $42
-    sta $56
-    jsl.l push32_l
-    lda $38
-    sta $54
+    xba
+    sta $400000,x
+    lda $40
+    xba
+    sta $400002,x
+
+    ; LINK A6,#0: push the old A6, then publish the current A7 as A6.
+    lda $3C
+    sec
+    sbc #$0004
+    sta $3C
+    tax
     lda $3A
-    sta $56
-    jsl.l push32_l
+    xba
+    sta $400000,x
+    lda $38
+    xba
+    sta $400002,x
     lda $3C
     sta $38
     lda $3E
     sta $3A
-    lda $20
-    sta $54
-    lda $22
-    sta $56
-    jsl.l push32_l
-    lda $00
-    sta $54
-    lda $02
-    sta $56
-    jsl.l push32_l
-    lda $38
-    clc
-    adc #$0008
+
+    ; MOVEM.L D0/A0,-(A7), predecrement order: D0 then A0 in memory.
+    lda $3C
+    sec
+    sbc #$0008
+    sta $3C
     tax
-    sep #$20
-    lda $400000,x
+    lda $02
     xba
-    lda $400001,x
-    rep #$20
+    sta $400000,x
+    lda $00
+    xba
+    sta $400002,x
+    lda $22
+    xba
+    sta $400004,x
+    lda $20
+    xba
+    sta $400006,x
+
+    ; D7.w = 8(A6) (signed byte displacement from A5); the count is 10(A6).
+    ldx $38
+    lda $400008,x
+    xba
+    sta $9A
+    lda $40000A,x
+    xba
     sta $1C
     lda $34
     clc
     adc #$1CF6
-    sta $20
-    lda $36
-    adc #$0000
-    sta $22
-    lda $1C
-    sta $9A
-    lda $9A
-    asl a
-    lda #$0000
-    sbc #$0000
-    eor #$FFFF
-    sta $9C
-    lda $20
     clc
     adc $9A
-    sta $20
-    lda $22
-    adc $9C
-    sta $22
-    lda $38
-    clc
-    adc #$000A
     tax
-    sep #$20
-    lda $400000,x
-    xba
-    lda $400001,x
-    rep #$20
-    sta $1C
-    lda #$00FA
-    sta $00
+    ldy $1C
+    lda #$FA00           ; raw little-endian word writes emulated BE $00FA
 Lfb8_fd2:
-    lda $00
-    pha
-    lda $20
-    clc
-    adc #$0000
-    tax
-    pla
-    sep #$20
-    xba
     sta $400000,x
-    xba
-    sta $400001,x
-    rep #$20
-    lda $20
-    clc
-    adc #$0002
-    sta $20
-    lda $22
-    adc #$0000
-    sta $22
-    lda $1C
-    dec a
-    sta $1C
-    cmp #$FFFF
-    beq Lffb8_1
-    jmp Lfb8_fd2
-Lffb8_1:
+    inx
+    inx
+    dey
+    cpy #$FFFF
+    bne Lfb8_fd2
+    sty $1C              ; DBRA leaves D7.lo = $FFFF; D7.hi is untouched
+
+    ; MOVEM.L (A7)+,D0/A0.
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $02
-    inx
-    inx
-    sep #$20
-    lda $400000,x
+    lda $400002,x
     xba
-    lda $400001,x
-    rep #$20
     sta $00
-    lda $3C
-    clc
-    adc #$0004
-    sta $3C
-    ldx $3C
-    sep #$20
-    lda $400000,x
+    lda $400004,x
     xba
-    lda $400001,x
-    rep #$20
     sta $22
-    inx
-    inx
-    sep #$20
-    lda $400000,x
+    lda $400006,x
     xba
-    lda $400001,x
-    rep #$20
     sta $20
     lda $3C
     clc
-    adc #$0004
+    adc #$0008
     sta $3C
+
+    ; UNLK A6: A7=A6, then restore the caller's A6.
     lda $38
     sta $3C
     lda $3A
     sta $3E
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $3A
-    inx
-    inx
-    sep #$20
-    lda $400000,x
+    lda $400002,x
     xba
-    lda $400001,x
-    rep #$20
     sta $38
     lda $3C
     clc
     adc #$0004
     sta $3C
+
+    ; RTS, preserving the real return-frame bytes for stack-residue parity.
     ldx $3C
-    sep #$20
     lda $400000,x
     xba
-    lda $400001,x
-    rep #$20
     sta $42
-    inx
-    inx
-    sep #$20
-    lda $400000,x
+    lda $400002,x
     xba
-    lda $400001,x
-    rep #$20
     sta $40
     lda $3C
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    ; MOVE.W #$00FA / MOVE.W D0,(A0)+ define the observable exit CCR.
+    stz $60              ; Z=0
+    stz $6E              ; C=0 (X unchanged)
+    stz $70              ; N=0
+    stz $72              ; V=0
+    jml.l ors_pre
+entry_fb8_end:
+    .org $8869
 
 ; =============================================================================
 ; gm_memset — GENERIC memset idiom for the boot loop fast-path, in the escape bank
@@ -1894,211 +1871,187 @@ Lf28d4_2:
     sta $3C
     jml.l inext
 
-; --- transpiled from $0026A0 (27 instrs) by tools/transpile.py [bank1] ---
-; --- transpiled from $0026A0 (27 instrs) by tools/transpile.py [bank1] ---
+; --- hand-HLE of $0026A0: fixed sprite-control gather + shadow scatter ---
+; The original scans 16 flag bytes at $F028EA+n*4 into a 16-bit mask, writes
+; its two bytes to the $D0 shadow, then scatters 16 pairs of big-endian words
+; from A5+$28EA into the two scroll columns.  The transpiled body routed every
+; byte/word through the generic EA engine.  This guarded version touches the
+; same BW-RAM bytes directly and materializes the exact observable registers,
+; CCR, X flag, skipped-JSR stack residue, and RTS result.  Non-work-RAM A5 (or
+; a crossing source span) resumes interpreted at $26A6 after faithfully doing
+; only the leading LEA, which does not alter CCR.
 entry_26a0:
     rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+.a16
+.i16
     lda $40
     sta $54
     lda $42
     sta $56
     jsl.l push32_l
-    lda #$28EA
-    sta $20
-    lda #$00F0
-    sta $22
-    lda #$0000
-    sta $00
+
+    lda $36
+    cmp #$00F0
+    beq h26_bank_ok
+    jmp h26_fallback
+h26_bank_ok:
+    lda $34
+    clc
+    adc #$292A           ; end-exclusive A5-relative source address
+    bcc h26_range_ok
+    jmp h26_fallback
+h26_range_ok:
+
+    ; Build the 16-bit mask from bit 0 of each four-byte record.
+    stz $80              ; mask
     lda #$0001
+    sta $82              ; current bit
+    ldx #$28EA
+    ldy #$0010
+h26_mask_loop:
+    lda $400000,x
+    and #$0001
+    beq h26_mask_clear
+    lda $80
+    ora $82
+    sta $80
+h26_mask_clear:
+    asl $82
+    inx
+    inx
+    inx
+    inx
+    dey
+    bne h26_mask_loop
+
+    ; $D00604/$D00606 map to raw shadow $41:3604/$41:3606.  Swap the
+    ; logical mask bytes so a 16-bit native store emits the original BE word.
+    lda $80
+    and #$00FF
+    xba
+    sta $413604
+    lda $80
+    xba
+    and #$00FF
+    xba
+    sta $413606
+
+    ; Source long pointer = $40:(A5.lo+$28EA).  X is the destination stride;
+    ; Y is the packed source stride.  Raw word copies preserve BE byte order.
+    lda $34
+    clc
+    adc #$28EA
+    sta $84
+    sep #$20
+.a8
+    lda #$40
+    sta $86
+    rep #$20
+.a16
+    ldx #$0000
+    ldy #$0000
+    lda #$0010
+    sta $82
+h26_copy_loop:
+    lda [$84],y
+    sta $413408,x
+    iny
+    iny
+    lda [$84],y
+    sta $413400,x
+    sta $88              ; raw final word drives the exit MOVE.W CCR
+    iny
+    iny
+    txa
+    clc
+    adc #$0020
+    tax
+    dec $82
+    bne h26_copy_loop
+
+    ; Exact final 68K register state.
+    lda #$0020
+    sta $00
+    stz $02              ; move.l #$20,d0
+    lda $80
+    xba
+    and #$00FF
     sta $04
-    lda #$0000
-    sta $06
+    stz $06              ; moveq #1,d1 made the upper word zero
     lda #$0004
     sta $08
-    lda #$0000
-    sta $0A
-    lda #$000F
+    stz $0A              ; moveq #4,d2
+    lda #$FFFF
     sta $1C
-    lda #$0000
-    sta $1E
-L26a0_26ae:
-    lda $20
-    clc
-    adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l readbyte_l
-    and #$0001
-    bne Lf26a0_1
-    jmp L26a0_26b6
-Lf26a0_1:
-    lda $00
-    ora $04
-    sta $00
-L26a0_26b6:
-    lda $04
-    clc
-    adc $04
-    sta $04
-    lda $20
-    clc
-    adc $08
-    sta $20
-    lda $22
-    adc $0A
-    sta $22
-    lda $1C
-    dec a
-    sta $1C
-    cmp #$FFFF
-    beq Lf26a0_2
-    jmp L26a0_26ae
-Lf26a0_2:
-    lda $00
-    sta $04
-    lda $00
-    and #$00FF
-    sta $00
-    lda $04
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    sta $04
-    lda $00
-    sta $80
-    lda #$0604
-    sta $54
-    lda #$00D0
-    sta $52
-    jsl.l writeword_l
-    lda $04
-    sta $80
-    lda #$0606
-    sta $54
-    lda #$00D0
-    sta $52
-    jsl.l writeword_l
-    lda #$0408
+    stz $1E              ; second DBRA leaves d7=$0000ffff
+    lda #$0608
     sta $20
     lda #$00D0
     sta $22
-    lda #$0400
+    lda #$0600
     sta $24
     lda #$00D0
     sta $26
     lda $34
     clc
-    adc #$28EA
+    adc #$292A
     sta $28
     lda $36
     adc #$0000
     sta $2A
-    lda #$0020
-    sta $9A
-    lda #$0000
-    sta $9C
-    lda $9A
-    sta $00
-    lda $9C
-    sta $02
-    lda #$000F
-    sta $1C
-L26a0_26ec:
-    lda $28
-    clc
-    adc #$0000
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    pha
-    lda $28
-    clc
-    adc #$0002
-    sta $28
-    lda $2A
-    adc #$0000
-    sta $2A
-    pla
-    sta $80
-    lda $20
-    clc
-    adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
-    lda $28
-    clc
-    adc #$0000
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    pha
-    lda $28
-    clc
-    adc #$0002
-    sta $28
-    lda $2A
-    adc #$0000
-    sta $2A
-    pla
-    sta $80
-    lda $24
-    clc
-    adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
-    lda $20
-    clc
-    adc $00
+
+    ; LSR.W #8 set X from original mask bit 7.  The final MOVE.W sets
+    ; N/Z from the last source word and clears V/C while preserving X.
+    lda $80
+    and #$0080
+    beq h26_x_clear
+    lda #$0001
+    sta $A2
+    bra h26_x_done
+h26_x_clear:
+    stz $A2
+h26_x_done:
+    stz $6E
+    stz $72
+    lda $88
+    and #$0080           ; raw bit 7 == logical BE word bit 15
+    sta $70
+    stz $60
+    lda $88
+    bne h26_nz_done
+    inc $60
+h26_nz_done:
+    jmp h26_return
+
+h26_fallback:
+    lda #$28EA
     sta $20
-    lda $22
-    adc $02
-    sta $22
-    lda $24
-    clc
-    adc $00
-    sta $24
-    lda $26
-    adc $02
-    sta $26
-    lda $1C
-    dec a
-    sta $1C
-    cmp #$FFFF
-    beq Lf26a0_3
-    jmp L26a0_26ec
-Lf26a0_3:
+    lda #$00F0
+    sta $22              ; LEA $F028EA,A0; CCR untouched
+    lda #$26A6
+    sta $40
+    stz $42
+    jml.l inext
+
+h26_return:
     ldx $3C
     sep #$20
+.a8
     lda $400000,x
     xba
     lda $400001,x
     rep #$20
+.a16
     sta $42
     inx
     inx
     sep #$20
+.a8
     lda $400000,x
     xba
     lda $400001,x
     rep #$20
+.a16
     sta $40
     lda $3C
     clc
@@ -6317,208 +6270,236 @@ Lcc10_cc42:
     sta $3C
     jml.l inext
 
-; --- $0008C2 dyn-btst (jah2_ext) ---
-; --- transpiled from $0008C2 (17 instrs) by tools/transpile.py [bank1] ---
+; --- hand-HLE of $0008C2: dirty palette-block transfer ---
+; D6 is a 32-bit dirty mask.  Each set bit copies one 32-byte block from
+; A5+$1712 into arcade palette RAM $B00000; every block advances both pointers.
+; The generic transpilation paid four EA helper calls per MOVE.L.  This guarded
+; path copies the identical raw BE bytes from BW-RAM $40 into shadow $41:2000.
+; It also preserves the odd but observable register contract: D1 becomes $FFFF
+; only if at least one bit was set, D5 becomes $FFFF, D6 retains the old mask,
+; A0/A1 finish at the span ends, and CLR.L supplies Z=1/N=V=C=0 with X intact.
 entry_8c2:
     rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+.a16
+.i16
     lda $40
     sta $54
     lda $42
     sta $56
     jsl.l push32_l
-    lda #$0000
-    sta $00
+
+    lda $36
+    cmp #$00F0
+    beq h8_bank_ok
+    jmp h8_fallback
+h8_bank_ok:
+    lda $34
+    clc
+    adc #$1B16           ; mask end-exclusive; also bounds the copy source
+    bcc h8_range_ok
+    jmp h8_fallback
+h8_range_ok:
+
+    stz $00              ; clr.w d0
     lda #$001F
-    sta $14
+    sta $14              ; move.w #$1f,d5
+
+    ; Load the original dirty mask as logical BE words into D6 and a shift copy.
     lda $34
     clc
     adc #$1B12
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9C
-    lda $34
-    clc
-    adc #$1B14
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9A
-    lda $9A
-    sta $18
-    lda $9C
-    sta $1A
+    tax
+    lda $400000,x
+    xba
+    sta $1A              ; D6 high word
+    sta $82
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $18              ; D6 low word
+    sta $80
+
+    ; Long pointers for a common Y offset through the 1024-byte source/dest spans.
     lda $34
     clc
     adc #$1712
-    sta $20
-    lda $36
-    adc #$0000
-    sta $22
-    lda #$0000
-    sta $24
-    lda #$00B0
-    sta $26
-L8c2_8d6:
-    lda $00
-    and #$001F
-    cmp #$0010
-    bcc Lf8c2_1
-    sec
-    sbc #$0010
-    tax
-    lda $1A
-    bra Lf8c2_2
-Lf8c2_1:
-    tax
-    lda $18
-Lf8c2_2:
-Lf8c2_3:
-    cpx #$0000
-    beq Lf8c2_4
-    lsr a
+    sta $84
+    lda #$2000
+    sta $88
+    sep #$20
+.a8
+    lda #$40
+    sta $86
+    lda #$41
+    sta $8A
+    rep #$20
+.a16
+    ldy #$0000
+    ldx #$0020
+h8_block_loop:
+    ; Size-neutral redirect.  The bank-$9E leaf skips the otherwise fixed
+    ; 32-iteration walk when the dirty mask is zero, or reproduces these two
+    ; shifts and rejoins at the BCC for a nonzero mask.
+    jml.l $9EE180
+    bcc h8_skip_block
+    jsr h8_copy_block
+    bra h8_next_block
+h8_skip_block:
+    tya
+    clc
+    adc #$0020
+    tay
+h8_next_block:
     dex
-    bra Lf8c2_3
-Lf8c2_4:
-    and #$0001
-    bne Lf8c2_5
-    jmp L8c2_8e6
-Lf8c2_5:
-    lda #$0007
-    sta $04
-L8c2_8de:
-    lda $20
-    clc
-    adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9C
-    lda $20
-    clc
-    adc #$0002
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $9A
-    lda $20
-    clc
-    adc #$0004
-    sta $20
-    lda $22
-    adc #$0000
-    sta $22
-    lda $9C
-    sta $80
-    lda $24
-    clc
-    adc #$0000
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
-    lda $9A
-    sta $80
-    lda $24
-    clc
-    adc #$0002
-    sta $54
-    lda $26
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
-    lda $24
-    clc
-    adc #$0004
-    sta $24
-    lda $26
-    adc #$0000
-    sta $26
-    lda $04
-    dec a
-    sta $04
-    cmp #$FFFF
-    beq Lf8c2_6
-    jmp L8c2_8de
-Lf8c2_6:
-    jmp L8c2_8ee
-L8c2_8e6:
-    lda $20
-    clc
-    adc #$0020
-    sta $20
-    lda $22
-    adc #$0000
-    sta $22
-    lda $24
-    clc
-    adc #$0020
-    sta $24
-    lda $26
-    adc #$0000
-    sta $26
-L8c2_8ee:
-    lda $00
-    clc
-    adc #$0001
-    sta $00
-    lda $14
-    dec a
-    sta $14
-    cmp #$FFFF
-    beq Lf8c2_7
-    jmp L8c2_8d6
-Lf8c2_7:
-    lda #$0000
-    sta $80
+    bne h8_block_loop
+
+    lda #$0020
+    sta $00              ; addq.w ran 32 times
+    lda #$FFFF
+    sta $14              ; outer DBRA result
+    lda $18
+    ora $1A
+    beq h8_d1_unchanged
+    jsl.l h8_mark_palette_dirty
+    nop                  ; same five bytes as the replaced LDA/STA: keep bank-$92 fixed
+h8_d1_unchanged:
+
     lda $34
     clc
     adc #$1B12
-    sta $54
+    sta $20
     lda $36
     adc #$0000
-    sta $52
-    jsl.l writeword_l
+    sta $22
+    lda #$0400
+    sta $24
+    lda #$00B0
+    sta $26
+
+    ; CLR.L $1B12(A5), plus its exact CCR result.  The preceding final ADDQ.W
+    ; changed D0 from 31 to 32, clearing X; CLR preserves that cleared X.
+    ldx $20
     lda #$0000
-    sta $80
-    lda $34
-    clc
-    adc #$1B14
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
+    sta $400000,x
+    sta $400002,x
+    lda #$0001
+    sta $60
+    jsl.l h8_clear_ccr_x
+    nop
+    nop                  ; six bytes exactly: keep every following bank-$92 label fixed
+    bra h8_return
+
+h8_fallback:
+    ; The skipped return is already present.  Emulate CLR.W D0 and resume at
+    ; $8C4 so the generic path handles an unusual address space without recursion.
+    stz $00
+    lda #$0001
+    sta $60
+    stz $6E
+    stz $70
+    stz $72
+    lda #$08C4
+    sta $40
+    stz $42
+    jml.l inext
+
+h8_return:
     ldx $3C
     sep #$20
+.a8
     lda $400000,x
     xba
     lda $400001,x
     rep #$20
+.a16
     sta $42
     inx
     inx
     sep #$20
+.a8
     lda $400000,x
     xba
     lda $400001,x
     rep #$20
+.a16
     sta $40
     lda $3C
     clc
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; Copy one 32-byte block and advance Y by $20.  X (the outer block count) and
+; the 68K register file are untouched.
+h8_copy_block:
+.a16
+.i16
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    lda [$84],y
+    sta [$88],y
+    iny
+    iny
+    rts
 
 ; --- $002DF0 callee (jah2_ext) ---
 ; --- transpiled from $002DF0 (5 instrs) by tools/transpile.py [bank1] ---
@@ -6839,9 +6820,11 @@ L2d8e_2dee:
 ; --- $002BDA (callee, jah2_ext) ---
 ; --- transpiled from $002BDA (2 instrs) by tools/transpile.py [bank1] ---
 entry_2bda:
-    rep #$30
+    ; Size-neutral redirect to the guarded canonical-work-RAM path in bank $9D.
+    ; A rejected state replays REP/LDA and resumes at the first untouched byte.
+    jml.l $9DAA00
+entry_2bda_generated_resume:
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
     sta $54
     lda $42
     sta $56
@@ -7250,9 +7233,11 @@ entry_4178:
 ; --- $0017B4 (callee, jah2_ext) ---
 ; --- transpiled from $0017B4 (43 instrs) by tools/transpile.py [bank1] ---
 entry_17b4:
-    rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
+    ; Size-neutral replacement of `rep #$30 / lda $40`. hle_17b4 owns the
+    ; complete hot function and recreates those instructions on its guarded
+    ; generated-body fallback, so every following packed-bank address stays put.
+    jml.l hle_17b4
+entry_17b4_generated_resume:
     sta $54
     lda $42
     sta $56
@@ -9753,9 +9738,11 @@ Ltj3eac_3ed0:
 ; --- $003C36  (jah2_ext) ---
 ; --- transpiled from $003C36 (115 instrs) by tools/transpile.py [bank1] ---
 entry_3c36:
-    rep #$30
+    ; Size-neutral redirect to the guarded settled-gameplay path in bank $9D.
+    ; A rejected state replays REP/LDA and resumes at the first untouched byte.
+    jml.l $9DA800
+entry_3c36_generated_resume:
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
     sta $54
     lda $42
     sta $56
@@ -10945,9 +10932,11 @@ Lf15b4_1:
 ; --- $00158E sprite-dma-copy (jah2_ext) ---
 ; --- transpiled from $00158E (264 instrs) by tools/transpile.py [bank1] ---
 entry_158e:
-    rep #$30
+    ; SIZE-NEUTRAL hot-path redirect: `jml.l` is exactly the four bytes formerly
+    ; occupied by `rep #$30 / lda $40`. Everything below remains at its proven
+    ; address for cold-reference safety; hle_158e owns the guarded fallback.
+    jml.l hle_158e
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
     sta $54
     lda $42
     sta $56
@@ -11088,81 +11077,35 @@ entry_3a92:
     lda $42
     sta $56
     jsl.l push32_l
-    lda $38
-    sta $54
-    lda $3A
-    sta $56
-    jsl.l push32_l
-    lda $34
-    sta $54
-    lda $36
-    sta $56
-    jsl.l push32_l
-    lda $30
-    sta $54
-    lda $32
-    sta $56
-    jsl.l push32_l
-    lda $2C
-    sta $54
-    lda $2E
-    sta $56
-    jsl.l push32_l
-    lda $28
-    sta $54
-    lda $2A
-    sta $56
-    jsl.l push32_l
-    lda $24
-    sta $54
-    lda $26
-    sta $56
-    jsl.l push32_l
-    lda $20
-    sta $54
-    lda $22
-    sta $56
-    jsl.l push32_l
-    lda $1C
-    sta $54
-    lda $1E
-    sta $56
-    jsl.l push32_l
-    lda $18
-    sta $54
-    lda $1A
-    sta $56
-    jsl.l push32_l
-    lda $14
-    sta $54
-    lda $16
-    sta $56
-    jsl.l push32_l
-    lda $10
-    sta $54
-    lda $12
-    sta $56
-    jsl.l push32_l
-    lda $0C
-    sta $54
-    lda $0E
-    sta $56
-    jsl.l push32_l
-    lda $08
-    sta $54
-    lda $0A
-    sta $56
-    jsl.l push32_l
-    lda $04
-    sta $54
-    lda $06
-    sta $56
-    jsl.l push32_l
-    lda $00
-    sta $54
-    lda $02
-    sta $56
-    jsl.l push32_l
+    ; $3A92 movem.l d0-d7/a0-a6,-(a7): reserve the complete frame once,
+    ; then emit two byte-swapped words per register. This is byte-identical to
+    ; fifteen push32_l calls without their helper/mode-switch overhead.
+    lda $3C
+    sec
+    sbc #$003C
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    ldx $3C
+    ldy #$0000
+gt_save_lp:
+    lda $0002,y
+    xba
+    sta $400000,x
+    inx
+    inx
+    lda $0000,y
+    xba
+    sta $400000,x
+    inx
+    inx
+    iny
+    iny
+    iny
+    iny
+    cpy #$003C
+    bne gt_save_lp
     lda $00
     sta $80
     lda #$0000
@@ -11654,6 +11597,45 @@ Lf3a92_9:
     jml.l inext
 br3a92_14:
 L3a92_3b7e:
+    ; $3B7E movem.l (a7)+,d0-d7/a0-a6 + rts: mirror the word-at-a-time
+    ; save above. X ends on the already-pushed jsr return, so consume that
+    ; long directly after the 15-register frame. The generated byte-at-a-time
+    ; restore below is retained as unreachable reference code.
+gt_restore_begin:
+    ldx $3C
+    ldy #$0000
+gt_restore_lp:
+    lda $400000,x
+    xba
+    sta $0002,y
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $0000,y
+    inx
+    inx
+    iny
+    iny
+    iny
+    iny
+    cpy #$003C
+    bne gt_restore_lp
+gt_restore_done:
+    lda $400000,x
+    xba
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    inx
+    inx
+    stx $3C
+    jml.l ors_pre
+
+    ; Unreachable transpiler reference for the original movem/rts sequence.
     ldx $3C
     sep #$20
     lda $400000,x
@@ -12562,7 +12544,11 @@ entry_ce58:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+entry_ce58_cd1a_jump:
+    ; Fixed-address guarded fusion in the free bank-$9D tail.  This is kept
+    ; explicit because escbank is assembled before escbank7 symbols exist;
+    ; tools/build_interp_rom.py proves both ends of the cross-bank seam.
+    jml.l $9DE000
 brce58_1:
     ; CALL-BRIDGE jsr $26fa.l -> entry_26fa (NATIVE escape), resume brce58_2
     lda #brce58_2
@@ -13870,58 +13856,42 @@ jah2_ext:
     jmp jx_real
 jx_on:
     lda $50
-    beq jx_b0            ; bank 0 -> scan
-    jmp jx_real          ; bank != 0 -> real miss (extension is bank-0 only)
+    bne jx_nonzero_bank
+    jmp jx_b0            ; bank 0 -> established scan
+jx_nonzero_bank:
+    cmp #$0002
+    beq jx_b2            ; sparse gameplay-entry initializers
+    jmp jx_real          ; every other bank -> real miss
+jx_b2:
+    lda $52
+    cmp #$4AA8
+    bne jx_b2_28f92
+    plp
+    pla
+    lda $42              ; caller/return bank; target bank remains in $50
+    sta $56
+    jsl.l push32_l       ; table convention requires the genuine return
+    jml.l $9DF000        ; entry_24aa8t, fixed and packer-audited
+jx_b2_28f92:
+    cmp #$8F92
+    beq jx_b2_28f92_hit
+    jmp jx_real
+jx_b2_28f92_hit:
+    plp
+    pla
+    lda $42
+    sta $56
+    jsl.l push32_l
+    jml.l $9DF298        ; entry_28f92t, fixed and packer-audited
 jx_b0:
-    lda $52              ; target low16
-    ; >>> JAH2_EXT_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jx_real <<<
-    cmp #$C9A6           ; CAMPAIGN 3: $00C9A6 HUD decimal formatter (jsr.l reach) -> entry_c9a6 ($94)
-    bne jx_c9a6
-    ldx $073E            ; c9a6 VALIDATION toggle (normally-on: boot $073E=0 -> dispatch in production;
-    bne jx_c9a6          ;   harness sets $073E=1 -> skip -> interpret = the without-c9a6 A/B baseline)
-    inc $0764
-    plp
-    pla
-    lda $54
-    sta $40
-    jml entry_c9a6          ; <- $00C9A6 HUD formatter (2nd bank $94)
-jx_c9a6:
-    cmp #$1008
-    bne jx_1008
-    inc $0764
-    plp
-    pla
-    lda $54
-    sta $40
-    jml entry_1008
-jx_1008:
-    cmp #$2DF0
-    bne jx_2df0
-    inc $0764
-    plp
-    pla
-    lda $54
-    sta $40
-    jmp entry_2df0          ; <- $002DF0 callee
-jx_2df0:
-    cmp #$4178
-    bne jx_4178
-    inc $0764
-    plp
-    pla
-    lda $54
-    sta $40
-    jmp entry_4178
-jx_4178:
-    cmp #$3A92
-    bne jx_3a92
-    inc $0764
-    plp
-    pla
-    lda $54
-    sta $40
-    jmp entry_3a92          ; <- $003A92 game-tick
-jx_3a92:
+    ; The original bank-$00 scan filled this bank up to its retained flowing
+    ; body.  Continue it in bank $9D, where the fixed $FB00 island also admits
+    ; the organic $00777C -> $00091E absolute-long call.
+    jml.l $9DFB00
+
+    ; Poppy permits .org overlap.  Pin the miss tail at its audited historical
+    ; seam so growth in the bank-2 arms fails instead of overwriting live code.
+    .org $F0C4
 jx_real:
     plp                  ; restore carry for push32r (matches the original jah2_miss)
     jml jsrabs_hook
@@ -14256,7 +14226,8 @@ cd_b2:                   ; --- bank-$02 bodies ---
 ; ===================== INDIRECT-BRIDGE-TO-ESCAPE =====================
 ; ibridge — reached from a coroutine body's `jsr (An)` bridge. The runtime target An is in $50(hi)/
 ; $52(lo); the bridge-to-escape state ($40=cont, $42=$00FE) is pre-set. If An is a bridge-to-escape-
-; able escape (an entity DRAW routine) -> jmp it NATIVELY (its prologue re-pushes $00FE:cont, its
+; able escape (an entity DRAW routine or the guarded $20E8 tile-strip body) -> enter it NATIVELY
+; (its prologue re-pushes the caller's bank-tagged continuation, and its
 ; ors_pre rts resumes the continuation). MISS -> push $00FE:cont and interpret An (the old behavior).
 ; This reclaims the draw routines that a jsr(a0) used to stream interpreted (e.g. $295A ~168 PCs).
 ; Extend the scan with one cmp/bne/jmp per bridge-to-escape-able jsr(An) target.
@@ -14281,8 +14252,15 @@ ib_n2:
     jmp entry_2742
 ib_n3:
     cmp #$284E
-    bne ib_miss
+    bne ib_n4
     jmp entry_284e
+ib_n4:
+    cmp #$20E8
+    bne ib_miss
+    ; $20E8 lives in packed bank $00.  Its existing jsr-hook convention
+    ; consumes $40/$42 exactly like the same indirect bridge, so preserve the
+    ; native caller tag and cross banks explicitly.
+    jml.l entry_20e8
 ib_miss:
     lda $40              ; interpret An: push the $00FE:cont sentinel return, then PC = An
     sta $54
@@ -14294,6 +14272,7 @@ ib_miss:
     lda $50
     sta $42
     jml.l inext
+ibridge_end:
 
 ; ===================== SCHEDULER SWITCH-OUT ($0532 yield trap) =====================
 ; entry_swo — native coroutine SWITCH-OUT. Reached from bank-$00 swo_tramp (jml $928039) when the
@@ -14321,112 +14300,55 @@ entry_swo:
     sec
     sbc #$003C           ; -60
     sta $3C              ; new a7 lo16 ($3E hi16 unchanged)
-    sta $54              ; $54 = work-RAM write ptr
-    stz $56              ; $56 = reg slot (0,4,..,$38)
-    ldy #$000F           ; Y = fixed iteration count (15 regs: D0..A6). ROBUST termination: the old
-                         ; `$56==$3C` exact-match terminator was being missed at runtime -> the loop
-                         ; ran away, overran work RAM/stack and crashed. A Y-countdown can't run away.
-swo_lp:
-    ldx $56
-    lda $0002,x          ; reg hi16
-    sta $50
-    lda $0000,x          ; reg lo16
-    sta $52
-    ldx $54
-    sep #$20
-    lda $51              ; bits31-24
-    sta $400000,x
-    inx
-    lda $50              ; bits23-16
-    sta $400000,x
-    inx
-    lda $53              ; bits15-8
-    sta $400000,x
-    inx
-    lda $52              ; bits7-0
-    sta $400000,x
-    inx
-    rep #$20
-    stx $54              ; advance write ptr (X += 4)
-    lda $56
-    clc
-    adc #$0004
-    sta $56
-    dey                  ; 15 iterations exactly (D0..A6); $56 still tracks the slot for the reads
-    bne swo_lp
+    tax                   ; X = new task SP; helper preserves the bank-$40 frame mapping
+swo_movem:
+    jml.l swo_movem_unrolled
+    ; Keep the rest of entry_swo byte-pinned.  The helper returns here after
+    ; writing the same 60-byte BE frame with fixed offsets instead of X/Y loops.
+    .org $FA32
+swo_movem_done:
+.a16
+.i16
     ; --- $053A movea.l $6(a5),a6 : a6 = BE long at (a5+6) ---
     lda $34
     clc
     adc #$0006
     tax
-    sep #$20
     lda $400000,x
-    sta $3B              ; a6 bits31-24
-    inx
-    lda $400000,x
-    sta $3A              ; bits23-16
-    inx
-    lda $400000,x
-    sta $39              ; bits15-8
-    inx
-    lda $400000,x
-    sta $38              ; bits7-0
-    rep #$20
+    xba
+    sta $3A              ; a6 high word
+    lda $400002,x
+    xba
+    sta $38              ; a6 low word
     ; --- $053E move.l a7,(a6) : write new a7 as BE long ---
     ldx $38              ; a6 lo16
-    sep #$20
-    lda $3F              ; a7 bits31-24
+    lda $3E              ; a7 high word
+    xba
     sta $400000,x
-    inx
-    lda $3E
-    sta $400000,x
-    inx
-    lda $3D
-    sta $400000,x
-    inx
-    lda $3C
-    sta $400000,x
-    rep #$20
+    lda $3C              ; a7 low word
+    xba
+    sta $400002,x
     ; --- $0540 movea.l $4a(a5),a4 : a4 = BE long at (a5+$4a) ---
     lda $34
     clc
     adc #$004A
     tax
-    sep #$20
     lda $400000,x
-    sta $33              ; a4 bits31-24
-    inx
-    lda $400000,x
-    sta $32
-    inx
-    lda $400000,x
-    sta $31
-    inx
-    lda $400000,x
-    sta $30              ; a4 bits7-0
-    rep #$20
+    xba
+    sta $32              ; a4 high word
+    lda $400002,x
+    xba
+    sta $30              ; a4 low word
     ; --- $0544-$054E  d0.w = ((a4).w & $cfff) | $c000 ; (a4).w = d0.w  (BE word) ---
     ldx $30              ; a4 lo16
-    sep #$20
-    lda $400000,x        ; hi byte
-    sta $51
-    inx
-    lda $400000,x        ; lo byte
-    sta $50
-    rep #$20
-    lda $50              ; $51:$50 = BE word
+    lda $400000,x
+    xba                   ; logical BE descriptor word
     and #$CFFF
     ora #$C000
-    sta $50
     sta $00              ; move.w d0,... : d0 lo16 = result (d0 hi16 $02 unchanged)
-    ldx $30
-    sep #$20
-    lda $51              ; hi byte
+    sta $50              ; preserve the former byte path's final scheduler-scratch residue
+    xba
     sta $400000,x
-    inx
-    lda $50              ; lo byte
-    sta $400000,x
-    rep #$20
     ; --- $0550 bra $74c : re-enter the scheduler scan natively ---
     lda #$074C
     sta $40
@@ -14486,9 +14408,9 @@ ojd_x:
 ;   $07D8 move.l d2,(a3)         write bit27-cleared d2 back to the descriptor (BE long), and
 ;   $07DA lea $8e(a5),a4         (transient a4 — consumed by $07DE, then movem restores a4)
 ;   $07DE move.l (a4,d1),$1c(a7) patch the frame: *(a7+$1c) = *(a5+$8e+idx*4) (BE->BE byte copy)
-;   $07E4 movem.l (a7)+,d0-a6    15-reg BE restore into DP $00..$38 ascending, Y-countdown terminator
-;                                (the entry_swo crash lesson — never exact-match), a7 += 60 (lo16,
-;                                faithful to op_movem)
+;   $07E4 movem.l (a7)+,d0-a6    15-reg fixed-offset BE restore into DP $00..$38, then a7 += 60
+;                                (lo16, faithful to op_movem).  The fixed offsets remove the hot
+;                                X/Y loop without moving the pinned scheduler-select entry.
 ;   $07E8 rte                    -> jml op_rte: pops SR+PC into $7C../$40, a7 += 6, and ors_rte
 ;                                routes the task resume-PC (escbank coroutine hits / AOT table /
 ;                                inext) EXACTLY as an interpreted rte would.
@@ -14496,9 +14418,9 @@ ojd_x:
 ; dispatch stack level — choke_tramp's ct_hit pattern); no-fire paths rts through lh_nofire with it.
 ; DP reg file: d0=$00 d1=$04 d2=$08/$0A a3=$2C a4=$30/$32 a5=$34/$36 a7=$3C/$3E. Scratch $50-$53,
 ; $54/$56 (loop ptrs), $80-$8B (validate). DBR=0 invariant (abs -> IRAM; entry_swo precedent).
-; .org-pinned at $92:FB00 (entry_swo $FA00+~$F0 ends $FAF0; nothing after -> ~360B free to $FFFF, no
-; jmptab slot -> zero shift anywhere). Branch ranges hand-checked: beq swin_go +4, bcc swin_out -96,
-; beq swin_movem +110, bne swin_lp -60.
+; .org-pinned at $92:FB00.  The unrolled restore ends at $FCFB, leaving five audited bytes before the
+; separately pinned lhs_sel at $FD00; no jump-table or downstream label moves.  Real task-frame
+; bounds keep the 60-byte frame in bank $40, matching the original X-indexed loop's address space.
 .org $FB00
 entry_swin:
     rep #$30
@@ -14520,33 +14442,28 @@ swin_go:
     sta $80              ; new_a4 lo16
     lda $32
     sta $82              ; new_a4 hi16 (unchanged: no lo16 carry)
-    ; task_sp = BE long at work[new_a4] -> $84(lo16)/$86(hi16)
+    ; task_sp = BE long at work[new_a4] -> $84(lo16)/$86(hi16).
+    ; Read one native word per 68K word and XBA it into the little-endian DP
+    ; representation.  This is byte-identical to the old four byte loads but
+    ; removes two shared-BW-RAM transactions from every switch-in.
     ldx $80
-    sep #$20
-    lda $400000,x        ; b31-24
-    sta $87
-    lda $400001,x        ; b23-16
+    lda $400000,x        ; raw BE high word
+    xba
     sta $86
-    lda $400002,x        ; b15-8
-    sta $85
-    lda $400003,x        ; b7-0
+    lda $400002,x        ; raw BE low word
+    xba
     sta $84
-    rep #$20
     ; bound = BE long at ROM $C1:{$0882 + d1} -> $88(lo16)/$8A(hi16)
     lda $04
     clc
     adc #$0882
     tax
-    sep #$20
-    lda $C10000,x        ; b31-24
-    sta $8B
-    lda $C10001,x
+    lda $C10000,x        ; raw BE high word
+    xba
     sta $8A
-    lda $C10002,x
-    sta $89
-    lda $C10003,x
+    lda $C10002,x        ; raw BE low word
+    xba
     sta $88
-    rep #$20
     ; unsigned 32-bit compare: C=1 (65816) <=> task_sp >= bound <=> 68K bcc-taken = PASS
     lda $86
     cmp $8A
@@ -14557,9 +14474,11 @@ swin_bd:
     bcc swin_out         ; FAIL (a7 < bound): delegate untouched -> interp runs the error path
     ; --- COMMIT ---------------------------------------------------------------
     pla                  ; drop the jsr-loop_hook return (16-bit) -> op_rte exits at inext level
+swin_diag_counter_begin:
     lda $407FE2          ; commit counter (work-RAM scratch next to ce4's proven $7FE0; the
     inc a                ; lockstep/multitick harnesses zero it at injection and report it)
     sta $407FE2
+swin_diag_counter_end:
     lda $80              ; $0796: a4 = new_a4
     sta $30
     lda $82
@@ -14568,16 +14487,12 @@ swin_bd:
     clc
     adc #$0006
     tax
-    sep #$20
-    lda $83              ; b31-24
+    lda $82              ; high word
+    xba
     sta $400000,x
-    lda $82
-    sta $400001,x
-    lda $81
+    lda $80              ; low word
+    xba
     sta $400002,x
-    lda $80
-    sta $400003,x
-    rep #$20
     lda $84              ; $079E: a7 = task_sp
     sta $3C
     lda $86
@@ -14590,87 +14505,137 @@ swin_bd:
     and #$F7FF           ; anyway for mid-block diff parity with the interp's bclr)
     sta $0A
     ldx $2C              ; $07D8: *(a3) = d2 (bit27-cleared), BE long
-    sep #$20
-    lda $0B              ; b31-24
+    lda $0A              ; high word
+    xba
     sta $400000,x
-    lda $0A
-    sta $400001,x
-    lda $09
+    lda $08              ; low word
+    xba
     sta $400002,x
-    lda $08
-    sta $400003,x
-    rep #$20
-    ; $07DA/$07DE: *(a7+$1c) = *(a5+$8e+d1) — BE->BE 4-byte copy via $50-$53
+    ; $07DA/$07DE: *(a7+$1c) = *(a5+$8e+d1) — raw BE->BE word copy via $50-$53
     lda $34
     clc
     adc #$008E
     clc
     adc $04
     tax
-    sep #$20
     lda $400000,x
     sta $50
-    lda $400001,x
-    sta $51
     lda $400002,x
     sta $52
-    lda $400003,x
-    sta $53
-    rep #$20
     lda $3C              ; a7 (= task_sp, just committed)
     clc
     adc #$001C
     tax
-    sep #$20
     lda $50
     sta $400000,x
-    lda $51
-    sta $400001,x
     lda $52
     sta $400002,x
-    lda $53
-    sta $400003,x
-    rep #$20
 swin_movem:
-    ; --- $07E4 movem.l (a7)+,d0-d7/a0-a6: 15-reg BE restore (entry_swo loop mirrored) ---
-    lda $3C
-    sta $54              ; $54 = work-RAM read ptr
-    stz $56              ; $56 = reg slot (0,4,..,$38)
-    ldy #$000F           ; Y-countdown: 15 regs exactly (the entry_swo terminator lesson)
-swin_lp:
-    ldx $54
-    sep #$20
-    lda $400000,x        ; b31-24
-    sta $51
-    inx
-    lda $400000,x        ; b23-16
-    sta $50
-    inx
-    lda $400000,x        ; b15-8
-    sta $53
-    inx
-    lda $400000,x        ; b7-0
-    sta $52
-    inx
-    rep #$20
-    stx $54              ; read ptr += 4
-    ldx $56
-    lda $50              ; reg hi16 ($51:$50 = b31-24:b23-16)
-    sta $0002,x
-    lda $52              ; reg lo16 ($53:$52 = b15-8:b7-0)
-    sta $0000,x
-    lda $56
-    clc
-    adc #$0004
-    sta $56
-    dey
-    bne swin_lp
-    lda $3C              ; a7 += 60 (lo16, faithful to op_movem)
+    ; --- $07E4 movem.l (a7)+,d0-d7/a0-a6: unrolled 15-register BE restore ---
+    ; X remains the original task SP throughout.  Each native load sees the same
+    ; two bytes as the old incrementing loop; XBA converts the raw BE word into
+    ; the numeric word stored in the interpreter's little-endian DP register file.
+    ldx $3C
+    lda $400000,x         ; d0 high
+    xba
+    sta $02
+    lda $400002,x         ; d0 low
+    xba
+    sta $00
+    lda $400004,x         ; d1 high
+    xba
+    sta $06
+    lda $400006,x         ; d1 low
+    xba
+    sta $04
+    lda $400008,x         ; d2 high
+    xba
+    sta $0A
+    lda $40000A,x         ; d2 low
+    xba
+    sta $08
+    lda $40000C,x         ; d3 high
+    xba
+    sta $0E
+    lda $40000E,x         ; d3 low
+    xba
+    sta $0C
+    lda $400010,x         ; d4 high
+    xba
+    sta $12
+    lda $400012,x         ; d4 low
+    xba
+    sta $10
+    lda $400014,x         ; d5 high
+    xba
+    sta $16
+    lda $400016,x         ; d5 low
+    xba
+    sta $14
+    lda $400018,x         ; d6 high
+    xba
+    sta $1A
+    lda $40001A,x         ; d6 low
+    xba
+    sta $18
+    lda $40001C,x         ; d7 high
+    xba
+    sta $1E
+    lda $40001E,x         ; d7 low
+    xba
+    sta $1C
+    lda $400020,x         ; a0 high
+    xba
+    sta $22
+    lda $400022,x         ; a0 low
+    xba
+    sta $20
+    lda $400024,x         ; a1 high
+    xba
+    sta $26
+    lda $400026,x         ; a1 low
+    xba
+    sta $24
+    lda $400028,x         ; a2 high
+    xba
+    sta $2A
+    lda $40002A,x         ; a2 low
+    xba
+    sta $28
+    lda $40002C,x         ; a3 high
+    xba
+    sta $2E
+    lda $40002E,x         ; a3 low
+    xba
+    sta $2C
+    lda $400030,x         ; a4 high
+    xba
+    sta $32
+    lda $400032,x         ; a4 low
+    xba
+    sta $30
+    lda $400034,x         ; a5 high
+    xba
+    sta $36
+    lda $400036,x         ; a5 low
+    xba
+    sta $34
+    lda $400038,x         ; a6 high
+    xba
+    sta $3A
+    lda $40003A,x         ; a6 low
+    xba
+    sta $38
+swin_movem_end:
+    txa
     clc
     adc #$003C
-    sta $3C
-    ; --- $07E8 rte: pop SR+PC via the REAL op_rte -> ors_rte dispatches the resume ---
-    jml.l op_rte         ; (.l: bank-$00 constant, same rule as above)
+    sta $3C               ; a7 += 60 (lo16, faithful to op_movem)
+    ; --- $07E8 rte: the bank-$9D helper recognizes proven native task roots,
+    ; pops the exact SR/PC frame, and dispatches them directly.  Gate-off or
+    ; unknown resume PCs reach the unchanged op_rte before any emulated write.
+swin_fast_rte_redirect:
+    jml.l $9D8400
 
 ; ===================== SCHEDULER SELECT ($075C-$0778) =====================
 ; lhs_sel — native scheduler task-SELECT + readiness check, the biggest remaining moderate lever
@@ -14701,17 +14666,16 @@ lhs_sel:
     pla                  ; drop the jsr loop_hook return
     jml.l irq_none       ; re-fetch $075C (swo_tramp has no $075C arm -> decodes normally, no loop)
 lsel_go:
+sels_diag_counter_begin:
     lda $407FEA          ; fire counter (work-RAM $7FE0-block convention)
     inc a
     sta $407FEA
+sels_diag_counter_end:
     ; --- $075C move.w d0,(a4): BE word write d0.lo16 to work RAM at a4.lo16 ---
     ldx $30              ; a4 lo16
-    sep #$20
-    lda $01              ; d0 bits15-8
+    lda $00
+    xba
     sta $400000,x
-    lda $00              ; d0 bits7-0
-    sta $400001,x
-    rep #$20
     ; --- $075E/$0760: d1.lo16 = idx*4 (asl.w -> hi16 $06 unchanged) ---
     lda $00
     asl a
@@ -14732,41 +14696,35 @@ lsel_go:
     clc
     adc #$004A
     tax
-    sep #$20
-    lda $2F              ; a3 bits31-24
+    lda $2E              ; a3 high word
+    xba
     sta $400000,x
-    lda $2E
-    sta $400001,x
-    lda $2D
+    lda $2C              ; a3 low word
+    xba
     sta $400002,x
-    lda $2C              ; a3 bits7-0
-    sta $400003,x
-    rep #$20
     ; --- $076A move.l (a3),d2: BE long read from work RAM at a3.lo16 ---
     ldx $2C
-    sep #$20
-    lda $400000,x        ; bits31-24
-    sta $0B              ; d2 bits31-24
-    lda $400001,x
-    sta $0A
-    lda $400002,x
-    sta $09
-    lda $400003,x
-    sta $08              ; d2 bits7-0
-    rep #$20
-    ; --- $076C move.w $2(a5),d3: BE word read from (a5.lo16+2) -> d3.lo16 (enable mask) ---
-    lda $34
-    clc
-    adc #$0002
-    tax
-    sep #$20
-    lda $400000,x        ; hi byte
+    lda $400000,x        ; raw BE high word
     xba
-    lda $400001,x        ; lo byte
-    rep #$20
+    sta $0A
+    lda $400002,x        ; raw BE low word
+    xba
+    sta $08
+    ; --- $076C move.w $2(a5),d3: materialize the enable mask already read by lh_sched ---
+    ; lh_sched keeps that original logical BE word in physical Y while it uses
+    ; $9A for the shifted scan mask.  irq_none reloads Y before every fetch, so
+    ; carrying it across this single native scheduling decision changes no
+    ; physical-register contract and avoids a second shared-BW-RAM transaction.
+    tya
     sta $0C              ; d3 lo16 (hi16 $0E unchanged)
-    ; --- $0770 btst d0,d3 / $0772 beq $074C : test bit idx of the enable mask ---
-    lda #$0001
+    ; --- $0770 btst d0,d3 / $0772 beq $074C ---------------------------------
+    ; lh_sched reaches lhs_sel only from its carry-set enable-mask branch, so
+    ; this second variable-length bit scan is provably true for every native
+    ; entry.  Jump to the descriptor-ready test directly.  The trailing NOP
+    ; makes this exactly the three bytes of the old LDA immediate; retain the
+    ; unreachable reference path below so every established label stays fixed.
+    bra lsel_rdy
+    nop
     ldx $00              ; idx (0-15; d0.lo16)
 lsel_shl:
     cpx #$0000

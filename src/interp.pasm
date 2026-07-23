@@ -234,9 +234,12 @@ ifetch_go:
     lda [$56],y
     xba                  ; A = big-endian opcode word
     sta $44
-    ; ring buffer: last 64 PCs (4 bytes each: low16,high16) at $0400; idx $48 wraps $100.
+    ; Diagnostic ring buffer: last 128 PCs (4 bytes each: low16,high16) at
+    ; $0400; idx $48 wraps $200.
     ; ($0400 not $0800: on the SA-1, bank-$00 IRAM is 2KB and $0800 mirrors $0000=DP.)
-    jsr dbg_fetch        ; ring-log 68K PC + optional debug-freeze (was inline ring write)
+    ; build_interp_rom.py replaces this JSR with three NOPs in both production
+    ; ROM mirrors. PC_RING=1 retains it for flight-recorder/freeze/profile ROMs.
+    jsr dbg_fetch        ; diagnostic ring-log + optional debug-freeze
     ; ---- LOOP FAST-PATH hook (boot accel) -----------------------------------
     ; Collapse known hot boot loops (delay/memset/memcpy/scan) to native. The opcode
     ; in $44 is ALREADY fetched, so when loop_hook rewrites $40 it returns C=1 and we
@@ -565,8 +568,8 @@ k38: lda $44
     bne k39
     jmp op_andi_b
 k39: lda $44
-    and #$F1FF
-    cmp #$41FA            ; lea (d16,PC),An
+    and #$F1FE
+    cmp #$41FA            ; lea (d16,PC),An / lea (d8,PC,Xn),An
     bne k40
     jmp op_lea_pc
 k40: cmp #$217C            ; move.l #imm,(d16,An)
@@ -2520,41 +2523,22 @@ lsl_done:
     sta $40
     jmp inext
 
-op_lea_pc:               ; lea (d16,PC),An : An = (PC+2)+signext(d16) ; PC += 4
-    jsr rdw2
-    sta $50              ; d16
-    lda $40
-    clc
-    adc #2
-    sta $52              ; base low16
-    lda $42
-    and #$00FF
-    adc #$0000
-    sta $54              ; base high (carry from +2)
-    lda $52
-    clc
-    adc $50
-    sta $52              ; result low16
-    lda $50
-    bmi lp_neg
-    lda $54
-    adc #$0000
-    bra lp_hi
-lp_neg:
-    lda $54
-    adc #$FFFF
-lp_hi:
-    sta $54
-    jsr regdstA
-    lda $52
-    sta $00,x
-    lda $54
-    sta $02,x
-    lda $40
-    clc
-    adc #4
-    sta $40
-    jmp inext
+op_lea_pc:               ; PC-relative LEA modes $41FA/$41FB; real body in bank $99
+    ; $49FB (lea (d8,PC,D7.w),a4) is live in the task-$08 initializer at
+    ; $01F4B2.  The old dispatcher only recognized mode $3A, so accelerated
+    ; pacing reached $49FB and stopped with $DEAD.  Keep this bank-$00 region
+    ; byte-neutral: the shared d16/index implementation lives at $99:F900.
+    jml $99F900
+
+; Production 5A22 interrupt trampolines. The handlers themselves execute from the
+; $7F WRAM mirror so NMI/IRQ never strand the shared bus on ROM while the SA-1 runs.
+; Eight bytes consume only the end of the asserted-zero $93EE-$942F seam.
+.org $9428
+irq_pacing_trampoline:
+    jml $7F8F40
+nmi_pacing_trampoline:
+    jml $7F8F00
+.org $9430               ; preserve op_movl_imm_d16 and every downstream address
 
 op_movl_imm_d16:         ; move.l #imm,(d16,An) : [An+d16]=imm32 (big-endian) ; PC+=8
     jsr rdw2
@@ -3201,7 +3185,7 @@ mqw_loop:
     tya
     asl a
     asl a
-    sta $6E              ; reg slot = i*4
+    sta $74              ; reg slot = i*4 ($6E is the emulated C flag)
     ldx $6C
     lda $00,x
     tax                  ; An addr
@@ -3217,7 +3201,7 @@ mqw_loop:
     clc
     adc #2
     sta $00,x            ; An += 2
-    ldx $6E
+    ldx $74
     lda $54              ; low16 = $55:$54
     sta $00,x
     lda $54
@@ -3258,7 +3242,7 @@ mq_loop:
     tya
     asl a
     asl a
-    sta $6E              ; reg slot
+    sta $74              ; reg slot ($6E is the emulated C flag)
     ldx $6C
     lda $00,x
     tax                  ; X = An addr
@@ -3282,7 +3266,7 @@ mq_loop:
     adc #4
     sta $00,x
     ; store into reg slot
-    ldx $6E
+    ldx $74
     lda $54              ; low16 = $55:$54
     sta $00,x
     lda $52              ; high16 = $53:$52
@@ -6644,18 +6628,31 @@ op_trap:               ; TRAP #n : push PC+2 + SR ; PC = vector[32+n] ($80+n*4);
     sbc #4
     sta $3C
     tax
-    sep #$20
-    stz $400000,x      ; 31-24 = 0
-    inx
+    ; 65816 has no long-address STZ.  Poppy encoded the old
+    ; `stz $400000,x` as `stz $0000,x`, leaving the exception frame's
+    ; PC[31:24] byte stale (the same bug class fixed in take_irq below).
+    ; Store the complete big-endian return PC as two real A16 long-indexed
+    ; words, then pad to keep every following bank-$00 address pinned.
     lda $52
-    sta $400000,x      ; 23-16
+    xba
+    sta $400000,x      ; 31-24 = 0, 23-16 = retPC bank
     inx
-    lda $51
-    sta $400000,x      ; 15-8
     inx
     lda $50
-    sta $400000,x      ; 7-0
-    rep #$20
+    xba
+    sta $400000,x      ; 15-8, 7-0 = retPC low word
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     jsr sr_build
     sta $50
     lda $3C
@@ -6699,7 +6696,7 @@ op_trap:               ; TRAP #n : push PC+2 + SR ; PC = vector[32+n] ($80+n*4);
     sep #$20
     sta $40
     rep #$20
-    jmp inext
+    jmp trap1_dispatch
 
 op_movem_abs:          ; movem.l (xxx).L,<list> : load regs from abs (ROM-aware) ; PC+=8
     jsr rdw2
@@ -6882,18 +6879,31 @@ take_irq:
     sbc #4
     sta $3C              ; A7 -= 4 (push PC long)
     tax
-    sep #$20
-    stz $400000,x        ; PC bits31-24 = 0
-    inx
+    rep #$20
+.a16
+    ; 65816 has no long-address STZ.  Poppy silently encoded the old
+    ; `stz $400000,x` as `stz $0000,x`, so an IRQ with A7.low=$0304
+    ; zeroed IRAM FRAME_REQ at $0300 instead of the emulated stack byte.
+    ; Store the big-endian 24-bit PC as two real long-indexed A16 words.
     lda $42
-    sta $400000,x        ; bits23-16
+    xba
+    sta $400000,x        ; bytes 31-24 = 0, 23-16 = PC bank
     inx
-    lda $41
-    sta $400000,x        ; bits15-8
     inx
     lda $40
-    sta $400000,x        ; bits7-0
-    rep #$20
+    xba
+    sta $400000,x        ; bytes 15-8, 7-0 = PC low word
+    inx                  ; preserve the old scratch-X residue (A7.low-1)
+    ; Keep jsr sr_build and every following bank-$00 address pinned.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     jsr sr_build         ; A = SR
     sta $50
     lda $3C
@@ -7006,25 +7016,38 @@ sa_n0:
 
 ; --- subroutines ---
 push32:                  ; push 32-bit ($56:$54) onto 68K stack at A7 (work RAM)
+.a16
+.i16
     lda $3C
     sec
     sbc #4
     sta $3C              ; A7 -= 4
     tax                  ; X = A7 low16
-    sep #$20
-    lda $57
-    sta $400000,x        ; byte0 (bits 24-31)
-    inx
     lda $56
-    sta $400000,x        ; byte1 (bits 16-23)
+    xba
+    sta $400000,x        ; raw BE high word: bits31-16
     inx
-    lda $55
-    sta $400000,x        ; byte2 (bits 8-15)
     inx
     lda $54
-    sta $400000,x        ; byte3 (bits 0-7)
-    rep #$20
+    xba
+    sta $400000,x        ; raw BE low word: bits15-0
+    xba                  ; preserve the old exit A/flags shape (A=$54; NZ from low byte)
+    inx
     rts
+    ; Unreachable size pad: keep readbyte and every later bank-$00 symbol fixed.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 readbyte:                ; addr $52(top16)/$54(low16) -> A.low = byte (I/O aware)
     lda $52
@@ -11182,14 +11205,16 @@ ojmp_x:
 
 ; lhs_rdbe — big-endian work-RAM word read for lh_sched (STEP C scheduler escape). Placed in the
 ; $D1BF gap before .org $D1ED (loop_hook's gap is too tight). in: A=68K work-RAM offset (lo16);
-; out: A=big-endian word at $40:offset; clobbers X; 16-bit M restored on exit.
+; out: A=big-endian word at $40:offset; clobbers X; caller supplies 16-bit M/X.
+; Both scheduler fields are aligned and cannot cross the bank boundary, so one
+; native word transaction plus XBA is byte-identical to the former two byte
+; reads while avoiding the second shared-BW-RAM transaction.
 lhs_rdbe:
+.a16
+.i16
     tax
-    sep #$20
-    lda $400000,x        ; high byte (68K big-endian: low addr = hi byte)
-    xba
-    lda $400001,x        ; low byte -> A = (hi<<8)|lo
-    rep #$20
+    lda $400000,x        ; raw little-endian word containing the two BE bytes
+    xba                  ; A = (high-address byte) | (low-address byte << 8)
     rts
 
 ; df_gap — dbg_fetch's freeze-release tail, relocated here so the redirect hook adds ZERO bytes to
@@ -11314,7 +11339,10 @@ bbe_t7:
     pla
     jml $97C800          ; entry_117b4
 bbe_miss:
-    jmp bhp_push
+    ; The original bank-$01 chain is packed immediately against the live
+    ; bank-$02 absolute-JSR extension.  Keep this three-byte tail size-neutral
+    ; and scan the rare allocator in the asserted-zero $D360 seam instead.
+    jmp bbe_ext2
 ; jb2_ext — jah2_b2's zero-shift extension (bank!=0 jsr.l escapes beyond $25110), dead-space host.
 ; Reached from jah2_b2_miss with the php still pushed (jsrabs_hook2's); HIT: plp/pla/set PC=return/
 ; jml the escbank4 body (fixed .orgs). The $023xxx trap#5-cluster roots (jsr.l from $0242A6/$0242B2/
@@ -11369,7 +11397,7 @@ ors_pre_98:
 ors_99chk:
     cmp #$00FA
     beq ors_pre_99
-    jmp op_rts_sentinel
+    jmp ors_95chk        ; next escape-bank sentinel ($00F9); miss still reaches the real-return path
 ors_pre_99:
     lda #$0099
     sta $42
@@ -11393,24 +11421,83 @@ ct_ext:
 ctx_hit:
     pla
     jml $94F900          ; xlat_dispatch
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+
+; ors_95chk / ors_pre_95 — sixth escape bank at SA-1 $95:8000 (file $2A8000).
+; This lives in the unreachable corpse of the old inline entry_25110, after
+; ct_ext's terminal JML.  $9A:8000/file $2D0000 is unavailable because the TAD
+; audio blob begins at $2D002B, so the earlier free bank $95 is used instead.
+.org $D308
+ors_95chk:
+    cmp #$00F9
+    beq ors_pre_95
+    jmp ors_9dchk       ; final escape-bank sentinel ($00F8), then ordinary returns
+ors_pre_95:
+    lda #$0095
+    sta $42
+    jml [$0040]
+
+; ct_bank1_ext — nonzero-bank half of the fetch-chokepoint allowlist.  Real-return
+; continuations inside $0175A0 are sometimes reached by a coroutine resume,
+; not op_rts_norm, so the ordinary xlat return hook never sees them.  Route
+; only the proven bank-$01 continuation PCs plus the guarded bank-$02
+; collision-box publisher; every other fetch returns to the already-fetched
+; interpreter opcode through ct_ret.
+.org $D320
+ct_bank1_ext:
+    dec a
+    beq ctb1_check
+    dec a
+    bne ctb1_miss
     lda $40
-    sta $54
-    lda $42
-    sta $56
-    jsr push32
-    lda $34
-    clc
-    adc #$2932
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsr rdw_ea
-    sec
-    sbc #$0002
-    bne _25110_t1
-    jmp L25110_25774
+    cmp #$AD4C           ; late-combat collision-box publisher
+    beq ctb1_hit
+    bra ctb1_miss
+ctb1_check:
+    lda $40
+    cmp #$C9AE           ; guarded sixteen-record inactive object pass
+    beq ctb1_hit
+    cmp #$770E           ; nested callback state-update resume
+    beq ctb1_hit
+    cmp #$7612           ; hot dynamic-callback return
+    beq ctb1_hit
+    cmp #$75E8           ; static $1762E-helper return
+    beq ctb1_hit
+ctb1_miss:
+    rts                   ; exact ct_ret contract, kept local to fit the pinned island
+ctb1_hit:
+    pla                  ; drop the jsr choke_tramp return
+    jml $94F900          ; xlat_dispatch; every admitted entry is guaranteed live
+
+; ors_9dchk / ors_pre_9d — seventh escape bank at SA-1 $9D:8000.  The
+; $02A86E table body has nested interpreted/native calls, so their RTS must
+; translate the synthetic $00F8 continuation back to bank $9D.  This block
+; reclaims only the unreachable prologue of the old inline $025110 body; pin
+; the next retained dead-code label so no downstream bank-$00 address moves.
+.org $D350
+ors_9dchk:
+    cmp #$00F8
+    beq ors_pre_9d
+    jmp op_rts_sentinel
+ors_pre_9d:
+    lda #$009D
+    sta $42
+    jml [$0040]
+
+; Second bank-$01 BSR/PC-relative arm.  Entry inherits A=$5C (target low
+; word) and $42=$0001 from the caller.  The 17-byte body fits wholly inside
+; the established zero seam before the pinned dead-$25110 label.
+.org $D360
+bbe_ext2:
+    cmp #$F2E4           ; $01F2E4 rare object allocator/initializer
+    bne bbe_ext2_miss
+    lda $54
+    sta $40              ; standard jsr-hook body re-simulates this real return
+    pla
+    jml $9DC000          ; entry_1f2e4 (escbank7, fixed .org)
+bbe_ext2_miss:
+    jmp bhp_push
+
+.org $D372
 _25110_t1:
     lda #$001E
     sta $1C
@@ -15791,7 +15878,8 @@ ba_neg:
     jmp inext
 
 ; dbg_fetch — per-instruction debug hook (replaces the inline 68K-PC ring write).
-; Always logs the 68K PC to the 128-entry ring at $0400 (idx $48). Additionally, if
+; PC_RING=1 diagnostic ROMs log the 68K PC to the 128-entry ring at $0400
+; (idx $48). Production packs the only call site to NOPs. Additionally, if
 ; the debug-freeze target $0710 is non-zero and equals the current 68K PC low16 ($40),
 ; it freezes (sets $0712=1, spins on $0714) so the harness can read the interp register
 ; file mid-routine -- the $3A92 jsr-hook can't reach non-jsr PCs like the task loops.
@@ -16256,20 +16344,36 @@ neg32_n:                 ; $8C/$8E = -$8C/$8E
 ; BW-RAM $40. in: X = work-RAM offset (aN.lo + disp). rdw40 -> A=word. wrw40: A=word
 ; in. 16-bit A on entry/exit; preserve X. (work RAM stores big-endian: [X]=hi,[X+1]=lo.)
 rdw40:
-    sep #$20
-    lda $400000,x        ; hi byte
-    xba
-    lda $400001,x        ; lo byte
-    rep #$20
+.a16
+.i16
+    lda $400000,x        ; raw bytes = lo:hi in native A
+    xba                  ; logical 68K word = hi:lo; NZ matches old final byte load
     rts
+    ; Unreachable size pad keeps wrw40 at its established address.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 wrw40:
-    sep #$20
-    xba                  ; A.lo = hi byte
+.a16
+.i16
+    xba                  ; raw native word writes the same BE byte pair
     sta $400000,x
-    xba                  ; A.lo = lo byte
-    sta $400001,x
-    rep #$20
+    xba                  ; restore logical A and the old final NZ source
     rts
+    ; Unreachable size pad keeps rdb40 and the exported long wrappers fixed.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 rdb40:                   ; X=work-RAM byte offset -> A = byte (hi=0). transpiler byte mem load/RMW
     sep #$20
     lda $400000,x
@@ -17217,6 +17321,7 @@ e11a_sx0:
     lda #$FFFF              ; reg d7 = $0000FFFF (clobbered; arg8>=0 -> hi16=0)
     sta $1C
     stz $1E
+e11a_return:
     jmp inext
 
 ; jsrabs_hook2 — native-escape dispatch for op_jsr_abs (jsr.l). Target $50(hi):$52(lo),
@@ -17634,8 +17739,12 @@ _20e8_t2:
     jsr rdw40
     sta $00
 L20e8_2108:
-    lda $00
-    sta $80
+    ; The production $DA62 indirect call reaches a stable tile-strip shape.
+    ; Keep this four-byte seam size-neutral: bank $9D proves every argument
+    ; before writing anything, or replays these two instructions and resumes
+    ; at h20e8_fill_resume.  Never grow this packed bank-$00 body in place.
+    jml.l $9DA003
+h20e8_fill_resume:
     lda $30
     clc
     adc #$0000
@@ -18546,7 +18655,14 @@ _20e8_t67:
     clc
     adc #$0004
     sta $3C
-    jmp inext
+entry_20e8_return:
+    ; A normal jsr-hook call leaves a real bank-$00 return here, while the
+    ; native $DA44 indirect bridge leaves its bank-$9D $00F8 continuation.
+    ; Both have already been popped into $40/$42.  The bank-aware dispatcher
+    ; handles the synthetic tag and sends ordinary returns through the same
+    ; gated RTS/xlat path as the interpreter.  JMP->JMP is size-neutral in the
+    ; tightly packed bank-$00 seam immediately before loop_hook.
+    jmp ors_pre
 
 ; =============================================================================
 ; loop_hook — LOOP FAST-PATH dispatcher (boot acceleration). Lives in the free
@@ -18565,24 +18681,21 @@ loop_hook:
     lda $40
     cmp #$0818
     bne lh_chk_3b84
-    ; $0818 IDLE-SPIN COLLAPSE — CLAMP form (root-caused 2026-07-10). The original
-    ; "$AC=1, fire the IRQ NOW" deterministically corrupted a coroutine context entry
-    ; minutes into gameplay (ring: healthy $0532/$0796 switch cascade dispatching to
-    ; $080000 = 68K ROM end; identical with a same-frame streak gate; bisected to this
-    ; arm alone). Clamp sweeps in a live-pokeable lab: $AC forced to 1 or clamped to
-    ; <= $0800 hits the same fatal event (~game tick $9E00-A000); clamped to $2000
-    ; is stable — the game needs IRQ spacing of some thousands of instructions around
-    ; that event (coroutine creation window). So: CLAMP the countdown DOWN to $2000
-    ; (never up — the spin hits this arm every iteration and an unconditional store
-    ; would refill faster than iloop drains it = IRQ never fires). Effect: at most
-    ; ~8K interpreted spin instructions per idle wait instead of ~26K (natural $7000
-    ; reload), preserving a hardware-plausible minimum slice. The full "fire NOW"
-    ; lever stays retired until lockstep-vs-MAME explains the $2000 boundary.
-    lda $AC
-    cmp #$2000
-    bcc lh818_pass       ; countdown already below the clamp -> let it drain
-    lda #$2000
-    sta $AC              ; clamp DOWN: IRQ due within ~8K instructions
+    ; $0818 IDLE WAIT SELECTOR. The old immediate "$AC=1" collapse deterministically
+    ; corrupted coroutine ordering near gameplay ticks 765-767. Gate-off therefore
+    ; retains the stable $2000 countdown clamp exactly. The organic production gate
+    ; selects an event-driven two-vblank WAI whose v25 prototype crossed that event to
+    ; tick 1354 with all 12 task stacks above their floors. That prototype evidence is
+    ; a scheduler-safety prerequisite only; end-to-end speed remains unproven until the
+    ; canonical cold-boot measurement runs on this integrated path.
+    jsl $99FB00          ; gate-off: exact clamp; gate-on: production two-vblank WAI
+    bcc lh818_pass       ; no clamp and no paced boundary to count
+    nop                  ; size-neutral: keep the real $0818 boundary hook at $00:F5A3
+    nop
+    nop
+    nop
+    nop
+    nop
     inc $0760            ; game-frame counter (fps instrumentation; counts clamps)
 lh818_pass:
     clc                  ; let the bra run; iloop fires the IRQ at the clamped boundary
@@ -18838,8 +18951,13 @@ ms_noop:
     sta $C2
     rts
 ms_shadow:
-    lda #$0001           ; mode 1: shadow RAM $7E
-    sta $C2
+    ; Size-neutral tail into the roomy bank-$9E publisher.  It records coarse
+    ; palette/BG producer dirtiness from the already-mapped $6A address, sets
+    ; mode 1, then jumps back to the retained RTS byte at $00:F846.  Keeping
+    ; that byte fixed avoids shifting the completely packed $F847+ tail.
+    jml.l $9EDE20
+    nop
+ms_shadow_return:
     rts
 
 ; ppu_build — convert shadow palette ($7E:2000) -> CGRAM staging ($7E:8000).
@@ -19047,18 +19165,21 @@ ors_pre_94:
 ; .org-pinned: the preceding `jml [$0040]` (ors_pre_94) mis-sizes in Poppy (tracked 2, emitted 3)
 ; and drifts this label by 1 onto a $00=BRK byte (same gotcha as ors_rte) -> pin past the drift.
 .org $F980
-; choke_tramp — bank-$00 fetch-chokepoint trampoline (replaces the now-dead ilog; SAME 42-byte size
+; choke_tramp — bank-$00/$01 fetch-chokepoint trampoline (replaces the now-dead ilog; SAME 42-byte size
 ; so lh_sched_pre below does not shift). jsr'd from lh_off per genuinely-interpreted fetch. MISS/gated
 ; -> rts (ilog's exact contract: 16-bit M/X, X preserved, A clobbered -> nolog reloads $44). HIT (ce4,
 ; only when $073A!=0) -> drop the jsr-return (16-bit pla) + jml xlat_dispatch ($94:F900). The per-fetch
-; common path NEVER crosses banks (the every-fetch cross-bank jml round-trip broke GAME_TICK's B0).
+; bank-$00 common path never crosses banks. Bank-$01 candidates use a same-bank
+; extension in the dead-$25110 corpse and return here on a miss.
 ilog:
 choke_tramp:
     rep #$30             ; 16-bit M/X (jsr'd into a .org region)
     lda $073A            ; dedicated chokepoint gate (0 = inert baseline)
     beq ct_ret
     lda $42
-    bne ct_ret           ; PC bank != 0 -> not a bank-0 table PC
+    beq ct_bank0
+    jmp ct_bank1_ext
+ct_bank0:
     lda $40              ; A = 68K PC lo16 (cmp preserves A -> still live at ct_hit)
     cmp #$0CE4           ; allowlist, hottest-first; per-handler counters live in the escape bodies
     beq ct_hit
@@ -19068,16 +19189,12 @@ choke_tramp:
     beq ct_hit
     jmp ct_ext           ; 42-byte block FULL -> the allowlist TAIL continues in the dead-25110
                          ; corpse (ct_ext: $0FD2 moved there + $3B48 prologue + future arms).
-                         ; SIZE-NEUTRAL: jmp(3)+nop(2) == the old cmp #$0FD2(3)+bne(2).
-    nop
-    nop
 ct_hit:
     pla                  ; drop the jsr choke_tramp return (16-bit) -> dispatch at inext stack level
     jml $94F900          ; xlat_dispatch (guaranteed HIT for an allowlisted PC; symbol in escbank2)
 ct_ret:
     rts
     nop                  ; --- padding: keep choke_tramp == ilog's 42 bytes (no shift of lh_sched_pre) ---
-    nop
     nop
 
 ; lh_sched — native disabled-task-skip scan for the coroutine scheduler (STEP C). The $074C-$0772
@@ -19096,7 +19213,8 @@ lh_sched:
     inc a
     inc a                ; a5+2 = enable-mask address
     jsr lhs_rdbe
-    sta $9A              ; $9A = enable mask (16-bit)
+    tay                   ; keep the original enable mask live for lhs_sel
+    nop                   ; size-neutral replacement for the old `sta $9A`
     lda $34
     clc
     adc #$0004           ; a5+4 = current-idx address = a4 (needed by the $075C exit)
@@ -19108,7 +19226,8 @@ lh_sched:
     lda $9C
     inc a                ; align count = current+1
     tax
-    lda $9A
+    tya                   ; recover the original enable mask without another BW-RAM read
+    nop                   ; size-neutral replacement for the old `lda $9A`
 lhs_align:
     lsr a
     dex
@@ -19976,6 +20095,27 @@ swo_pass:
     jmp lh_sched_pre
 
 .org $FFE0
-.word $0000,$0000,irq,irq,$0000,nmi,reset,irq
+.word $0000,$0000,irq,irq,$0000,nmi_pacing_trampoline,reset,irq_pacing_trampoline
 .org $FFF0
-.word $0000,$0000,irq,$0000,$0000,nmi,reset,irq
+.word $0000,$0000,irq,$0000,$0000,nmi_pacing_trampoline,reset,irq_pacing_trampoline
+
+; TRAP #1 ($000466) is the task-slot allocator behind the remaining occasional
+; three-frame object-spawn tick. Retarget op_trap's size-neutral final JMP to
+; this exact-vector gate. The island overwrites only the unreachable corpse of
+; the old inline $025110 body; gate-off and every other trap vector rejoin the
+; unchanged interpreter path. $9E:8000 is pinned and pack-audited.
+.org $D3A1
+trap1_dispatch:
+    .a16
+    .i16
+    lda $073A
+    beq trap1_dispatch_miss
+    lda $42
+    bne trap1_dispatch_miss
+    lda $40
+    cmp #$0466
+    bne trap1_dispatch_miss
+    jml $9E8000
+trap1_dispatch_miss:
+    jmp inext
+trap1_dispatch_end:
