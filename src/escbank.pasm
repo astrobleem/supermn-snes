@@ -48,6 +48,9 @@ entry_13bet=$94AB04
 entry_8fat=$94AD98
 entry_fd2t=$94B009
 entry_c9a6=$94B0CB
+entry_d3b0t=$94B400
+entry_d3b0t_bridge_end=$94B567
+entry_d3b0t_end=$94B5AE
 entry_d6e6=$94E2C2
 entry_d64a=$94E32E
 entry_d3de=$94E5F8
@@ -13556,193 +13559,20 @@ Ld386_d3ac:
     jml.l entry_d232       ; pt.22 P3b COVERAGE: -> NATIVE $D232 (was jml.l inext); cross-bank $99 (--bank5)
 
 ; --- $00D3B0 jmp-table state handler ---
+; The generated body used to flow from $EFFB through $F18E.  The fixed
+; jah2_ext island below is assembled later at $F000 and Poppy silently
+; overwrote $F000-$F0C8, so the charged-shot release path eventually ran a
+; bare physical RTI and fell into address zero.  Keep the established bank-$92
+; entry as a four-byte trampoline; the complete body now lives in audited free
+; space at $94:B400.
 ; --- transpiled from $00D3B0 (14 instrs) by tools/transpile.py [bank1] ---
 entry_d3b0:
-    rep #$30
-    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
-    lda $30
-    clc
-    adc #$FFF0
-    sta $54
-    lda $32
-    adc #$FFFF
-    sta $52
-    jsl.l rdw_ea_l
-    sta $2E
-    lda $30
-    clc
-    adc #$FFF2
-    sta $54
-    lda $32
-    adc #$FFFF
-    sta $52
-    jsl.l rdw_ea_l
-    sta $2C
-    lda #$0000
-    sta $80
-    lda $2C
-    clc
-    adc #$0000
-    sta $54
-    lda $2E
-    adc #$0000
-    sta $52
-    jsl.l writeword_l
-    lda #$0000
-    sta $80
-    lda $30
-    clc
-    adc #$FFFE
-    sta $54
-    lda $32
-    adc #$FFFF
-    sta $52
-    jsl.l writeword_l
-    lda $30
-    clc
-    adc #$FFF5
-    sta $54
-    lda $32
-    adc #$FFFF
-    sta $52
-    jsl.l readbyte_l
-    sep #$20
-    sta $00
-    rep #$20
-    lda $34
-    clc
-    adc #$2AA6
-    sta $20
-    lda $36
-    adc #$0000
-    sta $22
-    lda $00
-    and #$00FF
-    eor #$0080
-    sec
-    sbc #$0080
-    sta $00
-    lda $00
-    sta $9A
-    lda $9A
-    asl a
-    lda #$0000
-    sbc #$0000
-    eor #$FFFF
-    sta $9C
-    lda $20
-    clc
-    adc $9A
-    sta $20
-    lda $22
-    adc $9C
-    sta $22
-    lda #$0000
-    sep #$20
-    sta $80
-    rep #$20
-    lda $20
-    clc
-    adc #$0000
-    sta $54
-    lda $22
-    adc #$0000
-    sta $52
-    jsl.l writebyte_l
-    lda #$0000
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
-    tax
-    pla
-    sep #$20
-    xba
-    sta $400000,x
-    xba
-    sta $400001,x
-    rep #$20
-    lda $30
-    clc
-    adc #$FFF6
-    sta $54
-    lda $32
-    adc #$FFFF
-    sta $52
-    jsl.l rdw_ea_l
-    pha
-    lda $3C
-    sec
-    sbc #$0002
-    sta $3C
-    lda $3E
-    sbc #$0000
-    sta $3E
-    lda $3C
-    tax
-    pla
-    sep #$20
-    xba
-    sta $400000,x
-    xba
-    sta $400001,x
-    rep #$20
-    lda $34
-    clc
-    adc #$1C9A
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $22
-    lda $34
-    clc
-    adc #$1C9C
-    sta $54
-    lda $36
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
-    sta $20
-    ; INDIRECT-BRIDGE jsr (a0) -> ibridge (a0 escape or interpret), resume brd3b0_1
-    lda #brd3b0_1
-    sta $40
-    lda #$00FE
-    sta $42
-    lda $20
-    sta $52
-    lda $22
-    sta $50
-    jmp ibridge
-brd3b0_1:
-    lda #$0004
-    sta $9A
-    lda $9A
-    asl a
-    lda #$0000
-    sbc #$0000
-    eor #$FFFF
-    sta $9C
-    lda $3C
-    clc
-    adc $9A
-    sta $3C
-    lda $3E
-    adc $9C
-    sta $3E
-    lda #$D374
-    sta $40
-    lda #$0000
-    sta $42
-    jml.l inext
+    jml.l $94B400
 
-
+; Keep the following established handler fixed.  This also makes any future
+; growth of the trampoline fail visibly instead of shifting the jump-table
+; dispatch layout.
+    .org $F18F
 
 ; --- $00D226 jmp-table state handler (pt.22 P2: MECHANIZED via transpile.py --jtstatic=D376:4;
 ; --- regenerated, instruction-identical to the P1 hand-authored body daf2e97). ---

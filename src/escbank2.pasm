@@ -25,6 +25,7 @@ ors_pre=$00D16F
 ; <<< ESCBANK2_SYMS <<<
 entry_d232=$99EB00   ; pt.22 P3b: --bank5 $99 body, .org-fixed (no $94->$99 const auto-gen; hand const)
 hce4_shape_try=$95F400 ; guarded immutable-shape renderer in bank $95
+ibridge=$92F828      ; fixed bank-$92 indirect-call bridge (packer-audited)
 
     .org $8000
 
@@ -6463,6 +6464,213 @@ Lc9a6_c9f0:
     sta $3C
     jml.l ors_pre
 escbank2_flowing_end:
+
+; ============================================================================
+; entry_d3b0t — relocated $00D3B0 charged-shot state handler
+;
+; The original bank-$92 body began at $EFFB and flowed across the later fixed
+; $F000 jah2_ext island.  Poppy silently let that island overwrite the first
+; 201 bytes, and charged-shot release was the first organic path that exposed
+; the resulting physical-stack corruption.  $92:EFFB is now a fixed JML here.
+;
+; This is the original generated body, moved without changing its emulated
+; 68000 effects.  Its indirect JSR continuation uses the established $00FD
+; sentinel so ors_pre returns to bank $94.  The body and continuation each have
+; an explicit seam before the existing $D800 helper island.
+; ============================================================================
+    .org $B400
+entry_d3b0t:
+    rep #$30
+.a16
+.i16
+    ; coroutine task body: NO return-push (entered by the op_rte resume hook, not a jsr)
+    lda $30
+    clc
+    adc #$FFF0
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2E
+    lda $30
+    clc
+    adc #$FFF2
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    sta $2C
+    lda #$0000
+    sta $80
+    lda $2C
+    clc
+    adc #$0000
+    sta $54
+    lda $2E
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
+    lda #$0000
+    sta $80
+    lda $30
+    clc
+    adc #$FFFE
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l writeword_l
+    lda $30
+    clc
+    adc #$FFF5
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l readbyte_l
+    sep #$20
+    sta $00
+    rep #$20
+    lda $34
+    clc
+    adc #$2AA6
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $00
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $20
+    clc
+    adc $9A
+    sta $20
+    lda $22
+    adc $9C
+    sta $22
+    lda #$0000
+    sep #$20
+    sta $80
+    rep #$20
+    lda $20
+    clc
+    adc #$0000
+    sta $54
+    lda $22
+    adc #$0000
+    sta $52
+    jsl.l writebyte_l
+    lda #$0000
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $30
+    clc
+    adc #$FFF6
+    sta $54
+    lda $32
+    adc #$FFFF
+    sta $52
+    jsl.l rdw_ea_l
+    pha
+    lda $3C
+    sec
+    sbc #$0002
+    sta $3C
+    lda $3E
+    sbc #$0000
+    sta $3E
+    lda $3C
+    tax
+    pla
+    sep #$20
+    xba
+    sta $400000,x
+    xba
+    sta $400001,x
+    rep #$20
+    lda $34
+    clc
+    adc #$1C9A
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $22
+    lda $34
+    clc
+    adc #$1C9C
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l rdw_ea_l
+    sta $20
+    ; INDIRECT-BRIDGE jsr (a0) -> ibridge, resume through bank-$94 sentinel $00FD.
+    lda #brd3b0_1t
+    sta $40
+    lda #$00FD
+    sta $42
+    lda $20
+    sta $52
+    lda $22
+    sta $50
+    jml.l ibridge
+entry_d3b0t_bridge_end:
+
+    .org $B580
+brd3b0_1t:
+.a16
+.i16
+    lda #$0004
+    sta $9A
+    lda $9A
+    asl a
+    lda #$0000
+    sbc #$0000
+    eor #$FFFF
+    sta $9C
+    lda $3C
+    clc
+    adc $9A
+    sta $3C
+    lda $3E
+    adc $9C
+    sta $3E
+    lda #$D374
+    sta $40
+    lda #$0000
+    sta $42
+    jml.l inext
+entry_d3b0t_end:
 
 ; ============================================================================
 ; hc172_optional_hot — bounded $C172 record update with real $29B6 callbacks.

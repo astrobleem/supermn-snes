@@ -1,7 +1,24 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: July 22, 2026. Per-area detail lives in the linked docs.
+Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
+
+> ## ⚠️ R8 CHARGED-SHOT CORRECTION — July 23, 2026
+>
+> Exact v124 froze when a held Button 1 charge was released. The `$00D3B0` native handler started
+> at `$92:EFFB` but crossed a later fixed `.org $F000` island; Poppy silently let that island
+> overwrite 201 bytes in the middle of the handler. Exact v127 candidate SHA-256
+> `1a8a5742536b6142a42387546524bb0e785fac508a01e6ff5e5c53027b06db35` relocates the full body to
+> audited `$94:B400` space and adds pack-time seam assertions.
+>
+> Real-controller holds of 96, 120, and 180 video frames are green; the longest observes 600 game
+> ticks and 600 completed renders over 1,200 post-release frames with halt zero and a 138-byte
+> minimum stack margin. Normal punch/jump, enemy offense, optest 160/160, and opsweep 782/782 remain
+> green. A fresh `TESTFLAG=0` smoke also organically arms the gates and reaches gameplay at halt
+> zero. This is a charged-shot-fixed **playtest candidate**, not a playable verdict or a new FPS
+> result. v124's 29.7002 game-fps measurement remains the latest formal rate evidence. See
+> [RECOVERY.md](RECOVERY.md) R8 and
+> [the focused handoff](docs/handoff/CHARGED_SHOT_FREEZE_20260723.md).
 
 > ## ⚠️ R7 USER-PLAYTEST CORRECTION — July 22, 2026
 >

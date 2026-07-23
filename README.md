@@ -9,20 +9,27 @@ hardware, while hot paths are migrated to native 65816 over time. Every componen
 validated **differentially against ground truth** — MAME for the arcade side, a real
 SNES PPU (via Nexen) for the target side.
 
-> ## Production status (July 22, 2026) — combat-fixed technical demo, not playable
+> ## Production status (July 23, 2026) — charged-shot-fixed candidate, not playable
 >
 > The first real v105 user playtest invalidated its **playable** label: the formal 30 Hz timing
 > result was genuine, but a bad `$012B6C` HLE return broke player attacks and enemy offense, and
-> the recognizable soundtrack is audibly incomplete. Exact v124 repairs the demonstrated combat
-> failures: all 35 caller returns match MAME, attack/jump visibly respond, and enemies activate
-> attacks and damage Superman in the retained idle-combat check.
+> the recognizable soundtrack is audibly incomplete. Exact v124 repaired those demonstrated
+> combat paths, but the next playtest found that releasing a held Button 1 energy charge froze it.
+> `$D3B0` crossed a later fixed ROM island and had 201 bytes silently overwritten.
 >
-> v124 ROM SHA-256:
-> `777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352`.
-> Its clean-power-on production window is stable through tick 2,210, but records **1,783 game
+> Exact v127 candidate SHA-256:
+> `1a8a5742536b6142a42387546524bb0e785fac508a01e6ff5e5c53027b06db35`.
+> The full handler is now in audited free space; three charge durations remain live through as
+> many as 1,200 post-release frames, while normal punch/jump and enemy offense remain green.
+> Current-ROM interpreter gates are optest 160/160 and opsweep 782/782. A fresh `TESTFLAG=0`
+> smoke also organically arms the production gates and reaches gameplay with halt zero.
+>
+> No new rate is inferred from those checkpointed tests. v124's clean-power-on production window
+> remains the latest formal measurement: **1,783 game
 > ticks in 3,602 SNES frames = 29.7002 game-fps** at **360,990.164 cycles/tick**. That misses the
 > explicit 30 Hz / 358K gates, so the honest status is **near-30 Hz interactive technical demo,
-> not playable or shippable**. See [RECOVERY.md](RECOVERY.md) R7 and
+> not playable or shippable**. See [RECOVERY.md](RECOVERY.md) R8,
+> [the charged-shot handoff](docs/handoff/CHARGED_SHOT_FREEZE_20260723.md), and
 > [CONFESSION.md](CONFESSION.md).
 >
 > Playtest controls: **Select** = coin, **Start** = start, **B/Y** = arcade Button 1
@@ -45,11 +52,11 @@ SNES PPU (via Nexen) for the target side.
 
 | Area | State |
 |---|---|
-| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Final-v124 correctness gates **opsweep 782/782 + optest 160/160**. |
+| **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Current-v127 correctness gates **opsweep 782/782 + optest 160/160**. |
 | Graphics pipeline | ✅ current Nexen cold boot renders the settled level and conserves every formal-window draw; ⚠️ exact aligned same-state MAME pixel fidelity remains open |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **30 Hz playability budget** | ❌ **not cleared by retained v124** — formal power-on gameplay window is **29.7002 game-fps / 360,990.164 mean SA-1 cycles/tick**; ordering, progress, renderer, input, sound-ring, mirror, and stack checks remain healthy through tick 2,210 |
+| **30 Hz playability budget** | ❌ **not cleared by the latest formal run (v124)** — power-on gameplay window is **29.7002 game-fps / 360,990.164 mean SA-1 cycles/tick**; v127 has no new formal rate result |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
 | Audio (YM2610 → SNES TAD) | ⚠️ **organic transport works; musical fidelity does not** — the first user playtest reports recognizable music that cuts out. A current capture shows no TAD stop/reload/drop or ≥200 ms digital silence, but ignored enemy SFX, placeholder SFX, trimmed samples, and untranscribed pitch/LFO/portamento remain |

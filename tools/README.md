@@ -112,6 +112,10 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
 - **`recovery_baseline.py`** [S] — production `TESTFLAG=0` cold boot, exact accelerator-arm
   observation, real virtual-mailbox coin/start inputs, counter-vs-hook validation, and honest
   separation of SNES video frames, Superman ticks, SA-1 cycles, and host throughput.
+- **`validate_charged_shot.py`** [S] — checkpointed real-controller B hold/release regression.
+  It records the `$D3B0` charged-shot native entry and relocated continuation, game-tick/render
+  progress, projectile state, production gates, task-stack floors, screenshots, and a first-stall
+  state/CPU trace. This is charged-shot liveness evidence, never cold-boot or FPS evidence.
 - **`profile_continuous.py`** [P/S] — simultaneous, non-pausing phase hooks using the R5 Nexen
   `cycleCount` notification stamp. Profiles clamp -> virtual IRQ -> `$3A92` -> next clamp without
   the stop-at-each-hook distortion that invalidated older phase accounting. It rejects cross-loads

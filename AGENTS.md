@@ -12,7 +12,7 @@ Project-state documents conflict. Use this precedence order:
    accounting as the baseline. Only a later dated `RECOVERY.md` result that explicitly supersedes
    an individual claim can replace it; otherwise, where documents conflict, believe the confession.
    It was recovered from the old `sound-p3` worktree during repository consolidation.
-2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R7 results
+2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R8 results
    supersede the older campaign projections they explicitly close.
 3. The newest branch/worktree-specific handoff and evidence (`docs/PROFILE_CAMPAIGN.md`,
    `MAIN_PLANNING_HANDOFF.md`, `supersoundhandoff.md`, and focused `docs/handoff/*`).
@@ -43,6 +43,14 @@ without explicit instruction.
   PC. It passes 35/35 focused MAME cases and 4/4 live combat-spine differentials; Button 1 visibly
   attacks, Button 2 visibly jumps, and an 800-frame idle check activates enemy attacks and changes
   health from 20 to 18 (two points of damage).
+- Exact v124 also freezes when a charged Button 1 shot is released. Its `$00D3B0` native handler
+  flowed from `$92:EFFB` across a later `.org $F000` island, which silently replaced 201 bytes.
+  Exact v127 candidate SHA-256
+  `1a8a5742536b6142a42387546524bb0e785fac508a01e6ff5e5c53027b06db35` relocates the complete
+  body to audited `$94:B400` space. Real-controller 96/120/180-frame holds are green through up to
+  1,200 frames after release, with continued ticks/renders, halt zero, and intact stack floors.
+  A fresh `TESTFLAG=0` smoke organically arms production and reaches gameplay. This is focused
+  charged-shot/cold-boot-reachability evidence, not a new FPS result or human-confirmed playability.
 - v124's formal power-on production window recorded **1,783 game ticks in 3,602 SNES video
   frames = 29.700167 game-fps**, at **360,990.164 SA-1 cycles/tick**. It ended at tick 2,210 with
   halt zero, task mask `$FFF1`, 14 initialized task stacks, a 138-byte minimum margin, valid real
@@ -62,7 +70,7 @@ without explicit instruction.
   R6 paced scheduler/renderer ownership design and survives through tick 2,210, but its whole
   production tick still misses the explicit rate and cycle gates.
 - The legal MC68000 interpreter and shipped native escapes have strong differential evidence:
-  final-v124 optest 160/160, opsweep 782/782, plus focused MAME and Nexen differentials are real.
+  current-v127 optest 160/160, opsweep 782/782, plus focused MAME and Nexen differentials are real.
   This is still not proof of every whole-program address-space path; R4's bank-assumption bugs
   remain the warning against promoting focused vectors into universal correctness.
 - A settled production-cold-boot Nexen capture renders the recognizable level background, HUD,

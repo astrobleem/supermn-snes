@@ -471,6 +471,13 @@ fix = relocate those bodies (escbank has no free tail — move to escbank3/4) th
 through the table. Run `python3 tools/audit_banks.py` after every build until it's wired into
 build_interp.sh (blocked on this fix — the audit currently exits 1 on the pre-existing violation).
 
+**R8 correction (2026-07-23):** the overlap was not latent. `$D3B0` was enabled in the current
+translation table and exact v124 reached it when a charged shot was released. Its body began at
+`$92:EFFB`; the fixed `$92:F000` island replaced 201 middle bytes and the SA-1 fell into an
+address-zero exception loop. v127 keeps a trampoline at `$92:EFFB`, relocates the complete body to
+`$94:B400/$B580`, and adds pack assertions for every seam. The full bank audit is now green. See
+`docs/handoff/CHARGED_SHOT_FREEZE_20260723.md`.
+
 ## Phase-1 progress ledger
 
 | item | status | win | commit |
@@ -1189,7 +1196,27 @@ in this campaign.
 
 ### Current verdict
 
-v124 is the retained combat-fixed ROM for user testing and is stable in the measured long window.
-It remains a **near-30 Hz interactive technical demo, not playable or shippable**. A future
+v124 was the retained combat-fixed ROM for user testing and is stable in the measured long window,
+but R8 supersedes it after the charged-shot freeze below. Its performance result remains current.
+The port remains a **near-30 Hz interactive technical demo, not playable or shippable**. A future
 playable claim requires the same exact ROM to clear the cold-boot 30 Hz/cycle/ordering/renderer
 contract and then pass a real human combat/audio test.
+
+## 2026-07-23 user-playtest correction: charged-shot `$D3B0` overlap repaired
+
+Exact v124 reproduced the user's freeze after a 96-frame real-controller B hold and release. It
+reached the charged-shot animation/projectile path, advanced 50 more ticks/renders, then stalled
+with the SA-1 in an address-zero `BRK`/`RTI` loop. The root cause was the old bank-$92 overlap
+warning above: `$D3B0` flowed from `$EFFB` through `$F18E`, while later `.org $F000` bytes replaced
+`$F000-$F0C8`.
+
+Exact v127 candidate `1a8a5742…` relocates the original body to `$94:B400`, fixes its continuation
+at `$94:B580`, and leaves a table-compatible trampoline at `$92:EFFB`. Packer seam assertions and
+the full bank audit are green. Focused 96/120/180-frame charge holds keep tick and render progress
+for 600/600/1,200 post-release frames; normal attacks, enemy offense, optest 160/160, and opsweep
+782/782 also remain green. A shortened `TESTFLAG=0` cold-boot smoke organically arms the gates and
+reaches gameplay at frame 5,711 / tick 291 with halt zero; it is not formal FPS evidence.
+
+This repair changes gameplay correctness, not the performance verdict. v124 remains the latest
+formal power-on rate result, and v127 remains a human-unconfirmed playtest candidate. Full evidence:
+`docs/handoff/CHARGED_SHOT_FREEZE_20260723.md` and `RECOVERY.md` R8.

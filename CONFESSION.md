@@ -1,15 +1,53 @@
 # CONFESSION.md
 
 An honest accounting of what is wrong, overclaimed, or unfinished in this project, originated
-2026-07-12 and last corrected after the first real v105 user playtest on 2026-07-22. The project's
+2026-07-12 and last corrected after the charged-shot user playtest on 2026-07-23. The project's
 older status docs and memory files were optimistic to the point of being misleading. Where a
 historical claim below conflicts with the newest dated correction, use the newer result.
 
 The current single-sentence version: **v105's formal 30 Hz measurement was real, but calling it
 playable was false: its combat return routing broke both player attacks and enemy offense, and its
-recognizable music is audibly incomplete; v124 repairs the demonstrated combat failures and is
-stable in the current long run, but measures 29.7002 game-fps / 360,990.164 SA-1 cycles per tick,
-so it remains a near-30 Hz interactive technical demo, not a playable or shippable port.**
+recognizable music is audibly incomplete; v124 repaired those combat paths but froze when a charged
+shot was released; v127 repairs that silently overwritten handler in focused tests, while v124's
+29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest formal performance
+measurement, so the port is still a near-30 Hz interactive technical demo, not playable or
+shippable.**
+
+## Post-charged-shot correction — July 23, 2026
+
+The next real playtest found another concrete gameplay failure: holding Button 1 long enough to
+charge Superman's energy shot and then releasing it froze the game. The input sequence was correct.
+Exact v124 reproduces the failure after reaching the charged-shot animation and projectile path:
+the post-release tick and renderer counters stop, and the SA-1 eventually falls into an
+address-zero `BRK`/`RTI` loop while the emulated interpreter halt word remains zero.
+
+The root cause was an assembly layout defect already foreshadowed in the old performance ledger.
+The generated `$00D3B0` state handler began at `$92:EFFB` and extended through `$92:F18E`, across
+the later fixed `.org $F000` `jah2_ext` island. Poppy silently accepts overlap, so the later island
+replaced 201 bytes in the middle of the handler. Ordinary attacks could work while the charged
+release still entered corrupt native code.
+
+Exact v127 candidate ROM SHA-256
+`1a8a5742536b6142a42387546524bb0e785fac508a01e6ff5e5c53027b06db35` keeps `$92:EFFB` as a
+trampoline and relocates the full original body plus its continuation into audited free space at
+`$94:B400/$94:B580`. The packer now asserts the trampoline, fixed islands, body boundaries,
+cross-bank bridge, and surrounding zero seams.
+
+Focused real-controller results tied to that hash are green for 96-, 120-, and 180-video-frame B
+holds. The longest case observes 1,200 frames after release, with 600 game ticks and 600 completed
+renders, two `$D3B0` entries and two relocated continuations, halt zero, intact production gates,
+and a 138-byte minimum saved-stack margin. Independent normal punch/jump and 800-frame enemy-offense
+checks remain green. Current-ROM interpreter gates are also optest 160/160 and opsweep 782/782
+cells (1,564/1,564 vectors).
+
+A fresh `TESTFLAG=0` smoke also organically arms the production gates and reaches gameplay through
+the real coin/Start mailbox, ending at frame 5,711 / tick 291 with halt zero, active rendering, a
+valid sound ring, an exact ROM/WRAM supervisor mirror, and intact initialized stack floors. This
+closes the demonstrated charged-shot freeze and proves cold-boot reachability, not project
+playability. v127 still needs human confirmation on the exact ROM, and no new formal uninterrupted
+rate/budget result supersedes v124's 29.700167 game-fps / 360,990.164 cycles-per-tick result. The
+known audio defects remain untouched. See `docs/handoff/CHARGED_SHOT_FREEZE_20260723.md` and
+`RECOVERY.md` R8.
 
 ## Post-user-playtest correction — July 22, 2026
 

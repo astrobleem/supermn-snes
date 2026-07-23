@@ -17,12 +17,13 @@ import re, sys
 from pathlib import Path
 
 # jmp-state class (convention: NO return-push; reached by `jmp (a0)` -> op_jmp_idx -> ojmp_hook).
-# These three are proven bit-exact through xlat_dispatch (val_frame_diff GREEN; 3 escapes, 3 pages).
-# d386/d3b0 ($D3 handlers) are EXCLUDED: each dispatches fine alone, but co-dispatching either with
-# d0d0 diverges -- a real escape INTERACTION (shared $D0-$D3 state) that routing real dispatch through
-# the table exposed (the old ojmp cmp-chain never co-dispatched them). They fall through to the
-# interpreter (bit-exact) until that interaction is debugged. See task #70 / memory.
-JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC, 0xD07A, 0xD718, 0xD3F6}  # re-testing d386/d3b0 under lockstep_trap
+# Historical campaign notes said $D386/$D3B0 were excluded after a co-dispatch
+# divergence, but the current allowlist already enables both.  The latent cause
+# was a Poppy layout overlap: $D3B0 flowed across the later fixed $92:F000
+# island.  v127 keeps the $92:EFFB table entry as a trampoline to the complete
+# audited body at $94:B400.  Keep the mapping enabled and let the ROM packer
+# assert both sides of that seam.
+JMP_STATE_PCS = {0xD5C4, 0xD0D0, 0xD6FC, 0xD386, 0xD3B0, 0xD01A, 0xD05E, 0xD0BC, 0xD07A, 0xD718, 0xD3F6}
 
 # AOT-TABLE / rts-class entries (transpiled with transpile.py --table; faithful link/unlk/rts,
 # entered via xlat_dispatch with the real return already on the 68K stack). $0CE4 = the hottest

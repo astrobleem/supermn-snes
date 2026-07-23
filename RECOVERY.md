@@ -1,19 +1,21 @@
 # Project recovery — canonicalization and evidence baseline
 
-Started July 12, 2026; latest evidence reconciliation July 22, 2026. This is the active
+Started July 12, 2026; latest evidence reconciliation July 23, 2026. This is the active
 project-control document. It converts the repository from overlapping optimistic handoffs into one
 evidence-backed engineering line. **R7 supersedes R6's playable verdict after the first real user
 playtest exposed broken combat and audibly incomplete music. R6 remains valid historical
 performance/scheduler/renderer evidence for exact v105; R7 identifies the retained v124
-combat-fixed technical demo and its new production result.**
+combat-fixed technical demo and its new production result. R8 supersedes v124 as the playtest ROM
+after reproducing and repairing its charged-shot release freeze; it does not replace v124's formal
+performance measurement.**
 
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
 - The completed recovery line became `main`; current recovery work is on
   `agent/playability-recovery`. Exact ROM hashes, rather than an old handoff's branch name, identify
-  each measured candidate. v105 (`72d925ac…`) is historical; retained combat-fixed v124 is
-  `777507c9…`.
+  each measured candidate. v105 (`72d925ac…`) is historical; formal combat-fixed v124 is
+  `777507c9…`; charged-shot-fixed v127 candidate is `1a8a5742…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -54,6 +56,11 @@ dirty `main` worktree identified above.
 - R7's v124 evidence: 35/35 `$012B6C` MAME cases, 4/4 live combat-spine differentials, visible
   Button 1/2 actions, enemy attack plus health loss in an 800-frame idle window, and a formal
   power-on 3,602-frame production run with current progress and intact safety checks.
+- R8's v127 focused evidence: exact reproduction of v124's charged-release stall, a concrete
+  `$92:EFFB`/fixed-`$92:F000` overlap, audited relocation of the full `$D3B0` body, three green
+  real-controller charge durations through 1,200 post-release frames, retained normal attack/jump
+  and enemy-offense behavior, fresh 160/160 plus 782/782 interpreter gates, and a green organic
+  power-on-to-gameplay smoke.
 
 ### Partial evidence, not a project-level verdict
 
@@ -66,7 +73,9 @@ dirty `main` worktree identified above.
 
 - Playability, a complete playthrough, every stage/boss path, real-cartridge timing, or
   shippability. v105 met a narrow formal performance contract but failed the first human combat
-  test. v124 repairs those demonstrated combat failures but misses both formal 30 Hz thresholds.
+  test. v124 repaired those combat failures but froze on charged-shot release and missed both
+  formal 30 Hz thresholds. v127 repairs the demonstrated freeze in focused tests but has not
+  passed a human confirmation or a new formal rate/budget run.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
 - Complete/faithful sound by ear. The first user playtest reports recognizable music that audibly
@@ -563,16 +572,81 @@ incomplete**. No audio-fidelity fix is claimed in R7.
 
 #### R7 verdict
 
-v124 is the retained combat-fixed playtest ROM and a stable near-30 Hz technical demo in the tested
-window. It is **not playable under the repository contract** because it misses both formal 30 Hz
-thresholds, has not passed a human confirmation of repaired combat, and still has known audible
-music/SFX incompleteness. Restore the word playable only after one exact ROM clears the cold-boot
-rate/budget/ordering/renderer gates and a real user confirms combat and audio behavior.
+v124 was the retained combat-fixed playtest ROM and a stable near-30 Hz technical demo in the tested
+window. R8 supersedes it as a playtest candidate after the charged-shot freeze below. Its formal
+performance evidence remains current. It is **not playable under the repository contract** because
+it misses both formal 30 Hz thresholds and still has known audible music/SFX incompleteness.
+
+### R8 — Charged-shot release freeze and layout repair
+
+#### User reproduction and failure signature
+
+Holding Button 1 to charge Superman's energy shot and releasing it froze exact v124. The focused
+real-controller reproduction reached the shot animation and projectile path, then advanced only 50
+more game ticks/renders. By relative frame 130 it had a sustained stall; the retained trace ended
+in an SA-1 address-zero `BRK`/`RTI` loop with no new game or render progress. MAME 0.287 remained
+live under the organic hold/release, confirming that this was not intended arcade behavior.
+
+#### Root cause and repair
+
+The generated `$00D3B0` handler started at `$92:EFFB` and flowed through `$92:F18E`. The later
+fixed `.org $F000` `jah2_ext` section silently overwrote `$92:F000-$92:F0C8`. This was the latent
+overlap warned about in the older profile ledger; assembly success was not evidence that both
+sections survived ROM packing.
+
+v127 retains `$92:EFFB` as the translation-table entry but makes it a `JML $94:B400` trampoline.
+The complete original body is fixed at `$94:B400`, its indirect-call continuation at `$94:B580`,
+and the following `$D226` handler at `$92:F18F`. The bank-$94 continuation uses its established
+`$00FD` return sentinel while crossing to the bank-$92 indirect bridge. New pack assertions verify
+both sides of every island plus the zero seams, and `tools/audit_banks.py` is green.
+
+Exact v127 candidate ROM SHA-256:
+`1a8a5742536b6142a42387546524bb0e785fac508a01e6ff5e5c53027b06db35`.
+
+#### Focused validation
+
+| Gate | v127 result |
+|---|---:|
+| B hold 96 / post-release observation | 300 ticks and 300 renders in 600 frames; green |
+| B hold 120 / post-release observation | 300 ticks and 300 renders in 600 frames; green |
+| B hold 180 / post-release observation | 600 ticks and 600 renders in 1,200 frames; green |
+| `$D3B0` trampoline / `$94:B580` continuation after release | 2 / 2 hits in each case |
+| Long-case halt / minimum stack margin | `$0000` / 138 bytes |
+| Visible normal Button 1 / Button 2 actions | both green |
+| Idle enemy offense | attack active; health 20 -> 18 over 800 frames |
+| Current-ROM optest / opsweep | 160/160 / 782/782 cells |
+| Escape-bank overlap audit | all banks green |
+| `TESTFLAG=0` organic cold-boot smoke | gameplay settled; frame 5,711 / tick 291 / halt `$0000` |
+
+The longest charge case runs from tick 1,029 to 1,718 and also takes live enemy damage from health
+20 to 16. These are checkpointed behavior and safety checks, not FPS evidence.
+
+The shortened power-on smoke organically armed every production gate at frame 5,242, drove coin and
+Start through the real controller mailbox, and reached gameplay. At its frame-5,711 endpoint,
+tick/render progress, sound ring, renderer state, supervisor mirror, and initialized stack floors
+were healthy. Because this was sampled and intentionally ended after a short settle, it is
+cold-boot reachability evidence, not a new formal rate measurement.
+
+Primary focused evidence is under
+`build/user-playtest-v105-investigation/charged-shot-v127-relocated-*`,
+`visible-actions-v127-charged-shot-fix-v2/`, and
+`idle-combat-v127-charged-shot-fix-v1/`. Cold-boot evidence is in
+`production-v127-charged-shot-coldboot-smoke-v1/`. The root-cause narrative and exact commands are in
+`docs/handoff/CHARGED_SHOT_FREEZE_20260723.md`.
+
+#### R8 verdict
+
+v127 is the charged-shot-fixed playtest candidate, not a playable release. It still requires a
+human confirmation of this exact ROM. v124's 29.700167 game-fps / 360,990.164 cycles-per-tick run
+remains the latest formal performance result, and R7's audio defects remain open. Restore the word
+playable only after one exact ROM clears the cold-boot rate/budget/ordering/renderer gates and a
+real user confirms combat and audio behavior.
 
 ## Decision rule after the baseline
 
-R7 supersedes R6's playable label while preserving its exact v105 performance evidence. Preserve
-the production evidence contract: local/checkpoint improvements remain local evidence, while a new
-playability claim requires another power-on uninterrupted run plus a human combat/audio playtest.
-Continue under the honest label **interactive technical demo, not playable or shippable**. v124 is
-the retained safe playtest hash; do not resurrect v125/v126 or project a local speedup into fps.
+R8 supersedes v124 as the playtest candidate while preserving R7's exact v124 formal performance
+evidence. Preserve the production evidence contract: local/checkpoint improvements remain local
+evidence, while a new playability claim requires another power-on uninterrupted run plus a human
+combat/audio playtest. Continue under the honest label **interactive technical demo, not playable
+or shippable**. v127 is the current charged-shot-fixed candidate; do not resurrect v125/v126 or
+project a local result into FPS.

@@ -736,6 +736,23 @@ if _osp.exists("src/escbank.bin"):
                 return int(fields[0].split(":", 1)[1], 16)
         raise AssertionError("missing escbank layout symbol %s" % symbol)
 
+    entry_d3b0 = esc_off("entry_d3b0")
+    entry_d226 = esc_off("entry_d226")
+    assert entry_d3b0 == 0xEFFB and entry_d226 == 0xF18F, (
+        "$D3B0 trampoline or following $D226 handler moved in bank $92"
+    )
+    assert ESC[entry_d3b0 - 0x8000:0x7000] == bytes.fromhex(
+        "5c00b49400"
+    ), (
+        "$D3B0 charged-shot trampoline was overwritten before jah2_ext@$92:F000"
+    )
+    assert ESC[0x7000:0x7003] == bytes.fromhex("ad1a07"), (
+        "jah2_ext lost its fixed $92:F000 entry after the $D3B0 relocation"
+    )
+    assert ESC[entry_d226 - 0x8000:entry_d226 - 0x8000 + 2] == bytes.fromhex(
+        "c230"
+    ), "$D226 handler lost its fixed REP #$30 prologue"
+
     entry_fb8 = esc_off("entry_fb8")
     entry_fb8_end = esc_off("entry_fb8_end")
     gm_memset = esc_off("gm_memset")
@@ -863,17 +880,49 @@ if _osp.exists("src/escbank2.bin"):
         "a538"
     ), "$08FA generated-body seam no longer begins with LDA $38"
     c172_flow_end = esc2_off("escbank2_flowing_end")
+    entry_d3b0t = esc2_off("entry_d3b0t")
+    entry_d3b0t_bridge_end = esc2_off("entry_d3b0t_bridge_end")
+    brd3b0_1t = esc2_off("brd3b0_1t")
+    entry_d3b0t_end = esc2_off("entry_d3b0t_end")
     c172_optional = esc2_off("hc172_optional_hot")
     c172_optional_end = esc2_off("hc172_optional_hot_end")
-    assert c172_flow_end <= 0xD800, (
-        "escbank2 flowing bodies crossed the fixed $D800 C172 helper island"
+    assert c172_flow_end <= entry_d3b0t == 0xB400, (
+        "escbank2 flowing bodies crossed the fixed $B400 D3B0 relocation island"
+    )
+    assert (
+        entry_d3b0t < entry_d3b0t_bridge_end <= brd3b0_1t == 0xB580
+        and brd3b0_1t < entry_d3b0t_end <= 0xD800
+    ), (
+        "$D3B0 relocation crossed its continuation or the fixed $D800 C172 island"
     )
     assert c172_optional == 0xD800 and c172_optional_end <= 0xE000, (
         "$C172 optional-callback helper crossed its fixed $94:D800-$DFFF island"
     )
-    assert ESC2[c172_flow_end - 0x8000:0x5800] == bytes(
-        0xD800 - c172_flow_end
-    ), "escbank2 flowing-body -> $D800 seam was overwritten"
+    for seam_start, seam_end, label in (
+        (c172_flow_end, entry_d3b0t, "flowing bodies -> $D3B0"),
+        (entry_d3b0t_bridge_end, brd3b0_1t, "$D3B0 bridge -> continuation"),
+        (entry_d3b0t_end, c172_optional, "$D3B0 continuation -> $C172"),
+    ):
+        assert ESC2[
+            seam_start - 0x8000:seam_end - 0x8000
+        ] == bytes(seam_end - seam_start), (
+            "escbank2 %s seam was overwritten" % label
+        )
+    assert ESC2[
+        entry_d3b0t - 0x8000:entry_d3b0t - 0x8000 + 4
+    ] == bytes.fromhex("c230a530"), (
+        "$D3B0 relocation lost its REP #$30 / LDA $30 prologue"
+    )
+    assert ESC2[
+        entry_d3b0t - 0x8000:entry_d3b0t_bridge_end - 0x8000
+    ].count(bytes.fromhex("5c28f892")) == 1, (
+        "$D3B0 relocation lost its sole cross-bank indirect bridge"
+    )
+    assert ESC2[
+        brd3b0_1t - 0x8000:brd3b0_1t - 0x8000 + 3
+    ] == bytes.fromhex("a90400"), (
+        "$D3B0 continuation moved or lost its 16-bit prologue"
+    )
     h8_mark_palette_dirty = esc2_off("h8_mark_palette_dirty")
     h8_mark_palette_dirty_end = esc2_off("h8_mark_palette_dirty_end")
     assert h8_mark_palette_dirty == 0xDB00 and h8_mark_palette_dirty_end <= 0xDB20, (

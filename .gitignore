@@ -71,6 +71,7 @@ tmp*
 /sub*_regs.txt
 
 # --- MAME per-run config (input/dip state; regenerable, not source) ---
+/cfg/
 tools/mame-trace/cfg*/
 
 # --- Derivative audio (converted from the copyrighted game's music) ---
