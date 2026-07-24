@@ -123,17 +123,33 @@ entry_23342_after_return:
     bne Lf23342_1
     jmp L23342_23354
 Lf23342_1:
-    ; CALL-BRIDGE jsr $2380c.l -> ojmp_hook (callee --table escape, else interpret), resume br23342_1
-    lda #br23342_1
-    sta $54
-    lda #$00FB
-    sta $56
-    jsl.l push32_l
-    lda #$380C
-    sta $40
-    lda #$0002
-    sta $42
-    jml.l ojmp_hook
+    ; Poppy resets mode inference at this generated branch label even though
+    ; the live path has M/X=16.  The old 24-byte stream encoded four immediates
+    ; as A8; at runtime the first LDA consumed STA's $85 opcode as its high
+    ; byte, then operand $54 became MVN $A9,$FB and erased the SA-1 IRAM mirror.
+    ; Keep br23342_1 and every later continuation fixed by routing the same
+    ; 24-byte footprint to the explicitly mode-pinned seam at $98:8F5E.
+    jml.l $988F5E
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 br23342_1:
 L23342_23354:
     ; Poppy resets mode inference at this generated continuation label.  This
@@ -2339,6 +2355,26 @@ h23342_empty_miss:
     jsl.l push32_l
     jmp entry_23342_after_return
 h23342_empty_end:
+
+    ; Correct-width CALL-BRIDGE for Lf23342_1.  This fills the previously
+    ; unused $8F5E-$8F79 seam and leaves the fixed $8F80 island untouched.
+    .org $8F5E
+h23342_call_bridge:
+    .a16
+    .i16
+    ; jsr $2380c.l -> ojmp_hook (callee --table escape, else interpret),
+    ; resume br23342_1 through the bank-$98 $00FB sentinel.
+    lda #br23342_1
+    sta $54
+    lda #$00FB
+    sta $56
+    jsl.l push32_l
+    lda #$380C
+    sta $40
+    lda #$0002
+    sta $42
+    jml.l ojmp_hook
+h23342_call_bridge_end:
 
     .org $8F80
 h23e34_empty:

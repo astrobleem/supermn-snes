@@ -101,8 +101,11 @@ tails capped (in-game hits retrigger gate-style, masking this).
 For exact v130 (`1ec22cbc…`), the live SPC oracle matches 47,886 bytes of common data and
 8,196 bytes of Main BGM 1 byte for byte, with 1,030 bytes before the `$F000` echo buffer.
 The organic 29.985-second capture has no internal 200 ms or 750 ms quiet interval. These are
-compiler/load/continuity checks only; the octave pass remains unaccepted until it is compared by ear
-with the arcade track.
+compiler/load/continuity checks only. The later v134 human test heard no noticeable difference
+from the five-anchor pass, so it is now rejected as an audible fix. Commit `9b39f95` did regenerate
+the MML/project data; the resulting 96,065-byte `audio-data.bin` SHA-256 `64f58ef…` is packed
+byte-for-byte in exact v135 at ROM file offset `$2D002B`. The next audio pass needs direct
+arcade-reference listening/transcription rather than another byte-level acceptance claim.
 
 ## Concurrent live-gameplay validation (P3 close-out, 2026-07-10)
 

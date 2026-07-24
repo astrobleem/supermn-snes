@@ -3,7 +3,44 @@
 Last updated: July 24, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
-> ## ⚠️ R14 v133 STAGE 2 REJECTION / v134 RESPONSE — July 24, 2026
+> ## ⚠️ R15 v134 FREEZE/HUD/AUDIO REJECTION / v135 RESPONSE — July 24, 2026
+>
+> Exact v134 is human-rejected. The tester supplied a gameplay freeze state, reproduced a freeze
+> by leaving the no-credit main screen running, found the top score HUD incomplete, and heard no
+> noticeable improvement from the earlier five-anchor octave pass. The same run did throw a crate
+> and charged ball successfully; those two positive events do not make the build generally stable.
+>
+> The supplied state and a separate exact-v134 idle replay both have almost all SA-1 IRAM erased,
+> with game tick/task mask zero but no reset. Poppy had emitted an 8-bit immediate at generated
+> `$023342` branch `Lf23342_1` even though the live CPU was M=16. The CPU consumed the following
+> `$85` store opcode as immediate data, then decoded operand `$54` as `MVN $A9,$FB`, zeroing the
+> IRAM mirror.
+>
+> Exact v135 production SHA-256
+> `5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`
+> routes the unchanged-size site to an explicit `.a16/.i16` bridge and preserves both continuation
+> addresses. Its final-ROM exact-Mesen replay advances frame 11,588→13,988 and tick
+> 2,107→2,519, 1,986 frames past the reproduced v134 terminal, with halt zero and live IRAM/task
+> state.
+>
+> A narrow X1-001-wrap exception also restores the fixed Y `$E2/$F2` top-HUD rows that the
+> centered crop had discarded. The checkpointed exact-Mesen capture advances tick 1,258→1,335
+> with 14 valid stacks and a 138-byte minimum margin. Its final 88-record packed manifest and
+> screenshot contain `1UP`, `HIGH SCORE`, `2UP`, all three score rows, and complete `CREDIT 3`.
+>
+> The prior MML really was regenerated, compiled, and packed: the 96,065-byte blob SHA
+> `64f58ef…` occurs byte-for-byte in v135 at ROM offset `$2D002B`. But the human listening verdict
+> is now “no noticeable improvement,” so the octave pass is rejected as an audible fix. v135 has
+> no audio change.
+>
+> These are exact cause/regression and checkpointed HUD results, not a cold boot, full-stage
+> stability, renderer conservation, FPS, or musical-fidelity verdict. v135 remains an
+> **interactive technical-demo response candidate, not playable or shippable**. Organic Stage 2,
+> attack-animation tiles, aligned MAME pixels, audio transcription/timbre, a full playthrough, and
+> formal performance remain open. See [RECOVERY.md](RECOVERY.md) R15 and
+> [the focused handoff](docs/handoff/V135_IRAM_FREEZE_HUD_AUDIO_20260724.md).
+
+> ## HISTORICAL R14 v133 STAGE 2 REJECTION / v134 RESPONSE — July 24, 2026 (SUPERSEDED BY R15)
 >
 > The first long v133 gameplay run cleared the first boss and reached the following vertical
 > section, but the playfield did not scroll when Superman moved to the top. The 68000 game was
@@ -720,12 +757,12 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
 
 ## Recommended next steps
 
-**Current correction:** the historical throughput list below predates R6-R14 and is retained only
-as campaign history. The immediate playability work is to have the tester cold-boot exact v134,
-verify that the post-boss vertical section now scrolls and that its center-column approximation is
-visually acceptable, then continue the full-stage path. The title/attract/credit/zoom regressions,
-charged-shot silver-enemy event, first wall and crate, attack-animation tiles, timbre, renderer
-conservation, and formal power-on rate/budget gate remain in the retest set.
+**Current correction:** the historical throughput list below predates R6-R15 and is retained only
+as campaign history. The immediate playability work is to have the tester cold-boot exact v135,
+leave the no-credit attract path running past the old IRAM-erasure terminal, verify the complete
+top HUD, then continue through Stage 1 and the post-boss vertical section. Charged-shot
+silver-enemy behavior, first wall and crate, attack-animation tiles, the human-rejected audio
+timbres, renderer conservation, and the formal power-on rate/budget gate remain in the retest set.
 
 The cold side (interpreter) and the hot side (automated transpiler + bridge + video
 codegen) are both built and validated. The remaining work is **throughput** — transpile

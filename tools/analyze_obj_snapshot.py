@@ -70,73 +70,121 @@ def main() -> int:
         m.pause()
         m.load_state(args.state.resolve())
         m.pause()
-        y_plane = m.read_memory("snesWorkRam", 0x3000, 0x0400)
-        code_plane = m.read_memory("snesWorkRam", 0x4000, 0x0400)
-        xcolor_plane = m.read_memory("snesWorkRam", 0x4400, 0x0400)
+        manifest_meta = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x89BA, 2), "little"
+        )
+        if manifest_meta & 0x8000:
+            manifest_length = manifest_meta & 0x7FFF
+            packed_manifest = m.read_memory(
+                "snesWorkRam", 0xBC00, manifest_length
+            )
+            y_plane = code_plane = xcolor_plane = b""
+        else:
+            manifest_length = manifest_meta
+            packed_manifest = b""
+            y_plane = m.read_memory("snesWorkRam", 0x3000, 0x0400)
+            code_plane = m.read_memory("snesWorkRam", 0x4000, 0x0400)
+            xcolor_plane = m.read_memory("snesWorkRam", 0x4400, 0x0400)
 
     entries = []
-    y_qualified_indexes = [
-        index
-        for index in range(512)
-        if 0 < y_plane[index * 2 + 1] < 0xF0
+    if manifest_meta & 0x8000:
+        if manifest_length % 6:
+            raise RuntimeError(
+                f"packed OBJ manifest has non-record length ${manifest_length:04X}"
+            )
+        for offset in range(0, manifest_length, 6):
+            y_word = be16(packed_manifest, offset)
+            code = be16(packed_manifest, offset + 2)
+            xcolor = be16(packed_manifest, offset + 4)
+            raw_x = xcolor & 0x1FF
+            entries.append(
+                {
+                    "manifest_index": offset // 6,
+                    "code": code & 0x3FFF,
+                    "flip_x": bool(code & 0x8000),
+                    "flip_y": bool(code & 0x4000),
+                    "raw_x": raw_x,
+                    "sx": raw_x - 64,
+                    "sy": y_word & 0xFF,
+                    "palette_bank": (xcolor >> 11) & 0x1F,
+                }
+            )
+        y_qualified_indexes = []
+        y_x_qualified_indexes = []
+        rejected = {
+            "zero_code": 0,
+            "ffff_code": 0,
+            "zero_y": 0,
+            "y_240_or_more": 0,
+            "left_of_screen": 0,
+            "after_oam_cap": 0,
+        }
+    else:
+        y_qualified_indexes = [
+            index
+            for index in range(512)
+            if 0 < y_plane[index * 2 + 1] < 0xF0
+        ]
+        y_x_qualified_indexes = []
+        for index in y_qualified_indexes:
+            offset = index * 2
+            xcolor = be16(xcolor_plane, offset)
+            sx = xcolor & 0x1FF
+            if sx >= 0x100:
+                sx -= 0x200
+            if sx >= -16:
+                y_x_qualified_indexes.append(index)
+
+        rejected = {
+            "zero_code": 0,
+            "ffff_code": 0,
+            "zero_y": 0,
+            "y_240_or_more": 0,
+            "left_of_screen": 0,
+            "after_oam_cap": 0,
+        }
+        for index in range(512):
+            offset = index * 2
+            code = be16(code_plane, offset)
+            if code & 0x3FFF == 0:
+                rejected["zero_code"] += 1
+                continue
+            if code == 0xFFFF:
+                rejected["ffff_code"] += 1
+                continue
+            sy = y_plane[offset + 1]
+            if sy == 0:
+                rejected["zero_y"] += 1
+                continue
+            if sy >= 240:
+                rejected["y_240_or_more"] += 1
+                continue
+            xcolor = be16(xcolor_plane, offset)
+            sx = xcolor & 0xFF
+            if xcolor & 0x100:
+                sx -= 0x100
+            if sx + 16 < 0:
+                rejected["left_of_screen"] += 1
+                continue
+            if len(entries) >= 128:
+                rejected["after_oam_cap"] += 1
+                continue
+            entries.append(
+                {
+                    "index": index,
+                    "code": code & 0x3FFF,
+                    "flip_x": bool(code & 0x8000),
+                    "flip_y": bool(code & 0x4000),
+                    "sx": sx,
+                    "sy": sy,
+                    "palette_bank": (xcolor >> 11) & 0x1F,
+                }
+            )
+
+    indexes = [
+        entry["index"] if "index" in entry else entry["manifest_index"]
+        for entry in entries
     ]
-    y_x_qualified_indexes = []
-    for index in y_qualified_indexes:
-        offset = index * 2
-        xcolor = be16(xcolor_plane, offset)
-        sx = xcolor & 0x1FF
-        if sx >= 0x100:
-            sx -= 0x200
-        if sx >= -16:
-            y_x_qualified_indexes.append(index)
-
-    rejected = {
-        "zero_code": 0,
-        "ffff_code": 0,
-        "zero_y": 0,
-        "y_240_or_more": 0,
-        "left_of_screen": 0,
-        "after_oam_cap": 0,
-    }
-    for index in range(512):
-        offset = index * 2
-        code = be16(code_plane, offset)
-        if code & 0x3FFF == 0:
-            rejected["zero_code"] += 1
-            continue
-        if code == 0xFFFF:
-            rejected["ffff_code"] += 1
-            continue
-        sy = y_plane[offset + 1]
-        if sy == 0:
-            rejected["zero_y"] += 1
-            continue
-        if sy >= 240:
-            rejected["y_240_or_more"] += 1
-            continue
-        xcolor = be16(xcolor_plane, offset)
-        sx = xcolor & 0xFF
-        if xcolor & 0x100:
-            sx -= 0x100
-        if sx + 16 < 0:
-            rejected["left_of_screen"] += 1
-            continue
-        if len(entries) >= 128:
-            rejected["after_oam_cap"] += 1
-            continue
-        entries.append(
-            {
-                "index": index,
-                "code": code & 0x3FFF,
-                "flip_x": bool(code & 0x8000),
-                "flip_y": bool(code & 0x4000),
-                "sx": sx,
-                "sy": sy,
-                "palette_bank": (xcolor >> 11) & 0x1F,
-            }
-        )
-
-    indexes = [entry["index"] for entry in entries]
     result = {
         "scope": "paused production-checkpoint OBJ population; not FPS",
         "rom": str(args.rom.resolve()),
@@ -145,28 +193,39 @@ def main() -> int:
         "state_sha256": sha256(args.state),
         "nexen": str(args.nexen.resolve()),
         "nexen_sha256": sha256(args.nexen),
+        "manifest_format": "packed" if manifest_meta & 0x8000 else "legacy",
+        "manifest_meta": manifest_meta,
+        "manifest_length": manifest_length,
         "active_count": len(entries),
         "active_index_min": min(indexes, default=None),
         "active_index_max": max(indexes, default=None),
         "active_indexes": indexes,
         "y_qualified_count": len(y_qualified_indexes),
         "y_x_qualified_count": len(y_x_qualified_indexes),
-        "y_low_zero_count": sum(
-            y_plane[index * 2 + 1] == 0 for index in range(512)
+        "y_low_zero_count": (
+            None
+            if manifest_meta & 0x8000
+            else sum(y_plane[index * 2 + 1] == 0 for index in range(512))
         ),
-        "y_low_240_or_more_count": sum(
-            y_plane[index * 2 + 1] >= 0xF0 for index in range(512)
+        "y_low_240_or_more_count": (
+            None
+            if manifest_meta & 0x8000
+            else sum(y_plane[index * 2 + 1] >= 0xF0 for index in range(512))
         ),
-        "all_zero_y_groups": {
-            str(group): sum(
-                all(
-                    y_plane[index * 2 + 1] == 0
-                    for index in range(start, start + group)
+        "all_zero_y_groups": (
+            None
+            if manifest_meta & 0x8000
+            else {
+                str(group): sum(
+                    all(
+                        y_plane[index * 2 + 1] == 0
+                        for index in range(start, start + group)
+                    )
+                    for start in range(0, 512, group)
                 )
-                for start in range(0, 512, group)
-            )
-            for group in (4, 8, 16)
-        },
+                for group in (4, 8, 16)
+            }
+        ),
         "active_by_128_entry_quarter": [
             sum(start <= index < start + 128 for index in indexes)
             for start in range(0, 512, 128)

@@ -51,6 +51,17 @@ sample remains coherent at vertical zero. Organic Stage 2 scrolling on the SNES 
 human confirmation; no playability, full-playthrough, audio, renderer-conservation, or formal
 performance verdict follows from these bounded results.**
 
+**R15 accepts the exact v134 human rejection: gameplay and the no-credit main/attract path could
+still freeze, the top score HUD was absent, and the five-anchor octave pass made no noticeable
+audible difference. The supplied freeze and an organic v134 idle replay both contain erased SA-1
+IRAM. A mistyped generated `$023342` branch encoded an 8-bit immediate on a live 16-bit path,
+turning the following `$54` operand into accidental `MVN $A9,$FB` and zeroing the IRAM mirror.
+Exact v135 routes that fixed-size site to an explicit `.a16/.i16` bridge and narrowly restores the
+X1-001-wrapped top HUD. Its final-ROM exact-Mesen replay survives 2,400 frames across the old
+terminal with live ticks/IRAM, and a checkpointed 88-record OBJ capture visibly contains all top
+labels and scores. These are freeze/HUD response results, not crash freedom, musical improvement,
+a full playthrough, or a new performance verdict.**
+
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
@@ -62,8 +73,9 @@ performance verdict follows from these bounded results.**
   is the human-rejected `1ec22cbc…`; the v131 second-playtest response candidate is
   human-rejected `be0ed971…`; the v132 title/crate/right-edge response candidate is
   human-rejected `48d7c4d6…`; the v133 title/attract/boot response candidate is superseded by its
-  human Stage 2 rejection at `15465fe6…`; and the current v134 vertical-scroll response candidate
-  is `782ae58f…`.
+  human Stage 2 rejection at `15465fe6…`; and the v134 vertical-scroll response candidate is
+  human-rejected `782ae58f…`. The current v135 IRAM-freeze/top-HUD response candidate is
+  `5aac64b6…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -144,6 +156,14 @@ dirty `main` worktree identified above.
   `BG1VOFS=0` with 14 valid stacks; and an unmodified fresh-power Mesen title sample advances
   tick 285→385 / render 264→349 with `BG1VOFS=0`. This is bridge, regression, and title evidence,
   not an organic SNES Stage 2 run or performance evidence.
+- R15's exact freeze evidence: the supplied v134 state and a separate organic idle replay both
+  reduce the game tick/task mask and almost all SA-1 IRAM to zero without taking the reset path; a
+  narrowed same-frame trace catches the live SA-1 at `$98:80B1`, DBR `$A9`, in the accidental
+  block move. Exact v135 then replays 2,400 Mesen 2.1.1 frames across that terminal, advances tick
+  2,107→2,519, ends with 475 nonzero IRAM bytes, halt zero, and no reset/IRAM-clear terminal.
+  Separately, its checkpointed packed manifest grows from 75 to 88 records and visibly restores
+  `1UP`, `HIGH SCORE`, `2UP`, and all score rows with 14 valid stacks. These are exact
+  cause/regression and HUD results, not a whole-stage stability or renderer-conservation verdict.
 
 ### Partial evidence, not a project-level verdict
 
@@ -161,15 +181,18 @@ dirty `main` worktree identified above.
   recorded Mesen title/transition/charged-shot/music regressions, then exposed the first-wall crash.
   v130 repairs that focused wall path and adds the octave/boot work; v131/v132/v133 add bounded
   renderer/crate/title/attract corrections. The user then reached the post-boss vertical section
-  on v133 and found its camera frozen. Exact v134 bridges the missing vertical state but still
-  inherits the red burst-render conservation result and has passed neither the organic Stage 2
-  retest, a full-stage/full-playthrough test, nor a new formal rate/budget run.
+  on v133 and found its camera frozen. Exact v134 bridges the missing vertical state, but its human
+  run supplied a later generic gameplay/attract freeze with erased SA-1 IRAM. Exact v135 repairs
+  the reproduced erasure and restores the top HUD, but it still inherits the red burst-render
+  conservation result and has passed neither the organic Stage 2 retest, a
+  full-stage/full-playthrough test, nor a new formal rate/budget run.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
 - Complete/faithful sound by ear. The user now identifies excessive sample transposition as a
-  concrete timbre defect. R10 adds five first-stage octave anchors, but only a new listening test
-  can accept or reject that authoring pass; ignored/placeholder SFX and missing
-  pitch/LFO/portamento remain.
+  concrete timbre defect. R10 regenerated and recompiled Main BGM MML with five first-stage octave
+  anchors, and exact blob/ROM checks prove those bytes shipped. The later v134 listening test heard
+  no noticeable difference, so that pass is now human-rejected rather than awaiting acceptance;
+  ignored/placeholder SFX and missing pitch/LFO/portamento remain.
 - Organic firing of every mapped music/SFX trigger.
 
 ## Canonical tools
@@ -1294,13 +1317,93 @@ player-animation tiles, crate/silver-enemy/wall behavior on this hash, musical f
 conservation, aligned MAME pixels, a complete playthrough, and formal performance remain open.
 The correct label remains **interactive technical demo, not playable or shippable**.
 
+### R15 — v134 SA-1 IRAM-freeze/HUD/audio rejection and v135 response
+
+#### Human v134 correction
+
+The tester supplied `build/playtest/frozen.mss` after a gameplay freeze and reported that v134
+also froze when left on the no-credit main screen. The same test successfully threw a crate and a
+charged energy ball, found the top score HUD incomplete, and heard no noticeable improvement from
+R10's source-octave audio pass. The state is SHA-256
+`71b7939a43c5f4b8d983555add16793485eb9cb6a8b6122bd5df5a1e1e3c15f7`; those observations
+human-reject exact v134 without erasing its bounded Stage 2 bridge evidence.
+
+#### Accidental block move through SA-1 IRAM
+
+The supplied state has game tick zero, task mask zero, and almost all 2 KiB of SA-1 IRAM zero,
+while the independent video supervisor and last scene remain. It is neither a normal `$DEAD` halt
+nor an SA-1 reset. An exact-v134 neutral-input replay independently reaches the same IRAM-erased
+terminal at Mesen frame 12,002. Reset-entry and reset-control hooks remain silent.
+
+A narrowed same-frame replay catches sequential zero writes through bank `$A9` and the SA-1 at
+`$98:80B1`, DBR `$A9`. Poppy had reset accumulator-width inference at generated branch
+`Lf23342_1`. Exact v134 bytes `$A9 $C6 $85 $54 $A9 $FB` intended a 16-bit load/store, but the
+live M=16 CPU consumed `$85` as the immediate high byte and then decoded operand `$54` as `MVN`.
+The accidental block move erased the IRAM mirror. Because this is a shared `$023342` task branch,
+it accounts for both gameplay and attract failures without assigning the freeze to one object.
+
+v135 replaces that exact 24-byte site with a long jump and padding to unused `$98:8F5E-$8F79`.
+The out-of-line bridge pins `.a16/.i16`, preserves `br23342_1=$80C6` and
+`br23342_2=$80D3`, publishes the real return PC, and enters the unchanged `$02380C` callee.
+Exact ROM assertions cover the redirect, bridge bytes, continuation addresses, and both seams.
+
+#### Top-HUD wrap
+
+The centered producer had rejected arcade Y `$F0-$FF` and side X values outside `$031-$13F`.
+That removed the X1-001 wrapped rows containing `1UP`, `HIGH SCORE`, `2UP`, and all three score
+rows. v135 admits only the additionally visible `$F0-$F2` interval and compacts only fixed HUD
+rows `$E2/$F2`: left X below `$040` moves right 48 pixels, right X `$120-$16F` moves left 24,
+and centered records retain the normal crop. A fixed 5A22 helper maps `$E2` to OAM row 8 and
+`$F0-$F2` through the top sprite wrap. Ordinary gameplay and the existing bottom-credit predicate
+remain unchanged.
+
+#### Exact v135 evidence
+
+Exact v135 response-candidate production SHA-256:
+`5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`.
+
+| Gate | Exact-v135 result |
+|---|---:|
+| Production build/layout | 4 MiB ROM; pack/layout assertions green |
+| Exact-Mesen old-terminal replay | 2,400 video frames, frame 11,588→13,988; no terminal |
+| SA-1 liveness | tick 2,107→2,519; IRAM nonzero 462→475; halt `$0000`; task mask `$FFCF→$FFFF` |
+| Checkpointed HUD replay | frame 7,645→7,799; tick 1,258→1,335; render 1,183→1,259; halt `$0000` |
+| HUD population/safety | packed OBJ records 75→88; all labels/scores visible; 14/14 stacks valid; 138-byte minimum margin |
+| MML/blob provenance | prior MML was regenerated/compiled; 96,065-byte blob SHA `64f58ef…` is packed at `$2D002B` |
+| Human audio verdict | no noticeable improvement from the five-anchor pass; v135 audio unchanged |
+| Cold boot / organic Stage 2 / full stage / formal FPS | not run |
+
+The freeze replay uses a last-healthy exact-v134 checkpoint with the final v135 ROM selected. It
+passes the reproduced frame-12,002 terminal by 1,986 frames and retains changing ticks/IRAM. The
+HUD replay explicitly refreshes the selected ROM's video mirror; its final paused-state analyzer
+decodes all 88 packed records, and its screenshot shows the complete top labels/scores plus
+`CREDIT 3`. The queue-backed checkpoint did not hit the direct-DMA equivalence hook, so that
+attempt is not counted.
+
+Primary evidence:
+
+- `build/user-playtest-v105-investigation/v134-user-frozen-state-initial-v1/`
+- `build/user-playtest-v105-investigation/v134-idle-iram-wipe-trace-mesen211-v2/`
+- `build/user-playtest-v105-investigation/v134-idle-iram-wipe-timedburst10ms-mesen211-v7/`
+- `build/user-playtest-v105-investigation/v135-final-idle-iram-wipe-regression-mesen211-v2/`
+- `build/user-playtest-v105-investigation/v135-hud-full-top-band-mesen211-v3/`
+- `docs/handoff/V135_IRAM_FREEZE_HUD_AUDIO_20260724.md`
+
+#### R15 verdict
+
+v135 supersedes human-rejected v134 only as the current **response candidate**. It repairs the
+reproduced common IRAM erasure and restores the observed missing HUD rows, but the final exact hash
+has not completed a human stage, a fresh cold-boot soak, organic Stage 2, renderer conservation,
+or a formal rate/budget run. The audio pass is now human-rejected rather than “awaiting listening.”
+The correct label remains **interactive technical demo, not playable or shippable**.
+
 ## Decision rule after the baseline
 
-R14 supersedes R13's v133-response verdict while preserving R7's exact v124 formal performance
-evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10-R13's bounded
-wall/audio/boot/cache/title/attract evidence. Preserve the production evidence contract:
+R15 supersedes R14's v134-response verdict while preserving R7's exact v124 formal performance
+evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10-R14's bounded
+wall/audio/boot/cache/title/attract/scroll evidence. Preserve the production evidence contract:
 local/checkpointed/idle-attract improvements remain scoped evidence, while a new playability claim
 requires another power-on uninterrupted gameplay run plus a human combat/audio playtest. Continue
-under the honest label **interactive technical demo, not playable or shippable**. v134 is the
-current response candidate; do not resurrect human-rejected v130/v131/v132/v133, the rejected
-pre-wake DMA ordering, v125/v126, or project a local result into FPS.
+under the honest label **interactive technical demo, not playable or shippable**. v135 is the
+current response candidate; do not resurrect human-rejected v130/v131/v132/v133/v134, the
+rejected pre-wake DMA ordering, v125/v126, or project a local result into FPS.

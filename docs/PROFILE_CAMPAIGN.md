@@ -1335,3 +1335,42 @@ confirmation, renderer conservation, and formal performance remain open. v124 re
 formal rate evidence. Exact v131 is an **interactive technical-demo response candidate, not
 playable or shippable**. Full evidence is in
 `docs/handoff/V130_SECOND_PLAYTEST_20260723.md` and `RECOVERY.md` R11.
+
+## 2026-07-24 v134 human rejection: exact v135 IRAM/HUD response
+
+R12-R14 subsequently repaired bounded crate-continuation, right-edge, title/attract/credit, and
+center-column vertical-scroll defects. The first exact-v134 human run then supplied a new generic
+gameplay freeze, reported the same behavior on the no-credit main screen, found the top score HUD
+missing, and heard no noticeable improvement from R10's source-octave pass.
+
+The supplied freeze is not a `$DEAD` halt or reset. Almost all SA-1 IRAM, including game tick and
+task state, is zero while the independent 5A22 video side retains the last frame. An organic
+exact-v134 idle replay reaches the same terminal at Mesen frame 12,002. A narrowed same-frame
+trace catches the SA-1 at `$98:80B1`, DBR `$A9`, while sequential zero writes cross the IRAM
+mirror. Poppy encoded an intended 16-bit immediate as 8-bit at generated branch `Lf23342_1`; live
+M=16 execution consumed the following `$85` store opcode and decoded its `$54` operand as
+accidental `MVN $A9,$FB`.
+
+Exact v135
+`5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`
+routes the fixed 24-byte site to an explicit `.a16/.i16` bridge and keeps both continuation
+addresses fixed. Its final-ROM exact-Mesen regression advances frame 11,588→13,988 and game tick
+2,107→2,519 across the old terminal with halt zero and live IRAM/task state. A separate
+freeze-fix-only intermediate survives 6,000 frames; that longer run isolates the bridge but is not
+whole-ROM v135 evidence.
+
+The centered producer also discarded X1-001's vertically wrapped Y `$E2/$F2` HUD rows and both
+side score groups. v135 uses signature-tight X compaction and a fixed 5A22 Y-wrap helper only for
+those rows. A checkpointed exact-Mesen selected-ROM replay advances tick 1,258→1,335 with 14
+valid stacks and a 138-byte minimum margin. The final packed manifest contains 88 records and its
+screenshot visibly restores `1UP`, `HIGH SCORE`, `2UP`, all score rows, and complete `CREDIT 3`.
+
+The earlier audio work was genuinely regenerated, compiled, and packed: the 96,065-byte blob SHA
+`64f58ef…` occurs byte-for-byte at v135 ROM offset `$2D002B`. The tester's “no noticeable
+difference” verdict nevertheless rejects the five-anchor pass as an audible fix. No audio bytes
+change in v135.
+
+These results do not replace v124's formal 29.700167 game-fps / 360,990.164 cycles-per-tick
+measurement and do not close the inherited burst-render conservation failure. Exact v135 remains
+an **interactive technical-demo response candidate, not playable or shippable**. Full evidence is
+in `docs/handoff/V135_IRAM_FREEZE_HUD_AUDIO_20260724.md` and `RECOVERY.md` R15.

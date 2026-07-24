@@ -3244,6 +3244,33 @@ pbct_clean:
     rts
 pacing_bg_cache_test_end:
 
+; Convert the logical X1-001 Y byte to the established SNES OAM coordinate.
+; Ordinary $01-$EF records retain the exact v131-v134 transform ($DA-sy).
+; Newly admitted $F0-$F2 top-HUD records are the MAME foreground wrap copy:
+; their glyph pixels occupy the lower half of a 16x16 tile, so $1EA-sy maps
+; them to OAM $FA-$F8 and exposes those eight pixels at SNES rows 0-7.
+.org $A200
+.a16
+.i16
+obj_y_transform:
+    lda $EC
+    cmp #$00E2
+    beq oyt_top_hud
+    cmp #$00F0
+    bcs oyt_top_hud
+    lda #$00DA
+    sec
+    sbc $EC
+    and #$00FF
+    rts
+oyt_top_hud:
+    lda #$01EA
+    sec
+    sbc $EC
+    and #$00FF
+    rts
+obj_y_transform_end:
+
 ; Refine the incremental renderer's conservative one-slot-per-cell capacity
 ; bound without mutating the persistent cache.  This runs only when that cheap
 ; bound would otherwise reclaim.  Missing codes are deduplicated in private
@@ -3616,15 +3643,27 @@ obj_oam_fast:
     lda $EA
     and #$00FF
     sta $F2
-    lda $EC
-    clc
-    adc #$000E
-    and #$00FF
-    eor #$00FF
-    inc a                ; 256 - (sy + 14)
-    sec
-    sbc #$0018           ; 240-line correction + centered Y=8 crop = -24
-    and #$00FF           ; retain SNES/X1-001 top-edge coordinate wrap
+    ; Preserve this 21-byte footprint: obj_oam_fast is pinned immediately
+    ; before the $A570 tail helper.  The out-of-line transform special-cases
+    ; only the newly retained top-HUD wrap records.
+    jsr obj_y_transform
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 oof_y_ready:
     xba
     ora $F2

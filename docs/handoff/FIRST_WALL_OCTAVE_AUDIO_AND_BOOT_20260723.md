@@ -2,10 +2,11 @@
 
 > **Superseded candidate notice:** the second human test rejected exact v130 after crate-throw and
 > charged-silver-enemy freezes, wrong animation tiles, an upper-left crop, and dizziness from this
-> document's rotating shield. Preserve the wall/audio evidence below, but use
-> [V133_TITLE_ATTRACT_BOOT_20260723.md](V133_TITLE_ATTRACT_BOOT_20260723.md) and
-> `RECOVERY.md` R13 for the current exact-v133 response candidate. The intermediate v131 and v132
-> responses were also human-rejected.
+> document's rotating shield. A later v134 test also heard no noticeable improvement from the five
+> octave anchors documented here. Preserve the wall/compiler/blob evidence below, but use
+> [V135_IRAM_FREEZE_HUD_AUDIO_20260724.md](V135_IRAM_FREEZE_HUD_AUDIO_20260724.md) and
+> `RECOVERY.md` R15 for the current exact-v135 response candidate. v131-v134 were human-rejected
+> or superseded.
 
 ## Verdict
 
@@ -26,9 +27,9 @@ This ROM combines:
 
 Controlled checks are green for the reproduced wall path, enemy offense, boot-screen handoff,
 coin/Start/charged-shot sequence, audio continuity, and SPC ARAM bytes. This is still an
-**interactive technical demo, not playable or shippable**. The first wall, perceived timbre, and
-boot presentation require a human run of this exact hash. Renderer conservation, a formal 30 Hz
-result, aligned MAME pixels, and a full playthrough remain open.
+**interactive technical demo, not playable or shippable**. Later human results rejected the
+candidate and found no noticeable timbre improvement from its octave pass. Renderer conservation,
+a formal 30 Hz result, aligned MAME pixels, and a full playthrough remain open.
 
 ## User evidence accepted
 

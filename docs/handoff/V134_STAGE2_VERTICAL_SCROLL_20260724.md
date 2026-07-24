@@ -1,5 +1,11 @@
 # v134 Stage 2 vertical-scroll response — July 24, 2026
 
+> **Superseded candidate notice:** the next human test rejected exact v134 after gameplay and
+> no-credit attract freezes, missing top score HUD text, and no noticeable audible improvement
+> from the earlier octave pass. Preserve the bounded vertical-scroll evidence below, but use
+> [V135_IRAM_FREEZE_HUD_AUDIO_20260724.md](V135_IRAM_FREEZE_HUD_AUDIO_20260724.md) and
+> `RECOVERY.md` R15 for the current exact-v135 response candidate.
+
 ## Human correction
 
 The first long v133 gameplay run reached the vertical section after the first boss and exposed a

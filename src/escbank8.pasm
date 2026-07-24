@@ -5938,15 +5938,16 @@ h8_zero_mask_gate_end:
 ; Return one producer OBJ X/color word in its packed-renderer form.
 ; Carry clear rejects the record. Carry set accepts it with A still in the
 ; source's big-endian byte order. The centered gameplay crop remains exactly
-; raw X $031-$13F. The arcade credit counter is the one intentional exception:
-; its five bottom-row glyph records sit at Y=$0A, X=$120-$160 with codes
-; $007D-$0080/$008B, so translate those glyphs left by 48 pixels instead of
-; dropping "DIT 0" beyond the SNES edge. Adjacent code-$0002 solid border
-; records deliberately retain the ordinary crop; moving one with the glyphs
-; covers the "C". The 48-pixel shift places that C immediately to the right of
-; the retained border and leaves the final digit at screen X=249..254. Keeping
-; the exception here prevents the wider cheap scan admission from changing any
-; gameplay object.
+; raw X $031-$13F. Two HUD-only exceptions preserve text that a centered
+; 384-to-256 crop would otherwise discard:
+; - top rows Y=$E2/$F2 compact raw left X<$40 by +48 and raw right
+;   X=$120-$16F by -24, retaining 1UP/2UP, both scores, and HIGH SCORE;
+; - the arcade credit counter's five bottom-row glyph records sit at
+;   Y=$0A, X=$120-$160 with codes $007D-$0080/$008B, so translate them
+;   left by 48 pixels instead of dropping "DIT 0" beyond the SNES edge.
+;
+; The top compaction is routed through an owned helper below $E400. Non-HUD
+; candidates replay this helper's exact original $031-$13F predicate.
 .org $E1A0
 .a16
 .i16
@@ -5983,16 +5984,18 @@ rox_credit:
 rox_normal:
     lda $014E
     and #$01FF
-    cmp #$0031
-    bcc rox_reject
-    cmp #$0140
-    bcs rox_reject
+    cmp #$0040
+    bcc rox_top_candidate
+    cmp #$0120
+    bcs rox_top_candidate
     lda $4400,x
     sec
     rts
 rox_reject:
     clc
     rts
+rox_top_candidate:
+    jmp rox_top_x
 rmb_obj_x_visible_end:
 
 ; ============================================================================
@@ -6157,6 +6160,55 @@ rbds_clean:
 rbds_default:
     jml.l $9EDC32
 render_bg_dirty_sparse_end:
+
+; Compact only the two fixed top-HUD rows into the narrower SNES window.
+; Masking bit $10 makes $E2 and $F2 one comparison.  Candidates which are not
+; on those rows replay the original centered-crop predicate exactly.
+.org $E320
+.a16
+.i16
+rox_top_x:
+    lda $3000,x
+    xba
+    and #$00EF
+    cmp #$00E2
+    bne rox_top_fallback
+    lda $014E
+    and #$01FF
+    cmp #$0040
+    bcs rox_top_right
+rox_top_left:
+    lda $014E
+    clc
+    adc #$0030
+    xba
+    sec
+    rts
+rox_top_right:
+    cmp #$0120
+    bcc rox_top_fallback
+    cmp #$0170
+    bcs rox_top_reject
+    lda $014E
+    sec
+    sbc #$0018
+    xba
+    sec
+    rts
+rox_top_fallback:
+    lda $014E
+    and #$01FF
+    cmp #$0031
+    bcc rox_top_reject
+    cmp #$0140
+    bcs rox_top_reject
+    lda $4400,x
+    sec
+    rts
+rox_top_reject:
+    clc
+    rts
+rox_top_x_end:
 
 .org $E400
 .a8
@@ -6490,7 +6542,7 @@ rmb_obj_fast_scan:
     jsr rmb_title_detect
 rmb_obj_fast_loop:
     lda $3001,x
-    cmp #$F0
+    cmp #$F3                  ; $F0-$F2 map to visible screen rows 2..0
     bcs rmb_obj_fast_slot0_next
     cmp #$01
     bcc rmb_obj_fast_slot0_next
@@ -6524,7 +6576,7 @@ rmb_obj_fast_slot0_next:
     inx
 
     lda $3001,x
-    cmp #$F0
+    cmp #$F3
     bcs rmb_obj_fast_slot1_next
     cmp #$01
     bcc rmb_obj_fast_slot1_next
@@ -6558,7 +6610,7 @@ rmb_obj_fast_slot1_next:
     inx
 
     lda $3001,x
-    cmp #$F0
+    cmp #$F3
     bcs rmb_obj_fast_slot2_next
     cmp #$01
     bcc rmb_obj_fast_slot2_next
@@ -6592,7 +6644,7 @@ rmb_obj_fast_slot2_next:
     inx
 
     lda $3001,x
-    cmp #$F0
+    cmp #$F3
     bcs rmb_obj_fast_slot3_next
     cmp #$01
     bcc rmb_obj_fast_slot3_next
@@ -6626,7 +6678,7 @@ rmb_obj_fast_slot3_next:
     inx
 
     lda $3001,x
-    cmp #$F0
+    cmp #$F3
     bcs rmb_obj_fast_slot4_next
     cmp #$01
     bcc rmb_obj_fast_slot4_next
@@ -6660,7 +6712,7 @@ rmb_obj_fast_slot4_next:
     inx
 
     lda $3001,x
-    cmp #$F0
+    cmp #$F3
     bcs rmb_obj_fast_slot5_next
     cmp #$01
     bcc rmb_obj_fast_slot5_next
@@ -6694,7 +6746,7 @@ rmb_obj_fast_slot5_next:
     inx
 
     lda $3001,x
-    cmp #$F0
+    cmp #$F3
     bcs rmb_obj_fast_slot6_next
     cmp #$01
     bcc rmb_obj_fast_slot6_next
@@ -6728,7 +6780,7 @@ rmb_obj_fast_slot6_next:
     inx
 
     lda $3001,x
-    cmp #$F0
+    cmp #$F3
     bcs rmb_obj_fast_slot7_next
     cmp #$01
     bcc rmb_obj_fast_slot7_next

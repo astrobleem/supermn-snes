@@ -12,7 +12,7 @@ Project-state documents conflict. Use this precedence order:
    accounting as the baseline. Only a later dated `RECOVERY.md` result that explicitly supersedes
    an individual claim can replace it; otherwise, where documents conflict, believe the confession.
    It was recovered from the old `sound-p3` worktree during repository consolidation.
-2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R10 results
+2. `RECOVERY.md` — the active canonicalization and evidence ledger. Its dated R0-R15 results
    supersede the older campaign projections they explicitly close.
 3. The newest branch/worktree-specific handoff and evidence (`docs/PROFILE_CAMPAIGN.md`,
    `MAIN_PLANNING_HANDOFF.md`, `supersoundhandoff.md`, and focused `docs/handoff/*`).
@@ -37,6 +37,15 @@ without explicit instruction.
   v105 ROM did clear the formal 30 Hz cadence/budget test, but the first real user playtest found
   that player attacks and enemy offense were broken. The **playable** label is superseded; retain
   v105 only as historical performance/scheduler/renderer evidence.
+- Exact v134 is human-rejected: a supplied gameplay freeze and a separate no-credit attract replay
+  both contain almost completely erased SA-1 IRAM. R15 traced this to an 8-bit immediate emitted
+  at generated `$023342` branch `Lf23342_1` on a live M=16 path; the following `$54` operand became
+  accidental `MVN $A9,$FB` and zeroed the IRAM mirror. Exact v135 SHA-256
+  `5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a` routes the fixed-size site
+  through an explicit `.a16/.i16` bridge and restores the missing X1-001-wrapped top HUD. A
+  2,400-frame exact-Mesen replay passes the reproduced terminal with live ticks/IRAM, and a
+  checkpointed HUD capture is visibly complete. This is a response candidate, not crash freedom,
+  a full-stage result, or a playable verdict.
 - The combat root cause was the `$012B6C` HLE hardcoding return PC `$01177C` for a function with 34
   real BSR callers. Exact v124 ROM SHA-256
   `777507c9ecba8b7911dae882ea266cca7d173d918dde65b73f880acdb0451352` propagates the real return
@@ -69,7 +78,9 @@ without explicit instruction.
   A controlled 1,800-frame idle window activates enemy offense and changes health 20→18.
 - v130 also adds five note-aware source-octave FM anchors and an original Mode 7 boot activity
   screen. Exact SPC ARAM is byte-correct and an organic 29.985-second capture has no internal
-  200 ms or 750 ms digital silence; this is not by-ear validation. Fresh exact-Mesen boot captures
+  200 ms or 750 ms digital silence. A later human test heard no noticeable improvement, so the
+  five-anchor pass is human-rejected as an audible fix despite being regenerated, compiled, and
+  packed correctly. Fresh exact-Mesen boot captures
   show a rotating activity marker throughout the formerly black interval and a clean handoff from
   Mode 7 to the normal Mode 1 renderer by frame 5,150. The marker is liveness, not a fabricated
   percentage or proof of a particular internal self-test.
@@ -113,8 +124,8 @@ without explicit instruction.
   `$19` credit cue no longer displaces an active song. v130 adds five first-stage octave anchors;
   its exact-Mesen and organic captures have no internal 200 ms digital silence. The remaining likely
   audible causes are incomplete transcription, trimmed samples, ignored enemy SFX IDs, placeholder
-  SFX, and missing pitch/LFO/portamento work. The new anchors have not passed by-ear musical
-  validation.
+  SFX, and missing pitch/LFO/portamento work. The later v134 human test heard no noticeable
+  improvement from the new anchors; treat them as musically rejected, not awaiting validation.
 - The `$0818` `$AC=$2000` clamp remains the gate-off fallback. The organically armed production
   path uses the paced scheduler above; neither path proves a full playthrough crash-free.
 - C-Chip work is genuinely resolved for the observed game contract: deterministic boot replay,

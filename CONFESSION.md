@@ -1,24 +1,64 @@
 # CONFESSION.md
 
 An honest accounting of what is wrong, overclaimed, or unfinished in this project, originated
-2026-07-12 and last corrected after the second v130 human playtest on 2026-07-23. The project's
-older status docs and memory files were optimistic to the point of being misleading. Where a
-historical claim below conflicts with the newest dated correction, use the newer result.
+2026-07-12 and last corrected after the v134 human playtest on 2026-07-24. The project's older
+status docs and memory files were optimistic to the point of being misleading. Where a historical
+claim below conflicts with the newest dated correction, use the newer result.
 
 The current single-sentence version: **v105's formal 30 Hz measurement was real, but calling it
-playable was false; v124 repaired its broken combat routing but froze on charged-shot release;
-v127 repaired that overwritten handler; the user has now confirmed v128's Mesen 2.1.1 title,
-transition, charged-shot, and music-restoration fixes, but then found a first-wall crash and
-over-transposed instrument samples; exact v130 repaired the wall corruption and added octave
-anchors and a Mode 7 boot screen, but its second human test crashed on a crate throw and a charged
-shot killing a silver enemy, showed wrong animation tiles and an upper-left crop, and made the
-tester dizzy with its rotating logo; exact v131 makes the supplied SA-1 logo static, centers the
-384x240 playfield, and quarantines displayed OBJ-cache slots, with fresh cold-boot/Mesen liveness,
-exact manifest, static-logo, and focused crate checks green, but the exact silver-enemy kill and a
-human v131 run remain open, music/timbre is unchanged, burst renderer conservation remains red, and
-v124's 29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest formal
-performance measurement, so the port is still an interactive technical demo, not playable or
-shippable.**
+playable was false; later candidates repaired concrete combat, charged-shot, wall, crate, viewport,
+title, attract, and Stage 2 bridge defects, but human testing repeatedly found the next failure;
+exact v134 was human-rejected after gameplay and no-credit attract freezes erased SA-1 IRAM, its
+top score HUD was missing, and the recompiled five-anchor audio pass made no noticeable
+difference; exact v135 repairs the reproduced accidental IRAM block move and restores the top HUD
+with bounded exact-Mesen evidence, but it has no full-stage or cold-boot stability verdict, its
+audio remains musically rejected/incomplete, burst renderer conservation remains red, and v124's
+29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest formal performance
+measurement, so the port is still an interactive technical demo, not playable or shippable.**
+
+## Post-v134 freeze/HUD/audio correction — July 24, 2026
+
+Exact v134 is human-rejected. The tester supplied `build/playtest/frozen.mss` from a gameplay
+freeze, reported that leaving the no-credit main screen running could also freeze, found top score
+text missing, and heard no noticeable improvement from the prior octave-sample work. The same run
+successfully threw a crate and a charged energy ball; those two events are accepted as bounded
+positive observations, not proof that the full paths are stable.
+
+The supplied state and an independent exact-v134 neutral-input replay both contain the same
+terminal condition: game tick and task mask zero, almost all 2 KiB of SA-1 IRAM zero, the SA-1 in
+zero-page `BRK`/`RTI` aftermath, and the independent video side still holding the last scene.
+Reset-entry and reset-control hooks do not fire. A narrowed replay catches sequential zero writes
+through the `$A9` IRAM mirror with the SA-1 at `$98:80B1`, DBR `$A9`.
+
+The cause is another Poppy mode-inference failure at a generated label. At `$98:80AE`, source
+intended a 16-bit `LDA #br23342_1 / STA $54`, but Poppy encoded an 8-bit immediate. On the live
+M=16 path the CPU consumed the `$85` store opcode as immediate data and decoded the following
+operand `$54` as `MVN $A9,$FB`, erasing IRAM. Exact v135 routes that unchanged 24-byte footprint
+to an explicit `.a16/.i16` bridge at `$98:8F5E`, preserving both continuation addresses. Its
+final exact-ROM Mesen 2.1.1 replay advances frame 11,588→13,988 and tick 2,107→2,519 across the
+old terminal with halt zero and live IRAM/task state. This is a deterministic reproduction and
+repair, not proof that no other freeze remains.
+
+The missing HUD came from the centered crop dropping the X1-001 wrapped top rows. v135 applies
+narrow exceptions only to fixed Y `$E2/$F2`, compacts their left/right label and score groups, and
+maps the vertically wrapped glyph halves to SNES rows 0-15. A checkpointed exact-Mesen replay
+ends at tick 1,335 with halt zero, all 14 initialized task stacks valid, and a 138-byte minimum
+margin. Its 88-record packed OBJ manifest and screenshot contain `1UP`, `HIGH SCORE`, `2UP`, all
+score rows, and complete `CREDIT 3`. The replay refreshes the selected-ROM video mirror, so it is
+HUD/liveness evidence rather than a cold-boot renderer-conservation result.
+
+The tester's audio question also corrects the record. Commit `9b39f95` did regenerate and recompile
+the Main BGM MML/project data. The resulting 96,065-byte blob SHA-256 `64f58ef…` occurs
+byte-for-byte in v135 at ROM offset `$2D002B`. Compilation and packing were real; an audible
+improvement was not. The human outcome for the five source-octave anchors is now “no noticeable
+difference,” and v135 intentionally contains no new audio change.
+
+Exact v135 production ROM SHA-256 is
+`5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`.
+It remains an **interactive technical-demo response candidate, not playable or shippable**.
+Organic Stage 2, attack-animation tiles, renderer conservation, musical transcription/timbre,
+aligned MAME pixels, a full playthrough, and the formal performance gates remain open. See
+`docs/handoff/V135_IRAM_FREEZE_HUD_AUDIO_20260724.md` and `RECOVERY.md` R15.
 
 ## Post-v130 second-playtest correction — July 23, 2026
 

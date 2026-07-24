@@ -534,6 +534,8 @@ bg_scroll = vid_off("bg_scroll")
 bg_scroll_end = vid_off("bg_scroll_end")
 bg_test = vid_off("pacing_bg_cache_test")
 bg_test_end = vid_off("pacing_bg_cache_test_end")
+obj_y_transform = vid_off("obj_y_transform")
+obj_y_transform_end = vid_off("obj_y_transform_end")
 bg_capacity_exact = vid_off("bg_capacity_exact")
 bg_capacity_exact_end = vid_off("bg_capacity_exact_end")
 snapshot_direct = vid_off("pacing_snapshot_direct")
@@ -612,10 +614,22 @@ assert VID[
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
     bg_test - palette_test_end
 ), "palette manifest consumer overlapped the fixed BG consumer"
-assert bg_test < bg_test_end <= bg_capacity_exact == 0xA220
-assert VID[bg_test_end - 0x8000:bg_capacity_exact - 0x8000] == bytes(
-    bg_capacity_exact - bg_test_end
-), "BG manifest consumer overlapped the exact-capacity helper"
+assert bg_test < bg_test_end <= obj_y_transform == 0xA200
+assert VID[bg_test_end - 0x8000:obj_y_transform - 0x8000] == bytes(
+    obj_y_transform - bg_test_end
+), "BG manifest consumer overlapped the top-HUD Y-transform island"
+assert obj_y_transform < obj_y_transform_end <= bg_capacity_exact == 0xA220
+assert VID[
+    obj_y_transform - 0x8000:obj_y_transform_end - 0x8000
+] == bytes.fromhex(
+    "a5ecc9e200f00fc9f000b00aa9da0038e5ec29ff0060"
+    "a9ea0138e5ec29ff0060"
+), "top-HUD Y transform lost its bounded $E2/$F0-$F2 wrap mapping"
+assert VID[
+    obj_y_transform_end - 0x8000:bg_capacity_exact - 0x8000
+] == bytes(bg_capacity_exact - obj_y_transform_end), (
+    "top-HUD Y transform crossed the exact-capacity helper"
+)
 assert bg_capacity_exact < bg_capacity_exact_end <= bg_cache_reset_counts == 0xA290
 assert VID[
     bg_capacity_exact_end - 0x8000:bg_cache_reset_counts - 0x8000
@@ -735,6 +749,9 @@ assert VID[0xAF61 - 0x8000:0xAF67 - 0x8000] == bytes.fromhex(
 ), "OBJ reclaimer lost its $0080 high-water publication or RTS tail"
 assert vid_obj_packed < vid_obj_packed_end <= 0xB000
 assert obj_oam_fast == 0xA4D5 and obj_oam_fast < obj_oam_fast_end <= 0xA570
+assert VID[0xA4E3 - 0x8000:0xA4F7 - 0x8000] == bytes.fromhex(
+    "2000a2" + "ea" * 17
+), "fast OAM helper lost its size-neutral top-HUD Y-transform call"
 assert VID[obj_oam_fast_end - 0x8000:0xA570 - 0x8000] == bytes(
     0xA570 - obj_oam_fast_end
 ), "fast OAM helper crossed its pinned tail helper"
@@ -1451,9 +1468,17 @@ if _osp.exists("src/escbank4.bin"):
         "escbank4 entry_23342 guarded redirect moved or changed size"
     )
     assert (
-        esc4_off("br23342_1") == 0x80C6
+        esc4_off("Lf23342_1") == 0x80AE
+        and esc4_off("h23342_call_bridge") == 0x8F5E
+        and esc4_off("br23342_1") == 0x80C6
         and esc4_off("br23342_2") == 0x80D3
-    ), "$023342 generated continuation moved; re-audit its mode-pinned call bridge"
+    ), "$023342 generated branch/continuation moved; re-audit its mode-pinned call bridge"
+    assert ESC4[0x00AE:0x00C6] == bytes.fromhex(
+        "5c5e8f98" + "ea" * 20
+    ), (
+        "$023342 rare callee branch lost its size-neutral mode-pinned redirect; "
+        "the old A8 encoding executed MVN $A9,$FB and erased SA-1 IRAM"
+    )
     assert ESC4[0x00C6:0x00D3] == bytes.fromhex(
         "a9d3808540a9fb0085424c0084"
     ), (
@@ -1475,8 +1500,13 @@ if _osp.exists("src/escbank4.bin"):
     ] == bytes(0x8F00 - h2429c_empty_end), (
         "escbank4 fused $02429C empty-helper seam has nonzero overlap"
     )
-    assert ESC4[0x0F5E:0x0F80] == bytes(0x22), (
-        "escbank4 h23342_empty grew into the $8F5E-$8F7F seam"
+    assert ESC4[0x0F5E:0x0F7A] == bytes.fromhex(
+        "a9c6808554a9fb00855622aee500a90c388540a9020085425cb3d100"
+    ), (
+        "escbank4 $023342 rare callee bridge lost explicit 16-bit immediates"
+    )
+    assert ESC4[0x0F7A:0x0F80] == bytes(0x06), (
+        "escbank4 $023342 call bridge crossed the fixed $8F80 island"
     )
     assert ESC4[0x0FD9:0x1000] == bytes(0x27), (
         "escbank4 h23e34_empty grew into the $8FD9-$8FFF seam"
@@ -2460,6 +2490,8 @@ if _osp.exists("src/escbank8.bin"):
     rmb_obj_prefilter_8_end = esc8_off("rmb_obj_prefilter_end")
     render_bg_dirty_sparse_8 = esc8_off("render_bg_dirty_sparse")
     render_bg_dirty_sparse_8_end = esc8_off("render_bg_dirty_sparse_end")
+    rox_top_x_8 = esc8_off("rox_top_x")
+    rox_top_x_8_end = esc8_off("rox_top_x_end")
     h158_ylist_stage_8 = esc8_off("h158_ylist_stage")
     h158_ylist_first_8 = esc8_off("hyl_first")
     h158_ylist_stage_8_end = esc8_off("h158_ylist_stage_end")
@@ -2667,16 +2699,28 @@ if _osp.exists("src/escbank8.bin"):
     assert rmb_obj_prefilter_8 == 0xE200
     assert rmb_obj_prefilter_8 < rmb_obj_prefilter_8_end <= render_bg_dirty_sparse_8
     assert render_bg_dirty_sparse_8 == 0xE280
-    assert render_bg_dirty_sparse_8 < render_bg_dirty_sparse_8_end <= h158_ylist_stage_8
+    assert (
+        render_bg_dirty_sparse_8
+        < render_bg_dirty_sparse_8_end
+        <= rox_top_x_8
+        == 0xE320
+        < rox_top_x_8_end
+        <= h158_ylist_stage_8
+    )
     assert ESC8[
         rmb_obj_prefilter_8_end - 0x8000:render_bg_dirty_sparse_8 - 0x8000
     ] == bytes(render_bg_dirty_sparse_8 - rmb_obj_prefilter_8_end), (
         "OBJ prefilter overlapped the exact BG producer-list helper"
     )
     assert ESC8[
-        render_bg_dirty_sparse_8_end - 0x8000:h158_ylist_stage_8 - 0x8000
-    ] == bytes(h158_ylist_stage_8 - render_bg_dirty_sparse_8_end), (
-        "exact BG producer-list helper overlapped the staged OBJ initializer"
+        render_bg_dirty_sparse_8_end - 0x8000:rox_top_x_8 - 0x8000
+    ] == bytes(rox_top_x_8 - render_bg_dirty_sparse_8_end), (
+        "exact BG producer-list helper overlapped the top-HUD X helper"
+    )
+    assert ESC8[
+        rox_top_x_8_end - 0x8000:h158_ylist_stage_8 - 0x8000
+    ] == bytes(h158_ylist_stage_8 - rox_top_x_8_end), (
+        "top-HUD X helper overlapped the staged OBJ initializer"
     )
     assert h158_ylist_stage_8 == 0xE400
     assert h158_ylist_stage_8 < h158_ylist_stage_8_end <= rmb_obj_pack_8
@@ -2704,6 +2748,11 @@ if _osp.exists("src/escbank8.bin"):
     )
     assert ESC8[
         rmb_obj_fast_scan_8 - 0x8000:rmb_obj_fast_scan_8_end - 0x8000
+    ].count(bytes.fromhex("c9f3")) == 8, (
+        "six-byte OBJ scan no longer retains visible top-HUD rows $F0-$F2"
+    )
+    assert ESC8[
+        rmb_obj_fast_scan_8 - 0x8000:rmb_obj_fast_scan_8_end - 0x8000
     ].count(bytes.fromhex("c970")) == 8, (
         "six-byte OBJ scan no longer admits all eight bottom-row credit slots"
     )
@@ -2723,7 +2772,8 @@ if _osp.exists("src/escbank8.bin"):
         (h8_zero_mask_gate_8_end, rmb_obj_x_visible_8, "palette-mask -> credit X"),
         (rmb_obj_x_visible_8_end, rmb_obj_prefilter_8, "credit X -> OBJ prefilter"),
         (rmb_obj_prefilter_8_end, render_bg_dirty_sparse_8, "OBJ prefilter -> exact BG list"),
-        (render_bg_dirty_sparse_8_end, h158_ylist_stage_8, "exact BG list -> Y-list stage"),
+        (render_bg_dirty_sparse_8_end, rox_top_x_8, "exact BG list -> top-HUD X"),
+        (rox_top_x_8_end, h158_ylist_stage_8, "top-HUD X -> Y-list stage"),
         (h158_ylist_stage_8_end, rmb_obj_pack_8, "Y-list stage -> packed OBJ helper"),
         (rmb_obj_pack_8_end, rmb_title_detect_8, "packed OBJ helper -> title detector"),
         (rmb_title_detect_8_end, rmb_obj_fast_scan_8, "title detector -> six-byte scan"),

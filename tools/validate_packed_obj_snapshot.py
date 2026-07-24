@@ -48,6 +48,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nexen", type=Path, default=DEFAULT_NEXEN)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--samples", type=int, default=20)
+    parser.add_argument(
+        "--max-frames-per-sample",
+        type=int,
+        default=60,
+        help="Maximum emulator frames to wait for each selected boundary.",
+    )
     parser.add_argument("--port", type=int, default=7663)
     parser.add_argument(
         "--input-buttons",
@@ -128,9 +134,14 @@ def mismatch_summary(expected: bytes, observed: bytes) -> dict[str, object]:
 
 
 def packed_x_word(sy: int, x_color: int, code_word: int) -> int | None:
-    """Apply the production crop and its exact bottom credit-row translation."""
+    """Apply the production crop and its exact HUD-only translations."""
     sx = x_color & 0x01FF
     code = code_word & 0x3FFF
+    if sy in (0xE2, 0xF2):
+        if sx < 0x0040:
+            return (x_color + 0x0030) & 0xFFFF
+        if 0x0120 <= sx < 0x0170:
+            return (x_color - 0x0018) & 0xFFFF
     credit_glyph = 0x007D <= code <= 0x0080 or code == 0x008B
     if sy == 0x0A and credit_glyph and 0x0120 <= sx < 0x0170:
         return (x_color - 0x0030) & 0xFFFF
@@ -147,7 +158,9 @@ def derive_source_records(m: McpSession) -> tuple[bytes, list[int]]:
     records = bytearray()
     offsets: list[int] = []
     for offset in range(0, 0x0400, 2):
-        if not 0 < raw_y[offset + 1] < 0xF0:
+        # The arcade coordinate maps $F0-$F2 to visible SNES rows 2..0.
+        # $F3 would map above the top edge; $FA remains the hidden sentinel.
+        if not 0 < raw_y[offset + 1] < 0xF3:
             continue
         x_color = int.from_bytes(raw_x[offset : offset + 2], "big")
         code = int.from_bytes(raw_code[offset : offset + 2], "big")
@@ -390,6 +403,8 @@ def main() -> int:
     args = parse_args()
     if args.samples <= 0:
         raise SystemExit("--samples must be positive")
+    if args.max_frames_per_sample <= 0:
+        raise SystemExit("--max-frames-per-sample must be positive")
     if args.force_drop_sample is not None:
         if not args.bg_producer_only:
             raise SystemExit("--force-drop-sample requires --bg-producer-only")
@@ -405,8 +420,21 @@ def main() -> int:
     if output.exists():
         raise SystemExit(f"refusing existing output: {output}")
     output.mkdir(parents=True)
-    os.environ["DOTNET_ROOT"] = "/home/chad/.dotnet10"
-    os.environ["PATH"] = "/home/chad/.dotnet10:" + os.environ.get("PATH", "")
+    executable_name = nexen.name.lower()
+    exact_mesen = "mesen" in executable_name
+    if exact_mesen:
+        runtime = "/home/chad/.dotnet8"
+        alternate = "/home/chad/.dotnet10"
+    else:
+        runtime = "/home/chad/.dotnet10"
+        alternate = "/home/chad/.dotnet8"
+    os.environ["DOTNET_ROOT"] = runtime
+    current_path = [
+        item
+        for item in os.environ.get("PATH", "").split(":")
+        if item and item not in (runtime, alternate)
+    ]
+    os.environ["PATH"] = ":".join([runtime, alternate, *current_path])
 
     samples: list[dict[str, object]] = []
     interventions: list[dict[str, object]] = []
@@ -467,10 +495,17 @@ def main() -> int:
                     "normalized_to_frame_ack": checkpoint_frame_ack,
                 },
             }
-        m.tool(
-            "set_input",
-            {"port": 0, "buttons": args.input_buttons, "hold": True},
-        )
+        if exact_mesen:
+            if args.input_buttons:
+                raise RuntimeError(
+                    "exact-Mesen checkpoint equivalence currently supports "
+                    "only neutral input"
+                )
+        else:
+            m.tool(
+                "set_input",
+                {"port": 0, "buttons": args.input_buttons, "hold": True},
+            )
         hook_address = (
             PRODUCER_BG_DONE_HOOK if args.bg_producer_only else MANIFEST_DONE_HOOK
         )
@@ -478,7 +513,10 @@ def main() -> int:
         hook = m.add_exec_hook(hook_address, cpu_type=hook_cpu)
         m.drain_notifications(timeout=0.05)
         for index in range(args.samples):
-            hit = m.run_until(max_frames=60, hook_handle=hook)
+            hit = m.run_until(
+                max_frames=args.max_frames_per_sample,
+                hook_handle=hook,
+            )
             m.pause()
             if (hit or {}).get("reason") != "hookFired":
                 raise RuntimeError(
@@ -551,7 +589,11 @@ def main() -> int:
         "bg_producer_only": args.bg_producer_only,
         "interventions": interventions,
         "input_buttons": args.input_buttons,
-        "input_transport": "nexen_port0_manual_4016",
+        "input_transport": (
+            "exact_mesen_default_neutral"
+            if exact_mesen
+            else "nexen_port0_manual_4016"
+        ),
         "mirror_intervention": mirror_intervention,
         "sample_count": len(samples),
         "green_count": sum(bool(sample["green"]) for sample in samples),
