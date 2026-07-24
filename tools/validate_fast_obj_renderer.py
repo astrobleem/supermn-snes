@@ -37,6 +37,9 @@ VIDEO_WRAM_LENGTH = 0x3000
 RETURN_STUB = 0x7F7F00
 RETURN_STACK = 0x1DFE
 ENTRIES = {"reference": 0x7F8189, "fast": 0x7FA400}
+# First instruction after obj_cache_preflight's protection JSR.  Stopping at
+# the caller avoids sampling the final long store on the helper's RTS edge.
+DISPLAYED_PROTECT_RETURN = 0x7FAE17
 
 
 def parse_args() -> argparse.Namespace:
@@ -131,6 +134,17 @@ def stable_ppu_state(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def physical_slots_from_oam(oam: bytes, count: int) -> list[int]:
+    """Invert obj_T for the active 16x16 entries in a low-OAM image."""
+    slots: set[int] = set()
+    for index in range(min(count, 128)):
+        offset = index * 4
+        tile = oam[offset + 2] | ((oam[offset + 3] & 0x01) << 8)
+        slot = ((tile & 0x01E0) >> 2) | ((tile & 0x000E) >> 1)
+        slots.add(slot)
+    return sorted(slots)
+
+
 def set_snes_entry(m: McpSession, entry: int) -> None:
     # RTS pulls low then high from SP+1/SP+2 and increments the stored address.
     # $7EFF therefore returns to the BRA $FE stub at $7F:7F00.
@@ -221,49 +235,36 @@ def run_variant(
             m.write_memory("snesWorkRam", 0x8988, "ffff")
             m.write_memory("snesWorkRam", 0x89C6, "0000")
         if args.force_full_obj_cache:
-            checkpoint_encoded_length = int.from_bytes(
+            # Production caches only the six-byte Y/code/X manifest; the
+            # retired canonical raw planes may be zero. Prefer that exact
+            # format, and do not infer the historical eight-byte
+            # offset/Y/code/X shape merely because (for example) 600 bytes is
+            # also divisible by eight.
+            encoded_length = int.from_bytes(
                 m.read_memory("snesWorkRam", 0x89BA, 2), "little"
             )
-            checkpoint_length = checkpoint_encoded_length & 0x7FFF
-            checkpoint_packed8 = None
-            if (
-                checkpoint_encoded_length & 0x8000
-                and checkpoint_length <= 0x0400
-                and checkpoint_length % 8 == 0
-            ):
-                checkpoint_packed8 = m.read_memory(
-                    "snesWorkRam", 0xBC00, checkpoint_length
-                )
-            raw_y = (
-                m.read_memory("snesWorkRam", 0x3000, 0x0400)
-                if checkpoint_packed8 is None
-                else None
-            )
-            raw_code = (
-                m.read_memory("snesWorkRam", 0x4000, 0x0400)
-                if checkpoint_packed8 is None
-                else None
-            )
-            raw_x = (
-                m.read_memory("snesWorkRam", 0x4400, 0x0400)
-                if checkpoint_packed8 is None
-                else None
-            )
+            packed_length = encoded_length & 0x7FFF
             removed = None
             candidate_codes: list[tuple[int, int]] = []
-            if checkpoint_packed8 is not None:
-                for cursor in range(0, len(checkpoint_packed8), 8):
-                    source_offset = int.from_bytes(
-                        checkpoint_packed8[cursor : cursor + 2], "little"
-                    )
+            if (
+                encoded_length & 0x8000
+                and packed_length <= 0x0300
+                and packed_length % 6 == 0
+            ):
+                packed = m.read_memory(
+                    "snesWorkRam", 0xBC00, packed_length
+                )
+                for cursor in range(0, packed_length, 6):
                     raw_code_word = int.from_bytes(
-                        checkpoint_packed8[cursor + 4 : cursor + 6], "big"
+                        packed[cursor + 2 : cursor + 4], "big"
                     )
                     code = raw_code_word & 0x3FFF
                     if raw_code_word != 0xFFFF and code:
-                        candidate_codes.append((source_offset, code))
+                        candidate_codes.append((cursor, code))
             else:
-                assert raw_y is not None and raw_code is not None and raw_x is not None
+                raw_y = m.read_memory("snesWorkRam", 0x3000, 0x0400)
+                raw_code = m.read_memory("snesWorkRam", 0x4000, 0x0400)
+                raw_x = m.read_memory("snesWorkRam", 0x4400, 0x0400)
                 for source_offset in range(0, 0x0400, 2):
                     if not 0 < raw_y[source_offset + 1] < 0xF0:
                         continue
@@ -271,7 +272,7 @@ def run_variant(
                         raw_x[source_offset : source_offset + 2], "big"
                     )
                     sx = x_color & 0x01FF
-                    if 0x0100 <= sx < 0x01F0:
+                    if not 0x0031 <= sx < 0x0100:
                         continue
                     raw_code_word = int.from_bytes(
                         raw_code[source_offset : source_offset + 2], "big"
@@ -302,7 +303,23 @@ def run_variant(
                 if removed is not None:
                     break
             if removed is None:
-                raise RuntimeError("could not remove a live code for full-cache exercise")
+                hash_snapshot = m.read_memory(
+                    "snesWorkRam", 0x5000, 0x0800
+                )
+                cached_codes = {
+                    int.from_bytes(
+                        hash_snapshot[offset : offset + 2], "little"
+                    )
+                    for offset in range(0, len(hash_snapshot), 2)
+                } - {0}
+                raise RuntimeError(
+                    "could not remove a live code for full-cache exercise: "
+                    f"manifest_codes={len(candidate_codes)}, "
+                    f"cached_codes={len(cached_codes)}, "
+                    f"intersection={len({code for _, code in candidate_codes} & cached_codes)}, "
+                    f"first_manifest={candidate_codes[:8]}, "
+                    f"first_cached={sorted(cached_codes)[:8]}"
+                )
             m.write_memory("snesWorkRam", 0x00DE, "8000")
             m.write_memory("snesWorkRam", 0x89CE, "0000")
             full_cache_intervention = {
@@ -363,7 +380,7 @@ def run_variant(
                     if raw_x is not None:
                         x_color = int.from_bytes(raw_x[offset : offset + 2], "big")
                         sx = x_color & 0x01FF
-                        if 0x0100 <= sx < 0x01F0:
+                        if not 0x0031 <= sx < 0x0100:
                             continue
                     offsets.append(offset)
                     if args.candidate_packed_manifest and len(offsets) == 128:
@@ -418,11 +435,70 @@ def run_variant(
                 "encoded_length": encoded_length,
                 "sha256": digest(manifest),
             }
+        displayed_count = min(
+            int.from_bytes(
+                m.read_memory("snesWorkRam", 0x89B2, 2), "little"
+            ),
+            128,
+        )
+        displayed_oam = m.read_memory(
+            "snesWorkRam", 0x8600, displayed_count * 4
+        )
+        displayed_slots = physical_slots_from_oam(
+            displayed_oam, displayed_count
+        )
         set_snes_entry(m, entry)
 
         return_hook = m.add_exec_hook(RETURN_STUB, cpu_type="Snes")
+        protect_hook = None
+        protect_probe = None
+        if args.force_full_obj_cache and entry == ENTRIES["fast"]:
+            protect_hook = m.add_exec_hook(
+                DISPLAYED_PROTECT_RETURN, cpu_type="Snes"
+            )
         m.drain_notifications(timeout=0.05)
         start_cycles = int(m.get_cpu_state("Snes")["cycleCount"])
+        if protect_hook is not None:
+            protect_hit = m.run_until(max_frames=20, hook_handle=protect_hook)
+            m.pause()
+            if (protect_hit or {}).get("reason") != "hookFired":
+                raise RuntimeError(
+                    f"{name}: displayed-slot protection did not return: "
+                    f"{protect_hit!r}"
+                )
+            used_bitmap = m.read_memory("snesWorkRam", 0x2E00, 0x0080)
+            protect_count = min(
+                int.from_bytes(
+                    m.read_memory("snesWorkRam", 0x89B2, 2), "little"
+                ),
+                128,
+            )
+            protect_oam = m.read_memory(
+                "snesWorkRam", 0x8600, protect_count * 4
+            )
+            protect_probe = {
+                "hit": protect_hit,
+                "displayed_count": protect_count,
+                "oam_sha256": digest(protect_oam),
+                "oam_slots": physical_slots_from_oam(
+                    protect_oam, protect_count
+                ),
+                "marked_slots": [
+                    slot for slot, used in enumerate(used_bitmap) if used
+                ],
+                "displayed_marked_intersection": sorted(
+                    set(displayed_slots).intersection(
+                        slot
+                        for slot, used in enumerate(used_bitmap)
+                        if used
+                    )
+                ),
+            }
+            protect_probe["green"] = (
+                protect_probe["displayed_marked_intersection"]
+                == sorted(set(displayed_slots))
+            )
+            m.remove_hook(protect_hook)
         hit = m.run_until(max_frames=20, hook_handle=return_hook)
         m.pause()
         end_cycles = int(m.get_cpu_state("Snes")["cycleCount"])
@@ -448,6 +524,43 @@ def run_variant(
                     f"{name}: could not normalize post-hook PC "
                     f"{pc:#08x}->{normalized_pc:#08x}"
                 )
+
+        free_count = min(
+            int.from_bytes(
+                m.read_memory("snesWorkRam", 0x89CE, 2), "little"
+            ),
+            128,
+        )
+        free_slots = list(
+            m.read_memory("snesWorkRam", 0x7B00, free_count)
+        )
+        queued_count = min(
+            int.from_bytes(
+                m.read_memory("snesWorkRam", 0x89C6, 2), "little"
+            ),
+            128,
+        )
+        queued_slots = list(
+            m.read_memory("snesWorkRam", 0x2D00, queued_count)
+        )
+        displayed_slot_set = set(displayed_slots)
+        quarantine = {
+            "displayed_oam_count": displayed_count,
+            "displayed_slots": displayed_slots,
+            "free_count": free_count,
+            "free_slots": free_slots,
+            "free_displayed_intersection": sorted(
+                displayed_slot_set.intersection(free_slots)
+            ),
+            "queued_count": queued_count,
+            "queued_slots": queued_slots,
+            "queued_displayed_intersection": sorted(
+                displayed_slot_set.intersection(queued_slots)
+            ),
+        }
+        quarantine["green"] = not quarantine[
+            "free_displayed_intersection"
+        ] and not quarantine["queued_displayed_intersection"]
 
         region_bytes = {
             "bank_to_palette": m.read_memory("snesWorkRam", 0x8580, 0x0020),
@@ -504,6 +617,8 @@ def run_variant(
             "interrupt_quiesce": interrupt_quiesce,
             "full_cache_intervention": full_cache_intervention,
             "manifest_intervention": manifest_intervention,
+            "displayed_protect_probe": protect_probe,
+            "displayed_slot_quarantine": quarantine,
             "regions": regions,
             "screenshot_settle": screenshot_settle,
             "ppu_state": ppu_state,

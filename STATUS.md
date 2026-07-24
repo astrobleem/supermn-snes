@@ -3,7 +3,36 @@
 Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
-> ## ⚠️ R10 FIRST-WALL / OCTAVE-AUDIO / MODE-7 BOOT CANDIDATE — July 23, 2026
+> ## ⚠️ R11 SECOND-v130-PLAYTEST RESPONSE — July 23, 2026
+>
+> Exact v130 is human-rejected. Before reaching the first wall, the tester froze while throwing a
+> crate and while killing a silver enemy with a held charged shot. They also saw wrong tiles in
+> Superman's attack animations, an upper-left gameplay crop, and a rotating boot logo that caused
+> dizziness.
+>
+> Exact v131 response-candidate SHA-256
+> `be0ed971b90ce4ce48e0c6b1ad3356eba41c5b12484c11506154ce40dbe8c1aa`
+> uses a static indexed derivative of the supplied SA-1 logo with only an 8x8 palette-pulsed
+> activity diamond, centers the MAME oracle's 384x240 view at arcade origin `(64,8)`, and
+> quarantines every displayed OAM physical slot before high-water OBJ-cache reclamation. Twenty
+> packed-manifest boundaries are exact; the full-cache fixture marks all 12 displayed slots and
+> leaves both displayed/free and displayed/upload intersections empty.
+>
+> Fresh `TESTFLAG=0` Nexen and stock-Mesen-2.1.1 sequences remain live through real coin/Start,
+> transition, two charged releases, enemy damage, and 600 post-release frames; the Mesen endpoint
+> is frame 8,177 / tick 1,524 / render 1,472 / halt zero. A focused checkpoint with the current ROM
+> renderer mirror explicitly refreshed visibly lifts and throws the crate through tick 1,483 at
+> halt zero. That crate result is not an organic v131 stage run, and the exact charged shot killing
+> a silver enemy has not been reproduced.
+>
+> v131 is an **interactive technical-demo response candidate, not playable or shippable**. It still
+> needs the user's exact crate/silver-enemy/wall/viewport/boot retest; timbre, renderer conservation,
+> aligned MAME pixels, a full playthrough, and formal performance remain open. v124's
+> 29.7002 game-fps / 360,990.164 cycles/tick run remains the latest formal rate evidence. See
+> [RECOVERY.md](RECOVERY.md) R11 and
+> [the focused handoff](docs/handoff/V130_SECOND_PLAYTEST_20260723.md).
+
+> ## HISTORICAL R10 WALL/AUDIO/BOOT CANDIDATE — July 23, 2026 (SUPERSEDED BY R11)
 >
 > The tester human-confirmed v128's post-TAITO title, pre-round bars, charged-shot, and gameplay-
 > music repairs, then found a new first-wall mixed-tile freeze and excessive sample transposition.
@@ -595,6 +624,13 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
   single-threaded, very slow to write large disassemblies.
 
 ## Recommended next steps
+
+**Current correction:** the historical throughput list below predates R6-R11 and is retained only
+as campaign history. The immediate playability work is to reproduce the exact charged-shot
+silver-enemy kill, run the first wall and crate path organically on exact v131, have the tester
+judge the centered/static-boot/timbre result, close renderer conservation, and only then rerun the
+formal power-on rate/budget gate.
+
 The cold side (interpreter) and the hot side (automated transpiler + bridge + video
 codegen) are both built and validated. The remaining work is **throughput** — transpile
 enough of the per-frame hot path to hit the realtime cycle budget. Detailed plan in

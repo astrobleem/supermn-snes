@@ -121,18 +121,35 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   screenshots, checkpoints, PPU Mode/brightness/forced-blank/layer state, the boot-activity byte,
   halt/tick/render state, and a JSON manifest. It is visual compatibility evidence, never gameplay
   stability or FPS evidence.
-- **`gen_boot_screen.py`** [S] — deterministic original-asset generator for the temporary
-  32 KiB Mode 7 SA-1 boot activity screen. It emits the low-byte Mode 7 map, high-byte tile data,
-  OBJ font/OAM, CGRAM, and 64-entry matrix table consumed over a 128-VBlank turn by
-  `src/video.pasm`.
-  `build_interp_rom.py` regenerates and hash/layout-checks the asset before packing it at
-  file `$300000-$307FFF`; no arcade graphics are used.
+- **`gen_boot_screen.py`** [S] — deterministic 32 KiB Mode 7 SA-1 boot-screen generator. It embeds
+  a compact indexed derivative of the supplied SA-1 logo, static status text, and one
+  palette-pulsed 8x8 activity diamond. All 64 retained matrix entries are identical and NMI never
+  changes M7A-D. `build_interp_rom.py` regenerates and hash/layout-checks the asset before packing
+  it at file `$300000-$307FFF`; no arcade graphics are used.
 - **`validate_bg_reconcile_helpers.py`** [S] — byte-oracle for the native background-list promote
   and revert helpers. It covers empty, compact, and full paths and specifically guards the
   zero-length flag-ordering bug that crossed BW-RAM mirrors at the first breakable wall.
 - **`trace_wall_context.py`** [S] — Mesen 2.1.1 real-controller first-wall replay with scheduler-
   context write hooks. It records the renderer manifest, every initialized task stack/floor, and
   suspicious saved-SP high-byte writes. This is focused crash/context evidence, not a stage soak.
+- **`trace_playtest_actions.py`** [S] — exact-Mesen real-controller action-schedule diagnostic for
+  crate/attack/encounter reproduction. It records player animation/action state, tick/render/halt,
+  stack floors, screenshots, and checkpoints. `--refresh-video-mirror` explicitly injects the
+  selected ROM's `$7F:8000-$AFFF` renderer mirror after a compatible older checkpoint is loaded and
+  records that intervention; such a result is focused cross-version evidence, never organic
+  cold-boot or FPS evidence.
+- **`validate_obj_cache_vram.py`** [S] — paused-checkpoint oracle for every persistent OBJ-cache
+  hash claim. It reconstructs each physical 16x16 slot from PPU VRAM, compares it with the exact
+  preconverted ROM record, and conditionally checks manifest-to-OAM tile alignment. It diagnoses
+  cache content; it does not prove display-generation lifetime by itself.
+- **`validate_fast_obj_renderer.py`** [S] — reference-vs-fast renderer differential. Its
+  forced-full-cache mode also stops immediately after displayed-OAM slot protection and proves
+  that every displayed physical slot is marked and absent from both the rebuilt free stack and
+  upload queue.
+- **`validate_paced_obj_sources.py`** [S] — samples the production `$0818` handoff and independently
+  rebuilds the OBJ visibility predicate. `--packed-obj-manifest --manifest-only` validates the
+  current bit-15-tagged six-byte Y/code/X records, bounded length, bytes, and source order while
+  reporting—but not gating on—unrelated raw-plane handoff transients.
 - **`validate_mesen211_playtest.py`** [S] — replays the reported real-controller sequence in exact
   Mesen 2.1.1: coin, Start, Clark/round transition, grounded B charge/release, tick/native hooks,
   screenshots/states, and digital-audio capture/silence analysis. It intentionally labels its

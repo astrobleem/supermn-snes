@@ -397,6 +397,8 @@ dma0_blank_pulse_extended = vid_off("dma0_blank_pulse_extended")
 dma0_blank_pulse_extended_end = vid_off("dma0_blank_pulse_extended_end")
 boot_mode7_tick = vid_off("boot_mode7_tick")
 boot_mode7_tick_end = vid_off("boot_mode7_tick_end")
+obj_cache_protect_displayed = vid_off("obj_cache_protect_displayed")
+obj_cache_protect_displayed_end = vid_off("obj_cache_protect_displayed_end")
 assert bg_tile_run_dma_chunks == 0x8A00
 assert (
     0x8A00
@@ -412,11 +414,22 @@ assert VID[
 ] == bytes(boot_mode7_tick - dma0_blank_pulse_extended_end), (
     "VBlank DMA helpers grew into the fixed Mode 7 activity island"
 )
-assert boot_mode7_tick == 0x8B00 and boot_mode7_tick < boot_mode7_tick_end <= 0x8DD0
+assert boot_mode7_tick == 0x8B00 and boot_mode7_tick < boot_mode7_tick_end <= 0x8B40
 assert VID[
-    boot_mode7_tick_end - 0x8000:0x0DD0
-] == bytes(0x8DD0 - boot_mode7_tick_end), (
-    "Mode 7 activity helper grew into the $8DD0 pacing island"
+    boot_mode7_tick_end - 0x8000:obj_cache_protect_displayed - 0x8000
+] == bytes(obj_cache_protect_displayed - boot_mode7_tick_end), (
+    "boot activity helper grew into the displayed-OBJ quarantine island"
+)
+assert (
+    obj_cache_protect_displayed == 0x8B40
+    and obj_cache_protect_displayed
+    < obj_cache_protect_displayed_end
+    <= 0x8DD0
+)
+assert VID[
+    obj_cache_protect_displayed_end - 0x8000:0x0DD0
+] == bytes(0x8DD0 - obj_cache_protect_displayed_end), (
+    "displayed-OBJ quarantine helper grew into the $8DD0 pacing island"
 )
 assert VID[0x099C:0x09AB] == bytes.fromhex(
     "bf0080e99f00807fe8e8e00030d0f1"
@@ -648,14 +661,14 @@ assert VID[
 ] == bytes.fromhex("4c409cea"), (
     "fast OBJ lookup stub moved or lost its size-neutral widened-hash redirect"
 )
-assert obj_cache_reclaim_fast == 0xAEE2
-assert obj_cache_reclaim_fast < obj_cache_reclaim_fast_end <= vid_obj_packed == 0xAF64
+assert obj_cache_reclaim_fast == 0xAEE5
+assert obj_cache_reclaim_fast < obj_cache_reclaim_fast_end <= vid_obj_packed == 0xAF68
 assert VID[
     obj_cache_reclaim_fast_end - 0x8000:vid_obj_packed - 0x8000
 ] == bytes(vid_obj_packed - obj_cache_reclaim_fast_end), (
     "OBJ reclaimer crossed the packed-renderer seam"
 )
-assert VID[0xAF5E - 0x8000:0xAF64 - 0x8000] == bytes.fromhex(
+assert VID[0xAF61 - 0x8000:0xAF67 - 0x8000] == bytes.fromhex(
     "a9800085de60"
 ), "OBJ reclaimer lost its $0080 high-water publication or RTS tail"
 assert vid_obj_packed < vid_obj_packed_end <= 0xB000
@@ -2876,7 +2889,7 @@ print(
     % ("enabled (diagnostic)" if pc_ring_enabled else "disabled (production)")
 )
 print(
-    "Mode 7 boot asset: %s (%d text sprites)"
+    "Mode 7 boot asset: %s (%d visible OBJ sprites)"
     % (
         BOOT_ASSET_REPORT["sha256"],
         BOOT_ASSET_REPORT["visible_obj_sprites"],

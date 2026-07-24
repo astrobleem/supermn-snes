@@ -638,8 +638,8 @@ obj_oam:
     adc #$000E
     and #$00FF
     sta $F2
-    jsr obj_pyfix        ; py = 256-(sy+14), with bottom-HUD wrap (byte-neutral: jsr+3 nop
-    nop                  ; replaces the old lda #$0100/sec/sbc $F2 -> no downstream shift)
+    jsr obj_pyfix        ; py = 240-(sy+14)-8: exact centered 384x240 -> 256x224 crop
+    nop                  ; replaces the old lda #$0100/sec/sbc $F2 -> no downstream shift
     nop
     nop
     inx
@@ -1143,10 +1143,11 @@ bg_upload:
     jsr dma0_blank_pulse ; blank only across this tilemap DMA
     nop
     nop
-    ; scroll: H derived from the live scroll shadow (bg_hscroll); V = -8 (validated).
+    ; scroll: H is the live arcade scroll plus the centered-crop X origin;
+    ; V=0 advances the previously faithful no-crop $3F8 image by eight lines.
     ; (byte-neutral swap: jsr(3)+7*nop = the 10 bytes the old hofs block used, so no
     ;  downstream code shifts -> avoids the Poppy relative-branch-wrap hazard.)
-    jsr bg_hscroll       ; BG1HOFS = ((spritectrl[2].bit0<<8) - scrollx[0]) & $3FF
+    jsr bg_hscroll       ; BG1HOFS = ((upper.bit0<<8) - scrollx[0] + 64) & $3FF
     nop
     nop
     nop
@@ -1154,10 +1155,12 @@ bg_upload:
     nop
     nop
     nop
-    lda #$F8
-    sta BG1VOFS
-    lda #$03
-    sta BG1VOFS          ; vofs = $3F8 = (-8 & $3FF) (validated)
+    stz BG1VOFS
+    stz BG1VOFS          ; centered crop begins at arcade scanline 8
+    nop
+    nop
+    nop
+    nop
     rep #$30
     rts
 
@@ -1392,30 +1395,27 @@ j5_l:
     plp
     rts
 
-; bg_hscroll — set BG1HOFS from the live arcade scroll shadow instead of a fixed value.
+; bg_hscroll — set BG1HOFS from the live arcade scroll shadow and center crop.
 ; The X1-001 "type0" playfield is a continuous H-scroll: tilemap column c sits at true
 ; pixel T[c] = (T[0] + c*32) mod 512, and vid_bg already lays columns out sequentially
-; (col c at BG pixel c*32), so a single BG1HOFS = -T[0] reproduces the arcade exactly.
+; (col c at BG pixel c*32), so BG1HOFS = -T[0] reproduces arcade X=0.  SNES
+; screen X=0 must instead show arcade X=64, the centered 384->256 crop origin.
 ;   T[0]  = (scrollx[0] - (upper.bit0 ? 256 : 0)) & $1FF   (per x1_001.cpp draw_background)
-;   hofs  = (-T[0]) & $3FF  ==  ((upper.bit0<<8) - scrollx[0]) & $3FF
+;   hofs  = (-T[0] + 64) & $3FF
+;         == ((upper.bit0<<8) - scrollx[0] + 64) & $3FF
 ; scrollx[0] = low byte of word @ $D00408 (shadow $41:3408 -> low byte $41:3409);
 ; upper.bit0 = bit0 of spritectrl[2] @ $D00604 (shadow $41:3604 -> low byte $41:3605).
-; (xoffs=0, and the scrolly/yoffs path nets the existing vofs=-8, so V is left hardcoded.)
-; obj_pyfix — compute the SNES OAM Y from $F2 (=(sy+14)&$FF), then keep the bottom HUD on
-; screen. Faithful gameplay Y = 256 - (sy+14) (matches x1_001 draw_foreground, screen.height
-; =256), so gameplay sprites sit on the BG (which is at bitmap_y via vofs=-8). The arcade
-; bottom-strip HUD (energy bar / credit, arcade y>216) lands at py>=224 = off the 224-line
-; SNES bottom; wrap it up 24px so it shows at the very bottom edge (~y208) while gameplay
-; stays grounded. Gameplay never sits below the floor (py<=~216), so py>=224 is HUD-only.
+; The arcade screen is 240 lines, not 256.  Centering its 240->224 crop begins at
+; arcade Y=8.  obj_pyfix therefore computes 240-(sy+14)-8, modulo 256 for the
+; X1-001/SNES top-edge wrap shared by partially visible 16px sprites.
 obj_pyfix:
     rep #$30
-    lda #$0100           ; 256 (screen.height)
+    lda #$00E8           ; 240 arcade lines - 8-line centered crop origin
     sec
-    sbc $F2              ; py = 256 - ((sy+14)&$FF)
-    cmp #$00E0           ; >= 224 ? -> bottom-strip HUD, off the SNES screen bottom
-    bcc oy_done
-    sec
-    sbc #$0018           ; -24 -> lands ~y208 (visible bottom edge)
+    sbc $F2              ; py = 232 - ((sy+14)&$FF)
+    and #$00FF
+    nop                  ; shrink this helper by four bytes so bg_hscroll can add
+    nop                  ; the centered X origin without moving fixed $88CC
 oy_done:
     rts
 
@@ -1435,6 +1435,8 @@ bg_hscroll:
     xba                  ; A = bit0<<8  ($0100 or $0000)
     sec
     sbc $D0              ; (upper.bit0<<8) - scrollx[0]
+    clc
+    adc #$0040           ; centered 384->256 crop begins at arcade X=64
     and #$03FF
     sep #$20
     sta BG1HOFS          ; low byte
@@ -1802,10 +1804,10 @@ dma0_wait_complete:
     rts
 dma0_blank_pulse_extended_end:
 
-; Mode 7 boot activity. The 5A22 calls this once per real NMI while the SA-1
-; interpreter is still inside the arcade reset/self-test path. The 64-entry
-; signed 8.8 matrix table was copied to private WRAM $7E:F100 by
-; boot_screen_init, so the animation adds no steady ROM/BW-RAM contention.
+; Mode 7 boot activity. The user-supplied SA-1 logo remains completely static;
+; rotating the old shield caused motion sickness. The 5A22 calls this once per
+; real NMI while the SA-1 interpreter is inside the arcade reset/self-test path
+; and gently pulses only CGRAM color 131 for one tiny OBJ status diamond.
 ; joy5a22_ordered clears bit7 before the first game renderer owns the PPU.
 .org $8B00
 .a8
@@ -1817,31 +1819,83 @@ boot_mode7_tick:
     and #$7F
     ora #$80
     sta $1F1B
-    and #$7F
-    lsr a                ; 128 vblanks per turn: table index 0..63
-    rep #$20
-.a16
-    and #$003F
-    asl a
-    asl a
-    asl a                ; eight bytes per A/B/C/D matrix
-    tax
-    sep #$20
-.a8
-    ldy #M7A
-bmt_matrix_loop:
-    lda $7EF100,x
-    sta $0000,y          ; each Mode 7 matrix register takes low then high
-    inx
-    lda $7EF100,x
-    sta $0000,y
-    inx
-    iny
-    cpy #M7X
-    bne bmt_matrix_loop
+    and #$20             ; one slow brightness cycle every 64 VBlanks
+    beq bmt_dim
+    lda #$83             ; OBJ palette 0, color 3
+    sta CGADD
+    lda #$FF             ; bright amber = SNES BGR555 $16FF
+    sta CGDATA
+    lda #$16
+    sta CGDATA
+    rts
+bmt_dim:
+    lda #$83
+    sta CGADD
+    lda #$CA             ; dim amber = SNES BGR555 $04CA
+    sta CGDATA
+    lda #$04
+    sta CGDATA
 bmt_done:
     rts
 boot_mode7_tick_end:
+
+; Mark every persistent OBJ cache slot referenced by the OAM image that is
+; currently on screen.  The rare high-water reclaimer runs before replacement
+; OAM is published; without this quarantine it could recycle one of those
+; slots and rewrite its VRAM pixels while the old OAM still named it, producing
+; the transient wrong Superman/enemy tiles seen during attack animations.
+;
+; OAM byte 2 is tile bits 0-7 and attribute bit 0 is tile bit 8.  obj_T maps
+; physical slot s to T=2*(s&7)+32*(s>>3), so the inverse below is:
+;   s = ((T & $01E0) >> 2) | ((T & $000E) >> 1)
+; The protected old-only slots deliberately remain outside both the rebuilt
+; hash and free list for this reclamation.  A later high-water pass releases
+; them after replacement OAM has become the displayed image.
+.org $8B40
+.a16
+.i16
+obj_cache_protect_displayed:
+    rep #$30
+    lda $7E89B2          ; active entries in the currently displayed OAM image
+    cmp #$0080
+    bcc ocpd_count_ready
+    lda #$0080           ; defensive clamp for checkpoint/corruption recovery
+ocpd_count_ready:
+    asl a
+    asl a
+    sta $D4              ; OAM low-table byte limit
+    ldx #$0000
+ocpd_loop:
+    cpx $D4
+    beq ocpd_done
+    stx $D6              ; no absolute-long,Y encoding: retain the OAM cursor
+    lda $7E8602,x        ; tile low byte + attribute byte
+    and #$01FF
+    sta $D0
+    and #$000E
+    lsr a
+    sta $D2
+    lda $D0
+    and #$01E0
+    lsr a
+    lsr a
+    ora $D2
+    tax
+    sep #$20
+.a8
+    lda #$01
+    sta $7E2E00,x        ; quarantine the displayed physical slot
+    rep #$20
+.a16
+    ldx $D6
+    inx
+    inx
+    inx
+    inx
+    bra ocpd_loop
+ocpd_done:
+    rts
+obj_cache_protect_displayed_end:
 
 ; =============================================================================
 ; Production 30 Hz pacing supervisor — copied by rc_copy and executed from WRAM.
@@ -3404,16 +3458,10 @@ vof_loop:
     bcc vof_sx_ready
     ora #$FE00           ; sign-extend the arcade 9-bit X coordinate
 vof_sx_ready:
+    sec
+    sbc #$0040           ; centered crop: SNES X = arcade X - 64
     sta $EA
-    ; The coherent producer manifest already applied the exact signed-nine-bit
-    ; visibility test, including the partially visible -16..-1 range.  Keep
-    ; every downstream helper at its established address: renderer timing is
-    ; scanline-sensitive, so compacting this island can turn a local saving
-    ; into a worse DMA phase even when every output byte remains exact.
-    bra vof_x_visible
-    nop
-    nop
-    nop
+    nop                  ; preserve the established downstream helper address
 vof_x_visible:
     lda $E8
     xba
@@ -3461,11 +3509,10 @@ obj_oam_fast:
     adc #$000E
     and #$00FF
     eor #$00FF
-    inc a                ; 256 - (sy + 14), sy is already constrained to 1..239
-    cmp #$00E0
-    bcc oof_y_ready
+    inc a                ; 256 - (sy + 14)
     sec
-    sbc #$0018           ; bottom HUD wrap, identical to obj_pyfix
+    sbc #$0018           ; 240-line correction + centered Y=8 crop = -24
+    and #$00FF           ; retain SNES/X1-001 top-edge coordinate wrap
 oof_y_ready:
     xba
     ora $F2
@@ -4773,6 +4820,7 @@ ocp_used_clear:
     inx
     cpx #$0080
     bne ocp_used_clear
+    jsr obj_cache_protect_displayed
     ldy #$0000
     lda $7E89BA
     bpl ocp_manifest_loop
@@ -4968,14 +5016,16 @@ obj_cache_reclaim_fast_end:
 ; for old checkpoints and the rejected $CA02 lab token.  The producer already
 ; applied Y/X/code visibility and the 128-object cap; the defensive code check
 ; below preserves the legacy renderer's behavior if a malformed record appears.
-.org $AF64               ; $AF60 overlapped the reclaimer's STA $DE / RTS tail
+.org $AF68               ; reclaimer grew by one displayed-OAM quarantine call
 .a16
 .i16
 vid_obj_packed:
     rep #$30
     lda $7E89BA
     cmp #$8000
-    beq vop_done
+    bne vop_nonempty
+    jmp vop_done
+vop_nonempty:
     lda #$FFFF
     sta $F4              ; last logical palette bank; F0 remains its assigned slot
     sta $F8              ; last logical tile code; E4 remains its physical OAM tile
@@ -5005,6 +5055,8 @@ vop_loop:
     bcc vop_sx_ready
     ora #$FE00
 vop_sx_ready:
+    sec
+    sbc #$0040           ; centered crop: SNES X = arcade X - 64
     sta $EA
     lda $E8
     xba
@@ -5606,15 +5658,17 @@ render_queue_promote_end:
 ; Immediate 5A22-owned boot display
 ;
 ; The genuine 68000 reset/self-test takes thousands of SNES video frames. Until
-; the production renderer can claim a coherent arcade image, show an original
-; Mode 7 SA-1 diamond and static OBJ status text instead of an unexplained black
-; screen. All assets are generated by tools/gen_boot_screen.py and packed at
-; 5A22 ROM $F0:0000-$F0:7FFF; they contain no arcade ROM material.
+; the production renderer can claim a coherent arcade image, show the user's
+; static SA-1 logo and OBJ status text instead of an unexplained black screen.
+; A tiny palette-pulsed status diamond is the only activity. All assets are
+; generated by tools/gen_boot_screen.py and packed at 5A22 ROM
+; $F0:0000-$F0:7FFF; they contain no arcade ROM material.
 ;
 ; PPU ownership is one-way: this routine runs once under forced blank before NMI
-; is enabled. NMI rotates only M7A-D while $7E:1F1B bit7 is set. The first
-; vf_tick clears that bit, and the existing game renderer then replaces BGMODE,
-; VRAM, CGRAM, OAM, OBSEL, and TM through its normal paths.
+; is enabled. NMI pulses one private OBJ palette color while $7E:1F1B bit7 is
+; set; it never changes the Mode 7 matrix. The first vf_tick clears that bit,
+; and the existing game renderer then replaces BGMODE, VRAM, CGRAM, OAM,
+; OBSEL, and TM through its normal paths.
 ; =============================================================================
 .org $F000
 .a16
@@ -5709,8 +5763,9 @@ boot_screen_init:
     sta DAS0H
     jsr boot_dma0
 
-    ; Copy the rotation table out of ROM once. The live NMI path reads only
-    ; private 5A22 WRAM, preserving the SA-1 bus-contention contract.
+    ; Retain the established matrix-table copy and asset seam for checkpoint
+    ; compatibility. Every entry is now the same static scale matrix; the live
+    ; NMI path never reads it.
     rep #$30
 .a16
     ldx #$0000
@@ -5731,7 +5786,7 @@ bsi_matrix_copy:
     lda #$03             ; OBJ 8x8/16x16; character base word $6000
     sta OBSEL
 
-    ; Initial 0.75-scale identity matrix, centered on the 96px diamond.
+    ; Static 0.75-scale identity matrix, centered on the 120x80 logo.
     lda #$C0
     sta M7A
     stz M7A
@@ -5742,7 +5797,7 @@ bsi_matrix_copy:
     lda #$C0
     sta M7D
     stz M7D
-    lda #$80             ; center X = 128
+    lda #$7C             ; source center X = 124 (map columns 8..22)
     sta M7X
     stz M7X
     lda #$70             ; center Y = 112

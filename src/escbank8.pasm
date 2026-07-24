@@ -5375,9 +5375,11 @@ rmb_bg_clean:
 rmb_bg_clean_jump:
     bra rmb_obj_begin
 
-    ; Y is the strongest cheap rejection in settled gameplay.  For its small
-    ; surviving set, also reject the signed-nine-bit X interval $100-$1EF.
-    ; Publish fully visible slots in exact source order together with the three
+    ; Y is the strongest cheap rejection in settled gameplay. For its small
+    ; surviving set, keep only the 16px OBJ overlap interval $031-$0FF for the
+    ; centered arcade-X $040-$13F view. X1-001 bit 8 is a sign bit, not an
+    ; extension into the right side of the 384px bitmap. Publish visible slots
+    ; order together with the three
     ; raw words the 5A22 consumes.  The fixed redirect enters an out-of-line
     ; A8 scan that applies the code predicate before packing six-byte records;
     ; saturation therefore remains the first 128 accepted objects rather than
@@ -6312,6 +6314,14 @@ h158_ylist_stage_end:
 .a16
 .i16
 rmb_obj_pack:
+    ; The unrolled A8 scan has already rejected negative signed-nine-bit X.
+    ; Finish the centered-crop overlap test here: a 16px sprite at X=49 is the
+    ; first one that can touch the 256px window beginning at arcade X=64.
+    lda $4400,x
+    xba
+    and #$01FF
+    cmp #$0031
+    bcc rmb_obj_pack_reject
     lda $3000,x
     sta $1600,y
     lda $4000,x
@@ -6328,11 +6338,14 @@ rmb_obj_pack:
     jmp rmb_obj_fast_done
 rmb_obj_pack_done:
     rts
+rmb_obj_pack_reject:
+    rts
 rmb_obj_pack_end:
 
 ; Exact visible-OBJ scan for the six-byte production representation.  The
-; common Y/X filters stay eight-way unrolled, while the remaining code test is
-; performed in A8 before paying either a mode switch or helper call.  This is
+; common Y and negative-X filters stay eight-way unrolled; rmb_obj_pack rejects
+; the X<49 left fringe. The remaining code test is performed in A8 before paying
+; either a mode switch or helper call. This is
 ; semantically identical to the old A16 helper predicate:
 ;   raw code != $FFFF && (raw code & $3FFF) != 0.
 ; $9E:E600-$E7FF is a fixed zero-backed island; keep the entire body below the
@@ -6355,8 +6368,8 @@ rmb_obj_fast_loop:
     lsr a
     bcc rmb_obj_fast_slot0_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot0_next
+    cmp #$00
+    bcs rmb_obj_fast_slot0_next
 rmb_obj_fast_slot0_code:
     lda $4001,x
     beq rmb_obj_fast_slot0_code_low_zero
@@ -6389,8 +6402,8 @@ rmb_obj_fast_slot0_next:
     lsr a
     bcc rmb_obj_fast_slot1_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot1_next
+    cmp #$00
+    bcs rmb_obj_fast_slot1_next
 rmb_obj_fast_slot1_code:
     lda $4001,x
     beq rmb_obj_fast_slot1_code_low_zero
@@ -6423,8 +6436,8 @@ rmb_obj_fast_slot1_next:
     lsr a
     bcc rmb_obj_fast_slot2_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot2_next
+    cmp #$00
+    bcs rmb_obj_fast_slot2_next
 rmb_obj_fast_slot2_code:
     lda $4001,x
     beq rmb_obj_fast_slot2_code_low_zero
@@ -6457,8 +6470,8 @@ rmb_obj_fast_slot2_next:
     lsr a
     bcc rmb_obj_fast_slot3_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot3_next
+    cmp #$00
+    bcs rmb_obj_fast_slot3_next
 rmb_obj_fast_slot3_code:
     lda $4001,x
     beq rmb_obj_fast_slot3_code_low_zero
@@ -6491,8 +6504,8 @@ rmb_obj_fast_slot3_next:
     lsr a
     bcc rmb_obj_fast_slot4_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot4_next
+    cmp #$00
+    bcs rmb_obj_fast_slot4_next
 rmb_obj_fast_slot4_code:
     lda $4001,x
     beq rmb_obj_fast_slot4_code_low_zero
@@ -6525,8 +6538,8 @@ rmb_obj_fast_slot4_next:
     lsr a
     bcc rmb_obj_fast_slot5_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot5_next
+    cmp #$00
+    bcs rmb_obj_fast_slot5_next
 rmb_obj_fast_slot5_code:
     lda $4001,x
     beq rmb_obj_fast_slot5_code_low_zero
@@ -6559,8 +6572,8 @@ rmb_obj_fast_slot5_next:
     lsr a
     bcc rmb_obj_fast_slot6_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot6_next
+    cmp #$00
+    bcs rmb_obj_fast_slot6_next
 rmb_obj_fast_slot6_code:
     lda $4001,x
     beq rmb_obj_fast_slot6_code_low_zero
@@ -6593,8 +6606,8 @@ rmb_obj_fast_slot6_next:
     lsr a
     bcc rmb_obj_fast_slot7_code
     lda $4401,x
-    cmp #$F0
-    bcc rmb_obj_fast_slot7_next
+    cmp #$00
+    bcs rmb_obj_fast_slot7_next
 rmb_obj_fast_slot7_code:
     lda $4001,x
     beq rmb_obj_fast_slot7_code_low_zero

@@ -1,5 +1,11 @@
 # First-wall, octave-audio, and Mode 7 boot handoff — July 23, 2026
 
+> **Superseded candidate notice:** the second human test rejected exact v130 after crate-throw and
+> charged-silver-enemy freezes, wrong animation tiles, an upper-left crop, and dizziness from this
+> document's rotating shield. Preserve the wall/audio evidence below, but use
+> [V130_SECOND_PLAYTEST_20260723.md](V130_SECOND_PLAYTEST_20260723.md) and `RECOVERY.md` R11 for
+> the current exact-v131 response candidate.
+
 ## Verdict
 
 Exact v130 playtest-candidate ROM SHA-256:

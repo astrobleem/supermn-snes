@@ -1,7 +1,7 @@
 # CONFESSION.md
 
 An honest accounting of what is wrong, overclaimed, or unfinished in this project, originated
-2026-07-12 and last corrected after the first-wall/audio/boot follow-up on 2026-07-23. The project's
+2026-07-12 and last corrected after the second v130 human playtest on 2026-07-23. The project's
 older status docs and memory files were optimistic to the point of being misleading. Where a
 historical claim below conflicts with the newest dated correction, use the newer result.
 
@@ -9,15 +9,58 @@ The current single-sentence version: **v105's formal 30 Hz measurement was real,
 playable was false; v124 repaired its broken combat routing but froze on charged-shot release;
 v127 repaired that overwritten handler; the user has now confirmed v128's Mesen 2.1.1 title,
 transition, charged-shot, and music-restoration fixes, but then found a first-wall crash and
-over-transposed instrument samples; exact v130 repairs the zero-length background-reconcile loop
-that corrupted scheduler contexts at the wall, adds five note-aware octave samples, and replaces
-the multi-minute black boot interval with a live Mode 7 activity screen, while controlled
-enemy-offense, wall, cold-boot, Mesen 2.1.1, ARAM, and audio-continuity checks are green; v130 still
-awaits human wall/timbre/boot-screen confirmation, burst renderer conservation remains red, and v124's
-29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest formal performance
-measurement, so the port is still an interactive technical demo, not playable or shippable.**
+over-transposed instrument samples; exact v130 repaired the wall corruption and added octave
+anchors and a Mode 7 boot screen, but its second human test crashed on a crate throw and a charged
+shot killing a silver enemy, showed wrong animation tiles and an upper-left crop, and made the
+tester dizzy with its rotating logo; exact v131 makes the supplied SA-1 logo static, centers the
+384x240 playfield, and quarantines displayed OBJ-cache slots, with fresh cold-boot/Mesen liveness,
+exact manifest, static-logo, and focused crate checks green, but the exact silver-enemy kill and a
+human v131 run remain open, music/timbre is unchanged, burst renderer conservation remains red, and
+v124's 29.7002 game-fps / 360,990.164 SA-1 cycles-per-tick run remains the latest formal
+performance measurement, so the port is still an interactive technical demo, not playable or
+shippable.**
 
-## Post-first-wall, octave-sample, and boot-screen correction — July 23, 2026
+## Post-v130 second-playtest correction — July 23, 2026
+
+Exact v130 is human-rejected. The tester did not reach the first wall because two earlier
+first-stage actions froze the game: picking up and throwing a crate, and killing a silver enemy
+with a held charged punch/energy shot. The same run exposed wrong tiles during Superman's attack
+animations, an upper-left rather than centered gameplay crop, and a rotating boot logo that caused
+dizziness. The reports are accepted as project truth; v130 is no longer the current playtest
+candidate.
+
+The wrong tiles have a concrete renderer cause. The high-water OBJ-cache reclaimer could recycle a
+physical VRAM slot still named by the OAM image currently on screen, then overwrite its pixels
+before replacement OAM reached the PPU. Exact v131 quarantines every physical slot decoded from
+the displayed OAM before rebuilding the hash and free stack. A forced-full-cache Nexen fixture
+marks all 12 displayed physical slots, leaves the displayed/free and displayed/upload intersections
+empty, and keeps all gating renderer outputs byte-identical. This is focused cache evidence, not a
+playthrough.
+
+The gameplay view now applies a centered crop of the MAME oracle's 384x240 output: arcade origin
+`(64,8)` maps to SNES `(0,0)` in the background, packed OBJ producer, and both OBJ consumers.
+Twenty sampled producer boundaries have exact six-byte packed manifests and source order under
+that predicate. Exact v131 ROM SHA-256
+`be0ed971b90ce4ce48e0c6b1ad3356eba41c5b12484c11506154ce40dbe8c1aa`
+also replaces the rotating shield with a static 120x80 indexed derivative of the supplied SA-1
+logo. Exact-Mesen frames 200 and 300 differ only inside the 8x8 palette-pulsed activity diamond;
+the Mode 7 logo itself does not move.
+
+A fresh `TESTFLAG=0` Nexen run organically arms the production gates, accepts real coin/Start, and
+settles at frame 5,982 / tick 426 with halt zero and continuing rendering. A fresh same-hash stock
+Mesen 2.1.1 sequence clears coin/Start, the round transition, two charged releases, 600
+post-release frames, and enemy damage, ending at frame 8,177 / tick 1,524 / render 1,472 / halt
+zero. A focused crate checkpoint with the selected-ROM renderer mirror explicitly refreshed
+visibly holds and throws the crate and continues through tick 1,483 at halt zero. Because that
+checkpoint originated on v130, it is not an organic v131 full-stage proof.
+
+The exact charged-shot kill of a silver enemy has not been reproduced. Generic charge-release
+liveness does not close that target-specific report. The first wall and the new static
+presentation also await a v131 human run, and v131 contains no new TAD data: the octave/timbre
+listening question remains open. No result in this correction is a formal FPS measurement. See
+`docs/handoff/V130_SECOND_PLAYTEST_20260723.md`.
+
+## Historical post-first-wall/audio/boot correction — July 23, 2026 (superseded by v130 retest)
 
 The next human test supplied both positive and negative evidence. On exact v128 in Mesen 2.1.1,
 the tester confirmed that the post-TAITO title flicker was gone, the pre-round horizontal bars were

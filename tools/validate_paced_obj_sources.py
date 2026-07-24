@@ -81,8 +81,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Validate bit-15-tagged $41:1600 visible OBJ records packed as "
-            "source-offset/Y/code/X words, and reconstruct the renderer's "
-            "legacy compact offset list."
+            "Y/code/X words, and reconstruct their ordered source slots."
         ),
     )
     return parser.parse_args()
@@ -140,7 +139,7 @@ def expected_obj_manifest(y_plane: bytes, code_plane: bytes, x_plane: bytes) -> 
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
         sx = x_color & 0x01FF
-        if 0x0100 <= sx < 0x01F0:
+        if not 0x0031 <= sx < 0x0100:
             continue
         offsets.append(offset)
         if len(offsets) == 128:
@@ -164,7 +163,7 @@ def expected_yx_manifest(y_plane: bytes, x_plane: bytes) -> bytes:
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
         sx = x_color & 0x01FF
-        if 0x0100 <= sx < 0x01F0:
+        if not 0x0031 <= sx < 0x0100:
             continue
         offsets.append(offset)
     return b"".join(offset.to_bytes(2, "little") for offset in offsets)
@@ -177,17 +176,48 @@ def expected_packed_manifest(
     visible = expected_obj_manifest(y_plane, code_plane, x_plane)
     for cursor in range(0, len(visible), 2):
         offset = int.from_bytes(visible[cursor : cursor + 2], "little")
-        records.extend(offset.to_bytes(2, "little"))
         records.extend(y_plane[offset : offset + 2])
         records.extend(code_plane[offset : offset + 2])
         records.extend(x_plane[offset : offset + 2])
     return bytes(records)
 
 
-def visible_from_packed_manifest(manifest: bytes) -> bytes:
-    return b"".join(
-        manifest[cursor : cursor + 2] for cursor in range(0, len(manifest), 8)
-    )
+def visible_from_packed_manifest(
+    manifest: bytes, y_plane: bytes, code_plane: bytes, x_plane: bytes
+) -> bytes:
+    """Recover the packed records' monotonically ordered source slots.
+
+    Production records intentionally omit their source offset.  Match each
+    six-byte record to the first identical, independently visible source slot
+    after the previous match.  The full packed-byte comparison remains the
+    authoritative completeness check; this reconstruction separately checks
+    source ordering and the visibility predicate.
+    """
+    expected_visible = expected_obj_manifest(y_plane, code_plane, x_plane)
+    candidates = [
+        int.from_bytes(expected_visible[cursor : cursor + 2], "little")
+        for cursor in range(0, len(expected_visible), 2)
+    ]
+    accepted: list[int] = []
+    candidate_cursor = 0
+    for cursor in range(0, len(manifest), 6):
+        record = manifest[cursor : cursor + 6]
+        if len(record) != 6:
+            break
+        while candidate_cursor < len(candidates):
+            offset = candidates[candidate_cursor]
+            candidate_cursor += 1
+            source_record = (
+                y_plane[offset : offset + 2]
+                + code_plane[offset : offset + 2]
+                + x_plane[offset : offset + 2]
+            )
+            if source_record == record:
+                accepted.append(offset)
+                break
+        else:
+            break
+    return b"".join(offset.to_bytes(2, "little") for offset in accepted)
 
 
 def visible_from_y_manifest(
@@ -203,7 +233,7 @@ def visible_from_y_manifest(
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
         sx = x_color & 0x01FF
-        if 0x0100 <= sx < 0x01F0:
+        if not 0x0031 <= sx < 0x0100:
             continue
         accepted.append(offset)
         if len(accepted) == 128:
@@ -309,8 +339,12 @@ def main() -> int:
                 or args.yx_qualified_manifest
                 or args.packed_obj_manifest
             )
-            maximum_length = 0x0400 if delegated_manifest else 0x0100
-            alignment = 8 if args.packed_obj_manifest else 2
+            maximum_length = (
+                0x0300
+                if args.packed_obj_manifest
+                else (0x0400 if delegated_manifest else 0x0100)
+            )
+            alignment = 6 if args.packed_obj_manifest else 2
             if manifest_length > maximum_length or manifest_length % alignment:
                 observed_manifest = b""
             else:
@@ -332,7 +366,9 @@ def main() -> int:
                 }
             )
             if args.packed_obj_manifest:
-                delegated_visible = visible_from_packed_manifest(observed_manifest)
+                delegated_visible = visible_from_packed_manifest(
+                    observed_manifest, full_y, full_code, full_x
+                )
             elif args.yx_qualified_manifest:
                 delegated_visible = visible_from_yx_manifest(
                     observed_manifest, full_code

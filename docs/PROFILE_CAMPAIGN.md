@@ -1311,3 +1311,27 @@ None of these short or checkpointed windows replaces v124's formal 29.700167 gam
 Exact v130 is a wall/audio/boot **playtest candidate**, not playable or shippable; the tester still
 needs to hit the wall, listen to the new octave anchors, and judge the boot presentation. Full
 evidence is in `docs/handoff/FIRST_WALL_OCTAVE_AUDIO_AND_BOOT_20260723.md` and `RECOVERY.md` R10.
+
+## 2026-07-23 second-v130-playtest correction: exact v131 response
+
+The second human v130 run rejected that candidate before reaching the wall: crate throw and a
+charged shot killing a silver enemy froze, attack animations showed wrong tiles, the view was
+cropped from the upper-left, and the rotating boot shield caused dizziness. Exact v131
+`be0ed971b90ce4ce48e0c6b1ad3356eba41c5b12484c11506154ce40dbe8c1aa` replaces the rotation with
+a static indexed derivative of the supplied SA-1 logo and one 8x8 palette-pulsed activity diamond,
+centers the 384x240 MAME view at arcade `(64,8)`, and quarantines physical OBJ-cache slots still
+named by displayed OAM before high-water reclamation.
+
+The centered producer is exact for 20/20 packed-manifest boundaries. A forced-full-cache fixture
+marks all 12 displayed physical slots and leaves the displayed/free and displayed/upload
+intersections empty while all gating renderer outputs remain equal. Fresh Nexen and stock-Mesen
+sequences remain live through organic gates, real coin/Start, transition, two ordinary charged
+releases, and enemy damage. A focused v130 gameplay checkpoint with the exact v131 renderer mirror
+explicitly refreshed visibly holds and throws the crate through tick 1,483 at halt zero.
+
+That crate result is not an organic v131 stage run, and the exact charged-shot kill of a silver
+enemy remains unreproduced. Timbre, the first wall on this hash, human viewport/static-boot
+confirmation, renderer conservation, and formal performance remain open. v124 remains the latest
+formal rate evidence. Exact v131 is an **interactive technical-demo response candidate, not
+playable or shippable**. Full evidence is in
+`docs/handoff/V130_SECOND_PLAYTEST_20260723.md` and `RECOVERY.md` R11.

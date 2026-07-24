@@ -13,6 +13,13 @@ confirmation of those v128 repairs, fixes the newly exposed first-wall context c
 adds a targeted octave-sample pass, and promotes the combined exact v130 ROM with a Mode 7 boot
 activity screen. The wall/audio/boot additions remain awaiting human confirmation.**
 
+**R11 accepts the second v130 human test: v130 is rejected after crate-throw and charged-silver-
+enemy freezes, wrong animation tiles, an upper-left crop, and a dizziness-inducing rotating boot
+logo. Exact v131 makes the supplied logo static, centers the 384x240 arcade view, and quarantines
+displayed OBJ-cache slots before reclamation. Its focused cache/manifest/crate, fresh cold-boot,
+and exact-Mesen liveness checks are green, but the exact charged silver-enemy kill, a human v131
+run, timbre listening, renderer conservation, and formal performance gates remain open.**
+
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
@@ -21,7 +28,8 @@ activity screen. The wall/audio/boot additions remain awaiting human confirmatio
   each measured candidate. v105 (`72d925ac…`) is historical; formal combat-fixed v124 is
   `777507c9…`; charged-shot-fixed v127 is `1a8a5742…`; exact-Mesen-regression-fixed v128 is
   `7c4b757d…`; first-wall/octave-sample v129 is `8f240332…`; combined wall/audio/Mode-7 v130
-  candidate is `1ec22cbc…`.
+  is the human-rejected `1ec22cbc…`; the v131 second-playtest response candidate is
+  `be0ed971…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -869,13 +877,106 @@ pixel fidelity, renderer conservation, or the formal 30 Hz budget. The tester st
 the first wall, listen to the first-stage instruments, and judge the boot screen on this exact
 hash. The correct project label remains **interactive technical demo, not playable or shippable**.
 
+### R11 — Second v130 playtest and renderer/view/boot response
+
+#### Human v130 rejection
+
+The second v130 run did not reach the first wall. Picking up and throwing a crate froze first; in
+another attempt, killing a silver enemy with a held charged punch/energy shot froze. Superman's
+punch/kick animation sometimes displayed unrelated tiles, the SNES view showed the upper-left
+part of the arcade scene instead of its center, and the rotating boot shield caused dizziness.
+These reports supersede R10's v130-candidate verdict. Exact v130 is human-rejected.
+
+#### Static supplied logo and centered playfield
+
+`/home/chad/data/sa1-logo.png` is a usable 1536x1024 RGB source image with SHA-256
+`091e5831c949a8c686e35ff8ba1e77fccd4bbbf0b6ed173c821bd9494516b3c6`. The generator embeds a
+reproducible 120x80, 92-color indexed derivative; the private source path is not required at build
+time. All 64 Mode 7 matrices are identical and NMI never writes M7A-D. It changes only one palette
+color for an 8x8 amber activity diamond. In the fresh exact-Mesen capture at frames 200 and 300,
+the changed-pixel bounding box is exactly that diamond `(228,192)-(236,200)`; the logo is static.
+
+MAME 0.287 reports a 384x240 screen, so the centered 256x224 SNES window begins at arcade `(64,8)`.
+BG1 now adds 64 horizontal pixels and uses vertical scroll zero; legacy and packed OBJ consumers
+subtract 64 from X and use `232 - ((sy + 14) & 255)` modulo 256. The producer keeps signed
+non-negative X in the 16-pixel overlap interval `49..255`. MAME register inspection confirmed that
+X1-001 bit 8 is the signed-X bit, not a right-side extension.
+
+The exact centered packed manifest is independently rebuilt at 20 settled production boundaries:
+all six-byte record lengths, bytes, visibility decisions, and source ordering match with zero
+manifest mismatch. One raw work-plane handoff transient is deliberately reported but is outside
+the `--manifest-only` gate; this is checkpointed predicate evidence, not FPS.
+
+#### Displayed-slot reclamation quarantine
+
+The exact v130 bad-animation checkpoint showed an internally exact code-to-VRAM mapping while OAM
+still referred to the preceding cache generation. The high-water reclaimer could place those
+displayed physical slots back on the free stack, allocate them to new codes, and upload replacement
+pixels before the new OAM DMA. The PPU then briefly drew the old Superman/enemy OAM with unrelated
+new pixels.
+
+The reclaimer now decodes every physical slot named by the displayed OAM and marks it unavailable
+before rebuilding the hash/free stack. A first attempt used `$7E8602,Y`, but 65816 has no
+absolute-long,Y encoding; Poppy silently encoded a bank-local access. The validator caught the
+displayed slots in the free list, and the retained implementation uses absolute-long,X with the
+OAM cursor preserved in direct page.
+
+Two forced-full-cache variants on the final ROM are green: all 12 physical slots named by the
+20-entry displayed OAM prefix are marked; none enters the 104-slot free stack or 12-slot upload
+queue; and the hash, VRAM, CGRAM, OAM, PPU state, and positioned OAM render remain byte-identical.
+This proves the focused reclamation invariant, not organic full-stage stability.
+
+#### Exact v131 evidence and remaining target
+
+Exact v131 response-candidate ROM SHA-256:
+`be0ed971b90ce4ce48e0c6b1ad3356eba41c5b12484c11506154ce40dbe8c1aa`.
+
+| Gate | Exact-v131 result |
+|---|---:|
+| Build/layout | 4 MiB production ROM; pack/layout and bank audits green |
+| Static logo | exact Mesen frames 200/300 differ only in the 8x8 activity diamond |
+| Centered producer predicate | 20/20 boundaries; packed bytes/order exact |
+| Displayed-slot quarantine | 12/12 marked; displayed/free and displayed/upload intersections empty |
+| `TESTFLAG=0` cold boot | organic gates and real coin/Start; frame 5,982 / tick 426 / halt `$0000` |
+| Fresh Mesen title samples | frames 5,650-5,800; brightness 15; no forced blank; progress continues |
+| Mesen transition and two charges | frame 8,177 / tick 1,524 / render 1,472 / halt `$0000` |
+| Encounter offense | health 20→18 in the fresh same-hash sequence |
+| Focused crate hold/throw | visible action states 10→7; tick 1,483 / halt `$0000`; renders continue |
+
+The crate replay begins from an exact-v130 Mesen gameplay checkpoint, then explicitly refreshes the
+state-restored `$7F:8000-$AFFF` supervisor/renderer mirror from the selected exact-v131 ROM before
+driving the real controller sequence. It is focused current-renderer evidence, not an organic v131
+stage run. The fresh same-hash Mesen sequence proves two ordinary charged releases remain live, but
+it does not reproduce the tester's exact charged shot killing a silver enemy. That target-specific
+freeze remains open until reproduced or human-cleared.
+
+Primary evidence:
+
+- `build/user-playtest-v105-investigation/v131-final-static-logo-mesen211-v1/`
+- `build/user-playtest-v105-investigation/v131-centered-obj-manifest-nexen-v3/`
+- `build/user-playtest-v105-investigation/v131-obj-displayed-slot-quarantine-nexen-v10/`
+- `build/user-playtest-v105-investigation/v131-final-coldboot-settle-v2/`
+- `build/user-playtest-v105-investigation/v131-final-title-mesen211-v1/`
+- `build/user-playtest-v105-investigation/v131-final-mesen211-full-sequence-v1/`
+- `build/user-playtest-v105-investigation/v131-box-regression-mesen211-v1/`
+- `docs/handoff/V130_SECOND_PLAYTEST_20260723.md`
+
+#### R11 verdict
+
+v131 supersedes human-rejected v130 only as the current **response candidate**. The static boot
+logo, centered transform, manifest predicate, displayed-slot cache invariant, fresh boot, generic
+charge path, encounter offense, and focused crate path have bounded evidence. The exact
+silver-enemy charged kill, the first wall on this hash, a human v131 run, musical timbre, renderer
+conservation, aligned MAME pixels, a full stage/playthrough, and formal 30 Hz gates remain open.
+The correct label remains **interactive technical demo, not playable or shippable**.
+
 ## Decision rule after the baseline
 
-R10 supersedes v128 as the playtest candidate while preserving R7's exact v124 formal performance
-evidence, R8's charged-shot diagnosis, and R9's renderer-conservation failure. Preserve the
-production evidence contract:
-local/checkpoint improvements remain local evidence, while a new playability claim requires another
-power-on uninterrupted run plus a human combat/audio playtest. Continue under the honest label
-**interactive technical demo, not playable or shippable**. v130 is the current combined
-wall/audio/boot candidate; do not resurrect the rejected pre-wake DMA ordering, v125/v126, or
-project a local result into FPS.
+R11 supersedes R10's v130-candidate verdict while preserving R7's exact v124 formal performance
+evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10's focused wall
+and audio evidence. Preserve the production evidence contract: local/checkpoint improvements
+remain local evidence, while a new playability claim requires another power-on uninterrupted run
+plus a human combat/audio playtest. Continue under the honest label **interactive technical demo,
+not playable or shippable**. v131 is the current second-playtest response candidate; do not
+resurrect human-rejected v130, the rejected pre-wake DMA ordering, v125/v126, or project a local
+result into FPS.
