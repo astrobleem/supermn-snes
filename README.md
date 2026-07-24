@@ -14,6 +14,13 @@ The port boots, accepts real controller input, renders recognizable gameplay, an
 plays VGM-derived TAD audio in controlled tests. It is an **interactive technical-demo
 response candidate, not playable or shippable**.
 
+The original MC68000 program already drives the game's tasks, combat, objects, and
+stage progression through the interpreter plus native hot-path escapes. An older
+README's “bulk game-logic port underway” row was a superseded phase snapshot, not the
+current roadmap. Remaining work is whole-game correctness and stability, renderer
+fidelity/conservation, Stage 2 presentation, audio fidelity, performance revalidation,
+hardware acceptance, and a complete playthrough.
+
 The current v135 ROM is 4 MiB with SHA-256
 `5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`.
 It fixes a reproduced IRAM-erasure freeze and restores the top HUD, but it has not

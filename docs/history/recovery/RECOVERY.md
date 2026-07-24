@@ -70,9 +70,11 @@ a full playthrough, or a new performance verdict.**
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
-- The completed recovery line became `main`; current recovery work is on
-  `agent/playability-recovery`. Exact ROM hashes, rather than an old handoff's branch name, identify
-  each measured candidate. v105 (`72d925ac…`) is historical; formal combat-fixed v124 is
+- As of the July 24 documentation/branch consolidation, `main` is the sole active local and remote
+  branch. The short-lived `agent/playability-recovery` publication branch and every older remote
+  topic branch were proven ancestors of `main` before their refs were removed. Exact ROM hashes,
+  rather than an old handoff's branch name, identify each measured candidate. v105
+  (`72d925ac…`) is historical; formal combat-fixed v124 is
   `777507c9…`; charged-shot-fixed v127 is `1a8a5742…`; exact-Mesen-regression-fixed v128 is
   `7c4b757d…`; first-wall/octave-sample v129 is `8f240332…`; combined wall/audio/Mode-7 v130
   is the human-rejected `1ec22cbc…`; the v131 second-playtest response candidate is
@@ -81,13 +83,15 @@ a full playthrough, or a new performance verdict.**
   human Stage 2 rejection at `15465fe6…`; and the v134 vertical-scroll response candidate is
   human-rejected `782ae58f…`. The current v135 IRAM-freeze/top-HUD response candidate is
   `5aac64b6…`.
-- Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
-- Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
-  refs. Nothing has been deleted.
-- The old `sound-p3` worktree remains locked and untouched as a safety archive. Its tracked tip is
-  already an ancestor of `origin/main`; its only unique visible
-  untracked file was `CONFESSION.md`, now copied byte-for-byte to the root. Its gitignored final
-  sound assets were also unique and have now been recovered into the canonical checkout.
+- Recovered truth documents now live at `docs/history/recovery/CONFESSION.md` and in the root
+  `AGENTS.md`, with current truth reconciled into `docs/current/STATUS.md`.
+- Old local tips and the unique unvalidated stash are preserved as annotated
+  `archive/*-pre-recovery-20260712` tags, not branches. The stash was deliberately not merged into
+  production.
+- The old `sound-p3` worktree remains locked as a detached safety archive at `2f06e4d`. Its tracked
+  tip is an ancestor of `main`; its original untracked `CONFESSION.md` remains physically present,
+  while the expanded correction ledger is tracked at `docs/history/recovery/CONFESSION.md`. Its
+  gitignored final sound assets were recovered into the canonical checkout.
 
 ### Historical worktree policy during consolidation (superseded)
 
@@ -99,8 +103,8 @@ dirty `main` worktree identified above.
   `recovery/canonicalize-20260712` before that line became `main`.
 - Treat `.claude/worktrees/sound-p3` as a frozen source archive. Do not build, edit, merge, or
   launch emulators from it.
-- The worktree's tracked commits need no merge: `sound-p3` is already an ancestor of
-  `origin/main`. Archive refs preserve its tip and the other pre-recovery tips independently.
+- The worktree's tracked commits need no merge: historical `sound-p3` is already an ancestor of
+  `main`. Archive tags preserve its tip and the other pre-recovery tips independently.
 - Keep the worktree locked as a safety archive through the recovery baseline. Its recorded Claude
   lock owner is no longer running, but removal is cleanup, not recovery work, and is unnecessary
   while the archive refs and recovered artifacts are intact.

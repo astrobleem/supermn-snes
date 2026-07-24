@@ -11,6 +11,14 @@ This is the only authoritative project-status summary. Dated reports under
 The port is an **interactive technical-demo response candidate**. It is **not
 playable, release-ready, or shippable**.
 
+The project is not waiting for a bulk source-level game-logic rewrite. The original
+MC68000 program already runs the game's task, combat, object, and progression logic
+through the legal interpreter, with measured hot paths replaced by native 65816
+escapes. The old “bulk game-logic port underway” status was a superseded phase
+snapshot. Current blockers concern uncovered whole-program behavior, stability,
+renderer fidelity and conservation, Stage 2 presentation, audio fidelity, formal
+candidate performance, hardware scope, and full-playthrough acceptance.
+
 The current candidate is v135:
 
 - production ROM size: 4,194,304 bytes;

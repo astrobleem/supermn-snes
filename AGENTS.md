@@ -25,14 +25,23 @@ Historical documents retain point-in-time words such as “current,” “playab
 preserved at
 [`docs/history/status/AGENTS_GUIDE_PRE_REORG_20260724.md`](docs/history/status/AGENTS_GUIDE_PRE_REORG_20260724.md).
 
-Inspect `git status`, branches, worktrees, refs, and the current evidence before
-choosing a base. Never merge, rebase, delete branches, or switch away from user work
-without explicit instruction.
+`main` is the sole active project branch and the GitHub default. Work directly on
+`main`; do not create or push feature branches or additional worktrees unless Chad
+explicitly asks for one. Pre-recovery tips that are not part of the project line are
+preserved as `archive/*` tags, not branches. The frozen historical `sound-p3` worktree
+is detached and is not a development base.
+
+Inspect `git status`, worktrees, refs, and the current evidence before changing state.
+Never merge, rebase, delete refs, or switch away from user work without explicit
+instruction.
 
 ## Honest baseline
 
 - The current v135 response candidate is interactive in bounded tests but is not
   playable or shippable.
+- The original MC68000 program already supplies the game logic. “Bulk game-logic port
+  underway” is an obsolete phase description; current work is integration correctness,
+  stability, presentation, sound, performance, and acceptance.
 - v135 SHA-256 is
   `5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`.
 - v124 is the latest formal production run:

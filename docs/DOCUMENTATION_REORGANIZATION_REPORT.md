@@ -13,6 +13,20 @@ The repository now has four explicit reading paths:
 
 The root [`README.md`](../README.md) is the short project/build entry point.
 
+## Publication and branch correction
+
+The first publication commit landed on `agent/playability-recovery` while GitHub's
+default `main` still displayed an obsolete status table. That was a publication error:
+the default README continued to say “bulk game-logic port underway” even though the
+original MC68000 program already drives gameplay through the interpreter/native-hot
+architecture.
+
+The same-day consolidation advanced `main` to the complete project/documentation tip.
+Every remote topic branch was proven to be an ancestor of that tip before its branch
+ref was removed. Historical pre-recovery tips, including the unique unvalidated stash,
+were retained as `archive/*` tags rather than merged into production. `main` is now the
+sole active local and remote branch.
+
 ## Authorities
 
 | Subject | Authority |
