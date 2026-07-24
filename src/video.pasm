@@ -13,9 +13,12 @@ OAMADDH=$2103
 OAMDATA=$2104
 BGMODE=$2105
 BG1SC=$2107
+BG2SC=$2108
 BG12NBA=$210B
 BG1HOFS=$210D
 BG1VOFS=$210E
+BG2HOFS=$210F
+BG2VOFS=$2110
 VMAIN=$2115
 VMADDL=$2116
 VMADDH=$2117
@@ -113,6 +116,10 @@ RQ2_BG_VALUES=$B820     ; corresponding pairs below $0200 bytes; ends before $BC
 ; No runtime instruction references those retired constants.  The widened OBJ
 ; hash above owns only $5000-$5FFF; $6000-$74FF remains deliberately unclaimed.
 STAGING_CGRAM=$8000
+TITLE_TEXT_META=$89BE ; palette dirty bit 15 = overloaded title composition uses BG2
+TITLE_FONT_MARK=$89DC ; $A55B after coherent BG2 font/map VRAM has been initialized
+TITLE_BG_MAP=$6000    ; private 2 KiB WRAM staging for the 32x32 BG2 map
+TITLE_FONT=$6800      ; private 1344-byte staging: blank tile + 41 title glyphs
 VFT_VEC=$E98004          ; fixed wrapper slot: per-tick joy+render vector (jsl'd from WRAM)
 .bank 0
 .org $8000
@@ -236,6 +243,7 @@ viclr41:
     sta $410146          ; no producer-prepared BG unique-code list
     sta $41014A          ; no guarded $C0BC prepared-image provenance
     sta $41014E          ; no cumulative exact producer offsets yet
+    sta $410150          ; no title-text BG2 overlay
     sta $410142          ; candidate has no promotable BG image
     lda #$FFFF
     sta $410144          ; no proven final $20E8 tile-strip payload in shadow
@@ -3043,6 +3051,21 @@ rqi_done:
     rts
 render_queue_helpers_end:
 
+; Keep the common renderer in its contention-free WRAM mirror.  Only the
+; overloaded arcade title crosses into the ROM-hosted BG2 helper after the
+; ordinary OBJ upload has completed and its converted palette is available.
+.org $A0E0
+.a16
+.i16
+obj_upload_title_dispatch:
+    jsr obj_upload
+    lda $7E89BE
+    bpl outd_done
+    jsl.l $E9B300
+outd_done:
+    rts
+obj_upload_title_dispatch_end:
+
 ; Production NMI/WAI acquisition.  An idle renderer is given a direct cache
 ; image by pacing_snapshot_direct while the SA-1 is quiescent.  While rendering
 ; or while a direct image awaits its worker ACK, later NMIs retain complete
@@ -3454,9 +3477,17 @@ vof_loop:
 
     lda $E8
     and #$01FF
-    cmp #$0100
-    bcc vof_sx_ready
-    ora #$FE00           ; sign-extend the arcade 9-bit X coordinate
+    ; X1-001 draws the signed coordinate in both 512px buckets.  The producer
+    ; retained raw $031-$13F, so raw $100-$13F is the visible wrapped-right
+    ; interval at arcade X=256..319, not an offscreen negative coordinate.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 vof_sx_ready:
     sec
     sbc #$0040           ; centered crop: SNES X = arcade X - 64
@@ -3490,7 +3521,7 @@ vof_next:
 
 vof_done:
     jsr obj_hide_tail_fast
-    jsr obj_upload
+    jsr obj_upload_title_dispatch
     plp
     rts
 
@@ -5051,9 +5082,16 @@ vop_loop:
 
     lda $E8
     and #$01FF
-    cmp #$0100
-    bcc vop_sx_ready
-    ora #$FE00
+    ; Preserve the wrapped-right raw $100-$13F interval exactly as in the
+    ; legacy path above.  Eight NOP bytes retain the established layout.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 vop_sx_ready:
     sec
     sbc #$0040           ; centered crop: SNES X = arcade X - 64
@@ -5393,6 +5431,267 @@ rqc2_restore:
     plp
     rtl
 render_queue_capture_secondary_end:
+
+; =============================================================================
+; Title text BG2 overlay.
+;
+; The arcade title represents each 8x8 legal-text glyph as a 16x16 X1-001 OBJ.
+; Six rows contain 149 such records: beyond both the SNES 128-OBJ frame limit
+; and the 34 OBJ-tile scanline limit.  The SA-1 manifest removes only those
+; signature-gated rows.  Here the 5A22 copies the same glyphs' nonempty
+; top-left 8x8 tiles from the native graphics records into otherwise-unused
+; BG2 VRAM, publishes a static 32x32 map for the centered crop, and leaves OAM
+; capacity to the Superman/TAITO artwork.  No private graphics bytes are
+; embedded in source; they are read from the already packed private ROM image.
+; =============================================================================
+.org $B300
+.a16
+.i16
+title_bg_overlay:
+    php
+    phb
+    sep #$20
+.a8
+    lda #$00
+    pha
+    plb                         ; PPU/DMA absolute registers require DBR=$00
+    rep #$30
+.a16
+
+    lda $7E89DC
+    cmp #$A55B
+    beq tbo_palette
+    jsr title_bg_build_font
+    jsr title_bg_build_map
+
+    ; MVN leaves DBR at its destination bank.  Restore zero before touching
+    ; PPU/DMA registers, while retaining the caller's original DBR below it.
+    sep #$20
+.a8
+    lda #$00
+    pha
+    plb
+    jsr title_bg_upload
+    rep #$30
+.a16
+    lda #$A55B
+    sta $7E89DC
+
+tbo_palette:
+    ; Logical arcade palette bank zero is assigned dynamically in the OBJ
+    ; palette cache.  Copy its already converted physical OBJ slot to reserved
+    ; BG palette 7 so the BG2 glyph pixels remain color-identical.
+    sep #$20
+.a8
+    lda $7E8580
+    cmp #$FF
+    beq tbo_registers
+    rep #$20
+.a16
+    and #$00FF
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$8100
+    sta $D0
+    lda #$80E0
+    sta $D4
+    lda #$007E
+    sta $D2
+    sta $D6
+    jsr copy32
+
+tbo_registers:
+    sep #$20
+.a8
+    lda #$70
+    sta BG2SC                   ; 32x32 BG2 map at VRAM word $7000
+    lda #$61
+    sta BG12NBA                 ; BG1 chars $1000; BG2 chars $6000
+    stz BG2HOFS
+    stz BG2HOFS
+    stz BG2VOFS
+    stz BG2VOFS
+    lda #$13
+    sta TM                      ; BG1 starfield + BG2 text + OBJ artwork
+    plb
+    plp
+    rtl
+
+.a16
+.i16
+title_bg_build_font:
+    ; Tile zero is transparent.  Tiles 1-41 are A-Z, 0-9, @, period, comma,
+    ; hyphen, and ampersand.  Every glyph's other three 8x8 quadrants are transparent in
+    ; the arcade record, so copying the first native 32-byte tile is exact.
+    lda #$0000
+    ldx #$0000
+tbf_clear:
+    sta $7E6800,x
+    inx
+    inx
+    cpx #$0540
+    bne tbf_clear
+
+    stz $D8
+tbf_glyph:
+    ldx $D8
+    sep #$20
+.a8
+    ; Poppy records same-bank labels with bank byte zero; force the physical
+    ; ROM bank exactly as the fixed renderer wrappers do.
+    lda.l title_font_codes|$E90000,x
+    rep #$20
+.a16
+    and #$00FF
+    xba
+    lsr a                       ; source = $C9:0000 + logical code * 128
+    sta $D0
+    lda #$00C9
+    sta $D2
+
+    lda $D8
+    inc a                       ; physical BG tile zero remains transparent
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$6800
+    sta $D4
+    lda #$007E
+    sta $D6
+    jsr copy32
+
+    inc $D8
+    lda $D8
+    cmp #$0029
+    bne tbf_glyph
+    rts
+
+title_bg_build_map:
+    lda #$0000
+    ldx #$0000
+tbm_clear:
+    sta $7E6000,x
+    inx
+    inx
+    cpx #$0800
+    bne tbm_clear
+
+    ; Six 64-byte rows land at screen tile rows 14,16,18,20,22,24.  The two
+    ; arcade legal lines wider than 256 pixels are edited without changing
+    ; their meaning: one trailing comma is omitted and "AND" becomes "&".
+    ; This keeps every word coherent instead of clipping the initial/final S.
+    lda #$003F
+    ldx #title_text_row14
+    ldy #$6380
+    mvn $7E,$E9
+    lda #$003F
+    ldx #title_text_row16
+    ldy #$6400
+    mvn $7E,$E9
+    lda #$003F
+    ldx #title_text_row18
+    ldy #$6480
+    mvn $7E,$E9
+    lda #$003F
+    ldx #title_text_row20
+    ldy #$6500
+    mvn $7E,$E9
+    lda #$003F
+    ldx #title_text_row22
+    ldy #$6580
+    mvn $7E,$E9
+    lda #$003F
+    ldx #title_text_row24
+    ldy #$6600
+    mvn $7E,$E9
+    rts
+
+.a8
+.i16
+title_bg_upload:
+    lda #$80
+    sta VMAIN
+    stz VMADDL
+    lda #$60
+    sta VMADDH
+    lda #$01
+    sta DMAP0
+    lda #$18
+    sta BBAD0
+    stz A1T0L
+    lda #$68
+    sta A1T0H
+    lda #$7E
+    sta A1B0
+    lda #$40
+    sta DAS0L
+    lda #$05
+    sta DAS0H                   ; blank tile + 41 glyphs = 1344 bytes
+    jsr dma0_blank_pulse
+
+    stz VMADDL
+    lda #$70
+    sta VMADDH
+    lda #$01
+    sta DMAP0
+    lda #$18
+    sta BBAD0
+    stz A1T0L
+    lda #$60
+    sta A1T0H
+    lda #$7E
+    sta A1B0
+    stz DAS0L
+    lda #$08
+    sta DAS0H                   ; complete 32x32 BG2 map
+    jsr dma0_blank_pulse
+    rts
+
+; Logical-code order for physical BG tiles 1-41.
+title_font_codes:
+    .db $41,$42,$43,$44,$45,$46,$47,$48,$49,$4A,$4B,$4C,$4D
+    .db $4E,$4F,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$5A
+    .db $30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$2E,$2C,$2D,$26
+
+; Palette 7 ($1C00) plus high-priority bit ($2000), followed by tile 1-40.
+title_text_row14:
+    .word $0000,$0000,$0000,$0000,$3C25,$0000,$3C14,$3C01
+    .word $3C09,$3C14,$3C0F,$0000,$3C03,$3C0F,$3C12,$3C10
+    .word $3C0F,$3C12,$3C01,$3C14,$3C09,$3C0F,$3C0E,$0000
+    .word $3C1C,$3C24,$3C23,$3C23,$0000,$0000,$0000,$0000
+title_text_row16:
+    .word $3C13,$3C15,$3C10,$3C05,$3C12,$3C0D,$3C01,$3C0E
+    .word $3C27,$0000,$3C01,$3C0C,$3C0C,$0000,$3C12,$3C05
+    .word $3C0C,$3C01,$3C14,$3C05,$3C04,$0000,$3C03,$3C08
+    .word $3C01,$3C12,$3C01,$3C03,$3C14,$3C05,$3C12,$3C13
+title_text_row18:
+    .word $3C13,$3C0C,$3C0F,$3C07,$3C01,$3C0E,$3C13,$0000
+    .word $3C29,$0000,$3C09,$3C0E,$3C04,$3C09,$3C03,$3C09
+    .word $3C01,$0000,$3C01,$3C12,$3C05,$0000,$3C14,$3C12
+    .word $3C01,$3C04,$3C05,$3C0D,$3C01,$3C12,$3C0B,$3C13
+title_text_row20:
+    .word $0000,$0000,$0000,$0000,$0000,$3C0F,$3C06,$0000
+    .word $3C04,$3C03,$0000,$3C03,$3C0F,$3C0D,$3C09,$3C03
+    .word $3C13,$0000,$3C09,$3C0E,$3C03,$3C26,$3C25,$3C1C
+    .word $3C24,$3C23,$3C23,$0000,$0000,$0000,$0000,$0000
+title_text_row22:
+    .word $0000,$0000,$0000,$0000,$3C13,$3C15,$3C10,$3C05
+    .word $3C12,$3C0D,$3C01,$3C0E,$0000,$3C14,$3C08,$3C05
+    .word $3C0D,$3C05,$0000,$3C25,$0000,$3C17,$3C01,$3C12
+    .word $3C0E,$3C05,$3C12,$3C28,$0000,$0000,$0000,$0000
+title_text_row24:
+    .word $3C14,$3C01,$3C0D,$3C05,$3C12,$3C0C,$3C01,$3C0E
+    .word $3C05,$0000,$3C10,$3C15,$3C02,$3C0C,$3C09,$3C13
+    .word $3C08,$3C09,$3C0E,$3C07,$0000,$3C03,$3C0F,$3C12
+    .word $3C10,$3C26,$3C27,$0000,$3C1C,$3C24,$3C23,$3C22
+title_bg_overlay_end:
 
 ; The first primary capture lazily copies this island to the identical private
 ; $7E:ED00 offset after production pacing has armed and while the SA-1 sleeps.

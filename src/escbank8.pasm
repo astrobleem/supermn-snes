@@ -5230,9 +5230,9 @@ escbank8_end:
 ;   $41:0132 candidate sequence (producer)
 ;   $41:0134 accepted sequence (5A22, after all snapshot DMA completes)
 ;   $41:0136 baseline sequence (producer-private promotion marker)
-;   $41:0138 packed visible-OBJ byte length with bit 15 set (0..$0400 payload)
+;   $41:0138 packed visible-OBJ byte length with bit 15 set (0..$0300 payload)
 ;   $41:013A BG-diff-list byte length (0..$0400, $FFFF = full rebuild)
-;   $41:013C palette changed for this candidate (0/1)
+;   $41:013C palette changed in bit 0; bit 15 marks title text moved to BG2
 ;   $41:013E cumulative palette-write dirty flag
 ;   $41:0140 cumulative BG-write dirty flag
 ;   $41:0142 candidate contains a promotable BG image (0/1)
@@ -5240,6 +5240,7 @@ escbank8_end:
 ;   $41:014A $C0BC prepared-image provenance ($C0BC or zero)
 ;   $41:014C cumulative producer BG-list status (0 empty, 1 exact, $FFFF unknown)
 ;   $41:014E cumulative producer BG-list byte length (0..$0400)
+;   $41:0150 title-text overlay flag after BG-preparation scratch is finished
 ;
 ; Private shared workspace (outside the arcade shadow at $41:2000+):
 ;   $41:0200/$0600  accepted BG code/color baseline
@@ -5376,10 +5377,10 @@ rmb_bg_clean_jump:
     bra rmb_obj_begin
 
     ; Y is the strongest cheap rejection in settled gameplay. For its small
-    ; surviving set, keep only the 16px OBJ overlap interval $031-$0FF for the
-    ; centered arcade-X $040-$13F view. X1-001 bit 8 is a sign bit, not an
-    ; extension into the right side of the 384px bitmap. Publish visible slots
-    ; order together with the three
+    ; surviving set, keep only the 16px OBJ overlap interval $031-$13F for the
+    ; centered arcade-X $040-$13F view. X1-001 bit 8 selects the wrapped copy
+    ; used by the rightmost 64 pixels of that crop. Publish visible slots in
+    ; source order together with the three
     ; raw words the 5A22 consumes.  The fixed redirect enters an out-of-line
     ; A8 scan that applies the code predicate before packing six-byte records;
     ; saturation therefore remains the first 128 accepted objects rather than
@@ -5489,6 +5490,12 @@ rmb_obj_done:
     tya
     ora #$8000          ; distinguish packed records from legacy offset lists
     sta $410138
+    lda $0150
+    beq rmb_obj_meta_done
+    lda $41013C
+    ora #$8000          ; metadata rides every direct/queued immutable snapshot
+    sta $41013C
+rmb_obj_meta_done:
 
     plb
     ply
@@ -6314,14 +6321,40 @@ h158_ylist_stage_end:
 .a16
 .i16
 rmb_obj_pack:
-    ; The unrolled A8 scan has already rejected negative signed-nine-bit X.
-    ; Finish the centered-crop overlap test here: a 16px sprite at X=49 is the
-    ; first one that can touch the 256px window beginning at arcade X=64.
+    ; The arcade title composes six long 8x8 text rows out of overlapping
+    ; 16x16 OBJ records.  They exceed both the SNES 128-OBJ frame cap and its
+    ; 34 OBJ tiles/scanline limit.  A title signature recorded at $0150 moves
+    ; precisely those six rows to the 5A22 BG2 overlay; retain the logo, HUD,
+    ; globe, and every non-title frame in their original source order.
+    lda $0150
+    beq rmb_obj_pack_x
+    lda $3000,x
+    xba
+    and #$00FF
+    cmp #$001A
+    beq rmb_obj_pack_reject
+    cmp #$002A
+    beq rmb_obj_pack_reject
+    cmp #$003A
+    beq rmb_obj_pack_reject
+    cmp #$004A
+    beq rmb_obj_pack_reject
+    cmp #$005A
+    beq rmb_obj_pack_reject
+    cmp #$006A
+    beq rmb_obj_pack_reject
+rmb_obj_pack_x:
+    ; The X1-001 treats bit 8 as a sign bit, then draws both 512px-wrapped
+    ; copies.  For the centered arcade-X 64..319 crop that makes raw
+    ; $031-$13F visible: a 16px sprite at raw X=49 first overlaps the left
+    ; edge, while raw $100-$13F wraps back to arcade X=256..319.
     lda $4400,x
     xba
     and #$01FF
     cmp #$0031
     bcc rmb_obj_pack_reject
+    cmp #$0140
+    bcs rmb_obj_pack_reject
     lda $3000,x
     sta $1600,y
     lda $4000,x
@@ -6342,9 +6375,48 @@ rmb_obj_pack_reject:
     rts
 rmb_obj_pack_end:
 
+; Identify the exact post-TAITO title composition before the packed scan.  The
+; signature spans one copyright glyph and two distant logo/text records so a
+; gameplay row which happens to reuse an ASCII tile cannot enable BG2.  $0150
+; was transient prepared-BG scratch earlier in this same boundary and becomes
+; candidate metadata only after that work has returned.
+.org $E5B0
+.a8
+.i16
+rmb_title_detect:
+    stz $0150
+    stz $0151
+    lda $4207                  ; slot 259: "T" in TAMERLANE, raw Y=$1A
+    cmp #$54
+    bne rmb_title_detect_done
+    lda $3207
+    cmp #$1A
+    bne rmb_title_detect_done
+    lda $408B                  ; slot 69: copyright glyph, raw Y=$6A
+    cmp #$40
+    bne rmb_title_detect_done
+    lda $308B
+    cmp #$6A
+    bne rmb_title_detect_done
+    lda $4256                  ; slot 299: first large SUPERMAN-logo tile
+    cmp #$12
+    bne rmb_title_detect_done
+    lda $4257
+    cmp #$A4
+    bne rmb_title_detect_done
+    lda $3257
+    cmp #$D2
+    bne rmb_title_detect_done
+    lda #$01
+    sta $0150
+rmb_title_detect_done:
+    rts
+rmb_title_detect_end:
+
 ; Exact visible-OBJ scan for the six-byte production representation.  The
-; common Y and negative-X filters stay eight-way unrolled; rmb_obj_pack rejects
-; the X<49 left fringe. The remaining code test is performed in A8 before paying
+; common Y and wrapped-right-X filters stay eight-way unrolled; rmb_obj_pack
+; rejects the X<49 left fringe and defensively enforces the complete
+; $031-$13F interval. The remaining code test is performed in A8 before paying
 ; either a mode switch or helper call. This is
 ; semantically identical to the old A16 helper predicate:
 ;   raw code != $FFFF && (raw code & $3FFF) != 0.
@@ -6358,6 +6430,7 @@ rmb_obj_fast_scan:
     txy
     sep #$20
 .a8
+    jsr rmb_title_detect
 rmb_obj_fast_loop:
     lda $3001,x
     cmp #$F0
@@ -6368,7 +6441,7 @@ rmb_obj_fast_loop:
     lsr a
     bcc rmb_obj_fast_slot0_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot0_next
 rmb_obj_fast_slot0_code:
     lda $4001,x
@@ -6402,7 +6475,7 @@ rmb_obj_fast_slot0_next:
     lsr a
     bcc rmb_obj_fast_slot1_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot1_next
 rmb_obj_fast_slot1_code:
     lda $4001,x
@@ -6436,7 +6509,7 @@ rmb_obj_fast_slot1_next:
     lsr a
     bcc rmb_obj_fast_slot2_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot2_next
 rmb_obj_fast_slot2_code:
     lda $4001,x
@@ -6470,7 +6543,7 @@ rmb_obj_fast_slot2_next:
     lsr a
     bcc rmb_obj_fast_slot3_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot3_next
 rmb_obj_fast_slot3_code:
     lda $4001,x
@@ -6504,7 +6577,7 @@ rmb_obj_fast_slot3_next:
     lsr a
     bcc rmb_obj_fast_slot4_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot4_next
 rmb_obj_fast_slot4_code:
     lda $4001,x
@@ -6538,7 +6611,7 @@ rmb_obj_fast_slot4_next:
     lsr a
     bcc rmb_obj_fast_slot5_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot5_next
 rmb_obj_fast_slot5_code:
     lda $4001,x
@@ -6572,7 +6645,7 @@ rmb_obj_fast_slot5_next:
     lsr a
     bcc rmb_obj_fast_slot6_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot6_next
 rmb_obj_fast_slot6_code:
     lda $4001,x
@@ -6606,7 +6679,7 @@ rmb_obj_fast_slot6_next:
     lsr a
     bcc rmb_obj_fast_slot7_code
     lda $4401,x
-    cmp #$00
+    cmp #$40
     bcs rmb_obj_fast_slot7_next
 rmb_obj_fast_slot7_code:
     lda $4001,x

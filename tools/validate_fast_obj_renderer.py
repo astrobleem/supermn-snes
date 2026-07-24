@@ -272,7 +272,7 @@ def run_variant(
                         raw_x[source_offset : source_offset + 2], "big"
                     )
                     sx = x_color & 0x01FF
-                    if not 0x0031 <= sx < 0x0100:
+                    if not 0x0031 <= sx < 0x0140:
                         continue
                     raw_code_word = int.from_bytes(
                         raw_code[source_offset : source_offset + 2], "big"
@@ -380,7 +380,7 @@ def run_variant(
                     if raw_x is not None:
                         x_color = int.from_bytes(raw_x[offset : offset + 2], "big")
                         sx = x_color & 0x01FF
-                        if not 0x0031 <= sx < 0x0100:
+                        if not 0x0031 <= sx < 0x0140:
                             continue
                     offsets.append(offset)
                     if args.candidate_packed_manifest and len(offsets) == 128:

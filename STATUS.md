@@ -3,7 +3,39 @@
 Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
-> ## ⚠️ R11 SECOND-v130-PLAYTEST RESPONSE — July 23, 2026
+> ## ⚠️ R12 v131 HUMAN REJECTION / v132 RESPONSE — July 23, 2026
+>
+> The next human run rejected the supplied v131 response candidate: throwing the crate still
+> froze, Superman disappeared at the visible right edge, and the title words were incoherent.
+>
+> Exact v132 production SHA-256
+> `48d7c4d6c6a431e8c2066410e325888d70aec9d15b7261903ddc4f8effd476a2`
+> repairs three reproduced causes. Poppy had emitted an 8-bit immediate at generated `$023342`
+> continuation `br23342_1`; under M=16 its following `$40` operand executed as `RTI` and jumped to
+> zero during the crate path. Explicit `.a16/.i16` modes plus a byte-level pack assertion repair
+> it. A diagnostic build is exact in 18/18 `$02429C` MAME/Nexen cases, and the production ROM's
+> exact-Mesen crate replay advances from tick 1,265 through 1,480, past v131's tick-1,288 freeze,
+> with halt zero and all initialized stacks valid.
+>
+> R11's right-edge model was incomplete: X1-001 bit 8 is signed, but the device draws a wrapped
+> copy. Raw X `$100-$13F` supplies arcade X `256..319` in the centered crop. v132 retains the full
+> `$031-$13F` overlap interval; an exact-Mesen capture visibly keeps Superman at the far-right
+> boundary. The title's six legal rows require 149 arcade OBJs, exceeding both SNES frame and
+> scanline OBJ limits, so a signature-gated BG2 overlay now carries those glyphs while 97 artwork
+> objects remain in OAM. A final-ROM Mesen 2.1.1 run from power-on shows six coherent legal lines
+> across frames 5,680-5,740 with ticks/renders advancing and halt zero. Continuing from that
+> same-ROM title state with held Select/Start removes the overlay and reaches the pre-round
+> Superman sequence at frame 6,491 / tick 681 / halt zero with eight valid initialized stacks.
+>
+> These are focused differential/checkpoint results, not a fresh full-stage run or FPS evidence.
+> A packed-snapshot mirror-refresh diagnostic is red 7/8 because its first consumer sample is
+> stale; renderer conservation remains open. v132 is an **interactive technical-demo response
+> candidate, not playable or shippable**. It needs a human cold-boot title/crate/right-edge retest,
+> plus the exact silver-enemy charged kill, first wall, timbre, full stage/playthrough, renderer,
+> and formal performance gates. See [RECOVERY.md](RECOVERY.md) R12 and
+> [the focused handoff](docs/handoff/V132_TITLE_CRATE_RIGHT_EDGE_20260723.md).
+
+> ## HISTORICAL R11 SECOND-v130-PLAYTEST RESPONSE — July 23, 2026 (SUPERSEDED BY R12)
 >
 > Exact v130 is human-rejected. Before reaching the first wall, the tester froze while throwing a
 > crate and while killing a silver enemy with a held charged shot. They also saw wrong tiles in
@@ -625,11 +657,11 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
 
 ## Recommended next steps
 
-**Current correction:** the historical throughput list below predates R6-R11 and is retained only
-as campaign history. The immediate playability work is to reproduce the exact charged-shot
-silver-enemy kill, run the first wall and crate path organically on exact v131, have the tester
-judge the centered/static-boot/timbre result, close renderer conservation, and only then rerun the
-formal power-on rate/budget gate.
+**Current correction:** the historical throughput list below predates R6-R12 and is retained only
+as campaign history. The immediate playability work is to have the tester cold-boot exact v132 and
+verify its title, crate, and right-edge repairs; reproduce the exact charged-shot silver-enemy
+kill; run the first wall and crate path organically; judge the static boot and timbre; close
+renderer conservation; and only then rerun the formal power-on rate/budget gate.
 
 The cold side (interpreter) and the hot side (automated transpiler + bridge + video
 codegen) are both built and validated. The remaining work is **throughput** — transpile

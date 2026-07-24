@@ -20,6 +20,15 @@ displayed OBJ-cache slots before reclamation. Its focused cache/manifest/crate, 
 and exact-Mesen liveness checks are green, but the exact charged silver-enemy kill, a human v131
 run, timbre listening, renderer conservation, and formal performance gates remain open.**
 
+**R12 accepts the next human correction: the supplied v131 response still freezes on crate throw,
+drops Superman at the visible right edge, and renders incoherent title words. Exact v132 repairs a
+misassembled `$023342` continuation, restores the X1-001 wrapped-right interval, and moves the
+title's over-capacity legal-text rows to BG2. The repaired task root is exact in 18/18 focused
+MAME/Nexen cases; exact-Mesen checkpoint replays pass the old crate terminal and visibly retain the
+right boundary; and a final-ROM title checkpoint has six coherent lines. These remain bounded
+results. A human v132 cold-boot run, the exact charged silver-enemy kill, first wall, timbre,
+renderer conservation, full playthrough, and formal performance gates remain open.**
+
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
@@ -29,7 +38,8 @@ run, timbre listening, renderer conservation, and formal performance gates remai
   `777507c9…`; charged-shot-fixed v127 is `1a8a5742…`; exact-Mesen-regression-fixed v128 is
   `7c4b757d…`; first-wall/octave-sample v129 is `8f240332…`; combined wall/audio/Mode-7 v130
   is the human-rejected `1ec22cbc…`; the v131 second-playtest response candidate is
-  `be0ed971…`.
+  human-rejected `be0ed971…`; the v132 title/crate/right-edge response candidate is
+  `48d7c4d6…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -88,6 +98,15 @@ dirty `main` worktree identified above.
   validate the new octave-sample data path, not its perceived musical quality. Exact-Mesen captures
   also prove that the Mode 7 boot activity screen moves during the formerly black interval, clears
   before normal Mode 1 ownership, and preserves the green coin/Start/charged-shot sequence.
+- R11's exact v131 focused evidence: static supplied-logo captures, exact centered-manifest
+  predicates, displayed-slot reclamation quarantine, organic Nexen cold-boot reachability, and an
+  exact-Mesen coin/Start/transition/two-charge sequence. The later human crate/right-edge/title
+  rejection supersedes its response-candidate verdict, not those bounded results.
+- R12's focused evidence: the exact v131 crate terminal was narrowed to a misassembled
+  `$023342` continuation; the mode-correct task root matches MAME in 18/18 diagnostic-build
+  variants; and the exact-Mesen production replay advances past the old freeze with valid stacks.
+  Separate final-ROM exact-Mesen captures show coherent title text and a retained far-right player
+  sprite. These are function/checkpoint results, not cold-boot stage stability or performance.
 
 ### Partial evidence, not a project-level verdict
 
@@ -103,8 +122,9 @@ dirty `main` worktree identified above.
   test. v124 repaired those combat failures but froze on charged-shot release and missed both
   formal 30 Hz thresholds. v127 repaired the demonstrated freeze. The user confirmed v128's
   recorded Mesen title/transition/charged-shot/music regressions, then exposed the first-wall crash.
-  v130 repairs that focused wall path and adds the octave/boot work but still inherits the red
-  burst-render conservation result and has passed neither a full-stage/full-playthrough test nor a
+  v130 repairs that focused wall path and adds the octave/boot work; v131/v132 add bounded
+  renderer/crate/title corrections. Exact v132 still inherits the red burst-render conservation
+  result and has passed neither a human cold-boot retest, a full-stage/full-playthrough test, nor a
   new formal rate/budget run.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
@@ -970,13 +990,112 @@ silver-enemy charged kill, the first wall on this hash, a human v131 run, musica
 conservation, aligned MAME pixels, a full stage/playthrough, and formal 30 Hz gates remain open.
 The correct label remains **interactive technical demo, not playable or shippable**.
 
+### R12 — v131 rejection and title/crate/right-edge response
+
+#### Human v131 correction
+
+The next user run supersedes R11's v131 response-candidate verdict. Throwing the crate still
+froze, Superman disappeared at the visible right edge of the centered window, and the title words
+were incoherent. These are direct Mesen 2.1.1 observations against the supplied candidate.
+
+#### Title OBJ-capacity repair
+
+The arcade title's six legal-text rows contain 149 overlapping 16x16 OBJ records. That exceeds
+both the SNES 128-OBJ frame cap and its 34 OBJ tiles per scanline limit, so no cache or ordering
+repair could preserve that representation exactly.
+
+The producer now recognizes the exact post-TAITO composition with three distant code/Y signatures,
+removes only the six text rows from its packed manifest, and tags the immutable snapshot. The 5A22
+copies the same packed private glyph tiles to BG2 and draws the six rows there, leaving 97 title
+artwork objects in OAM. Two over-width legal lines are fit to 32 columns by omitting one trailing
+comma and replacing `AND` with `&`; every word is now complete. A first Poppy build encoded the
+same-bank long font-table read in bank zero; the final source explicitly selects physical bank
+`$E9`.
+
+The final production ROM's stock-Mesen-2.1.1 run starts from power-on and uses no runtime pokes.
+Frames 5,680/5,700/5,720/5,740 remain Mode 1 with BG1+BG2+OBJ, brightness 15, no forced blank, and
+halt zero; ticks advance 275→305 and completed renders 254→281. Visual inspection confirms all six
+lines are coherent.
+
+#### Crate continuation repair
+
+Exact v131 stops at tick 1,288 after reaching `$98:80C9`, then executes `RTI` into `$00:0000`.
+Poppy reset mode inference at generated label `br23342_1`. The intended 16-bit
+`LDA #br23342_2; STA $40` became `A9 D1 85 40`; under M=16, `$85` was consumed as the high
+immediate and `$40` executed as `RTI`. Explicit `.a16/.i16` declarations produce
+`A9 D3 80 85 40 A9 FB 00 85 42 4C 00 84`. ROM packing now asserts the labels and full byte string.
+
+The `$02429C` task root is exact in 18/18 retained-fixture variants against MAME 0.287: all D/A
+registers, CCR, interrupt mask, mapped work RAM, and bounded native-return residue match. This gate
+correctly uses a `PC_RING=1` diagnostic ROM; an earlier production-ROM invocation ran past the
+NOPed terminal hook and is not counted. The normal production build was restored byte-for-byte
+afterward.
+
+The production-ROM exact-Mesen replay starts immediately before the old crate failure and advances
+tick 1,265→1,480 and completed renders 1,164→1,370. Halt remains zero, all 13 initialized task
+stacks are valid, and the minimum margin is 138 bytes. Two speculative interpreter return guards
+failed this same replay and were removed; they are not part of v132.
+
+#### Wrapped right edge
+
+R11's raw-X conclusion was incomplete. X1-001 bit 8 is signed, but the device renders the sprite
+in both 512-pixel buckets. Raw `$100-$13F` therefore supplies arcade X `256..319`, the rightmost 64
+pixels of the centered crop. The producer and validators now retain raw `$031-$13F`, and the
+legacy/packed consumers no longer sign-extend that wrapped-right interval before subtracting the
+64-pixel crop origin.
+
+An exact-Mesen drive advances tick 1,480→1,572 and renders 1,370→1,411 with halt zero and valid
+stacks. A captured intermediate visibly retains Superman at the far-right boundary behind the
+copper pipe; his later coordinate 336 is legitimately beyond the crop. A synthetic boundary gate
+retains `$031/$0FF/$100/$13F` and rejects `$030/$140`.
+
+One packed-snapshot mirror-refresh run records a stale first consumer followed by seven exact
+samples. Its aggregate remains red 7/8 and is retained as negative evidence; it does not close the
+inherited renderer-conservation failure.
+
+#### Exact v132 evidence and remaining target
+
+Exact v132 response-candidate production SHA-256:
+`48d7c4d6c6a431e8c2066410e325888d70aec9d15b7261903ddc4f8effd476a2`.
+
+| Gate | Exact-v132 result |
+|---|---:|
+| Production build/layout | 4 MiB ROM; pack/layout assertions green; rebuild byte-identical |
+| `$02429C` diagnostic differential | 18/18 exact MAME/Nexen variants |
+| Crate failure replay | tick 1,265→1,480; render 1,164→1,370; halt `$0000`; stacks valid |
+| Wrapped-right drive | far-right player visible; tick 1,480→1,572; halt `$0000` |
+| Fresh-power-on title | six coherent rows; frames 5,680-5,740; Mode 1 BG1+BG2+OBJ; halt `$0000` |
+| Title-state coin/Start continuation | overlay clears; pre-round frame 6,491 / tick 681; halt `$0000`; stacks valid |
+| Packed-snapshot refresh diagnostic | red 7/8; first consumer stale |
+| Formal FPS / complete playthrough | not run |
+
+Primary evidence:
+
+- `build/user-playtest-v105-investigation/v131-fresh-crate-throw-crash-v1/`
+- `build/user-playtest-v105-investigation/v132-final-2429c-mode-fix-differential-v4.json`
+- `build/user-playtest-v105-investigation/v132-final-crate-mode-fix-mesen211-v2/`
+- `build/user-playtest-v105-investigation/v132-final-right-edge-mesen211-v2/`
+- `build/user-playtest-v105-investigation/v132-title-fontdma-final-mesen211-fresh-v1/`
+- `build/user-playtest-v105-investigation/v132-final-title-coin-start-handoff-mesen211-v2/`
+- `build/user-playtest-v105-investigation/v132-final-packed-obj-right-edge-nexen-v2/`
+- `docs/handoff/V132_TITLE_CRATE_RIGHT_EDGE_20260723.md`
+
+#### R12 verdict
+
+v132 supersedes human-rejected v131 only as the current **response candidate**. The reproduced
+crate continuation, title capacity, and wrapped-right visibility defects have bounded evidence.
+The tester must still cold-boot this exact hash and verify all three. The exact charged shot
+killing a silver enemy, first wall on this hash, timbre, renderer conservation, aligned MAME
+pixels, full stage/playthrough, and formal performance remain open. The correct label remains
+**interactive technical demo, not playable or shippable**.
+
 ## Decision rule after the baseline
 
-R11 supersedes R10's v130-candidate verdict while preserving R7's exact v124 formal performance
-evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10's focused wall
-and audio evidence. Preserve the production evidence contract: local/checkpoint improvements
-remain local evidence, while a new playability claim requires another power-on uninterrupted run
-plus a human combat/audio playtest. Continue under the honest label **interactive technical demo,
-not playable or shippable**. v131 is the current second-playtest response candidate; do not
-resurrect human-rejected v130, the rejected pre-wake DMA ordering, v125/v126, or project a local
-result into FPS.
+R12 supersedes R11's v131-response verdict while preserving R7's exact v124 formal performance
+evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10/R11's bounded
+wall/audio/boot/cache evidence. Preserve the production evidence contract: local/checkpoint
+improvements remain local evidence, while a new playability claim requires another power-on
+uninterrupted run plus a human combat/audio playtest. Continue under the honest label
+**interactive technical demo, not playable or shippable**. v132 is the current response candidate;
+do not resurrect human-rejected v130/v131, the rejected pre-wake DMA ordering, v125/v126, or
+project a local result into FPS.

@@ -522,6 +522,8 @@ snapshot_acquire_paced = vid_off("snapshot_acquire_paced")
 render_queue_finish = vid_off("render_queue_finish")
 render_queue_install = vid_off("render_queue_install")
 render_queue_helpers_end = vid_off("render_queue_helpers_end")
+obj_upload_title_dispatch = vid_off("obj_upload_title_dispatch")
+obj_upload_title_dispatch_end = vid_off("obj_upload_title_dispatch_end")
 obj_palette_cache_init = vid_off("vof_pal_cache_init")
 obj_palette_fill_cached = vid_off("obj_pal_fill_cached")
 obj_fast_end = vid_off("vid_obj_fast_end")
@@ -553,6 +555,11 @@ queue_capture = vid_off("render_queue_capture")
 queue_capture_end = vid_off("render_queue_capture_end")
 queue_capture_secondary = vid_off("render_queue_capture_secondary")
 queue_capture_secondary_end = vid_off("render_queue_capture_secondary_end")
+title_bg_overlay = vid_off("title_bg_overlay")
+title_bg_overlay_end = vid_off("title_bg_overlay_end")
+title_bg_upload = vid_off("title_bg_upload")
+title_font_codes = vid_off("title_font_codes")
+title_text_row14 = vid_off("title_text_row14")
 queue_promote = vid_off("render_queue_promote")
 queue_promote_end = vid_off("render_queue_promote_end")
 boot_screen_init = vid_off("boot_screen_init")
@@ -616,11 +623,23 @@ assert VID[
     "OBJ hash helpers crossed the queue-finish island"
 )
 assert render_queue_finish < render_queue_install < render_queue_helpers_end
-assert render_queue_helpers_end <= snapshot_acquire_paced == 0xA100
+assert (
+    render_queue_helpers_end
+    <= obj_upload_title_dispatch
+    == 0xA0E0
+    < obj_upload_title_dispatch_end
+    <= snapshot_acquire_paced
+    == 0xA100
+)
 assert VID[
-    render_queue_helpers_end - 0x8000:0xA100 - 0x8000
-] == bytes(0xA100 - render_queue_helpers_end), (
-    "lazy queue installer crossed paced snapshot acquisition"
+    render_queue_helpers_end - 0x8000:obj_upload_title_dispatch - 0x8000
+] == bytes(obj_upload_title_dispatch - render_queue_helpers_end), (
+    "lazy queue installer crossed the title-upload dispatch island"
+)
+assert VID[
+    obj_upload_title_dispatch_end - 0x8000:0xA100 - 0x8000
+] == bytes(0xA100 - obj_upload_title_dispatch_end), (
+    "title-upload dispatch crossed paced snapshot acquisition"
 )
 assert bytes.fromhex("9f00007f") not in VID, (
     "renderer must never write $7F:0000,X; bank $7F is emulated 68000 work RAM"
@@ -730,17 +749,41 @@ assert VID[
     "primary queue capture crossed the fixed secondary capture island"
 )
 assert queue_capture_secondary == 0xB140
-assert queue_capture_secondary < queue_capture_secondary_end <= queue_promote
+assert (
+    queue_capture_secondary
+    < queue_capture_secondary_end
+    <= title_bg_overlay
+    == 0xB300
+    < title_bg_overlay_end
+    <= queue_promote
+)
 assert VID[
     queue_capture_secondary - 0x8000:queue_capture_secondary - 0x8000 + 9
 ] == bytes.fromhex("08c230a5d048a5d448"), (
     "secondary queue capture no longer preserves interrupted $D0/$D4 scratch"
 )
 assert VID[
-    queue_capture_secondary_end - 0x8000:queue_promote - 0x8000
-] == bytes(queue_promote - queue_capture_secondary_end), (
-    "ROM-only secondary capture crossed the private-WRAM queue-promoter island"
+    queue_capture_secondary_end - 0x8000:title_bg_overlay - 0x8000
+] == bytes(title_bg_overlay - queue_capture_secondary_end), (
+    "ROM-only secondary capture crossed the title BG2 island"
 )
+assert VID[
+    title_bg_overlay_end - 0x8000:queue_promote - 0x8000
+] == bytes(queue_promote - title_bg_overlay_end), (
+    "title BG2 island crossed the private-WRAM queue-promoter island"
+)
+assert (
+    VID[
+        title_bg_upload - 0x8000:title_font_codes - 0x8000
+    ].count(bytes.fromhex("a9408d0543a9058d0643"))
+    == 1
+), "title font DMA must upload blank tile plus all 41 glyphs ($0540 bytes)"
+assert VID[
+    title_font_codes - 0x8000:title_text_row14 - 0x8000
+] == bytes.fromhex(
+    "4142434445464748494a4b4c4d4e4f505152535455565758595a"
+    "30313233343536373839402e2c2d26"
+), "title BG2 font-code table changed; re-audit its map tile indices"
 assert queue_promote == 0xED00 and queue_promote < queue_promote_end <= 0xF000
 assert queue_promote_end - queue_promote == 0x022A, (
     "pinned lazy-installer size no longer matches the queue promoter"
@@ -1339,6 +1382,16 @@ if _osp.exists("src/escbank4.bin"):
 
     assert ESC4[0x0000:0x000E] == bytes.fromhex("5c008f98" + "ea" * 10), (
         "escbank4 entry_23342 guarded redirect moved or changed size"
+    )
+    assert (
+        esc4_off("br23342_1") == 0x80C6
+        and esc4_off("br23342_2") == 0x80D3
+    ), "$023342 generated continuation moved; re-audit its mode-pinned call bridge"
+    assert ESC4[0x00C6:0x00D3] == bytes.fromhex(
+        "a9d3808540a9fb0085424c0084"
+    ), (
+        "$023342 continuation lost 16-bit immediates; the old encoding executed "
+        "STA $40's operand as RTI and crashed crate throws"
     )
     assert ESC4[0x1200:0x120E] == bytes.fromhex("5c009098" + "ea" * 10), (
         "escbank4 entry_235e0 guarded redirect moved or changed size"
@@ -2316,6 +2369,8 @@ if _osp.exists("src/escbank8.bin"):
     rmb_obj_done_8 = esc8_off("rmb_obj_done")
     rmb_obj_pack_8 = esc8_off("rmb_obj_pack")
     rmb_obj_pack_8_end = esc8_off("rmb_obj_pack_end")
+    rmb_title_detect_8 = esc8_off("rmb_title_detect")
+    rmb_title_detect_8_end = esc8_off("rmb_title_detect_end")
     rmb_obj_fast_scan_8 = esc8_off("rmb_obj_fast_scan")
     rmb_obj_fast_loop_8 = esc8_off("rmb_obj_fast_loop")
     rmb_obj_fast_done_8 = esc8_off("rmb_obj_fast_done")
@@ -2534,7 +2589,14 @@ if _osp.exists("src/escbank8.bin"):
     assert h158_ylist_stage_8 == 0xE400
     assert h158_ylist_stage_8 < h158_ylist_stage_8_end <= rmb_obj_pack_8
     assert rmb_obj_pack_8 == 0xE540
-    assert rmb_obj_pack_8 < rmb_obj_pack_8_end <= rmb_obj_fast_scan_8
+    assert (
+        rmb_obj_pack_8
+        < rmb_obj_pack_8_end
+        <= rmb_title_detect_8
+        == 0xE5B0
+        < rmb_title_detect_8_end
+        <= rmb_obj_fast_scan_8
+    )
     assert rmb_obj_fast_scan_8 == 0xE600
     assert rmb_obj_fast_scan_8 < rmb_obj_fast_loop_8 < rmb_obj_fast_done_8
     assert rmb_obj_fast_done_8 < rmb_obj_fast_scan_8_end <= render_bg_offset_table_8
@@ -2565,7 +2627,8 @@ if _osp.exists("src/escbank8.bin"):
         (rmb_obj_prefilter_8_end, render_bg_dirty_sparse_8, "OBJ prefilter -> exact BG list"),
         (render_bg_dirty_sparse_8_end, h158_ylist_stage_8, "exact BG list -> Y-list stage"),
         (h158_ylist_stage_8_end, rmb_obj_pack_8, "Y-list stage -> packed OBJ helper"),
-        (rmb_obj_pack_8_end, rmb_obj_fast_scan_8, "packed OBJ helper -> six-byte scan"),
+        (rmb_obj_pack_8_end, rmb_title_detect_8, "packed OBJ helper -> title detector"),
+        (rmb_title_detect_8_end, rmb_obj_fast_scan_8, "title detector -> six-byte scan"),
         (rmb_obj_fast_scan_8_end, render_bg_offset_table_8, "six-byte scan -> BG-offset table"),
     ):
         assert ESC8[

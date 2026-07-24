@@ -140,9 +140,10 @@ def derive_source_records(m: McpSession) -> tuple[bytes, list[int]]:
         x_color = int.from_bytes(raw_x[offset : offset + 2], "big")
         sx = x_color & 0x01FF
         # Centered 384->256 crop begins at arcade X=64. A 16px OBJ first
-        # overlaps at X=49; X1-001 bit 8 is the signed-X bit, so $100-$1FF
-        # remains the negative interval rather than arcade X=256..511.
-        if not 0x0031 <= sx < 0x0100:
+        # overlaps at raw X=49. X1-001 interprets bit 8 as sign and draws a
+        # second 512px-wrapped copy, so raw $100-$13F covers arcade
+        # X=256..319 and is the crop's visible right side.
+        if not 0x0031 <= sx < 0x0140:
             continue
         code = int.from_bytes(raw_code[offset : offset + 2], "big")
         if code == 0xFFFF or code & 0x3FFF == 0:

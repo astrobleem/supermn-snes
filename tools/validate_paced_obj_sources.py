@@ -139,7 +139,7 @@ def expected_obj_manifest(y_plane: bytes, code_plane: bytes, x_plane: bytes) -> 
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
         sx = x_color & 0x01FF
-        if not 0x0031 <= sx < 0x0100:
+        if not 0x0031 <= sx < 0x0140:
             continue
         offsets.append(offset)
         if len(offsets) == 128:
@@ -163,7 +163,7 @@ def expected_yx_manifest(y_plane: bytes, x_plane: bytes) -> bytes:
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
         sx = x_color & 0x01FF
-        if not 0x0031 <= sx < 0x0100:
+        if not 0x0031 <= sx < 0x0140:
             continue
         offsets.append(offset)
     return b"".join(offset.to_bytes(2, "little") for offset in offsets)
@@ -233,7 +233,7 @@ def visible_from_y_manifest(
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
         sx = x_color & 0x01FF
-        if not 0x0031 <= sx < 0x0100:
+        if not 0x0031 <= sx < 0x0140:
             continue
         accepted.append(offset)
         if len(accepted) == 128:

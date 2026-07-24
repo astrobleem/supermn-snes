@@ -136,6 +136,12 @@ Lf23342_1:
     jml.l ojmp_hook
 br23342_1:
 L23342_23354:
+    ; Poppy resets mode inference at this generated continuation label.  This
+    ; path runs with M/X=16; without explicit modes it encoded both immediates
+    ; below as one byte.  The following $85 byte then became the high immediate
+    ; and $40 executed as RTI, which is the crate-throw crash to $00:0000.
+    .a16
+    .i16
     ; CALL-BRIDGE bsr.w $2335e -> entry_2335e (NATIVE escape), resume br23342_2
     lda #br23342_2
     sta $40

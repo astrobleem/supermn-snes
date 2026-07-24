@@ -1,5 +1,11 @@
 # v130 second human playtest — July 23, 2026
 
+> **Superseded later on July 23:** the next human run rejected the supplied v131 response
+> candidate after another crate-throw freeze, right-edge player disappearance, and incoherent
+> title words. Exact v132 repairs the reproduced crate continuation, restores the X1-001 wrapped
+> right interval, and moves the over-capacity title text to BG2. See
+> [V132_TITLE_CRATE_RIGHT_EDGE_20260723.md](V132_TITLE_CRATE_RIGHT_EDGE_20260723.md).
+
 ## Verdict
 
 Exact v130
