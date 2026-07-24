@@ -39,9 +39,6 @@ instruction.
 
 - The current v135 response candidate is interactive in bounded tests but is not
   playable or shippable.
-- The original MC68000 program already supplies the game logic. “Bulk game-logic port
-  underway” is an obsolete phase description; current work is integration correctness,
-  stability, presentation, sound, performance, and acceptance.
 - v135 SHA-256 is
   `5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`.
 - v124 is the latest formal production run:
