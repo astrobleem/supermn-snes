@@ -1,5 +1,11 @@
 # v133 title, attract, credit, and boot response — July 23, 2026
 
+> **Superseded July 24:** the first long v133 gameplay run cleared the first boss, then found that
+> the following vertical section did not scroll. Exact v134 bridges X1-001 scrolly into SNES BG1.
+> Preserve the bounded v133 title/attract/credit/zoom evidence below, but use
+> [V134_STAGE2_VERTICAL_SCROLL_20260724.md](V134_STAGE2_VERTICAL_SCROLL_20260724.md) and
+> `RECOVERY.md` R14 for the current response candidate.
+
 ## Verdict
 
 The first human v132 run supersedes R12's response-candidate verdict. The title text was readable

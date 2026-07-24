@@ -1,9 +1,38 @@
 # Superman (Taito X) → SNES/SA-1 — Project Status
 
-Last updated: July 23, 2026. Per-area detail lives in the linked docs.
+Last updated: July 24, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
-> ## ⚠️ R13 v132 HUMAN REJECTION / v133 RESPONSE — July 23, 2026
+> ## ⚠️ R14 v133 STAGE 2 REJECTION / v134 RESPONSE — July 24, 2026
+>
+> The first long v133 gameplay run cleared the first boss and reached the following vertical
+> section, but the playfield did not scroll when Superman moved to the top. The 68000 game was
+> updating X1-001 per-column scrolly; the SNES full/fast/incremental BG paths had discarded it and
+> retained `BG1VOFS=0`.
+>
+> Exact v134 production SHA-256
+> `782ae58fe5b6d05fd23bb0d50e306fc3186fe12c1cca7e1be8703286313f85c0`
+> carries a center-playfield scrolly byte through all four snapshot producers and all three BG
+> consumer paths. It applies MAME's `-1` no-flip offset plus the centered crop's eight lines:
+> `BG1VOFS=(scrolly+7)&$ff`. Stage 1's `$F9` therefore remains exactly zero. Because Stage 2 uses
+> multiple simultaneous per-column values and SNES BG1 has one global Y register, this is an
+> explicit center-column approximation; exact per-column fidelity remains open.
+>
+> The exact-title signature still forces vertical zero. The real-65816/PPU Nexen lab passes 8/8,
+> including two per-column values from the retained MAME Stage 2 trace. An exact-Mesen Stage 1
+> checkpoint advances tick 1,192→1,258 / completed render 1,124→1,183 at halt zero, with
+> `BG1VOFS=0`, 14 valid stacks, and a 138-byte minimum margin. A no-poke fresh-power Mesen title
+> sample advances tick 285→385 / render 264→349 while all 11 samples remain Mode 1, visible,
+> coherent, and vertically zero.
+>
+> These are bridge and regression results, not an organic SNES Stage 2 test or FPS evidence.
+> v134 remains an **interactive technical-demo response candidate, not playable or shippable**.
+> Stage 2 on this exact hash now needs human confirmation; attack-animation tiles, musical timbre,
+> renderer conservation, aligned MAME pixels, a full playthrough, and formal performance remain
+> open. See [RECOVERY.md](RECOVERY.md) R14 and
+> [the focused handoff](docs/handoff/V134_STAGE2_VERTICAL_SCROLL_20260724.md).
+
+> ## HISTORICAL R13 v132 HUMAN REJECTION / v133 RESPONSE — July 23, 2026 (SUPERSEDED BY R14)
 >
 > The first human v132 run rejected its response-candidate label. The title words were readable,
 > but briefly became pixelated about once per second; the no-input attract path stopped at
@@ -31,8 +60,8 @@ Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 > small activity diamond pulses.
 >
 > These are title/idle-attract/boot results, not interactive stage, audio-listening, or FPS
-> evidence. v133 remains an **interactive technical-demo response candidate, not playable or
-> shippable**. Wrong attack-animation tiles, crate/silver-enemy/wall behavior on this hash, timbre,
+> evidence. At R13, v133 remained an **interactive technical-demo response candidate, not playable
+> or shippable**. Wrong attack-animation tiles, crate/silver-enemy/wall behavior on this hash, timbre,
 > renderer conservation, full stage/playthrough, and formal performance remain open. See
 > [RECOVERY.md](RECOVERY.md) R13 and
 > [the focused handoff](docs/handoff/V133_TITLE_ATTRACT_BOOT_20260723.md).
@@ -691,11 +720,12 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
 
 ## Recommended next steps
 
-**Current correction:** the historical throughput list below predates R6-R13 and is retained only
-as campaign history. The immediate playability work is to have the tester cold-boot exact v133 and
-verify its title, attract, credit, and zoom repairs; reproduce the exact charged-shot silver-enemy
-kill; run the first wall and crate path organically; inspect attack-animation tiles; judge the
-timbre; close renderer conservation; and only then rerun the formal power-on rate/budget gate.
+**Current correction:** the historical throughput list below predates R6-R14 and is retained only
+as campaign history. The immediate playability work is to have the tester cold-boot exact v134,
+verify that the post-boss vertical section now scrolls and that its center-column approximation is
+visually acceptable, then continue the full-stage path. The title/attract/credit/zoom regressions,
+charged-shot silver-enemy event, first wall and crate, attack-animation tiles, timbre, renderer
+conservation, and formal power-on rate/budget gate remain in the retest set.
 
 The cold side (interpreter) and the hot side (automated transpiler + bridge + video
 codegen) are both built and validated. The remaining work is **throughput** — transpile

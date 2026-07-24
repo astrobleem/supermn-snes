@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""Exercise the SNES vertical-scroll bridge on Nexen's real 65816/PPU core.
+
+This is an isolated Mesen/Nexen machine-code lab.  It redirects the paused
+5A22 to the production helpers, supplies synthetic X1-001 scroll-shadow bytes,
+and checks both the packed snapshot result and the PPU BG1 scroll registers.
+It is not gameplay, cold-boot, stability, or performance evidence.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+MESEN_PY = Path("/home/chad/Mesen2/python")
+DEFAULT_ROM = ROOT / "build" / "interp.sfc"
+DEFAULT_EMULATOR = Path(
+    "/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/"
+    "linux-x64/publish/Nexen"
+)
+DEFAULT_SYMBOLS = ROOT / "src" / "video.sym"
+
+sys.path.insert(0, str(MESEN_PY))
+import mesen_mcp.session as _session  # noqa: E402
+
+_session.validate_mesen_build = lambda *_args, **_kwargs: None
+from mesen_mcp import McpSession  # noqa: E402
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--rom", type=Path, default=DEFAULT_ROM)
+    parser.add_argument("--emulator", type=Path, default=DEFAULT_EMULATOR)
+    parser.add_argument("--symbols", type=Path, default=DEFAULT_SYMBOLS)
+    parser.add_argument("--port", type=int, default=8846)
+    parser.add_argument("--boot-wait", type=float, default=6.0)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="also retain the JSON report at this path",
+    )
+    return parser.parse_args()
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def symbol_address(path: Path, name: str) -> int:
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+        fields = raw.split()
+        if len(fields) == 2 and fields[1] == name:
+            bank, offset = fields[0].split(":")
+            if int(bank, 16) != 0:
+                raise RuntimeError(f"unexpected video symbol bank for {name}: {fields[0]}")
+            return 0xE90000 | int(offset, 16)
+    raise RuntimeError(f"missing symbol {name} in {path}")
+
+
+def configure_runtime() -> None:
+    dotnet10 = "/home/chad/.dotnet10"
+    dotnet8 = "/home/chad/.dotnet8"
+    os.environ["DOTNET_ROOT"] = dotnet10
+    current = [
+        item
+        for item in os.environ.get("PATH", "").split(":")
+        if item and item not in (dotnet8, dotnet10)
+    ]
+    os.environ["PATH"] = ":".join([dotnet10, dotnet8, *current])
+
+
+def set_cpu(m: McpSession, cpu_type: str, **updates: Any) -> None:
+    state = dict(m.get_cpu_state(cpu_type))
+    state.update(updates)
+    allowed = (
+        "cpuType",
+        "pc",
+        "k",
+        "a",
+        "x",
+        "y",
+        "sp",
+        "d",
+        "dbr",
+        "ps",
+        "emulationMode",
+    )
+    m.tool(
+        "set_cpu_state",
+        {key: state[key] for key in allowed if key in state},
+    )
+
+
+def park_sa1(m: McpSession) -> None:
+    m.write_memory("Sa1Memory", 0x0600, "80fe")
+    m.write_memory("snesMemory", 0x2201, "00")
+    state = m.get_cpu_state("Sa1")
+    set_cpu(
+        m,
+        "Sa1",
+        pc=0x0600,
+        k=0,
+        d=0,
+        dbr=0,
+        ps=int(state["ps"]) | 0x04,
+        emulationMode=False,
+    )
+
+
+def run_helper(
+    m: McpSession,
+    entry: int,
+    return_spin: int,
+    *,
+    a: int = 0x5A3C,
+    x: int = 0x1234,
+    y: int = 0x5678,
+) -> dict[str, Any]:
+    previous = m.get_cpu_state("Snes")
+    ps = (int(previous["ps"]) & ~0x30) | 0x04
+    return_minus_one = (return_spin - 1) & 0xFFFF
+    m.write_memory(
+        "snesMemory",
+        0x001FEF,
+        return_minus_one.to_bytes(2, "little").hex(),
+    )
+    set_cpu(
+        m,
+        "Snes",
+        pc=entry & 0xFFFF,
+        k=(entry >> 16) & 0xFF,
+        a=a,
+        x=x,
+        y=y,
+        # Model the two bytes a real JSR would have pushed. The helper's
+        # terminal RTS consumes them and returns the logical caller SP to
+        # $1FF0 at the runtime-only spin.
+        sp=0x1FEE,
+        d=0,
+        dbr=0,
+        ps=ps,
+        emulationMode=False,
+    )
+    hook = m.add_exec_hook(return_spin, cpu_type="Snes")
+    m.drain_notifications(timeout=0.05)
+    try:
+        result = m.run_until(max_frames=1, hook_handle=hook)
+        m.pause()
+        state = dict(m.get_cpu_state("Snes"))
+    finally:
+        m.remove_hook(hook)
+        m.drain_notifications(timeout=0.05)
+    pc = ((int(state["k"]) & 0xFF) << 16) | (int(state["pc"]) & 0xFFFF)
+    if (result or {}).get("reason") != "hookFired" or pc != return_spin:
+        trace = m.trace_log(count=48, cpu_type="Snes")
+        raise RuntimeError(
+            f"helper did not return to ${return_spin:06X}: result={result!r}, "
+            f"pc=${pc:06X}, trace={trace!r}"
+        )
+    return state
+
+
+def rom_file_offset(cpu_address: int) -> int:
+    bank = (cpu_address >> 16) & 0xFF
+    if bank < 0xC0:
+        raise RuntimeError(f"expected HiROM bank for helper: ${cpu_address:06X}")
+    return ((bank & 0x3F) << 16) | (cpu_address & 0xFFFF)
+
+
+def write_scroll_shadow(
+    m: McpSession,
+    *,
+    scrollx: int,
+    sampled: dict[int, int],
+) -> None:
+    m.write_memory("snesMemory", 0x413409, f"{scrollx & 0xFF:02x}")
+    for column in (2, 4, 6, 8, 9):
+        value = sampled.get(column, sampled[4])
+        m.write_memory(
+            "snesMemory",
+            0x413401 + column * 0x20,
+            f"{value & 0xFF:02x}",
+        )
+
+
+def main() -> int:
+    args = parse_args()
+    for label, path in (
+        ("ROM", args.rom),
+        ("emulator", args.emulator),
+        ("symbols", args.symbols),
+    ):
+        if not path.is_file():
+            raise FileNotFoundError(f"{label} not found: {path}")
+    rom = args.rom.resolve()
+    if rom.stat().st_size != 0x400000:
+        raise RuntimeError("expected a 4 MiB production ROM")
+    if int.from_bytes(rom.read_bytes()[0x77E0:0x77E2], "little") != 0:
+        raise RuntimeError("refusing non-production ROM: TESTFLAG is set")
+
+    capture = symbol_address(args.symbols, "capture_bg_vscroll")
+    capture_end = symbol_address(args.symbols, "capture_bg_vscroll_end")
+    apply_scroll = symbol_address(args.symbols, "bg_scroll")
+    apply_end = symbol_address(args.symbols, "bg_scroll_end")
+    return_spin = capture_end + 1
+    configure_runtime()
+
+    rows: list[dict[str, Any]] = []
+    stderr_log = ROOT / "build" / "vertical-scroll-bridge-nexen.stderr.log"
+    with McpSession(
+        rom=rom,
+        mesen=args.emulator.resolve(),
+        cwd=ROOT,
+        port=args.port,
+        boot_wait=args.boot_wait,
+        socket_timeout=120.0,
+        stderr_log=stderr_log,
+    ) as m:
+        m.pause()
+        m.write_memory("snesMemory", 0x4200, "00")
+        m.read_memory("snesMemory", 0x4210, 1)
+        park_sa1(m)
+        # Execute each real PLP+RTS into one runtime-only BRA -2 in the zero
+        # seam after capture_bg_vscroll. This keeps the returned state stable
+        # despite asynchronous hook delivery without modifying helper code.
+        spin_offset = rom_file_offset(return_spin)
+        if bytes(m.read_memory("snesPrgRom", spin_offset, 2)) != b"\x00\x00":
+            raise RuntimeError("vertical-scroll lab return seam is no longer zero")
+        m.write_memory("snesPrgRom", spin_offset, "80fe")
+        observed = bytes(m.read_memory("snesPrgRom", spin_offset, 2))
+        if observed != bytes.fromhex("80fe"):
+            raise RuntimeError(f"failed to install helper spin at file ${spin_offset:06X}")
+
+        cases = (
+            ("stage1-wrap", 0x23, {4: 0xF9}, 0x2300),
+            ("stage2-motion", 0x7A, {4: 0x40}, 0x7A47),
+            ("byte-wrap", 0x55, {4: 0xFF}, 0x5506),
+            (
+                "stage2-per-column-center",
+                0x31,
+                {2: 0xF2, 4: 0xEB, 6: 0xEB, 8: 0xEB, 9: 0xEB},
+                0x31F2,
+            ),
+            (
+                "stage2-per-column-next",
+                0x31,
+                {2: 0x7A, 4: 0xFB, 6: 0xFB, 8: 0xFB, 9: 0xFB},
+                0x3102,
+            ),
+        )
+        for name, scrollx, sampled, expected in cases:
+            write_scroll_shadow(m, scrollx=scrollx, sampled=sampled)
+            state = run_helper(m, capture, return_spin)
+            observed = int(state["a"]) & 0xFFFF
+            preserved = {
+                "x": int(state["x"]) & 0xFFFF,
+                "y": int(state["y"]) & 0xFFFF,
+                "sp": int(state["sp"]) & 0xFFFF,
+            }
+            passed = observed == expected and preserved == {
+                "x": 0x1234,
+                "y": 0x5678,
+                "sp": 0x1FF0,
+            }
+            rows.append(
+                {
+                    "kind": "capture",
+                    "name": name,
+                    "expected": expected,
+                    "observed": observed,
+                    "preserved": preserved,
+                    "pass": passed,
+                }
+            )
+
+        apply_cases = (
+            ("gameplay", 0x7A47, 0x00, 0x47),
+            ("stage2-wrap", 0x31F2, 0x00, 0xF2),
+            ("title-guard", 0x7A47, 0x80, 0x00),
+        )
+        for name, packed, title_high, expected_vscroll in apply_cases:
+            m.write_memory("snesWorkRam", 0x8994, packed.to_bytes(2, "little").hex())
+            m.write_memory("snesWorkRam", 0x8997, "00")
+            m.write_memory("snesWorkRam", 0x89BF, f"{title_high:02x}")
+            run_helper(m, apply_scroll, return_spin)
+            layer = m.get_ppu_state()["layers"][0]
+            observed_vscroll = int(layer["vscroll"])
+            expected_hscroll = (0x40 - ((packed >> 8) & 0xFF)) & 0x3FF
+            observed_hscroll = int(layer["hscroll"])
+            rows.append(
+                {
+                    "kind": "apply",
+                    "name": name,
+                    "expected_vscroll": expected_vscroll,
+                    "observed_vscroll": observed_vscroll,
+                    "expected_hscroll": expected_hscroll,
+                    "observed_hscroll": observed_hscroll,
+                    "pass": (
+                        observed_vscroll == expected_vscroll
+                        and observed_hscroll == expected_hscroll
+                    ),
+                }
+            )
+
+    report = {
+        "scope": (
+            "isolated real-65816/PPU vertical-scroll bridge lab; synthetic "
+            "X1-001 shadow; not gameplay, cold boot, stability, or performance"
+        ),
+        "rom": str(rom),
+        "rom_sha256": sha256(rom),
+        "emulator": str(args.emulator.resolve()),
+        "emulator_sha256": sha256(args.emulator.resolve()),
+        "symbols": str(args.symbols.resolve()),
+        "symbols_sha256": sha256(args.symbols.resolve()),
+        "helpers": {
+            "capture": f"{capture:06X}",
+            "capture_end": f"{capture_end:06X}",
+            "apply": f"{apply_scroll:06X}",
+            "apply_end": f"{apply_end:06X}",
+            "return_spin": f"{return_spin:06X}",
+        },
+        "rows": rows,
+        "passed": sum(1 for row in rows if row["pass"]),
+        "total": len(rows),
+    }
+    report_text = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(report_text, encoding="utf-8")
+    print(report_text, end="")
+    return 0 if report["passed"] == report["total"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

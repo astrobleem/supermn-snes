@@ -86,7 +86,7 @@ RQ_BG_LEN=$D184
 RQ_PAL_DIRTY=$D186
 RQ_PREP_LEN=$D188
 RQ_FRAME_REQ=$D18A
-RQ_CTRL_3408=$D18C
+RQ_CTRL_3408=$D18C      ; packed: low byte=BG1 VOFS, high byte=raw scrollx[0] low
 RQ_CTRL_3604=$D18E
 RQ_PALETTE=$D1A0        ; $0400 bytes
 RQ_OBJ=$D5A0            ; packed manifest, at most $0300 bytes
@@ -106,7 +106,7 @@ RQ2_BG_LEN=$B004
 RQ2_PAL_DIRTY=$B006
 RQ2_PREP_LEN=$B008
 RQ2_FRAME_REQ=$B00A
-RQ2_CTRL_3408=$B00C
+RQ2_CTRL_3408=$B00C     ; same packed vertical/horizontal scroll word as primary
 RQ2_CTRL_3604=$B00E
 RQ2_PALETTE=$B020       ; $0400 bytes
 RQ2_OBJ=$B420           ; $0300 bytes
@@ -1151,11 +1151,12 @@ bg_upload:
     jsr dma0_blank_pulse ; blank only across this tilemap DMA
     nop
     nop
-    ; scroll: H is the live arcade scroll plus the centered-crop X origin;
-    ; V=0 advances the previously faithful no-crop $3F8 image by eight lines.
+    ; scroll: H is the live arcade scroll plus the centered-crop X origin.
+    ; V follows the arcade center playfield column's scrolly plus its -1
+    ; noflip offset and the centered-crop Y origin.
     ; (byte-neutral swap: jsr(3)+7*nop = the 10 bytes the old hofs block used, so no
     ;  downstream code shifts -> avoids the Poppy relative-branch-wrap hazard.)
-    jsr bg_hscroll       ; BG1HOFS = ((upper.bit0<<8) - scrollx[0] + 64) & $3FF
+    jsr bg_scroll        ; BG1 HOFS + guarded VOFS from one coherent snapshot
     nop
     nop
     nop
@@ -1163,8 +1164,12 @@ bg_upload:
     nop
     nop
     nop
-    stz BG1VOFS
-    stz BG1VOFS          ; centered crop begins at arcade scanline 8
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop                  ; preserve the two former absolute STZ instructions
     nop
     nop
     nop
@@ -2458,7 +2463,7 @@ bg_dispatch_fast:
     beq bg_dispatch_pal_ready
     jsr bg_refresh_pal   ; restore BG's bank->slot mapping after a real palette rebuild
 bg_dispatch_pal_ready:
-    jsr bg_hscroll       ; tilemap/tiles persist, but scroll is live every game tick
+    jsr bg_scroll        ; tilemap/tiles persist, but both scroll axes remain live
     plp
     rts
 
@@ -2768,7 +2773,7 @@ sa_generation_ready:
     sta $7E8990
 sa_bg_unchanged:
     jsr snapshot_obj_cache
-    lda $417400          ; raw $41:3408 word (scrollx[0] low byte is the second byte)
+    lda $417400          ; packed VOFS/scrollx word from capture_bg_vscroll
     sta $7E8994
     lda $417402          ; raw $41:3604 word (spritectrl[2] low byte is the second byte)
     sta $7E8996
@@ -2899,8 +2904,9 @@ spp_no_new_obj:
     lda #$4C00
     ldx #$7000
     jsr snapshot_dma_plane
-    lda $413408
+    jsr capture_bg_vscroll
     sta $417400
+    nop
     lda $413604
     sta $417402
     lda $410124
@@ -3168,7 +3174,7 @@ sal_bg_clean:
     lda $7E89AC
     inc a
     sta $7E89AC          ; consumed OBJ-change count (measurement only)
-    lda $7E3408          ; direct D0 cache: raw $41:3408 scroll word
+    lda $7E3408          ; direct cache: packed VOFS/scrollx word
     sta $7E8994
     lda $7E3604          ; direct D0 cache: raw $41:3604 control word
     sta $7E8996
@@ -3196,6 +3202,33 @@ pacing_palette_cache_test:
     and #$0001
     sta $7E8986
     rts
+
+.org $A1B0
+.a16
+.i16
+; Apply the packed scroll word accepted with the current coherent image.
+; TITLE_TEXT_META bit 15 identifies the exact post-TAITO title composition,
+; whose column effects must retain the established zero vertical offset.
+bg_scroll:
+    jsr bg_hscroll
+    php
+    sep #$20
+.a8
+    lda $7E89BF
+    bmi bgs_vertical_zero
+    lda $7E8994
+    sta BG1VOFS
+    lda #$00
+    sta BG1VOFS
+    plp
+    rts
+bgs_vertical_zero:
+    lda #$00
+    sta BG1VOFS
+    sta BG1VOFS
+    plp
+    rts
+bg_scroll_end:
 pacing_palette_cache_test_end:
 
 .org $A1E8
@@ -3404,8 +3437,9 @@ psd_obj_overlay_done:
 psd_obj_planes_done:
     ; The old $3000-$37FF raw transfer also carried these non-OBJ control
     ; words.  Preserve them explicitly when packed records skip that plane.
-    lda $413408
+    jsr capture_bg_vscroll
     sta $7E3408
+    nop
     lda $413604
     sta $7E3604
     sep #$20
@@ -3735,7 +3769,7 @@ bg_incremental_finish:
     beq bif_scroll
     jsr bg_refresh_pal
 bif_scroll:
-    jmp bg_hscroll
+    jmp bg_scroll
 
 ; Finish obj_hide_tail_fast in the former zero seam.  Low OAM is persistent:
 ; entries above the previous active prefix are already exactly
@@ -4033,6 +4067,35 @@ bic_no_yflip:
 bic_overflow:
     sec
     rts
+
+; X1-001 exposes independent vertical scroll for each 32-pixel column, while
+; the SNES BG1 register is global. Stage 2 uses several simultaneous values, so
+; follow column 4 from the center playfield group; returning zero when columns
+; disagree would recreate the reported frozen camera. The exact title
+; composition is held at zero by bg_scroll's signature guard. The returned
+; word is deliberately packed so the established two-byte scroll mailbox
+; needs no growth:
+;   low byte  = BG1VOFS = (scrolly + noflip yoffs(-1) + crop 8) & $FF,
+;   high byte = raw low byte of scrollx[0], consumed by bg_hscroll
+; This helper runs either from ROM while the SA-1 is asleep or from the
+; matching $7F mirror and preserves P.
+.org $A7BC
+.a16
+.i16
+capture_bg_vscroll:
+    php
+    sep #$20
+.a8
+    lda $413409
+    xba                         ; retain scrollx in B
+    lda $413481                 ; representative center-playfield column 4
+    clc
+    adc #$07                   ; X1 noflip yoffs=-1 plus centered crop y=8
+    rep #$20                   ; B:scrollx + A:vofs -> packed 16-bit word
+.a16
+    plp
+    rts
+capture_bg_vscroll_end:
 vid_bg_incremental_end:
 
 ; =============================================================================
@@ -5320,8 +5383,9 @@ rqc_bg_prepared_pal:
     jsr pacing_snapshot_dma
 rqc_bg_done:
 
-    lda $413408
+    jsr capture_bg_vscroll
     sta $7ED18C
+    nop
     lda $413604
     sta $7ED18E
 
@@ -5454,8 +5518,9 @@ rqc2_bg_loop:
     iny
     bra rqc2_bg_loop
 rqc2_bg_done:
-    lda $413408
+    jsr capture_bg_vscroll
     sta $7EB00C
+    nop
     lda $413604
     sta $7EB00E
     lda $7EB000

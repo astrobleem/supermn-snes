@@ -9,52 +9,37 @@ hardware, while hot paths are migrated to native 65816 over time. Every componen
 validated **differentially against ground truth** — MAME for the arcade side, a real
 SNES PPU (via Nexen) for the target side.
 
-> ## Production status (July 23, 2026) — v133 playtest response, not playable
+> ## Production status (July 24, 2026) — v134 Stage 2 response, not playable
 >
-> The first real v105 user playtest invalidated its **playable** label: the formal 30 Hz timing
-> result was genuine, but a bad `$012B6C` HLE return broke player attacks and enemy offense, and
-> the recognizable soundtrack is audibly incomplete. Exact v124 repaired those demonstrated
-> combat paths, but the next playtest found that releasing a held Button 1 energy charge froze it.
-> v127 repaired the silently overwritten `$D3B0` handler. v128 then repaired the tester's exact
-> Mesen 2.1.1 title flicker, pre-round bars, charged-shot, and music-replacement regressions; the
-> tester has now human-confirmed all four of those focused repairs.
+> Human testing has repeatedly superseded narrow lab verdicts. The latest v133 run cleared the
+> first boss and reached the following vertical section, but the playfield did not scroll when
+> Superman moved to the top. The 68000 game was updating X1-001 per-column scrolly; every SNES BG
+> consumer had discarded it and retained `BG1VOFS=0`.
 >
-> That same playtest exposed a first-wall mixed-tile freeze and over-transposed instrument samples.
-> v130 repaired that wall corruption, added five octave anchors, and added a rotating Mode 7 boot
-> screen. Its second human test rejected it before the wall: crate throw and a charged shot killing
-> a silver enemy froze, Superman showed wrong animation tiles, the view was cropped from the
-> upper-left, and the rotation caused dizziness.
+> Exact v134 response-candidate SHA-256:
+> `782ae58fe5b6d05fd23bb0d50e306fc3186fe12c1cca7e1be8703286313f85c0`.
+> It carries a center-playfield scrolly byte through all four snapshot producers and the
+> full/fast/incremental BG consumers. MAME's `-1` no-flip offset plus the centered crop gives
+> `BG1VOFS=(scrolly+7)&$ff`; Stage 1's normal `$F9` therefore remains exactly zero.
 >
-> The next human run rejected that v131 response too: crate throw still froze, Superman
-> disappeared at the visible right edge, and the title words were incoherent. Exact v132
-> fixed the reproduced crate continuation, wrapped-right visibility, and title capacity. The first
-> human v132 run then found three more issues: legal glyphs briefly became pixelated, idle attract
-> stopped on `INSERT COIN`, and the bottom counter was clipped to `CRE`.
+> Stage 2 uses several simultaneous per-column Y values, while SNES BG1 has only one global Y
+> register. v134 explicitly follows arcade column 4 from the large center-playfield group. An 8/8
+> real-65816/PPU Nexen lab includes two retained MAME Stage 2 values and proves the shipped helper
+> advances across their byte wrap. This is a documented approximation, not exact per-column pixel
+> fidelity.
 >
-> Exact v133 response-candidate SHA-256:
-> `15465fe67b458eee08eeb2fe235362e5986378f22f60bf96b1d22e662a53cac5`.
-> It keeps the title BG2 character base at `$6000` during ordinary BG uploads, exits the
-> prepared-background insertion sort when `Y >= length` so empty lists cannot wrap forever, and
-> shifts only the exact bottom-row credit glyph signature left 48 pixels. A stock-Mesen-2.1.1
-> fresh-power capture keeps legal/credit masks stable for 201/201 frames. A same-ROM continuation
-> from that fresh-power checkpoint passes v132's frame-7,910/tick-1,389 terminal and reaches
-> frame 9,000 / tick 1,726 /
-> completed render 1,493 with halt zero while the demo and task masks continue changing.
+> An exact-Mesen Stage 1 checkpoint remains live through tick 1,258 / completed render 1,183 at
+> halt zero with `BG1VOFS=0`, 14 valid stacks, and a 138-byte minimum margin. A no-poke
+> fresh-power Mesen title sample remains coherent and vertically zero from frames 5,700-5,900 while
+> ticks and renders advance. The exact-title signature retains the previous title lock.
 >
-> The temporary Mode 7 screen now starts with an extreme SA-1-logo close-up and shrinks once to the
-> fitted logo. Its 64 matrices are scale-only identities, so there is no rotation or shear; after
-> settling, only the small activity diamond pulses. Exact-Mesen frames 17/50/86 show the
-> huge/intermediate/fitted states. v133 carries v130's sound data unchanged, so the uncertain
-> attract music and first-stage timbre remain open.
->
-> No new rate is inferred from those smoke/checkpoint tests. v124's clean-power-on window remains
-> the latest formal measurement: **1,783 game ticks in 3,602 SNES frames = 29.7002 game-fps** at
-> **360,990.164 cycles/tick**. That misses the explicit 30 Hz / 358K gates, and the inherited
-> burst-render gate is also red. The title/attract/credit/zoom changes need a human v133 retest;
-> attack-animation tiles, crate, first wall, exact silver-enemy event, timbre, full
-> stage/playthrough, and formal performance remain open. The honest status is **interactive
-> technical demo, not playable or shippable**. See [RECOVERY.md](RECOVERY.md) R13,
-> [the focused handoff](docs/handoff/V133_TITLE_ATTRACT_BOOT_20260723.md), and
+> Organic Stage 2 scrolling on v134 still needs the human retest. No new rate is inferred:
+> v124's latest formal result remains **29.7002 game-fps / 360,990.164 cycles per tick**, missing
+> the explicit 30 Hz / 358K gates, and renderer conservation is still red. Attack-animation tiles,
+> crate/silver-enemy/wall behavior on this hash, musical timbre, aligned MAME pixels, a full
+> playthrough, and formal performance remain open. The honest status is **interactive technical
+> demo, not playable or shippable**. See [RECOVERY.md](RECOVERY.md) R14,
+> [the focused handoff](docs/handoff/V134_STAGE2_VERTICAL_SCROLL_20260724.md), and
 > [CONFESSION.md](CONFESSION.md).
 >
 > Playtest controls: **Select** = coin, **Start** = start, **B/Y** = arcade Button 1
@@ -78,13 +63,13 @@ SNES PPU (via Nexen) for the target side.
 | Area | State |
 |---|---|
 | **68000 interpreter** | ✅ **Complete legal MC68000 instruction set** — bit-exact vs MAME on attract + active gameplay (lock-step diff), runs on the **SA-1**, boots Superman + renders video + reads input on real SNES. Retained current-line correctness gates **opsweep 782/782 + optest 160/160**. |
-| Graphics pipeline | ⚠️ v133 retains the centered 384x240 crop and BG2 title, keeps its title character base stable, shows the full credit label, and gives the supplied boot logo a one-shot non-rotating zoom; focused exact-Mesen evidence is green, but human confirmation, attack-animation tiles, the inherited 568/600 burst-render result with 31 coalesces, and aligned MAME pixel fidelity remain open |
+| Graphics pipeline | ⚠️ v134 retains the centered crop, coherent BG2 title, full credit label, and one-shot non-rotating boot zoom, and now bridges center-playfield vertical scroll; component/Stage-1/title evidence is green, but organic Stage 2 confirmation, exact per-column fidelity, attack-animation tiles, the inherited 568/600 burst-render result with 31 coalesces, and aligned MAME pixels remain open |
 | **Transpiler (automated tool)** | ✅ **`tools/transpile.py`** — 68K→65816, validated bit-exact; **call-bridge** (non-leaf) + **`--video`** (shadow stores) + inlined BW-RAM access |
 | **Bulk game-logic port** | ⬆ **underway (automated)** — **~25 escapes deployed** (18 in the SA-1 escape bank + bank-$00 gaps), covering **~40%** of the real per-frame work; incl. the ~12.6% collision (bridged) and ~5.9% video. *(Phase snapshot — these counts conflate "deployed in the bank" with "actually fires in gameplay" and are superseded by [MAIN_PLANNING_HANDOFF.md](MAIN_PLANNING_HANDOFF.md); the live bottleneck is the coroutine scheduler + handler chains, not dispatch coverage.)* |
-| **30 Hz playability budget** | ❌ **not cleared by the latest formal run (v124)** — power-on gameplay window is **29.7002 game-fps / 360,990.164 mean SA-1 cycles/tick**; v133 has no new formal rate result and inherits the red burst-render gate |
+| **30 Hz playability budget** | ❌ **not cleared by the latest formal run (v124)** — power-on gameplay window is **29.7002 game-fps / 360,990.164 mean SA-1 cycles/tick**; v134 has no new formal rate result and inherits the red burst-render gate |
 | C-Chip boot handshake | ✅ solved via patch + input mailbox + download replay (no MCU emulation) |
 | Disassembly coverage (G1) | ⬆ trace-driven CDL pipeline; full playthrough trace (not a hybrid blocker) |
-| Audio (YM2610 → SNES TAD) | ⚠️ **organic transport works; musical fidelity is unconfirmed** — v133 carries v130's `$19` repair and five first-stage octave anchors unchanged; ARAM is byte-exact and the prior organic capture has no ≥200 ms silence, but attract correctness/timbres need listening and ignored enemy SFX, placeholder SFX, trimmed samples, and untranscribed pitch/LFO/portamento remain |
+| Audio (YM2610 → SNES TAD) | ⚠️ **organic transport works; musical fidelity is unconfirmed** — v134 carries v130's `$19` repair and five first-stage octave anchors unchanged; ARAM is byte-exact and the prior organic capture has no ≥200 ms silence, but attract correctness/timbres need listening and ignored enemy SFX, placeholder SFX, trimmed samples, and untranscribed pitch/LFO/portamento remain |
 
 See **[CONFESSION.md](CONFESSION.md)** for the authoritative correction and
 **[RECOVERY.md](RECOVERY.md)** for the active recovery campaign. `STATUS.md` and
@@ -120,8 +105,10 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 - **[RECOVERY.md](RECOVERY.md)** — active consolidation and baseline campaign
 - **[docs/PROFILE_CAMPAIGN.md](docs/PROFILE_CAMPAIGN.md)** — native/render campaign and historical
   R6 timing evidence
+- **[docs/handoff/V134_STAGE2_VERTICAL_SCROLL_20260724.md](docs/handoff/V134_STAGE2_VERTICAL_SCROLL_20260724.md)**
+  — exact v134 vertical-scroll bridge, MAME/Nexen/Mesen evidence, approximation, and retest scope
 - **[docs/handoff/V133_TITLE_ATTRACT_BOOT_20260723.md](docs/handoff/V133_TITLE_ATTRACT_BOOT_20260723.md)**
-  — exact v133 title-register, idle-attract, credit-label, non-rotating zoom, and remaining scope
+  — historical exact-v133 title-register, idle-attract, credit-label, and non-rotating zoom evidence
 - **[docs/handoff/V132_TITLE_CRATE_RIGHT_EDGE_20260723.md](docs/handoff/V132_TITLE_CRATE_RIGHT_EDGE_20260723.md)**
   — historical exact-v132 title-capacity, crate-continuation, wrapped-right, and rejection context
 - **[docs/handoff/V130_SECOND_PLAYTEST_20260723.md](docs/handoff/V130_SECOND_PLAYTEST_20260723.md)**

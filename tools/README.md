@@ -119,11 +119,11 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
 - **`capture_mesen211_transitions.py`** [S] — fresh-power-on or named-state Mesen 2.1.1 frame
   capture for title/transition compatibility. It records exact ROM/emulator/controller provenance,
   screenshots, checkpoints, PPU Mode/brightness/forced-blank/layer state, the boot-activity byte,
-  halt/tick/render state, and a JSON manifest. For an explicitly checkpointed cross-version
-  renderer lab, `--refresh-video-mirror` replaces and verifies saved `$7F:8000-$AFFF` from the
-  selected ROM and records that intervention in provenance; it requires `--state`. The default
-  fresh-power path performs no memory write. This is visual compatibility evidence, never gameplay
-  stability or FPS evidence.
+  BG1 H/V offsets, packed/X1-001 scroll state, halt/tick/render state, and a JSON manifest. For an
+  explicitly checkpointed cross-version renderer lab, `--refresh-video-mirror` replaces and
+  verifies saved `$7F:8000-$AFFF` from the selected ROM and records that intervention in
+  provenance; it requires `--state`. The default fresh-power path performs no memory write. This
+  is visual compatibility evidence, never gameplay stability or FPS evidence.
 - **`gen_boot_screen.py`** [S] — deterministic 32 KiB Mode 7 SA-1 boot-screen generator. It embeds
   a compact indexed derivative of the supplied SA-1 logo, static status text, one palette-pulsed
   8x8 activity diamond, and 64 strictly increasing identity matrices for a one-shot
@@ -139,10 +139,15 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   suspicious saved-SP high-byte writes. This is focused crash/context evidence, not a stage soak.
 - **`trace_playtest_actions.py`** [S] — exact-Mesen real-controller action-schedule diagnostic for
   crate/attack/encounter reproduction. It records player animation/action state, tick/render/halt,
-  stack floors, screenshots, and checkpoints. `--refresh-video-mirror` explicitly injects the
-  selected ROM's `$7F:8000-$AFFF` renderer mirror after a compatible older checkpoint is loaded and
-  records that intervention; such a result is focused cross-version evidence, never organic
-  cold-boot or FPS evidence.
+  stack floors, BG1 H/V plus packed/X1-001 scroll state, screenshots, and checkpoints.
+  `--refresh-video-mirror` explicitly injects the selected ROM's `$7F:8000-$AFFF` renderer mirror
+  after a compatible older checkpoint is loaded and records that intervention; such a result is
+  focused cross-version evidence, never organic cold-boot or FPS evidence.
+- **`validate_vertical_scroll_bridge.py`** [S] — isolated Nexen real-65816/PPU lab for the shipped
+  vertical-scroll capture and apply helpers. It covers Stage 1 wrap-to-zero, general motion,
+  byte wrap, MAME-derived Stage 2 per-column patterns, actual BG1 H/V register publication, and
+  the exact-title zero guard. Its scroll shadow is synthetic; it is not gameplay, cold boot,
+  stability, or performance evidence.
 - **`validate_obj_cache_vram.py`** [S] — paused-checkpoint oracle for every persistent OBJ-cache
   hash claim. It reconstructs each physical 16x16 slot from PPU VRAM, compares it with the exact
   preconverted ROM record, and conditionally checks manifest-to-OAM tile alignment. It diagnoses

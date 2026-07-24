@@ -530,6 +530,8 @@ assert VID[0x0F68:0x1000] == bytes(0x98), (
 # implementation bytes that these optimizations intentionally change.
 palette_test = vid_off("pacing_palette_cache_test")
 palette_test_end = vid_off("pacing_palette_cache_test_end")
+bg_scroll = vid_off("bg_scroll")
+bg_scroll_end = vid_off("bg_scroll_end")
 bg_test = vid_off("pacing_bg_cache_test")
 bg_test_end = vid_off("pacing_bg_cache_test_end")
 bg_capacity_exact = vid_off("bg_capacity_exact")
@@ -572,6 +574,8 @@ snapshot_dma_helpers = vid_off("psd_palette_dma")
 snapshot_dma_helpers_end = vid_off("psd_manifest_dma_end")
 bg_incremental = vid_off("vid_bg_incremental")
 bg_incremental_end = vid_off("vid_bg_incremental_end")
+capture_bg_vscroll = vid_off("capture_bg_vscroll")
+capture_bg_vscroll_end = vid_off("capture_bg_vscroll_end")
 bg_slot = vid_off("bg_slot")
 bg_tile_dma = vid_off("bg_tile_dma")
 bg_cache_reset_counts = vid_off("bg_cache_reset_counts")
@@ -598,6 +602,13 @@ boot_screen_init = vid_off("boot_screen_init")
 boot_screen_init_end = vid_off("boot_screen_init_end")
 video_image_end = vid_off("video_image_end")
 assert palette_test == 0xA1A0 and palette_test < palette_test_end <= bg_test == 0xA1E8
+assert palette_test < bg_scroll == 0xA1B0 < bg_scroll_end == palette_test_end
+assert VID[
+    bg_scroll - 0x8000:bg_scroll_end - 0x8000
+] == bytes.fromhex(
+    "20998808e220afbf897e300eaf94897e8d0e21a9008d0e212860"
+    "a9008d0e218d0e212860"
+), "BG scroll dispatcher lost its title guard or two-write VOFS publication"
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
     bg_test - palette_test_end
 ), "palette manifest consumer overlapped the fixed BG consumer"
@@ -759,6 +770,27 @@ assert VID[snapshot_dma_helpers_end - 0x8000:bg_incremental - 0x8000] == bytes(
     bg_incremental - snapshot_dma_helpers_end
 ), "snapshot-DMA helpers crossed the incremental BG island"
 assert bg_incremental < bg_incremental_end <= 0xA800
+assert (
+    bg_incremental
+    < capture_bg_vscroll
+    == 0xA7BC
+    < capture_bg_vscroll_end
+    == bg_incremental_end
+    <= 0xA800
+)
+capture_vscroll_bytes = VID[
+    capture_bg_vscroll - 0x8000:capture_bg_vscroll_end - 0x8000
+]
+assert capture_vscroll_bytes == bytes.fromhex(
+    "08e220af093441ebaf813441186907c2202860"
+), "vertical-scroll capture lost center-column selection, exact -1/+8 offset, or side effects"
+assert VID.count(
+    bytes((0x20, capture_bg_vscroll & 0xFF, capture_bg_vscroll >> 8))
+) == 4, "all direct/queued/legacy snapshots must pack vertical scroll coherently"
+assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 2
+assert VID.count(bytes((0x4C, bg_scroll & 0xFF, bg_scroll >> 8))) == 1, (
+    "full, incremental, and unchanged BG paths must all publish vertical scroll"
+)
 assert VID[bg_incremental_end - 0x8000:bg_cache_extended - 0x8000] == bytes(
     bg_cache_extended - bg_incremental_end
 ), "incremental BG renderer crossed the fixed cache-reclamation island"

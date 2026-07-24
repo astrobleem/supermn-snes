@@ -281,6 +281,13 @@ def snapshot(
     virtual = bytes(m.read_memory("Sa1Memory", 0x0040, 0x70))
     request_ack = bytes(m.read_memory("snesMemory", 0x3300, 4))
     renderer = bytes(m.read_memory("snesWorkRam", 0x89A0, 0x3A))
+    ppu = m.get_ppu_state()
+    bg1 = ppu["layers"][0]
+    scroll_packed = bytes(m.read_memory("snesWorkRam", 0x8994, 2))
+    x1_scrolly = [
+        m.read_memory("snesMemory", 0x413401 + column * 0x20, 1)[0]
+        for column in (2, 4, 6, 8, 9)
+    ]
     tasks = task_snapshot(m, floors)
     return {
         "label": label,
@@ -303,6 +310,13 @@ def snapshot(
         "manifest_length": le16(renderer[0x1A:0x1C]),
         "last_obj_count": le16(renderer[0x12:0x14]),
         "obj_slots": le16(m.read_memory("snesWorkRam", 0x00DE, 2)),
+        "bg1_hscroll": int(bg1["hscroll"]),
+        "bg1_vscroll": int(bg1["vscroll"]),
+        "scroll_packed": le16(scroll_packed),
+        "x1_scrolly_columns_2_4_6_8_9": x1_scrolly,
+        "title_text_meta": le16(
+            m.read_memory("snesWorkRam", 0x89BE, 2)
+        ),
         "player": player_snapshot(m),
         **tasks,
     }

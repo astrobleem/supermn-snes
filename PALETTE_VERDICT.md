@@ -82,12 +82,20 @@ The church/bricks background is the X1-001's **other** draw path
 column-based tilemap: `numcol` columns (16 here) of 16×16 tiles, with per-column
 scroll from `scrollram` (`$D00400`). Key finding from the runtime dump:
 
-- **`scrolly` is uniform and `scrollx` steps by exactly 32 per column** — i.e.
-  the "per-column scroll" is just the hardware doing a single continuous
-  horizontal scroll across 32px columns. **The background is a standard
-  scrolling tilemap**, which maps directly to a SNES BG layer.
+- In the captured Stage 1 frame, **`scrolly` is uniform and `scrollx` steps by
+  exactly 32 per column** — i.e. the "per-column scroll" is just the hardware
+  doing a single continuous horizontal scroll across 32px columns. **For that
+  frame, the background is a standard scrolling tilemap** that maps directly
+  to a SNES BG layer.
 - Logical map = 32×16 grid of 16×16 tiles; 119 distinct tiles, **2 color banks**
   (18, 21) for this frame. Same `xRGB555` + bank color model as the sprites.
+
+> **R14 correction (July 24, 2026):** the post-boss vertical section uses
+> multiple simultaneous X1-001 `scrolly` groups, so the uniform Stage 1 dump
+> was not a whole-game invariant. SNES BG1 has one global Y register; exact
+> v134 follows arcade column 4 from the large center-playfield group. See
+> `docs/handoff/V134_STAGE2_VERTICAL_SCROLL_20260724.md`. Exact per-column
+> vertical fidelity remains open.
 
 `tools/render_full_frame.py` renders backdrop+bg+fg and matches MAME (47/47
 frame colors). `tools/build_snes_full_scene.py` builds a full SNES ROM

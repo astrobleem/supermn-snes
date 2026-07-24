@@ -98,6 +98,7 @@ def le16(data: bytes) -> int:
 def snapshot(m: McpSession) -> dict[str, Any]:
     state = m.get_state()
     ppu = m.get_ppu_state()
+    bg1 = ppu["layers"][0]
     return {
         "frame": int(state.get("frameCount", 0)),
         "tick": le16(m.read_memory("Sa1Memory", 0x0760, 2)),
@@ -116,6 +117,20 @@ def snapshot(m: McpSession) -> dict[str, Any]:
             m.read_memory("snesWorkRam", 0x1F1B, 1)[0]
         ),
         "bg_mode": int(ppu.get("bgMode", -1)),
+        "bg1_hscroll": int(bg1["hscroll"]),
+        "bg1_vscroll": int(bg1["vscroll"]),
+        "scroll_packed": le16(
+            m.read_memory("snesWorkRam", 0x8994, 2)
+        ),
+        "x1_scrolly_columns_2_4_6_8_9": [
+            m.read_memory(
+                "snesMemory", 0x413401 + column * 0x20, 1
+            )[0]
+            for column in (2, 4, 6, 8, 9)
+        ],
+        "title_text_meta": le16(
+            m.read_memory("snesWorkRam", 0x89BE, 2)
+        ),
         "main_screen_layers": int(ppu.get("mainScreenLayers", -1)),
         "brightness": int(ppu.get("brightness", -1)),
         "forced_blank": bool(ppu.get("forcedBlank", False)),

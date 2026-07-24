@@ -1,6 +1,6 @@
 # Project recovery — canonicalization and evidence baseline
 
-Started July 12, 2026; latest evidence reconciliation July 23, 2026. This is the active
+Started July 12, 2026; latest evidence reconciliation July 24, 2026. This is the active
 project-control document. It converts the repository from overlapping optimistic handoffs into one
 evidence-backed engineering line. **R7 supersedes R6's playable verdict after the first real user
 playtest exposed broken combat and audibly incomplete music. R6 remains valid historical
@@ -40,6 +40,17 @@ one-shot non-rotating huge-to-fitted zoom. These are bounded title/attract/prese
 human gameplay/audio, renderer conservation, full playthrough, and formal performance remain
 open.**
 
+**R14 accepts the first long v133 gameplay result: the tester cleared the first boss and reached
+the following vertical section, but the playfield did not scroll when Superman moved to the top.
+The 68000 game was updating X1-001 per-column scrolly; all SNES BG consumers had hardcoded or
+retained `BG1VOFS=0`. Exact v134 carries a center-playfield scrolly value through every
+direct/queued snapshot and full/fast/incremental BG consumer, using MAME's `-1` no-flip offset plus
+the eight-line centered crop. Its isolated real-65816/PPU lab is 8/8, an exact-Mesen Stage 1
+checkpoint retains vertical zero with live ticks/renders and valid stacks, and a fresh-power title
+sample remains coherent at vertical zero. Organic Stage 2 scrolling on the SNES still requires
+human confirmation; no playability, full-playthrough, audio, renderer-conservation, or formal
+performance verdict follows from these bounded results.**
+
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
@@ -50,8 +61,9 @@ open.**
   `7c4b757d…`; first-wall/octave-sample v129 is `8f240332…`; combined wall/audio/Mode-7 v130
   is the human-rejected `1ec22cbc…`; the v131 second-playtest response candidate is
   human-rejected `be0ed971…`; the v132 title/crate/right-edge response candidate is
-  human-rejected `48d7c4d6…`; and the current v133 title/attract/boot response candidate is
-  `15465fe6…`.
+  human-rejected `48d7c4d6…`; the v133 title/attract/boot response candidate is superseded by its
+  human Stage 2 rejection at `15465fe6…`; and the current v134 vertical-scroll response candidate
+  is `782ae58f…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -125,6 +137,13 @@ dirty `main` worktree identified above.
   zero. A separate fresh-power capture shows the scale-only Mode 7 boot at huge, intermediate, and
   fitted sizes. This is title/idle-attract/boot evidence, not interactive stage or performance
   evidence.
+- R14's exact v134 focused evidence: the production pack/layout gate is green; an 8/8 Nexen
+  machine-code lab executes the shipped capture/apply helpers on the real 65816/PPU path, including
+  two per-column Stage 2 values retained from MAME; an exact-Mesen Stage 1 checkpoint advances
+  tick 1,192→1,258 and completed render 1,124→1,183 at halt zero while keeping `$F9` at
+  `BG1VOFS=0` with 14 valid stacks; and an unmodified fresh-power Mesen title sample advances
+  tick 285→385 / render 264→349 with `BG1VOFS=0`. This is bridge, regression, and title evidence,
+  not an organic SNES Stage 2 run or performance evidence.
 
 ### Partial evidence, not a project-level verdict
 
@@ -141,9 +160,10 @@ dirty `main` worktree identified above.
   formal 30 Hz thresholds. v127 repaired the demonstrated freeze. The user confirmed v128's
   recorded Mesen title/transition/charged-shot/music regressions, then exposed the first-wall crash.
   v130 repairs that focused wall path and adds the octave/boot work; v131/v132/v133 add bounded
-  renderer/crate/title/attract corrections. Exact v133 still inherits the red burst-render
-  conservation result and has passed neither a human gameplay retest, a full-stage/full-playthrough
-  test, nor a new formal rate/budget run.
+  renderer/crate/title/attract corrections. The user then reached the post-boss vertical section
+  on v133 and found its camera frozen. Exact v134 bridges the missing vertical state but still
+  inherits the red burst-render conservation result and has passed neither the organic Stage 2
+  retest, a full-stage/full-playthrough test, nor a new formal rate/budget run.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
 - Complete/faithful sound by ear. The user now identifies excessive sample transposition as a
@@ -935,8 +955,9 @@ color for an 8x8 amber activity diamond. In the fresh exact-Mesen capture at fra
 the changed-pixel bounding box is exactly that diamond `(228,192)-(236,200)`; the logo is static.
 
 MAME 0.287 reports a 384x240 screen, so the centered 256x224 SNES window begins at arcade `(64,8)`.
-BG1 now adds 64 horizontal pixels and uses vertical scroll zero; legacy and packed OBJ consumers
-subtract 64 from X and use `232 - ((sy + 14) & 255)` modulo 256. The producer keeps signed
+At R11, BG1 added 64 horizontal pixels and used vertical scroll zero; R14 later supersedes that
+zero-only policy for the post-boss vertical section. Legacy and packed OBJ consumers subtract 64
+from X and use `232 - ((sy + 14) & 255)` modulo 256. The producer keeps signed
 non-negative X in the 16-pixel overlap interval `49..255`. MAME register inspection confirmed that
 X1-001 bit 8 is the signed-X bit, not a right-side extension.
 
@@ -1208,13 +1229,78 @@ on this hash, musical fidelity, renderer conservation, aligned MAME pixels, a co
 stage/playthrough, and formal performance remain open. The correct label remains **interactive
 technical demo, not playable or shippable**.
 
+### R14 — v133 Stage 2 vertical-scroll rejection and v134 response
+
+#### Human v133 correction
+
+The tester cleared the first boss on v133 and reached the following vertical section. Superman and
+the rest of the scene remained interactive, but moving to the top did not move the playfield
+upward. This is the first human report beyond Stage 1 and supersedes v133's response-candidate
+verdict.
+
+#### Missing X1-001-to-BG1 bridge
+
+The arcade game had not stopped producing camera state. X1-001 scrolly lives at CPU
+`$D00401 + column*$20`, mirrored at SNES `$41:3401 + column*$20`. The SNES renderer discarded it:
+the full uploader wrote `BG1VOFS=0`, while the fast and incremental paths updated only
+`BG1HOFS`; the existing two-byte snapshot/queue field carried only horizontal state.
+
+MAME 0.287 computes `sy = -(scrolly + yoffs) + row*16`, and Superman sets the no-flip background
+Y offset to `-1`. With the centered crop beginning at arcade Y=8, the corresponding SNES value is
+`(scrolly + 7) & $ff`. Stage 1's `$F9` maps to zero, explaining why the omission remained hidden.
+
+A retained MAME drive with explicit invincibility and enemy/boss state edits reaches the vertical
+scene and shows multiple simultaneous column groups. At frames 6,000 and 6,120, columns 4-11
+advance `$EB→$FB`; their SNES offsets are `$F2→$02`. Because SNES BG1 has one global Y register,
+v134 explicitly follows arcade column 4, the first column of that large center-playfield group.
+This restores global camera motion but does not claim exact per-column fidelity; an exact port of
+those simultaneous offsets would require HDMA or a different renderer.
+
+The accepted vertical byte is packed into the low byte of the established two-byte scroll mailbox;
+the original raw horizontal byte stays in the high byte. All four legacy/direct/primary/secondary
+snapshot producers and all full/fast/incremental consumers use that packed word, so no queue grows.
+The exact post-TAITO title signature forces vertical zero. ROM packing asserts the helper bytes,
+four producer calls, three consumer calls, two-write PPU publication, title guard, and owned-island
+seams.
+
+#### Exact v134 evidence and remaining target
+
+Exact v134 response-candidate production SHA-256:
+`782ae58fe5b6d05fd23bb0d50e306fc3186fe12c1cca7e1be8703286313f85c0`.
+
+| Gate | Exact-v134 result |
+|---|---:|
+| Production build/layout | 4 MiB ROM; pack/layout assertions green |
+| Nexen real-65816/PPU bridge lab | 8/8, including two MAME-derived per-column Stage 2 values |
+| Exact-Mesen Stage 1 checkpoint | frame 7,512→7,645; tick 1,192→1,258; render 1,124→1,183; halt `$0000` |
+| Stage 1 alignment/safety | sampled scrolly `$F9`; `BG1VOFS=0`; 14/14 stacks valid; 138-byte minimum margin |
+| Fresh-power Mesen title sample | 11/11 frames 5,700-5,900 at `BG1VOFS=0`; tick 285→385; render 264→349; halt `$0000` |
+| Organic SNES Stage 2 / formal FPS / audio listening | not run |
+
+Primary evidence:
+
+- `build/stage2-scroll-oracle-cheat/drive.log`
+- `build/user-playtest-v105-investigation/v134-vertical-scroll-final-nexen/report.json`
+- `build/user-playtest-v105-investigation/v134-vertical-scroll-stage1-mesen211-v3/`
+- `build/user-playtest-v105-investigation/v134-vertical-scroll-fresh-title-mesen211-v3/`
+- `docs/handoff/V134_STAGE2_VERTICAL_SCROLL_20260724.md`
+
+#### R14 verdict
+
+v134 supersedes human-rejected v133 only as the current **response candidate**. The missing
+vertical-scroll transport and its Stage 1/title regressions have bounded exact-core evidence. The
+organic post-boss scene, visual acceptability of the global center-column approximation, wrong
+player-animation tiles, crate/silver-enemy/wall behavior on this hash, musical fidelity, renderer
+conservation, aligned MAME pixels, a complete playthrough, and formal performance remain open.
+The correct label remains **interactive technical demo, not playable or shippable**.
+
 ## Decision rule after the baseline
 
-R13 supersedes R12's v132-response verdict while preserving R7's exact v124 formal performance
-evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10-R12's bounded
-wall/audio/boot/cache/title evidence. Preserve the production evidence contract:
+R14 supersedes R13's v133-response verdict while preserving R7's exact v124 formal performance
+evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10-R13's bounded
+wall/audio/boot/cache/title/attract evidence. Preserve the production evidence contract:
 local/checkpointed/idle-attract improvements remain scoped evidence, while a new playability claim
 requires another power-on uninterrupted gameplay run plus a human combat/audio playtest. Continue
-under the honest label **interactive technical demo, not playable or shippable**. v133 is the
-current response candidate; do not resurrect human-rejected v130/v131/v132, the rejected pre-wake
-DMA ordering, v125/v126, or project a local result into FPS.
+under the honest label **interactive technical demo, not playable or shippable**. v134 is the
+current response candidate; do not resurrect human-rejected v130/v131/v132/v133, the rejected
+pre-wake DMA ordering, v125/v126, or project a local result into FPS.
