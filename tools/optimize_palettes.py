@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SUPERSEDED FOR SPRITES — see PALETTE_VERDICT.md.
+SUPERSEDED FOR SPRITES — see docs/toolchain/GRAPHICS_PALETTE_EVIDENCE.md.
 
 Tile-aware palette quantization is the WRONG model for Taito X sprites: the
 arcade picks a sprite's 16-color bank from its OAM color field at RUNTIME (not
@@ -62,7 +62,8 @@ def read_arcade_palette(path, max_entries=2048):
     for i in range(num_entries):
         # The MAME byte dump stores read_u8(even)=HIGH byte, read_u8(odd)=LOW
         # byte (68K is big-endian), so the logical 16-bit word is big-endian.
-        # (Ground-truth-validated against MAME's screen — see PALETTE_VERDICT.md.
+        # (Ground-truth-validated against MAME's screen — see
+        # docs/toolchain/GRAPHICS_PALETTE_EVIDENCE.md.
         #  An earlier little-endian reading here produced scrambled colors that a
         #  self-referential proof failed to catch.)
         w = (data[i * 2] << 8) | data[i * 2 + 1]

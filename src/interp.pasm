@@ -5,7 +5,8 @@
 ; addressing modes. Reaching $4008 (first opcode after the RAM test) proves real
 ; data-dependent 68K code runs correctly on real SNES.
 ;
-; Memory: 68K work RAM $F0xxxx -> SNES bank $7F ($400000,x). Other writes no-op.
+; Memory: 68K work RAM $F0xxxx -> SA-1 BW-RAM bank $40 ($400000,x).
+; Device writes route through the game adapter.
 ; 68K regs in direct page (D2): Dn @ $00+4n (lo@+0, hi@+2), An @ $20+4n.
 ; PC@$40, opcode@$44, scratch@$50/$52, log idx@$48, step@$4A (32-bit), stop@$4C,
 ; Z-flag@$60. 68K ROM slice at CPU $A000 (ROM off $2000); PC log -> $0800.
@@ -220,10 +221,10 @@ irq_none:
     lda $40
     sta $56              ; ptr low16 = PC low16
     lda $42
-    cmp #$00F0           ; 68K work-RAM PC ($F0xxxx)? execute from SNES $7F bank
+    cmp #$00F0           ; 68K work-RAM PC ($F0xxxx)? execute from SA-1 BW-RAM $40
     bne ifetch_rom
     lda #$0040
-    sta $58              ; ptr bank = $7F (work RAM); RAM-resident routines
+    sta $58              ; ptr bank = $40 (work RAM); RAM-resident routines
     bra ifetch_go
 ifetch_rom:
     clc
@@ -4529,7 +4530,7 @@ ix_long:
     rts
 
 ; --- memory WRITE helpers (mirror readbyte's decode): addr hi16 $52, lo16 $54.
-;     Only 68K work RAM $00F0xxxx writes (-> $7F:xxxx); ROM/I/O writes no-op.
+;     68K work RAM $00F0xxxx writes -> BW-RAM $40:xxxx; devices route below.
 ;     Data: writebyte uses $80(low byte); writeword $80(word, big-endian);
 ;     writelong $80(lo16)/$82(hi16) (big-endian 4 bytes). Caller is 16-bit (rep).
 writebyte:
@@ -5363,7 +5364,7 @@ op_movl_d16_dn:        ; move.l (d16,An),Dn : Dn = [An+d16] (32, work RAM) ; PC+
     lda $00,x
     clc
     adc $52
-    tax                ; src addr low16 (An assumed $F0xxxx -> $7F)
+    tax                ; src addr low16 (An assumed $F0xxxx -> BW-RAM $40)
     sep #$20
     lda $400000,x
     sta $53            ; bits 31-24
@@ -18905,11 +18906,11 @@ TESTFLAG:
 ;
 ;  map_snes — destination-bank dispatch for stores. The live game writes hardware
 ;  video banks via only op_movl_anp_anp / op_movw_anp_an / op_movw_dn_abs (Stage-0
-;  capture, video_writes.log). We mirror them into SNES bank $7E shadow RAM:
-;    $B0 = palette (xRGB555 4KB) -> $7E:2000+(lo&$0FFF)
-;    $D0 = sprite Y/scroll/ctrl  -> $7E:3000+(lo&$0FFF)
-;    $E0 = sprite code+X (16KB)  -> $7E:4000+(lo&$3FFF)  (bases ORA-aligned)
-;  in: A=dst hi16, $6A=dst lo16 ; out: $C2=mode(0=$7F work/1=$7E shadow/2=noop),
+;  capture, video_writes.log). We mirror them into SA-1 BW-RAM bank $41:
+;    $B0 = palette (xRGB555 4KB) -> $41:2000+(lo&$0FFF)
+;    $D0 = sprite Y/scroll/ctrl  -> $41:3000+(lo&$0FFF)
+;    $E0 = sprite code+X (16KB)  -> $41:4000+(lo&$3FFF)  (bases ORA-aligned)
+;  in: A=dst hi16, $6A=dst lo16 ; out: $C2=mode(0=$40 work/1=$41 shadow/2=noop),
 ;  $6A=SNES offset ; preserves $50/$51 and X ; 16-bit A.
 ; =============================================================================
 .org $F800
@@ -18920,7 +18921,7 @@ STAGING_CGRAM=$8000
 map_snes:
     cmp #$00F0
     bne ms_b0
-    stz $C2              ; mode 0: work RAM $7F, offset already = lo16
+    stz $C2              ; mode 0: work RAM $40, offset already = lo16
     rts
 ms_b0:
     cmp #$00B0

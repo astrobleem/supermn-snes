@@ -1,6 +1,7 @@
 # MAME C-Chip Access Trace (validation harness)
 
-Runtime validation for the static C-Chip findings in `../../CCHIP_FIRMWARE.md`
+Runtime validation for the static C-Chip findings in
+[`docs/current/CCHIP_FIRMWARE.md`](../../docs/current/CCHIP_FIRMWARE.md)
 ("68K-SIDE TRACE"). It runs Superman in MAME headlessly and logs every 68K
 access to the C-Chip window `$900000–$900FFF`, then prints a verdict on the
 self-test protection gate.

@@ -1,7 +1,8 @@
 # Tools index (reuse guide)
 
 What each tool does and how reusable it is for the **next** game. See
-`../METHODOLOGY.md` for the end-to-end recipe. Legend:
+[the reusable toolchain overview](../docs/toolchain/README.md) for the end-to-end
+workflow. Legend:
 **[G]** game-agnostic · **[P]** parameterized (env/args) · **[S]** Superman-specific
 (swap addresses/input-field names to reuse).
 
@@ -13,8 +14,8 @@ What each tool does and how reusable it is for the **next** game. See
   68K image, MAME-layout graphics image, organic C-Chip response, and 12 ADPCM-A drum
   WAVs, then verifies every output by pinned size/SHA-256 before atomic writes.
   Supports `--dry-run`, `--validate-only`, `--output-root`, and `--mame`. See
-  `../docs/PREPARE_ROMS.md`; exact FM authoring WAV regeneration remains outside this
-  ROM-only path.
+  [private ROM inputs](../docs/current/ROM_INPUTS.md); exact FM authoring WAV
+  regeneration remains outside this ROM-only path.
 
 ## Tracing & coverage (gate G1)
 - **`mame-trace/trace68k.lua`** [G] — headless 68K PC+disasm trace
@@ -75,7 +76,9 @@ What each tool does and how reusable it is for the **next** game. See
 The strategic shift from per-target dispatch hooks (one hardcoded cmp-chain per
 escape: `ojmp_hook`/`ojmp_disp`, `ors_pre`, `ors_rte`/`cors_disp`, `jsrabs_hook2`,
 `bsr_hookpush`) to ONE global 68K-PC→native table that all control flow consults.
-See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
+See the [transpiler workflow](../docs/toolchain/TRANSPILER_WORKFLOW.md) and the
+[historical planning handoff](../docs/history/campaigns/MAIN_PLANNING_HANDOFF.md) for
+the design and later corrections.
 - **`gen_xlat_table.py`** [G core / S addresses] — builds the table offline from the
   escape banks' `.sym` (entry_X native addrs) + the `transpiled from $XXXXXX`
   comments (68K PCs). Emits `src/xlat_table.bin`, a 2-level page table
@@ -115,7 +118,10 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   (save works; load+trace-in-one-debug-session has a notifier glitch — prefer
   `.inp` playback for deep states).
 
-## Graphics (validated, see PALETTE_VERDICT.md)
+## Graphics
+
+See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
+[palette evidence](../docs/toolchain/GRAPHICS_PALETTE_EVIDENCE.md).
 - **`render_full_frame.py`, `render_arcade_sprites.py`, `build_snes_full_scene.py`,
   `build_snes_sprite_scene.py`** [S] — arcade decode + SNES reproduction +
   MAME diff. X1-001-specific; the decode/diff *approach* is general.
@@ -206,8 +212,9 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
   task's saved SP against the actual 68K ROM floor table at `$0882`. The default target passes the
   historical `$9F05`/`$A005` coroutine-corruption window.
 
-The results and negative iterations are in `../docs/R5_PERFORMANCE_ARCHITECTURE.md`. These lab
-tools are evidence harnesses, not a production build path.
+The results and negative iterations are in
+[R5 scheduler experiments](../docs/history/performance/R5_SCHEDULER_EXPERIMENTS.md).
+These lab tools are evidence harnesses, not a production build path.
 
 ## MCP servers (the two oracles — the most reusable thing here)
 - **`mame`** (`/home/chad/mame-mcp`): **25 tools** in two families — *stateless* one-shot
@@ -219,11 +226,13 @@ tools are evidence harnesses, not a production build path.
   at any game.
 - **`nexen-inproc`**: SNES PPU/CPU + SA-1 oracle through `nexen_mcp_bridge.py` —
   `read/write_memory`, `run_frames`, hooks, CPU state/cycle count, screenshots, etc. The active
-  recovery binary lives on the healthy volume; see `../BUILD.md` rather than assuming the old
+  recovery binary lives on the healthy volume; see
+  [building](../docs/current/BUILDING.md) rather than assuming the old
   `/home/chad/Nexen` checkout is usable.
 
 ## Notes
-- **Debugging the interp / Poppy / harness traps: see `../docs/INTERP_DEBUG_AND_GOTCHAS.md`**
+- **Debugging the interpreter, Poppy, and harness traps: see
+  [the gotchas reference](../docs/toolchain/DEBUGGING.md).**
   (diagnostic-build flight recorder, PC-freeze, `$07xx`-counter rule, `.org` overlap guards,
   MAME/Mesen gotchas).
 - 68K is big-endian: read words (`read_u16`), not byte lanes.

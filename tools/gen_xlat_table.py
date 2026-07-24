@@ -92,7 +92,8 @@ TABLE_PCS = {0xCE4, 0x111A, 0x295A, 0x29B6, 0x13BE,
 # 2026-07-03: BANK-$01 pages (object-processor A2): the table is now 512 pages, index =
 # ((PC>>8) & 0x1FF) so bank-$01 resume PCs dispatch through the SAME ors_rte_x->ojmp_hook route
 # with ZERO bank-$00 changes (xlat_dispatch accepts $42 in {0,1}). $01D5F0 = objproc physics visit,
-# $01E7C0 = objproc render visit (docs/OBJPROC_SPEC.md).
+# $01E7C0 = objproc render visit
+# (docs/history/designs/OBJECT_PROCESSOR_CAMPAIGN_20260703.md).
 CORO_PCS = {0xC172, 0x01D51A, 0x01D5F0, 0x01E7C0,
             # $DA44 resumes at $DA72 and immediately RTSes to the genuine
             # $D8B4 continuation.  Both are no-push coroutine continuations.

@@ -8273,7 +8273,8 @@ Lcb9e_cc0e:
     sta $3C
     jml.l ors_pre
 
-; --- objproc PHYSICS visit (coroutine resume $01D5F0, docs/OBJPROC_SPEC.md) — Phase-2.1 A2 pilot.
+; --- objproc PHYSICS visit (coroutine resume $01D5F0,
+; docs/history/designs/OBJECT_PROCESSOR_CAMPAIGN_20260703.md) — Phase-2.1 A2 pilot.
 ; Dispatched via xlat_dispatch BANK-$01 page (ors_rte_x -> ojmp_hook -> $94:F900); --coroutine
 ; (no return-push), --jt=1D606:0:24,1D726:0:24 (13-entry physics type tables; types >12 bail),
 ; --bail (2 dyn-bit edges $01D778/$01D7AA). Types observed live: 1, 8.

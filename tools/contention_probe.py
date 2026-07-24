@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # contention_probe.py — the 5A22<->SA-1 bus-contention probe (the decisive unattributed-1.08M
-# measurement, docs/PROFILE_CAMPAIGN.md "ISR verification round" suspect (a)).
+# measurement, docs/history/performance/PROFILE_CAMPAIGN.md
+# "ISR verification round" suspect (a)).
 #
 # Mechanism (Nexen Sa1Cpu::ProcessCpuCycle): the SA-1 pays wait cycles whenever its access's
 # memory TYPE equals the 5A22's latched Bus-A type (SnesMemoryManager::_memTypeBusA):

@@ -9451,7 +9451,8 @@ h8_mark_palette_dirty_end:
 ; tools/gen_xlat_table.py). HIT -> jml [native entry]; MISS -> jml inext (interpret as today).
 ; This replaces ojmp_hook's hardcoded cmp-chain AND escbank's ojmp_disp re-scan with one lookup.
 ; Banks $00/$01/$02 (768-page layout, index = (bank<<8)|(PC>>8)); $42>=3 -> miss. Bank-$01 pages
-; carry the objproc coroutine resume PCs (docs/OBJPROC_SPEC.md); bank-$02 pages the trap#5-shell
+; carry the objproc coroutine resume PCs
+; (docs/history/designs/OBJECT_PROCESSOR_CAMPAIGN_20260703.md); bank-$02 pages the trap#5-shell
 ; resume PCs (escbank5). All reached via ors_rte_x->ojmp_hook.
 ; ============================================================================
 .org $F900

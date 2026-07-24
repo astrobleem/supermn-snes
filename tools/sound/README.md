@@ -3,8 +3,12 @@
 Converts the VGMRips **Superman (Taito X System, YM2610B)** soundtrack into
 **Terrific Audio Driver** MML drafts + compile-checkable projects for the SNES port.
 
-These are the tools referenced by `supersoundhandoff.md`. Plain Python 3, stdlib only.
-On Windows, prefix commands with `PYTHONUTF8=1` (GD3 tags / output are UTF-8).
+The current workflow and acceptance boundary are in the
+[VGM-to-TAD sound pipeline](../../docs/toolchain/SOUND_PIPELINE.md). The original
+bring-up runbook is preserved as the
+[historical sound handoff](../../docs/history/audio/SOUND_BOOTSTRAP_HANDOFF.md).
+The conversion scripts are plain Python 3, stdlib only. On Windows, prefix commands
+with `PYTHONUTF8=1` because GD3 tags and output are UTF-8.
 
 ## Quick start
 
@@ -182,4 +186,7 @@ fits in audio-RAM). FM pitch is validated by confirming decoded notes cluster on
 equal-tempered semitones (within a few cents). The converter is a **scaffold generator**:
 pitch/timing/loop/drum-placement are mechanical and accurate; timbre, per-note dynamics,
 vibrato, and final tempo confirmation are the human's musical pass (each `notes.md` says
-which). See `supersoundhandoff.md` for the full bring-up runbook.
+which). See the [current sound pipeline](../../docs/toolchain/SOUND_PIPELINE.md) for
+the acceptance sequence and the
+[historical handoff](../../docs/history/audio/SOUND_BOOTSTRAP_HANDOFF.md) for the
+original full bring-up record.

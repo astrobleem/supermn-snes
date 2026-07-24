@@ -4788,7 +4788,8 @@ h23b52_write_a2_generic:
     jsl.l writeword_l
     rts
 
-; --- objproc RENDER visit (coroutine resume $01E7C0, docs/OBJPROC_SPEC.md) — Phase-2.1 A2 main body.
+; --- objproc RENDER visit (coroutine resume $01E7C0,
+; docs/history/designs/OBJECT_PROCESSOR_CAMPAIGN_20260703.md) — Phase-2.1 A2 main body.
 ; xlat bank-$01 dispatch like entry_1d5f0. --jt=1EE6C:-16:0 (anim-op DOWNWARD table, ops 0..-8) +
 ; 1F0B6:0:6 (mode table); --escapes=D96 (F1: jsr(a4) -> entry_d96t same-bank, PUSHED-sentinel
 ; return); --bail (8 cold edges: 2 divs, 4 muls, 2 dyn-bclr). Sentinels sed $00FD->$00FB.
@@ -13349,7 +13350,8 @@ Ld96_e42:
     jml.l ors_pre
 
 ; ============================================================================
-; objproc_mid — Phase 2.1 A3 WIDEN (docs/OBJPROC_SPEC.md "A3 WIDEN"): HAND-WRITTEN
+; objproc_mid — Phase 2.1 A3 WIDEN
+; (docs/history/designs/OBJECT_PROCESSOR_CAMPAIGN_20260703.md "A3 WIDEN"): HAND-WRITTEN
 ; native continuation of the render visit's interpreted middle (~125 instr/tick):
 ;   latch pass $01E780-$01E7A0 (8-slot ptr list at a6-$20: w($36)->$3c, w($2e)->$38,
 ;   w($32)->$3a per live object; d7 = last long read = list[7]) ->

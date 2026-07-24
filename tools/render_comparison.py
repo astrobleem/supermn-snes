@@ -51,7 +51,8 @@ def read_arcade_palette(path):
     palette = np.zeros((2048, 3), dtype=np.uint8)
     for i in range(min(2048, len(data) // 2)):
         # big-endian dump (read_u8(even)=high); arcade xRGB_555.
-        # See optimize_palettes.read_arcade_palette / PALETTE_VERDICT.md.
+        # See optimize_palettes.read_arcade_palette /
+        # docs/toolchain/GRAPHICS_PALETTE_EVIDENCE.md.
         w = (data[i * 2] << 8) | data[i * 2 + 1]
         r = (w >> 10) & 0x1F
         g = (w >> 5) & 0x1F

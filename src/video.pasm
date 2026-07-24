@@ -1499,7 +1499,8 @@ BOOT_ARM:
 ; IRAM conflict +1-2 cyc, BW-RAM 2->4 cyc. The old cv_loop busy-polled FROM ROM at 100%
 ; duty (ROM code fetch + IRAM $3300/$3302 poll + BW-RAM joy mailbox every iteration), a
 ; constant tax on every SA-1 cycle: measured 411K cyc/tick light (28.8%) / 578K combat
-; (28.7%) — the bulk of the combat "unattributed 1.08M" (docs/PROFILE_CAMPAIGN.md).
+; (28.7%) — the bulk of the combat "unattributed 1.08M"
+; (docs/history/performance/PROFILE_CAMPAIGN.md).
 ; Fix: the 5A22 idles in WRAM — WRAM fetches can never conflict (the SA-1 has no WRAM
 ; path) — polling IRAM only ~2 accesses per ~700 cyc (throttle loop), and drops into ROM
 ; once per game tick for joy+render. joy sampling moves from continuous to per-tick,

@@ -2,7 +2,7 @@
 """Validate a legal Superman arcade ROM set and prepare private build inputs.
 
 This tool supports the World ``superman`` set used by MAME 0.287.  It never
-prints ROM contents.  See docs/PREPARE_ROMS.md for provenance and legal notes.
+prints ROM contents.  See docs/current/ROM_INPUTS.md for provenance and legal notes.
 """
 
 from __future__ import annotations
@@ -1108,7 +1108,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         validate_only(output_root)
         print(
             "NOTE: exact FM authoring WAVs are a separate preserved input; "
-            "see docs/PREPARE_ROMS.md."
+            "see docs/current/ROM_INPUTS.md."
         )
         print("Validation complete; no files were written.")
         return 0
@@ -1122,7 +1122,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         )
     print(
         "NOTE: exact FM authoring WAVs are a separate preserved input; "
-        "see docs/PREPARE_ROMS.md."
+        "see docs/current/ROM_INPUTS.md."
     )
 
     if args.dry_run:
