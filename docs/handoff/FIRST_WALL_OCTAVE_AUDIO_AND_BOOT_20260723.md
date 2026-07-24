@@ -3,9 +3,9 @@
 > **Superseded candidate notice:** the second human test rejected exact v130 after crate-throw and
 > charged-silver-enemy freezes, wrong animation tiles, an upper-left crop, and dizziness from this
 > document's rotating shield. Preserve the wall/audio evidence below, but use
-> [V132_TITLE_CRATE_RIGHT_EDGE_20260723.md](V132_TITLE_CRATE_RIGHT_EDGE_20260723.md) and
-> `RECOVERY.md` R12 for the current exact-v132 response candidate. The intermediate v131 response
-> was also human-rejected.
+> [V133_TITLE_ATTRACT_BOOT_20260723.md](V133_TITLE_ATTRACT_BOOT_20260723.md) and
+> `RECOVERY.md` R13 for the current exact-v133 response candidate. The intermediate v131 and v132
+> responses were also human-rejected.
 
 ## Verdict
 

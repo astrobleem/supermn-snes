@@ -34,6 +34,9 @@ from mesen_mcp import McpSession
 
 DEFAULT_MESEN = ROOT / "tools" / "mesen211_mcp_controller.sh"
 REAL_MESEN = Path("/home/chad/Mesen2/bin/linux-x64/Release/Mesen")
+VIDEO_FILE_BASE = 0x298000
+VIDEO_WRAM_OFFSET = 0x18000
+VIDEO_WRAM_LENGTH = 0x3000
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,6 +51,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--step", type=int, default=30)
     parser.add_argument("--checkpoint-step", type=int, default=150)
     parser.add_argument("--boot-wait", type=float, default=6.0)
+    parser.add_argument(
+        "--refresh-video-mirror",
+        action="store_true",
+        help=(
+            "Checkpoint lab only: replace saved $7F:8000-$AFFF with the "
+            "selected ROM's video supervisor before resuming."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -156,6 +167,8 @@ def main() -> int:
             raise FileNotFoundError(f"{label} not found: {path}")
     if args.state is not None and not args.state.is_file():
         raise FileNotFoundError(f"state not found: {args.state}")
+    if args.refresh_video_mirror and args.state is None:
+        raise SystemExit("--refresh-video-mirror requires --state")
     rom = args.rom.resolve()
     if rom.stat().st_size != 0x400000:
         raise SystemExit("expected a 4 MiB production ROM")
@@ -184,7 +197,20 @@ def main() -> int:
         "frame_range": [args.start_frame, args.end_frame],
         "capture_step": args.step,
         "checkpoint_step": args.checkpoint_step,
-        "runtime_memory_pokes": [],
+        "runtime_memory_pokes": (
+            [
+                {
+                    "region": "snesWorkRam $7F:8000-$AFFF",
+                    "source": (
+                        f"selected ROM file ${VIDEO_FILE_BASE:06X}-"
+                        f"${VIDEO_FILE_BASE + VIDEO_WRAM_LENGTH - 1:06X}"
+                    ),
+                    "reason": "cross-version checkpoint video-mirror refresh",
+                }
+            ]
+            if args.refresh_video_mirror
+            else []
+        ),
         "input": "controller idle",
     }
     print(json.dumps({"event": "provenance", **provenance}, sort_keys=True))
@@ -203,6 +229,38 @@ def main() -> int:
         if args.state is not None:
             m.load_state(args.state.resolve())
             m.pause()
+        if args.refresh_video_mirror:
+            video_mirror = rom.read_bytes()[
+                VIDEO_FILE_BASE : VIDEO_FILE_BASE + VIDEO_WRAM_LENGTH
+            ]
+            if len(video_mirror) != VIDEO_WRAM_LENGTH:
+                raise RuntimeError("selected ROM does not contain the video mirror span")
+            for offset in range(0, VIDEO_WRAM_LENGTH, 0x1000):
+                chunk = video_mirror[offset : offset + 0x1000]
+                m.write_memory(
+                    "snesWorkRam",
+                    VIDEO_WRAM_OFFSET + offset,
+                    chunk.hex(),
+                )
+            observed = bytes(
+                m.read_memory(
+                    "snesWorkRam", VIDEO_WRAM_OFFSET, VIDEO_WRAM_LENGTH
+                )
+            )
+            if observed != video_mirror:
+                raise RuntimeError("selected-ROM video mirror injection did not verify")
+            print(
+                json.dumps(
+                    {
+                        "event": "video_mirror_refresh",
+                        "region": "$7F:8000-$AFFF",
+                        "length": VIDEO_WRAM_LENGTH,
+                        "sha256": hashlib.sha256(video_mirror).hexdigest(),
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
         current = int(m.get_state().get("frameCount", 0))
         if current > args.start_frame:
             raise RuntimeError(

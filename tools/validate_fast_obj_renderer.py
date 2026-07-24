@@ -134,6 +134,18 @@ def stable_ppu_state(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def packed_x_word(sy: int, x_color: int, code_word: int) -> int | None:
+    """Apply the production crop and its exact bottom credit-row translation."""
+    sx = x_color & 0x01FF
+    code = code_word & 0x3FFF
+    credit_glyph = 0x007D <= code <= 0x0080 or code == 0x008B
+    if sy == 0x0A and credit_glyph and 0x0120 <= sx < 0x0170:
+        return (x_color - 0x0030) & 0xFFFF
+    if 0x0031 <= sx < 0x0140:
+        return x_color
+    return None
+
+
 def physical_slots_from_oam(oam: bytes, count: int) -> list[int]:
     """Invert obj_T for the active 16x16 entries in a low-OAM image."""
     slots: set[int] = set()
@@ -271,12 +283,13 @@ def run_variant(
                     x_color = int.from_bytes(
                         raw_x[source_offset : source_offset + 2], "big"
                     )
-                    sx = x_color & 0x01FF
-                    if not 0x0031 <= sx < 0x0140:
-                        continue
                     raw_code_word = int.from_bytes(
                         raw_code[source_offset : source_offset + 2], "big"
                     )
+                    if packed_x_word(
+                        raw_y[source_offset + 1], x_color, raw_code_word
+                    ) is None:
+                        continue
                     code = raw_code_word & 0x3FFF
                     if raw_code_word != 0xFFFF and code:
                         candidate_codes.append((source_offset, code))
@@ -379,25 +392,54 @@ def run_variant(
                         continue
                     if raw_x is not None:
                         x_color = int.from_bytes(raw_x[offset : offset + 2], "big")
-                        sx = x_color & 0x01FF
-                        if not 0x0031 <= sx < 0x0140:
+                        if raw_code is None:
+                            x_visible = 0x0031 <= (x_color & 0x01FF) < 0x0140
+                        else:
+                            code_word = int.from_bytes(
+                                raw_code[offset : offset + 2], "big"
+                            )
+                            x_visible = packed_x_word(
+                                raw_y[offset + 1], x_color, code_word
+                            ) is not None
+                        if not x_visible:
                             continue
                     offsets.append(offset)
                     if args.candidate_packed_manifest and len(offsets) == 128:
                         break
             if args.candidate_packed_manifest:
                 if packed8_source is not None:
-                    manifest = b"".join(
-                        packed8_source[cursor + 2 : cursor + 8]
-                        for cursor in range(0, len(packed8_source), 8)
-                    )
+                    records = bytearray()
+                    for cursor in range(0, len(packed8_source), 8):
+                        sy = packed8_source[cursor + 3]
+                        x_color = int.from_bytes(
+                            packed8_source[cursor + 6 : cursor + 8], "big"
+                        )
+                        code_word = int.from_bytes(
+                            packed8_source[cursor + 4 : cursor + 6], "big"
+                        )
+                        packed_x = packed_x_word(sy, x_color, code_word)
+                        if packed_x is None:
+                            continue
+                        records.extend(packed8_source[cursor + 2 : cursor + 6])
+                        records.extend(packed_x.to_bytes(2, "big"))
+                    manifest = bytes(records)
                 else:
                     assert raw_code is not None and raw_x is not None
                     records = bytearray()
                     for offset in offsets:
+                        x_color = int.from_bytes(
+                            raw_x[offset : offset + 2], "big"
+                        )
+                        code_word = int.from_bytes(
+                            raw_code[offset : offset + 2], "big"
+                        )
+                        packed_x = packed_x_word(
+                            raw_y[offset + 1], x_color, code_word
+                        )
+                        assert packed_x is not None
                         records.extend(raw_y[offset : offset + 2])
                         records.extend(raw_code[offset : offset + 2])
-                        records.extend(raw_x[offset : offset + 2])
+                        records.extend(packed_x.to_bytes(2, "big"))
                     manifest = bytes(records)
                 encoded_length = 0x8000 | len(manifest)
             else:

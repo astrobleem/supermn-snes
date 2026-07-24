@@ -5646,7 +5646,7 @@ rpb_collect_done:
     ldy #$0002
 rpb_sort_outer:
     cpy $0146
-    beq rpb_sort_done
+    bcs rpb_sort_done    ; zero/one-entry lists are already sorted (Y >= length)
     lda $9000,y
     sta $014E           ; insertion key
     sty $0150           ; outer cursor
@@ -5934,6 +5934,66 @@ h8_zero_mask_gate:
 h8_zero_mask_done:
     jml.l $92B3B0
 h8_zero_mask_gate_end:
+
+; Return one producer OBJ X/color word in its packed-renderer form.
+; Carry clear rejects the record. Carry set accepts it with A still in the
+; source's big-endian byte order. The centered gameplay crop remains exactly
+; raw X $031-$13F. The arcade credit counter is the one intentional exception:
+; its five bottom-row glyph records sit at Y=$0A, X=$120-$160 with codes
+; $007D-$0080/$008B, so translate those glyphs left by 48 pixels instead of
+; dropping "DIT 0" beyond the SNES edge. Adjacent code-$0002 solid border
+; records deliberately retain the ordinary crop; moving one with the glyphs
+; covers the "C". The 48-pixel shift places that C immediately to the right of
+; the retained border and leaves the final digit at screen X=249..254. Keeping
+; the exception here prevents the wider cheap scan admission from changing any
+; gameplay object.
+.org $E1A0
+.a16
+.i16
+rmb_obj_x_visible:
+    lda $4400,x
+    xba
+    sta $014E
+    and #$01FF
+    cmp #$0120
+    bcc rox_normal
+    cmp #$0170
+    bcs rox_reject
+    lda $3000,x
+    xba
+    and #$00FF
+    cmp #$000A
+    bne rox_normal
+    lda $4000,x
+    xba
+    and #$3FFF
+    cmp #$007D
+    bcc rox_normal
+    cmp #$0081
+    bcc rox_credit
+    cmp #$008B
+    bne rox_normal
+rox_credit:
+    lda $014E
+    sec
+    sbc #$0030
+    xba
+    sec
+    rts
+rox_normal:
+    lda $014E
+    and #$01FF
+    cmp #$0031
+    bcc rox_reject
+    cmp #$0140
+    bcs rox_reject
+    lda $4400,x
+    sec
+    rts
+rox_reject:
+    clc
+    rts
+rmb_obj_x_visible_end:
 
 ; ============================================================================
 ; Rejected renderer OBJ prefilter consumers/producers (dead islands).
@@ -6347,19 +6407,16 @@ rmb_obj_pack_x:
     ; The X1-001 treats bit 8 as a sign bit, then draws both 512px-wrapped
     ; copies.  For the centered arcade-X 64..319 crop that makes raw
     ; $031-$13F visible: a 16px sprite at raw X=49 first overlaps the left
-    ; edge, while raw $100-$13F wraps back to arcade X=256..319.
-    lda $4400,x
-    xba
-    and #$01FF
-    cmp #$0031
+    ; edge, while raw $100-$13F wraps back to arcade X=256..319. The helper
+    ; also applies the narrow bottom-row credit-label translation.
+    jsr rmb_obj_x_visible
     bcc rmb_obj_pack_reject
-    cmp #$0140
-    bcs rmb_obj_pack_reject
+    sta $014E
     lda $3000,x
     sta $1600,y
     lda $4000,x
     sta $1602,y
-    lda $4400,x
+    lda $014E
     sta $1604,y
     tya
     clc
@@ -6441,7 +6498,7 @@ rmb_obj_fast_loop:
     lsr a
     bcc rmb_obj_fast_slot0_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot0_next
 rmb_obj_fast_slot0_code:
     lda $4001,x
@@ -6475,7 +6532,7 @@ rmb_obj_fast_slot0_next:
     lsr a
     bcc rmb_obj_fast_slot1_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot1_next
 rmb_obj_fast_slot1_code:
     lda $4001,x
@@ -6509,7 +6566,7 @@ rmb_obj_fast_slot1_next:
     lsr a
     bcc rmb_obj_fast_slot2_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot2_next
 rmb_obj_fast_slot2_code:
     lda $4001,x
@@ -6543,7 +6600,7 @@ rmb_obj_fast_slot2_next:
     lsr a
     bcc rmb_obj_fast_slot3_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot3_next
 rmb_obj_fast_slot3_code:
     lda $4001,x
@@ -6577,7 +6634,7 @@ rmb_obj_fast_slot3_next:
     lsr a
     bcc rmb_obj_fast_slot4_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot4_next
 rmb_obj_fast_slot4_code:
     lda $4001,x
@@ -6611,7 +6668,7 @@ rmb_obj_fast_slot4_next:
     lsr a
     bcc rmb_obj_fast_slot5_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot5_next
 rmb_obj_fast_slot5_code:
     lda $4001,x
@@ -6645,7 +6702,7 @@ rmb_obj_fast_slot5_next:
     lsr a
     bcc rmb_obj_fast_slot6_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot6_next
 rmb_obj_fast_slot6_code:
     lda $4001,x
@@ -6679,7 +6736,7 @@ rmb_obj_fast_slot6_next:
     lsr a
     bcc rmb_obj_fast_slot7_code
     lda $4401,x
-    cmp #$40
+    cmp #$70
     bcs rmb_obj_fast_slot7_next
 rmb_obj_fast_slot7_code:
     lda $4001,x

@@ -2,9 +2,10 @@
 """Generate the original, ROM-safe Mode 7 boot-indicator assets.
 
 The asset contains no arcade ROM material.  It uses a downsampled, indexed
-derivative of the user-supplied SA-1 logo, an 8x8 status font/OAM image, and a
-small non-moving activity light.  The ROM packer imports :func:`build_asset`
-directly; the command-line form is useful for byte auditing.
+derivative of the user-supplied SA-1 logo, an 8x8 status font/OAM image, a
+one-shot non-rotating Mode 7 scale table, and a small non-moving activity
+light.  The ROM packer imports :func:`build_asset` directly; the command-line
+form is useful for byte auditing.
 """
 
 from __future__ import annotations
@@ -253,12 +254,20 @@ def palette_section(logo_palette: bytes) -> bytes:
 
 
 def matrix_section() -> bytes:
-    # Retain the historical table-shaped asset seam, but every entry is the
-    # same static 0.75-scale identity matrix.  The logo never rotates.
-    matrix = b"".join(
-        value.to_bytes(2, "little") for value in (0x00C0, 0, 0, 0x00C0)
+    # One second at 60 Hz: begin at 0.125 scale (a very large close-up) and
+    # converge monotonically to the established fitted 0.75 scale. B=C=0 in
+    # every entry, so the logo never rotates or shears.
+    scales = [
+        0x0020 + ((0x00A0 * index + 31) // 63)
+        for index in range(64)
+    ]
+    table = b"".join(
+        b"".join(
+            value.to_bytes(2, "little")
+            for value in (scale, 0, 0, scale)
+        )
+        for scale in scales
     )
-    table = matrix * 64
     assert len(table) == MATRIX_SIZE
     return bytes(table)
 
@@ -291,7 +300,10 @@ def build_asset() -> tuple[bytes, dict[str, object]]:
         "mode7_tiles": 151,
         "visible_obj_sprites": visible_sprites,
         "activity_sprite": activity_sprite,
-        "activity": "static OBJ diamond with a palette-only NMI pulse",
+        "activity": (
+            "one-shot 64-frame non-rotating Mode 7 zoom, then static logo "
+            "with a palette-only OBJ-diamond pulse"
+        ),
         "logo": {
             "width": LOGO_WIDTH,
             "height": LOGO_HEIGHT,

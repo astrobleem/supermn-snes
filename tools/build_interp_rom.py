@@ -339,6 +339,27 @@ assert BOOT_ASSET_REPORT["sections"] == {
     "palette": [0x7C00, 0x0200],
     "matrices": [0x7E00, 0x0200],
 }, "Mode 7 generator offsets no longer match boot_screen_init's DMA descriptors"
+boot_matrices = [
+    tuple(
+        int.from_bytes(
+            BOOT_ASSET[0x7E00 + index * 8 + field * 2:
+                       0x7E02 + index * 8 + field * 2],
+            "little",
+        )
+        for field in range(4)
+    )
+    for index in range(64)
+]
+assert boot_matrices[0] == (0x0020, 0, 0, 0x0020)
+assert boot_matrices[-1] == (0x00C0, 0, 0, 0x00C0)
+assert all(
+    a == d and b == 0 and c == 0
+    for a, b, c, d in boot_matrices
+), "boot matrix table gained rotation/shear or mismatched identity coefficients"
+assert all(
+    boot_matrices[index][0] < boot_matrices[index + 1][0]
+    for index in range(63)
+), "boot matrix table is no longer a one-shot monotonic huge-to-fitted zoom"
 assert ROM[0x300000:0x308000] == bytes(0x8000), (
     "5A22 bank-$F0 boot-asset window overlaps another packed payload"
 )
@@ -399,6 +420,8 @@ boot_mode7_tick = vid_off("boot_mode7_tick")
 boot_mode7_tick_end = vid_off("boot_mode7_tick_end")
 obj_cache_protect_displayed = vid_off("obj_cache_protect_displayed")
 obj_cache_protect_displayed_end = vid_off("obj_cache_protect_displayed_end")
+boot_mode7_scale_tick = vid_off("boot_mode7_scale_tick")
+boot_mode7_scale_tick_end = vid_off("boot_mode7_scale_tick_end")
 assert bg_tile_run_dma_chunks == 0x8A00
 assert (
     0x8A00
@@ -424,12 +447,20 @@ assert (
     obj_cache_protect_displayed == 0x8B40
     and obj_cache_protect_displayed
     < obj_cache_protect_displayed_end
+    <= boot_mode7_scale_tick
+    == 0x8BC0
+    < boot_mode7_scale_tick_end
     <= 0x8DD0
 )
 assert VID[
-    obj_cache_protect_displayed_end - 0x8000:0x0DD0
-] == bytes(0x8DD0 - obj_cache_protect_displayed_end), (
-    "displayed-OBJ quarantine helper grew into the $8DD0 pacing island"
+    obj_cache_protect_displayed_end - 0x8000:boot_mode7_scale_tick - 0x8000
+] == bytes(boot_mode7_scale_tick - obj_cache_protect_displayed_end), (
+    "displayed-OBJ quarantine helper grew into the boot-scale island"
+)
+assert VID[
+    boot_mode7_scale_tick_end - 0x8000:0x0DD0
+] == bytes(0x8DD0 - boot_mode7_scale_tick_end), (
+    "boot-scale helper grew into the $8DD0 pacing island"
 )
 assert VID[0x099C:0x09AB] == bytes.fromhex(
     "bf0080e99f00807fe8e8e00030d0f1"
@@ -551,6 +582,7 @@ bg_cache_extended = vid_off("bg_slot_extended")
 bg_cache_reclaim = vid_off("bg_cache_reclaim")
 bg_cache_reclaim_end = vid_off("bg_cache_reclaim_end")
 bg_cache_extended_end = vid_off("bg_cache_extended_end")
+bg_upload = vid_off("bg_upload")
 queue_capture = vid_off("render_queue_capture")
 queue_capture_end = vid_off("render_queue_capture_end")
 queue_capture_secondary = vid_off("render_queue_capture_secondary")
@@ -784,6 +816,9 @@ assert VID[
     "4142434445464748494a4b4c4d4e4f505152535455565758595a"
     "30313233343536373839402e2c2d26"
 ), "title BG2 font-code table changed; re-audit its map tile indices"
+assert bytes.fromhex("a9618d0b21") in VID[
+    bg_upload - 0x8000:bg_upload - 0x8000 + 0x80
+], "BG upload no longer preserves the live title BG2 character base"
 assert queue_promote == 0xED00 and queue_promote < queue_promote_end <= 0xF000
 assert queue_promote_end - queue_promote == 0x022A, (
     "pinned lazy-installer size no longer matches the queue promoter"
@@ -2381,11 +2416,14 @@ if _osp.exists("src/escbank8.bin"):
     mark_bg_dirty_8_end = esc8_off("mark_bg_dirty_end")
     rmb_prepare_bg_8 = esc8_off("rmb_prepare_bg")
     rmb_prepare_bg_8_end = esc8_off("rmb_prepare_bg_end")
+    rpb_sort_outer_8 = esc8_off("rpb_sort_outer")
     rpb_prepare_dispatch_8 = esc8_off("rpb_prepare_dispatch")
     rpb_c0bc_prepared_8 = esc8_off("rpb_c0bc_prepared")
     rpb_prepare_dispatch_8_end = esc8_off("rpb_prepare_dispatch_end")
     h8_zero_mask_gate_8 = esc8_off("h8_zero_mask_gate")
     h8_zero_mask_gate_8_end = esc8_off("h8_zero_mask_gate_end")
+    rmb_obj_x_visible_8 = esc8_off("rmb_obj_x_visible")
+    rmb_obj_x_visible_8_end = esc8_off("rmb_obj_x_visible_end")
     rmb_obj_prefilter_8 = esc8_off("rmb_obj_prefilter")
     rmb_obj_prefilter_8_end = esc8_off("rmb_obj_prefilter_end")
     render_bg_dirty_sparse_8 = esc8_off("render_bg_dirty_sparse")
@@ -2555,6 +2593,11 @@ if _osp.exists("src/escbank8.bin"):
     assert rmb_prepare_bg_8 < rmb_prepare_bg_8_end <= rpb_prepare_dispatch_8, (
         "prepared-map helper overflowed its bank-$9E tail"
     )
+    assert ESC8[
+        rpb_sort_outer_8 - 0x8000:rpb_sort_outer_8 - 0x8000 + 4
+    ] == bytes.fromhex("cc4601b0"), (
+        "prepared-map insertion sort lost its Y>=length empty-list exit"
+    )
     assert rpb_prepare_dispatch_8 == 0xE100
     assert rpb_prepare_dispatch_8 < rpb_c0bc_prepared_8
     assert rpb_c0bc_prepared_8 < rpb_prepare_dispatch_8_end <= 0xE180, (
@@ -2571,7 +2614,24 @@ if _osp.exists("src/escbank8.bin"):
     ] == bytes(h8_zero_mask_gate_8 - rpb_prepare_dispatch_8_end), (
         "$C0BC prepared dispatcher overlapped the palette-mask shortcut"
     )
-    assert h8_zero_mask_gate_8 < h8_zero_mask_gate_8_end <= rmb_obj_prefilter_8
+    assert (
+        h8_zero_mask_gate_8
+        < h8_zero_mask_gate_8_end
+        <= rmb_obj_x_visible_8
+        == 0xE1A0
+        < rmb_obj_x_visible_8_end
+        <= rmb_obj_prefilter_8
+    )
+    assert ESC8[
+        h8_zero_mask_gate_8_end - 0x8000:rmb_obj_x_visible_8 - 0x8000
+    ] == bytes(rmb_obj_x_visible_8 - h8_zero_mask_gate_8_end), (
+        "zero-mask gate overlapped the credit-label X helper"
+    )
+    assert ESC8[
+        rmb_obj_x_visible_8_end - 0x8000:rmb_obj_prefilter_8 - 0x8000
+    ] == bytes(rmb_obj_prefilter_8 - rmb_obj_x_visible_8_end), (
+        "credit-label X helper overlapped the rejected OBJ prefilter island"
+    )
     assert rmb_obj_prefilter_8 == 0xE200
     assert rmb_obj_prefilter_8 < rmb_obj_prefilter_8_end <= render_bg_dirty_sparse_8
     assert render_bg_dirty_sparse_8 == 0xE280
@@ -2611,6 +2671,11 @@ if _osp.exists("src/escbank8.bin"):
         "six-byte OBJ scan no longer has eight audited packed-record calls"
     )
     assert ESC8[
+        rmb_obj_fast_scan_8 - 0x8000:rmb_obj_fast_scan_8_end - 0x8000
+    ].count(bytes.fromhex("c970")) == 8, (
+        "six-byte OBJ scan no longer admits all eight bottom-row credit slots"
+    )
+    assert ESC8[
         rmb_obj_fast_done_8 - 0x8000:rmb_obj_fast_scan_8_end - 0x8000
     ].endswith(bytes.fromhex("5cf6dd9e")), (
         "six-byte OBJ scan no longer rejoins the fixed manifest epilogue"
@@ -2623,7 +2688,8 @@ if _osp.exists("src/escbank8.bin"):
     assert render_bg_offset_table_8 == 0xE800
     assert render_bg_offset_table_8_end == 0xEC00
     for seam_start, seam_end, label in (
-        (h8_zero_mask_gate_8_end, rmb_obj_prefilter_8, "palette-mask -> OBJ prefilter"),
+        (h8_zero_mask_gate_8_end, rmb_obj_x_visible_8, "palette-mask -> credit X"),
+        (rmb_obj_x_visible_8_end, rmb_obj_prefilter_8, "credit X -> OBJ prefilter"),
         (rmb_obj_prefilter_8_end, render_bg_dirty_sparse_8, "OBJ prefilter -> exact BG list"),
         (render_bg_dirty_sparse_8_end, h158_ylist_stage_8, "exact BG list -> Y-list stage"),
         (h158_ylist_stage_8_end, rmb_obj_pack_8, "Y-list stage -> packed OBJ helper"),

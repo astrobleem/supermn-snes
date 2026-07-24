@@ -1,5 +1,12 @@
 # v132 title, crate, and right-edge response — July 23, 2026
 
+> **Superseded later on July 23:** the first human v132 run found brief title-glyph corruption,
+> a no-input attract freeze at `INSERT COIN`, and a clipped `CRE` credit label. Exact v133 repairs
+> those reproduced causes and adds the requested one-shot non-rotating boot zoom. Preserve the
+> bounded v132 crate/title-capacity/right-edge evidence below, but use
+> [V133_TITLE_ATTRACT_BOOT_20260723.md](V133_TITLE_ATTRACT_BOOT_20260723.md) and `RECOVERY.md` R13
+> for current project truth.
+
 ## Verdict
 
 The next human run supersedes v131's response-candidate label. The supplied v131 ROM still froze

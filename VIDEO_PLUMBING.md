@@ -7,12 +7,13 @@ running *blind*: every 68K write to a video/sprite hardware bank is currently a
 does with the video hardware, what I learned getting it alive, and the concrete
 plan + traps for the next phase.
 
-## Current correction: static SA-1 boot ownership (July 23, 2026)
+## Current correction: one-shot scale-only SA-1 boot ownership (July 23, 2026)
 
 The opening statement above describes the June bring-up and is historical: production now renders
 the game. Exact v130 replaced the long black SA-1/interpreter initialization interval with a
 temporary 5A22-owned Mode 7 activity screen, but its rotating shield made the tester dizzy.
-The v131 successor keeps Mode 7 ownership while making the logo completely static.
+v131 made the logo static. At the tester's request, v133 retains the no-rotation rule while adding
+one huge-to-fitted scale animation that never repeats.
 
 `tools/gen_boot_screen.py` deterministically creates a 32 KiB asset:
 
@@ -23,11 +24,11 @@ The v131 successor keeps Mode 7 ownership while making the logo completely stati
 | OBJ font tiles | `$6800` | `$1000` | static status text + heartbeat diamond |
 | OAM | `$7800` | `$0220` | 56 text sprites + one 8×8 activity sprite |
 | CGRAM | `$7C00` | `$0200` | boot palette |
-| Mode 7 A/B/C/D table | `$7E00` | `$0200` | 64 identical static matrices |
+| Mode 7 A/B/C/D table | `$7E00` | `$0200` | 64 monotonic scale-only identity matrices |
 
 The packer regenerates and places that asset at file `$300000-$307FFF` (5A22
 `$F0:0000-$7FFF`) and asserts every DMA seam plus SHA-256
-`fc39ed2f9176dc55fa7c1bc40c4ae716f3151a005f166f7d2c7cfc85bc08f616`.
+`e8d6b5f6c3d77d646eaa695c47d1e74c2c040a56e24d359fa067c3d749ea8734`.
 The 120×80, 92-color logo is a compact indexed derivative of the user-supplied
 `/home/chad/data/sa1-logo.png` (source SHA-256
 `091e5831c949a8c686e35ff8ba1e77fccd4bbbf0b6ed173c821bd9494516b3c6`; decoded
@@ -37,21 +38,25 @@ It contains no arcade graphics.
 
 `boot_screen_init` is fixed at `$E9:F000`. It forces blank only during one-time setup, DMAs the
 map/tiles/font/OAM/CGRAM, copies the matrix table to private WRAM `$7E:F100`, selects Mode 7 BG1 +
-OBJ, centers the matrix, and restores brightness 15. `$7E:1F1B` owns the active flag (bit 7) and
-seven-bit heartbeat phase. The WRAM-mirrored `boot_mode7_tick` runs once per NMI and changes only
-CGRAM color 131 between two amber values. It never updates M7A-D, so the logo and status text do
-not move. It does not touch the SA-1 scheduler or pretend to measure boot percentage.
+OBJ, starts A=D at `$0020`, centers the matrix, and restores brightness 15. `$7E:1F1B` bit 7 owns
+the screen, bit 6 latches completion, and its low six bits are the table/heartbeat phase. The
+WRAM-mirrored `boot_mode7_tick` runs once per NMI. During its first pass it increases A and D
+strictly to `$00C0`; B and C are zero in all 64 table entries, so the logo cannot rotate or shear.
+After entry 63, matrix updates stop permanently and only CGRAM color 131 alternates between two
+amber values for the small activity diamond. It does not touch the SA-1 scheduler or pretend to
+measure boot percentage.
 
 The first real game renderer clears `$1F1B` before claiming the display. In the fresh exact-Mesen
 2.1.1 capture
-`build/user-playtest-v105-investigation/v131-final-static-logo-mesen211-v1/`, frames 200 and 300
-differ only in bounding box `(228,192)-(236,200)`, the activity diamond's 8×8 box; the logo pixels
-are identical. Both frames remain Mode 7 at brightness 15, forced blank clear, and halt zero. A
-separate same-hash fresh boot reaches ordinary Mode 1 by frame 5,650 with the activity flag clear,
-halt zero, and advancing ticks/renders through frame 5,800. After clearing, NMI overhead is only
-the call and inactive-flag branch/return.
+`build/user-playtest-v105-investigation/v133-final-boot-zoom-mesen211-fresh-v1/`, exact-v133 frame
+17 is an extreme close-up, frame 50 is intermediate, and frame 86 is fitted and geometrically
+static afterward. All remain Mode 7 at brightness 15 with forced blank clear. The packer asserts
+the `$0020/$00C0` endpoints, A=D, B=C=0, and strict monotonicity. A same-ROM continuation from an
+exact-v133 fresh-power title checkpoint remains live through frame 9,000 / tick 1,726 /
+render 1,493. After game ownership clears bit 7, NMI overhead is only the call and inactive-flag
+branch/return.
 
-See `docs/handoff/V130_SECOND_PLAYTEST_20260723.md`. The status strings describe
+See `docs/handoff/V133_TITLE_ATTRACT_BOOT_20260723.md`. The status strings describe
 high-level liveness (`ROM LOADED`, `SA-1 68000 CORE ACTIVE`, `ARCADE BOOT IN PROGRESS`); they are
 not claims that a particular internal RAM/ROM test is active.
 

@@ -3,7 +3,41 @@
 Last updated: July 23, 2026. Per-area detail lives in the linked docs.
 **Start any new session at [RECOVERY.md](RECOVERY.md).**
 
-> ## ⚠️ R12 v131 HUMAN REJECTION / v132 RESPONSE — July 23, 2026
+> ## ⚠️ R13 v132 HUMAN REJECTION / v133 RESPONSE — July 23, 2026
+>
+> The first human v132 run rejected its response-candidate label. The title words were readable,
+> but briefly became pixelated about once per second; the no-input attract path stopped at
+> `INSERT COIN`; and only `CRE` of the credit label was visible.
+>
+> Exact v133 production SHA-256
+> `15465fe67b458eee08eeb2fe235362e5986378f22f60bf96b1d22e662a53cac5`
+> repairs three reproduced causes. Ordinary BG uploads had temporarily selected BG2 character
+> base `$0000` while the prior title frame remained visible; retaining `BG12NBA=$61` keeps the
+> title font at `$6000`. The prepared-background insertion sort used equality after starting Y at
+> two, so an empty list wrapped around the address space; its terminal is now unsigned
+> `Y >= length`. Finally, only bottom-row credit codes `$007D-$0080/$008B` at their exact Y/X
+> signature move left 48 pixels, leaving the established gameplay crop untouched.
+>
+> A stock-Mesen-2.1.1 fresh-power capture keeps the legal and credit nonblack masks identical in
+> 201/201 frames 5,700-5,900. A same-ROM continuation from that fresh-power checkpoint passes
+> v132's frame-7,910 /
+> tick-1,389 terminal and reaches frame 9,000 / tick 1,726 / completed render 1,493 with halt zero,
+> changing task masks and scenes through the demo and `GAME OVER`. Screenshots show complete
+> `CREDIT 0`.
+>
+> The temporary Mode 7 screen now performs the requested one-shot huge-to-fitted zoom. All 64
+> matrices are scale-only identities (A=D `$0020`→`$00C0`, B=C zero), so it cannot rotate or
+> shear; exact-Mesen frames 17/50/86 show huge/intermediate/fitted states. After settling, only the
+> small activity diamond pulses.
+>
+> These are title/idle-attract/boot results, not interactive stage, audio-listening, or FPS
+> evidence. v133 remains an **interactive technical-demo response candidate, not playable or
+> shippable**. Wrong attack-animation tiles, crate/silver-enemy/wall behavior on this hash, timbre,
+> renderer conservation, full stage/playthrough, and formal performance remain open. See
+> [RECOVERY.md](RECOVERY.md) R13 and
+> [the focused handoff](docs/handoff/V133_TITLE_ATTRACT_BOOT_20260723.md).
+
+> ## HISTORICAL R12 v131 HUMAN REJECTION / v132 RESPONSE — July 23, 2026 (SUPERSEDED BY R13)
 >
 > The next human run rejected the supplied v131 response candidate: throwing the crate still
 > froze, Superman disappeared at the visible right edge, and the title words were incoherent.
@@ -657,11 +691,11 @@ Driven by scripted states + a faithful **full beat-the-game playthrough** (your
 
 ## Recommended next steps
 
-**Current correction:** the historical throughput list below predates R6-R12 and is retained only
-as campaign history. The immediate playability work is to have the tester cold-boot exact v132 and
-verify its title, crate, and right-edge repairs; reproduce the exact charged-shot silver-enemy
-kill; run the first wall and crate path organically; judge the static boot and timbre; close
-renderer conservation; and only then rerun the formal power-on rate/budget gate.
+**Current correction:** the historical throughput list below predates R6-R13 and is retained only
+as campaign history. The immediate playability work is to have the tester cold-boot exact v133 and
+verify its title, attract, credit, and zoom repairs; reproduce the exact charged-shot silver-enemy
+kill; run the first wall and crate path organically; inspect attack-animation tiles; judge the
+timbre; close renderer conservation; and only then rerun the formal power-on rate/budget gate.
 
 The cold side (interpreter) and the hot side (automated transpiler + bridge + video
 codegen) are both built and validated. The remaining work is **throughput** — transpile

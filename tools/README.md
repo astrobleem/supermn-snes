@@ -119,13 +119,18 @@ See `STATUS.md` (June 29) + the `aot-dispatch-table` memory for the full design.
 - **`capture_mesen211_transitions.py`** [S] — fresh-power-on or named-state Mesen 2.1.1 frame
   capture for title/transition compatibility. It records exact ROM/emulator/controller provenance,
   screenshots, checkpoints, PPU Mode/brightness/forced-blank/layer state, the boot-activity byte,
-  halt/tick/render state, and a JSON manifest. It is visual compatibility evidence, never gameplay
+  halt/tick/render state, and a JSON manifest. For an explicitly checkpointed cross-version
+  renderer lab, `--refresh-video-mirror` replaces and verifies saved `$7F:8000-$AFFF` from the
+  selected ROM and records that intervention in provenance; it requires `--state`. The default
+  fresh-power path performs no memory write. This is visual compatibility evidence, never gameplay
   stability or FPS evidence.
 - **`gen_boot_screen.py`** [S] — deterministic 32 KiB Mode 7 SA-1 boot-screen generator. It embeds
-  a compact indexed derivative of the supplied SA-1 logo, static status text, and one
-  palette-pulsed 8x8 activity diamond. All 64 retained matrix entries are identical and NMI never
-  changes M7A-D. `build_interp_rom.py` regenerates and hash/layout-checks the asset before packing
-  it at file `$300000-$307FFF`; no arcade graphics are used.
+  a compact indexed derivative of the supplied SA-1 logo, static status text, one palette-pulsed
+  8x8 activity diamond, and 64 strictly increasing identity matrices for a one-shot
+  huge-to-fitted zoom. A=D `$0020`→`$00C0` and B=C=0, so there is no rotation or shear; NMI latches
+  the fitted state and never restarts the zoom. `build_interp_rom.py` regenerates and
+  hash/layout/matrix-checks the asset before packing it at file `$300000-$307FFF`; no arcade
+  graphics are used.
 - **`validate_bg_reconcile_helpers.py`** [S] — byte-oracle for the native background-list promote
   and revert helpers. It covers empty, compact, and full paths and specifically guards the
   zero-length flag-ordering bug that crossed BW-RAM mirrors at the first breakable wall.

@@ -127,6 +127,18 @@ def mismatch_summary(expected: bytes, observed: bytes) -> dict[str, object]:
     }
 
 
+def packed_x_word(sy: int, x_color: int, code_word: int) -> int | None:
+    """Apply the production crop and its exact bottom credit-row translation."""
+    sx = x_color & 0x01FF
+    code = code_word & 0x3FFF
+    credit_glyph = 0x007D <= code <= 0x0080 or code == 0x008B
+    if sy == 0x0A and credit_glyph and 0x0120 <= sx < 0x0170:
+        return (x_color - 0x0030) & 0xFFFF
+    if 0x0031 <= sx < 0x0140:
+        return x_color
+    return None
+
+
 def derive_source_records(m: McpSession) -> tuple[bytes, list[int]]:
     """Rebuild the exact ordered/capped producer result from coherent planes."""
     raw_y = bytes(m.read_memory("snesMemory", 0x413000, 0x0400))
@@ -138,19 +150,19 @@ def derive_source_records(m: McpSession) -> tuple[bytes, list[int]]:
         if not 0 < raw_y[offset + 1] < 0xF0:
             continue
         x_color = int.from_bytes(raw_x[offset : offset + 2], "big")
-        sx = x_color & 0x01FF
+        code = int.from_bytes(raw_code[offset : offset + 2], "big")
         # Centered 384->256 crop begins at arcade X=64. A 16px OBJ first
         # overlaps at raw X=49. X1-001 interprets bit 8 as sign and draws a
         # second 512px-wrapped copy, so raw $100-$13F covers arcade
         # X=256..319 and is the crop's visible right side.
-        if not 0x0031 <= sx < 0x0140:
+        packed_x = packed_x_word(raw_y[offset + 1], x_color, code)
+        if packed_x is None:
             continue
-        code = int.from_bytes(raw_code[offset : offset + 2], "big")
         if code == 0xFFFF or code & 0x3FFF == 0:
             continue
         records.extend(raw_y[offset : offset + 2])
         records.extend(raw_code[offset : offset + 2])
-        records.extend(raw_x[offset : offset + 2])
+        records.extend(packed_x.to_bytes(2, "big"))
         offsets.append(offset)
         if len(offsets) == 128:
             break

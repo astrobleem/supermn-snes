@@ -29,6 +29,17 @@ right boundary; and a final-ROM title checkpoint has six coherent lines. These r
 results. A human v132 cold-boot run, the exact charged silver-enemy kill, first wall, timbre,
 renderer conservation, full playthrough, and formal performance gates remain open.**
 
+**R13 accepts the human v132 rejection: the readable title glyphs briefly became corrupted, the
+no-input attract path stopped at `INSERT COIN`, and the centered crop showed only `CRE` of the
+credit label. Exact v133 keeps the title BG2 character base live during ordinary BG uploads,
+repairs a zero-length prepared-background insertion-sort terminal, and applies a signature-tight
+48-pixel translation only to the bottom credit glyphs. A stock-Mesen-2.1.1 fresh-power lineage
+keeps all 201 sampled title/credit masks stable and advances through the old frame-7,910 terminal
+to frame 9,000 / tick 1,726 / render 1,493 at halt zero. Its Mode 7 boot performs the requested
+one-shot non-rotating huge-to-fitted zoom. These are bounded title/attract/presentation results;
+human gameplay/audio, renderer conservation, full playthrough, and formal performance remain
+open.**
+
 ## Canonical repository state
 
 - Historical recovery base: `origin/main` at PR #15 merge `73f1839`.
@@ -39,7 +50,8 @@ renderer conservation, full playthrough, and formal performance gates remain ope
   `7c4b757d…`; first-wall/octave-sample v129 is `8f240332…`; combined wall/audio/Mode-7 v130
   is the human-rejected `1ec22cbc…`; the v131 second-playtest response candidate is
   human-rejected `be0ed971…`; the v132 title/crate/right-edge response candidate is
-  `48d7c4d6…`.
+  human-rejected `48d7c4d6…`; and the current v133 title/attract/boot response candidate is
+  `15465fe6…`.
 - Recovered truth documents: root `CONFESSION.md` and `AGENTS.md`.
 - Old local tips and the unique stash are preserved as local `archive/*-pre-recovery-20260712`
   refs. Nothing has been deleted.
@@ -107,6 +119,12 @@ dirty `main` worktree identified above.
   variants; and the exact-Mesen production replay advances past the old freeze with valid stacks.
   Separate final-ROM exact-Mesen captures show coherent title text and a retained far-right player
   sprite. These are function/checkpoint results, not cold-boot stage stability or performance.
+- R13's exact v133 focused evidence: a stock-Mesen-2.1.1 power-on lineage keeps the legal and credit
+  nonblack masks stable for 201/201 title frames, passes v132's frame-7,910/tick-1,389 attract
+  terminal, and remains live through frame 9,000 / tick 1,726 / completed render 1,493 at halt
+  zero. A separate fresh-power capture shows the scale-only Mode 7 boot at huge, intermediate, and
+  fitted sizes. This is title/idle-attract/boot evidence, not interactive stage or performance
+  evidence.
 
 ### Partial evidence, not a project-level verdict
 
@@ -122,10 +140,10 @@ dirty `main` worktree identified above.
   test. v124 repaired those combat failures but froze on charged-shot release and missed both
   formal 30 Hz thresholds. v127 repaired the demonstrated freeze. The user confirmed v128's
   recorded Mesen title/transition/charged-shot/music regressions, then exposed the first-wall crash.
-  v130 repairs that focused wall path and adds the octave/boot work; v131/v132 add bounded
-  renderer/crate/title corrections. Exact v132 still inherits the red burst-render conservation
-  result and has passed neither a human cold-boot retest, a full-stage/full-playthrough test, nor a
-  new formal rate/budget run.
+  v130 repairs that focused wall path and adds the octave/boot work; v131/v132/v133 add bounded
+  renderer/crate/title/attract corrections. Exact v133 still inherits the red burst-render
+  conservation result and has passed neither a human gameplay retest, a full-stage/full-playthrough
+  test, nor a new formal rate/budget run.
 - Exact aligned same-state MAME graphics fidelity. R6 retains a long-settle canonical Nexen
   capture, but it is not yet paired to an arcade-oracle frame for a pixel verdict.
 - Complete/faithful sound by ear. The user now identifies excessive sample transposition as a
@@ -1089,13 +1107,114 @@ killing a silver enemy, first wall on this hash, timbre, renderer conservation, 
 pixels, full stage/playthrough, and formal performance remain open. The correct label remains
 **interactive technical demo, not playable or shippable**.
 
+### R13 — v132 title/attract rejection and non-rotating zoom response
+
+#### Human v132 correction
+
+The first exact-v132 human run supersedes R12's response-candidate verdict. The legal text was now
+readable, but briefly became pixelated about once per second. With no input, attract music began
+and the game then froze on `INSERT COIN`. The lower-right counter was also clipped to `CRE`. The
+tester requested that the temporary SA-1 Mode 7 screen start with a very large logo and shrink,
+without restoring the rotation that caused dizziness.
+
+#### Title BG2 register ownership
+
+The v132 framewise reproduction showed that the title font, tilemap, source palette, staged
+palette, and live CGRAM were byte-stable during the corrupt frame. The actual transient was
+`BG12NBA`: ordinary `bg_upload` selected `$01` while the previous completed BG2 title remained
+visible, so BG2 temporarily read character base `$0000` instead of its font at `$6000`. The title
+overlay restored `$61` only when the next multi-video-frame render completed.
+
+The ordinary uploader now retains `$61` throughout. In the exact-v133 stock-Mesen-2.1.1
+fresh-power capture, every frame from 5,700 through 5,900 remains visible at brightness 15 and halt
+zero. Tick advances 285→385 and completed render 264→349. The legal rows and credit region each
+have one identical nonblack-pixel mask across all 201/201 frames, including the formerly corrupt
+frame 5,756. Whole-screen one-pixel variants are confined to the title sparkle.
+
+#### Empty prepared-background sort
+
+The rejected v132 idle-attract capture stops around frame 7,910 at tick 1,389 / completed render
+1,170 with halt zero, task mask `$4003`, and physical SA-1 PC `$9E:DF9F` in
+`rpb_sort_shift`. `rpb_sort_outer` initialized Y to two, then used equality against the byte length
+at `$0146`. For a zero-length prepared background, Y had already passed the terminal and the
+insertion sort wrapped through the 16-bit address space. MAME 0.287 continued changing state
+through the corresponding no-input interval, so this was a port-side terminal error.
+
+The terminal is now unsigned `Y >= length` (`BCS`), which also correctly treats one-entry lists as
+already sorted. ROM packing asserts the exact comparison/branch bytes. The exact-v133
+fresh-power lineage continues from the title through the old terminal:
+
+| Video frame | Game tick | Completed render | Halt | Task mask |
+|---:|---:|---:|---:|---:|
+| 7,910 | 1,389 | 1,171 | `$0000` | `$4003` |
+| 7,940 | 1,405 | 1,187 | `$0000` | `$4003` |
+| 9,000 | 1,726 | 1,493 | `$0000` | `$FDFF` |
+
+The screenshots advance from `INSERT COIN` into the demo and `GAME OVER`; this is a bounded
+no-input attract result, not a playthrough.
+
+#### Credit-label exception
+
+The established centered crop keeps ordinary raw X `$031-$13F`. The title credit records instead
+place codes `$007D-$0080/$008B` at bottom-row Y `$0A`, raw X `$120-$160`; the crop therefore
+discarded the latter glyphs. Only those code/Y/X signatures now move left 48 pixels while being
+packed. Adjacent solid-border records and every ordinary title/gameplay object retain the existing
+crop. The exact title and attract screenshots show complete `CREDIT 0`, with the final digit at
+screen X 249..254. All three Python renderer oracles pass the same 6/6 focused
+credit/adjacent/gameplay/boundary cases.
+
+#### One-shot Mode 7 zoom
+
+The generated boot matrix table now contains 64 strictly increasing identity matrices from
+A=D=`$0020` to A=D=`$00C0`; B=C=0 in every entry. NMI consumes the table once, latches the fitted
+state, and never restarts it. The activity diamond's palette pulse continues after the logo
+settles. The final boot asset SHA-256 is
+`e8d6b5f6c3d77d646eaa695c47d1e74c2c040a56e24d359fa067c3d749ea8734`.
+
+An exact-v133 fresh-power Mesen capture shows an extreme close-up at frame 17, an intermediate
+size at frame 50, and the fitted static logo by frame 86. The packer asserts both matrix endpoints,
+all zero off-diagonal coefficients, strict monotonicity, and code/data seams.
+
+#### Exact v133 evidence and remaining target
+
+Exact v133 response-candidate production SHA-256:
+`15465fe67b458eee08eeb2fe235362e5986378f22f60bf96b1d22e662a53cac5`.
+
+| Gate | Exact-v133 result |
+|---|---:|
+| Production build/layout | 4 MiB ROM; pack/layout assertions green |
+| Fresh title framewise capture | 201 frames; legal/credit masks stable 201/201; halt `$0000` |
+| Fresh-lineage idle attract | frame 5,900→9,000; tick 385→1,726; render 349→1,493; halt `$0000` |
+| Old v132 terminal | passed at frame 7,910 / tick 1,389; continued scenes/ticks/renders |
+| Credit predicate | 6/6 focused cases in each of three renderer validators |
+| Fresh Mode 7 zoom | frames 17/50/86 show huge/intermediate/fitted; no rotation |
+| Formal FPS / interactive stage / audio listening | not run |
+
+Primary evidence:
+
+- `build/user-playtest-v105-investigation/v132-human-reject-title-framewise-v1/`
+- `build/user-playtest-v105-investigation/v132-human-reject-idle-attract-coarse-v1/`
+- `build/user-playtest-v105-investigation/v133-final-fresh-title-mesen211-v1/`
+- `build/user-playtest-v105-investigation/v133-final-fresh-lineage-attract-mesen211-v1/`
+- `build/user-playtest-v105-investigation/v133-final-boot-zoom-mesen211-fresh-v1/`
+- `docs/handoff/V133_TITLE_ATTRACT_BOOT_20260723.md`
+
+#### R13 verdict
+
+v133 supersedes human-rejected v132 only as the current **response candidate**. The demonstrated
+brief title corruption, idle-attract terminal, credit clipping, and requested non-rotating zoom
+have bounded exact-Mesen evidence. Wrong player-animation tiles, crate/silver-enemy/wall behavior
+on this hash, musical fidelity, renderer conservation, aligned MAME pixels, a complete
+stage/playthrough, and formal performance remain open. The correct label remains **interactive
+technical demo, not playable or shippable**.
+
 ## Decision rule after the baseline
 
-R12 supersedes R11's v131-response verdict while preserving R7's exact v124 formal performance
-evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10/R11's bounded
-wall/audio/boot/cache evidence. Preserve the production evidence contract: local/checkpoint
-improvements remain local evidence, while a new playability claim requires another power-on
-uninterrupted run plus a human combat/audio playtest. Continue under the honest label
-**interactive technical demo, not playable or shippable**. v132 is the current response candidate;
-do not resurrect human-rejected v130/v131, the rejected pre-wake DMA ordering, v125/v126, or
-project a local result into FPS.
+R13 supersedes R12's v132-response verdict while preserving R7's exact v124 formal performance
+evidence, R8's charged-shot diagnosis, R9's renderer-conservation failure, and R10-R12's bounded
+wall/audio/boot/cache/title evidence. Preserve the production evidence contract:
+local/checkpointed/idle-attract improvements remain scoped evidence, while a new playability claim
+requires another power-on uninterrupted gameplay run plus a human combat/audio playtest. Continue
+under the honest label **interactive technical demo, not playable or shippable**. v133 is the
+current response candidate; do not resurrect human-rejected v130/v131/v132, the rejected pre-wake
+DMA ordering, v125/v126, or project a local result into FPS.
