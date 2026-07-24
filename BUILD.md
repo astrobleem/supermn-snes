@@ -1,12 +1,16 @@
 # BUILD — toolchain, dependencies, and migration guide
 
-Last updated: July 12, 2026. **Read this before migrating to a new machine/workspace.**
+Last updated: July 24, 2026. **Read this before migrating to a new machine/workspace.**
 
 > ⚠️ **Honest status:** the git repo carries only *source* (the 65816 interpreter/video, the
 > Python tools, docs). The **build toolchain, the arcade ROM + everything derived from it, and the
-> build outputs are NOT in git**, and the tools are wired with **hardcoded `/home/chad/...` paths**
-> (and a hardcoded `/home/chad/supermn-snes` working dir). A fresh checkout does **not** build until
-> the external toolchain is recreated and the paths are fixed. See **[Migration](#migration-checklist)**.
+> build outputs are NOT in git**. `tools/prepare_roms.py` now reproducibly creates the three direct
+> binary inputs and 12 ADPCM-A drum WAVs from an authenticated World ROM set with configurable
+> paths. The wider build/harness toolchain still contains **hardcoded `/home/chad/...` paths**, and
+> the exact private FM authoring WAVs are not reproducible from the ROM set alone. A fresh checkout
+> therefore still needs the external toolchain, path configuration, and the preserved FM authoring
+> set before it can rebuild the current audio blob. See **[Migration](#migration-checklist)** and
+> [docs/PREPARE_ROMS.md](docs/PREPARE_ROMS.md).
 
 ---
 
@@ -20,6 +24,8 @@ Last updated: July 12, 2026. **Read this before migrating to a new machine/works
 | 68K program image | ❌ gitignored | `data/superman_m68k.bin` (512 KB) | derived from the ROM set |
 | Arcade tile ROM | ❌ gitignored | `tools/mame-trace/gfx1.bin` (2 MB) | derived from the ROM set |
 | C-Chip boot response | ❌ gitignored | `data/cchip_boot_response.bin` (256 B) | captured from MAME |
+| ADPCM-A drum WAVs | ❌ gitignored | `soundwork/tad/mml_drafts/instruments/sm_drum_*.wav` | 12 files derived exactly from `b61-01.e18` |
+| FM authoring WAVs | ❌ gitignored | `soundwork/tad/mml_drafts/instruments/fm_p*.wav` | 45 project-referenced files; external VGM/ymfm authoring inputs still required |
 
 ## External toolchain (NONE of this is in git — recreate on migration)
 
@@ -62,6 +68,9 @@ project source, private-derived inputs, recovery evidence, and critical hashes w
 ## Build commands
 
 ```sh
+# 0. Authenticate your legal World set and prepare all reproducible private inputs:
+python3 tools/prepare_roms.py /path/to/superman.zip
+
 # 1. Assemble interp + video + pack the 4MB SA-1 ROM (the main build):
 bash tools/build_interp.sh        # -> build/interp.sfc (32KB interp + 68K image + gfx + video
                                   #    + the TAD audio blob: soundwork/tad/build_blob.sh runs
@@ -97,14 +106,24 @@ override/repair old Nexen defaults before running it.
 
 ## Re-deriving the gitignored assets from the arcade ROM
 
-Supply your own legal Superman (Taito X) ROM set (the `b61-*` files), then:
-- **`data/superman_m68k.bin`** (512 KB 68K image): `tools/build_m68k_rom.py` /
-  `tools/determine_interleave.py` interleave the four 128 KB program ROMs
-  (`b61_09.a10`/`b61_07.a5`/`b61_08.a8`/`b61_13.a3`, even/odd word-swapped).
-- **`tools/mame-trace/gfx1.bin`** (2 MB tiles): from `b61-14/15/16/17` (plane-interleaved, see
-  `tools/build_m68k_rom.py` header comment for the exact layout).
-- **`data/cchip_boot_response.bin`** (256 B): captured from MAME's C-Chip boot (see
-  `CCHIP_BOOT_HANDSHAKE.md`).
+Supply your own legal MAME `superman` (World) ROM set as a ZIP or directory:
+
+```sh
+python3 tools/prepare_roms.py /path/to/superman.zip
+python3 tools/prepare_roms.py /path/to/superman.zip --dry-run
+python3 tools/prepare_roms.py /path/to/superman.zip --validate-only
+```
+
+This single entry point validates all 12 ROMs by filename, size, SHA-1, and SHA-256;
+rejects the US/Japan clones, duplicates, missing files, and bad dumps; then generates
+and SHA-256-verifies `data/superman_m68k.bin`, `tools/mame-trace/gfx1.bin`,
+`data/cchip_boot_response.bin`, and the 12 `sm_drum_*.wav` inputs. MAME 0.287 is
+required for the organic C-Chip response capture. Exact layouts, hashes, modes, legal
+boundaries, and the remaining FM-sample limitation are in
+[docs/PREPARE_ROMS.md](docs/PREPARE_ROMS.md).
+
+The older extraction scripts remain as historical references; do not use their
+hardcoded paths as the migration workflow.
 
 ## Migration checklist
 
@@ -112,9 +131,10 @@ When moving off this failing drive (the July 12 recovery copy is already under
 `/mnt/sdc1/supermn-host-recovery-20260712/`):
 
 1. **`git clone`** the repo (carries all source + docs). Build outputs regenerate.
-2. **Copy, don't lose** (NOT in git): the arcade ROM set (`/home/chad/superman-arcade/`), and the
-   derived assets `data/superman_m68k.bin`, `tools/mame-trace/gfx1.bin`,
-   `data/cchip_boot_response.bin` — OR re-derive them (above). Also worth copying: the
+2. **Copy, don't lose** (NOT in git): the arcade ROM set, then run
+   `python3 tools/prepare_roms.py /path/to/set` to regenerate the direct binary inputs and drums.
+   Preserve the current private `fm_p*.wav` authoring set separately until its exact source
+   pipeline is made self-contained. Also worth copying: the
    `$SUPERMN_SCRATCH` flytick/MAME-state captures (slow to re-record). NOTE: the MAME-0.287
    playthrough recordings (`inp/superman_play.inp`, `inp/vplay.inp`) ARE in git now; old
    cross-version recordings (0.185/0.193) were deleted (won't replay on 0.287).
@@ -134,6 +154,9 @@ When moving off this failing drive (the July 12 recovery copy is already under
    then `python3 tools/opsweep.py` (expect 782/782).
 
 ## Known fragility / follow-ups (honest)
+- **Exact FM authoring WAV regeneration remains open.** The ROM preparer exactly rebuilds the
+  direct binaries and drums, but the current 45 FM WAVs still depend on external VGM capture/ymfm
+  authoring inputs. Without them, a fresh clone cannot regenerate the current TAD audio blob.
 - **Hardcoded paths are the core migration risk** — ~120 references to `/home/chad/.dotnet8` alone,
   scattered across `tools/*.py` + `tools/*.sh`. A worthwhile (deferred) hardening: route them
   through env vars (`DOTNET8_ROOT`, `MESEN_BIN`, `MESEN_PY`, `POPPY_DLL`, `MAME_BIN`) with the

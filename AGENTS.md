@@ -171,6 +171,12 @@ derived, gitignored inputs unless the user explicitly asks to regenerate them:
 - `tools/mame-trace/gfx1.bin` (2 MiB)
 - `data/cchip_boot_response.bin` (256 bytes)
 
+Use `python3 tools/prepare_roms.py /path/to/superman.zip` to authenticate the supported
+World set and reproduce those three files plus the 12 project-referenced ADPCM-A drum
+WAVs. The exact FM authoring WAV set remains a separate private sound-pipeline input;
+see `docs/PREPARE_ROMS.md`. Never substitute placeholder FM samples and call the result
+equivalent.
+
 Generated outputs and captures may be valuable evidence. Do not delete or overwrite them casually.
 
 ## Toolchain on this host

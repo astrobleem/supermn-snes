@@ -5,6 +5,17 @@ What each tool does and how reusable it is for the **next** game. See
 **[G]** game-agnostic · **[P]** parameterized (env/args) · **[S]** Superman-specific
 (swap addresses/input-field names to reuse).
 
+## Private-input preparation
+
+- **`prepare_roms.py`** [S/P] — the supported user entry point for a legally obtained
+  MAME `superman` World set supplied as a ZIP or directory. It authenticates all 12
+  ROMs by filename/size/SHA-1/SHA-256, rejects clones and ambiguity, reproduces the
+  68K image, MAME-layout graphics image, organic C-Chip response, and 12 ADPCM-A drum
+  WAVs, then verifies every output by pinned size/SHA-256 before atomic writes.
+  Supports `--dry-run`, `--validate-only`, `--output-root`, and `--mame`. See
+  `../docs/PREPARE_ROMS.md`; exact FM authoring WAV regeneration remains outside this
+  ROM-only path.
+
 ## Tracing & coverage (gate G1)
 - **`mame-trace/trace68k.lua`** [G] — headless 68K PC+disasm trace
   (`-debug -debugger none`). env `T68K_OUT/START/FRAMES`.
@@ -36,7 +47,10 @@ What each tool does and how reusable it is for the **next** game. See
   conventions** (see `aot-dispatch-table` memory): default = jsr-hook (re-simulate
   the skipped return-push); `--coroutine` = no push, decode ends at the yield bra;
   `--table` = no push, faithful link/unlk/rts, for AOT/xlat dispatch where the real
-  return is already on the stack at a materialized boundary.
+  return is already on the stack at a materialized boundary. Decode bytes come from
+  `data/superman_m68k.bin` so a first build no longer requires an older
+  `build/interp.sfc`; a matching packed-ROM fallback and `SUPERMN_TRANSPILE_ROM`
+  override remain available.
 - **`stream_profile.py`** [P/S] — in-game hot-function profile from the interp's
   per-frame PC stream (MAME can't reach gameplay under `-debug`). Injects a gameplay
   tick, enables PC streaming (`$0718=0`), histograms by 64-byte function-region. The

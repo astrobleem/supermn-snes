@@ -124,6 +124,10 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 - **[STATUS.md](STATUS.md)** — detailed historical state (superseded where noted)
 - **[ROADMAP.md](ROADMAP.md)** — next steps and milestones
 - **[BUILD.md](BUILD.md)** — toolchain (the "Game Garden" suite: Poppy/Peony), dependencies, and **migration guide**
+- **[docs/PREPARE_ROMS.md](docs/PREPARE_ROMS.md)** — authenticated ROM-set preparation,
+  exact private-output hashes, dry-run/validation modes, and legal boundary
+- **[docs/handoff/ROM_PREPARATION_TOOL_20260724.md](docs/handoff/ROM_PREPARATION_TOOL_20260724.md)**
+  — byte-identity, synthetic-test, fresh-tree build, and remaining-input report
 - **[METHODOLOGY.md](METHODOLOGY.md)** — the reusable arcade→SNES recipe
 - **[TRANSPILER_DESIGN.md](TRANSPILER_DESIGN.md)** — 68K→SA-1 lowering decisions
 - **[INTERPRETER_SPIKE.md](INTERPRETER_SPIKE.md)** — interpreter design & validation
@@ -135,8 +139,15 @@ ground truth directly via `tools/val_cc10_mame.py`). See
 
 > Requires a legally-obtained Superman arcade ROM set (not distributed here).
 
-1. Place the ROM set where the tools expect it (extract the 68K image to
-   `data/superman_m68k.bin`; see `tools/build_interp_rom.py`).
+1. Authenticate the supported World set and generate the reproducible private inputs:
+   ```sh
+   python3 tools/prepare_roms.py /path/to/superman.zip
+   ```
+   The preparer accepts a ZIP or directory, verifies every input and output, captures
+   the C-Chip response through MAME 0.287, and supports `--dry-run` and
+   `--validate-only`. See [docs/PREPARE_ROMS.md](docs/PREPARE_ROMS.md). The exact FM
+   authoring WAVs remain a separately preserved sound-pipeline input; the tool does not
+   silently substitute placeholder audio.
 2. Toolchain: Poppy, Python 3, MAME 0.287 (arcade oracle), and the MCP-enabled Nexen
    fork with the shared `mesen_mcp` Python client (SNES/SA-1/PPU validation).
 3. Build the interpreter ROM:

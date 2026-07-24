@@ -17,11 +17,78 @@ rdw40 for frame pointers (a6/a7, always work RAM) and rdw_ea (ROM/IO/work-RAM-aw
 Usage: tools/transpile.py <hex-entry>          # e.g. tools/transpile.py 000CE4
 Fail-loud: any unhandled op/mode/out-of-fn branch/indirect/IO -> raise (never emit wrong code).
 """
-import sys, re
+import os
+import re
+import sys
+from pathlib import Path
+
 import capstone
 
-ROM = open('build/interp.sfc', 'rb').read()
-IMG = 0x10000                                  # 68K ROM at file offset $10000
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_arcade_image():
+    """Load decode bytes without requiring a previously built SNES ROM.
+
+    A fresh build has ``data/superman_m68k.bin`` but cannot yet have
+    ``build/interp.sfc``.  Historically this transpiler opened the latter
+    unconditionally, creating a circular first-build dependency when escape
+    banks regenerated their bodies.  Retain packed-ROM compatibility for
+    standalone use and allow an explicit override for lab workflows.
+    """
+
+    override = os.environ.get("SUPERMN_TRANSPILE_ROM")
+    if override:
+        path = Path(override).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        if not path.is_file():
+            raise SystemExit(f"SUPERMN_TRANSPILE_ROM does not name a file: {path}")
+        data = path.read_bytes()
+        if len(data) == 0x80000:
+            return data, 0
+        if len(data) >= 0x90000:
+            return data, 0x10000
+        raise SystemExit(
+            f"SUPERMN_TRANSPILE_ROM must be a 512 KiB raw 68K image or "
+            f"a packed ROM of at least 576 KiB; got {len(data)} bytes from {path}"
+        )
+
+    raw_path = ROOT / "data/superman_m68k.bin"
+    packed_path = ROOT / "build/interp.sfc"
+    if raw_path.is_file():
+        raw = raw_path.read_bytes()
+        if len(raw) != 0x80000:
+            raise SystemExit(
+                f"expected {raw_path} to be 524288 bytes, got {len(raw)}"
+            )
+        if packed_path.is_file():
+            packed = packed_path.read_bytes()
+            if len(packed) < 0x90000:
+                raise SystemExit(
+                    f"existing {packed_path} is too small ({len(packed)} bytes)"
+                )
+            if packed[0x10000:0x90000] != raw:
+                raise SystemExit(
+                    f"{packed_path} contains a different 68K image than {raw_path}; "
+                    "remove or rebuild the stale packed ROM"
+                )
+        return raw, 0
+    if packed_path.is_file():
+        packed = packed_path.read_bytes()
+        if len(packed) < 0x90000:
+            raise SystemExit(
+                f"existing {packed_path} is too small ({len(packed)} bytes)"
+            )
+        return packed, 0x10000
+    raise SystemExit(
+        "no 68000 decode image found; run tools/prepare_roms.py first "
+        "or set SUPERMN_TRANSPILE_ROM"
+    )
+
+
+ROM, IMG = load_arcade_image()
 CODE_BASE = None                               # optional RAM/C-Chip code override for decode only
 CODE_BYTES = b''
 MD = capstone.Cs(capstone.CS_ARCH_M68K, capstone.CS_MODE_BIG_ENDIAN)
