@@ -31,8 +31,12 @@ in and assert on the memory written.
 """
 import os, sys, subprocess, tempfile, re
 
+from mame_0287 import MAME as MAME_0287
+from mame_0287 import environment as mame_environment
+from mame_0287 import identity as mame_identity
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MAME = "/snap/bin/mame"
+MAME = str(MAME_0287)
 ROMPATH = os.path.join(REPO, "tools/mame-trace/roms")
 NVRAM = os.path.join(REPO, ".mame_mcp/nvram")
 CFG = os.path.join(REPO, ".mame_mcp/cfg")
@@ -156,7 +160,7 @@ end)
          "-nothrottle","-skip_gameinfo","-seconds_to_run",str(secs),
          "-autoboot_script",script,"-autoboot_delay","0",
          "-nvram_directory",NVRAM,"-cfg_directory",CFG]
-    env=os.environ.copy()
+    env=mame_environment(os.environ)
     env.setdefault("SDL_VIDEODRIVER","dummy"); env.setdefault("SDL_AUDIODRIVER","dummy")
     try:
         subprocess.run(cmd, cwd=REPO, capture_output=True, timeout=secs+30, env=env)
@@ -354,6 +358,7 @@ def run_test(name, opwords, oplen, vecs, check_regs, check_ccr=True,
 
 # ---------------------------------------------------------------------------
 if __name__=="__main__":
+    print(f"MAME oracle: {mame_identity()}", flush=True)
     r=[]
     # Harness sanity: CMPI.W #$0003,D0 (uses verified subflags_w).
     r.append(run_test("CMPI.W #3,D0", [0x0C40,0x0003], 4,

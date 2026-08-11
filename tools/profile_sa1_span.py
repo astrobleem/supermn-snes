@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import validate_gameplay_controls as controls
+import validate_render_helpers as base
 
 
 def integer(value: str) -> int:
@@ -67,18 +68,23 @@ def main() -> int:
     args.output.mkdir(parents=True)
 
     events: list[dict[str, int | str]] = []
-    with controls.McpSession(
-        rom=args.rom.resolve(),
-        mesen=args.nexen.resolve(),
+    # ``mesen_mcp.McpSession`` only connects to an already-running server;
+    # that made this otherwise useful profiler fail before launching Nexen.
+    # Reuse the project launcher used by the exact Stage-3 validators.
+    with base.McpSession(
+        rom=str(args.rom.resolve()),
+        mesen=str(args.nexen.resolve()),
         cwd=ROOT,
         port=args.port,
-        boot_wait=6.0,
+        boot_wait=8.0,
         socket_timeout=300.0,
         stderr_log=args.output / "nexen.stderr.log",
     ) as session:
         session.pause()
         session.load_state(args.state.resolve())
         session.pause()
+        initial = controls.snapshot(session, "initial")
+        controls.require_healthy("initial", initial)
         handles = {
             session.add_exec_hook(args.entry, cpu_type="Sa1"): "entry",
             session.add_exec_hook(args.exit_address, cpu_type="Sa1"): "exit",
@@ -158,6 +164,7 @@ def main() -> int:
         "unfinished_entry": active is not None,
         "cycles": summarize([span["cycles"] for span in spans]),
         "spans": spans,
+        "initial": initial,
         "final": final,
         "hooks": {"path": str(raw_path), "sha256": sha256(raw_path)},
     }

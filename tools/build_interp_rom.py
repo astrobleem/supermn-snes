@@ -50,6 +50,23 @@ assert INTERP[0x5360:0x5372] == bytes.fromhex(
     "c9e4f2d009a5548540685c00c09d4c50e400"
 ), "the packed $01F2E4 -> $9D:C000 dispatch arm changed or overlapped $25110"
 
+entry_ce4 = interp_symbol("entry_ce4")
+entry_ce4_after_counter = interp_symbol("entry_ce4_after_counter")
+assert (
+    entry_ce4_after_counter == entry_ce4 + 5
+), "$CE4 leaf residue return moved from its size-neutral five-byte seam"
+assert INTERP[
+    entry_ce4 - 0x8000:entry_ce4_after_counter - 0x8000
+] == bytes.fromhex("5c00ca94ea"), (
+    "$CE4 leaf no longer redirects size-neutrally to $94:CA00"
+)
+rdw_ea_l = interp_symbol("rdw_ea_l")
+readbyte_l = interp_symbol("readbyte_l")
+assert rdw_ea_l == 0xE5B2 and readbyte_l == 0xE5B6
+assert INTERP[rdw_ea_l - 0x8000:readbyte_l - 0x8000] == bytes.fromhex(
+    "5c00eb9f"
+), "rdw_ea_l no longer redirects size-neutrally to $9F:EB00"
+
 # $0020E8 is itself packed through the old $F400 overlap zone.  Its hot-loop
 # seam replaces exactly `lda $00; sta $80` with a four-byte long jump; any
 # address or byte drift can silently land on the guard-failure trampoline.
@@ -78,6 +95,25 @@ assert INTERP[0x1428:0x1430] == bytes.fromhex("5c408f7f5c008f7f"), (
 )
 assert INTERP[0x75A3:0x75A6] == bytes.fromhex("ee6007"), (
     "the real $0818 INC $0760 boundary moved from $00:F5A3"
+)
+assert interp_symbol("lh_0818_after_gateway") == 0xF59B
+assert INTERP[0x7597:0x759D] == bytes.fromhex("5cb0fb999009"), (
+    "$0818 loop hook lost its size-neutral bank-$99 fallback gateway/BCC seam"
+)
+lh_sched = interp_symbol("lh_sched")
+lh_sched_end = interp_symbol("lh_sched_end")
+assert lh_sched == 0xF9B2 and lh_sched < lh_sched_end <= 0xFA00, (
+    "native scheduler scan moved or crossed the fixed $FA00 opcode seam"
+)
+assert INTERP[lh_sched - 0x8000:lh_sched - 0x8000 + 7] == bytes.fromhex(
+    "ad3607d0021860"
+), "native scheduler scan lost its zero-select-gate interpreter fallback"
+assert INTERP[lh_sched_end - 0x8000:0x7A00] == bytes(
+    0xFA00 - lh_sched_end
+), "native scheduler scan consumed the zero seam before op_move_g@$00:FA00"
+assert interp_symbol("iloop") == 0x80A5
+assert INTERP[0x00AC:0x00B1] == bytes.fromhex("22c0e597ea"), (
+    "packed virtual-IRQ reload no longer calls campaign_irq_reload@$97:E5C0"
 )
 # readbyte deliberately reuses the store mapper to translate video-shadow
 # addresses.  The bank-$9E publisher distinguishes that read by the exact JSR
@@ -152,6 +188,60 @@ def build_snes_tile_blob(gfx: bytes) -> bytes:
     assert hashlib.sha256(result).hexdigest() == (
         "991a34a8fc6984048bf9bd29d9d5dc697f6c48885105fca0f6c778020c16a329"
     ), "SNES-native graphics permutation changed; re-run the 128/128 oracle"
+    return result
+
+
+def make_credit_tiles_transparent(snes_gfx: bytes) -> bytes:
+    """Remove the arcade credit label's painted-black background.
+
+    Logical OBJ codes $007D-$0080 spell the four wide ``CREDIT`` chunks used
+    by the bottom HUD.  Their source art uses palette index 15 for the black
+    arcade backdrop instead of transparent index 0.  That was harmless over
+    the arcade's black overscan, but after the centered SNES crop moved the
+    label over live artwork it became an opaque rectangle.
+
+    Patch only pixels whose complete native 4bpp value is 15, and only in
+    those four derived tile records.  White glyph pixels (index 1), every
+    other palette index, and the authenticated private graphics input remain
+    unchanged.
+    """
+
+    output = bytearray(snes_gfx)
+    changed_by_code: dict[int, int] = {}
+    for code in range(0x007D, 0x0081):
+        changed = 0
+        record = code * 0x80
+        for quadrant in range(4):
+            tile = record + quadrant * 0x20
+            for row in range(8):
+                planes = (
+                    tile + row * 2,
+                    tile + row * 2 + 1,
+                    tile + 0x10 + row * 2,
+                    tile + 0x11 + row * 2,
+                )
+                index15 = (
+                    output[planes[0]]
+                    & output[planes[1]]
+                    & output[planes[2]]
+                    & output[planes[3]]
+                )
+                changed += index15.bit_count()
+                keep = 0xFF ^ index15
+                for plane in planes:
+                    output[plane] &= keep
+        changed_by_code[code] = changed
+
+    assert changed_by_code == {
+        0x007D: 234,
+        0x007E: 194,
+        0x007F: 204,
+        0x0080: 238,
+    }, "credit-label pixel shape changed; re-audit the transparent-HUD patch"
+    result = bytes(output)
+    assert hashlib.sha256(result).hexdigest() == (
+        "1a5b137302ccff5bebd9ea307a166cc7e7ba75d867991e84ea2ee899686689a5"
+    ), "transparent credit-tile derivation changed unexpectedly"
     return result
 
 
@@ -318,7 +408,7 @@ def build_c0bc_blobs(image: bytes) -> tuple[bytes, bytes]:
 
 C262_DMA_BLOB = build_c262_dma_blob(IMG)
 C0BC_DMA_BLOB, C0BC_PREPARED_BLOB = build_c0bc_blobs(IMG)
-SNES_GFX = build_snes_tile_blob(GFX)
+SNES_GFX = make_credit_tiles_transparent(build_snes_tile_blob(GFX))
 
 # 4MB HiROM: interp @ $C0:8000, 68K image @ $C1:0000 (file $10000), and the
 # private arcade tile ROM pre-permuted into native SNES 4bpp records @ $C9:0000
@@ -432,6 +522,13 @@ assert (
     < dma0_blank_pulse_extended_end
     <= 0x8B00
 )
+service_pending_dma0_bytes = VID[
+    service_pending_dma0 - 0x8000:service_pending_dma0_end - 0x8000
+]
+assert bytes.fromhex("ad3f21ad3721ad3d21") in service_pending_dma0_bytes, (
+    "pending DMA0 service no longer resets OPVCT low/high phase through "
+    "STAT78 before latching and reading the vertical counter"
+)
 assert VID[
     dma0_blank_pulse_extended_end - 0x8000:boot_mode7_tick - 0x8000
 ] == bytes(boot_mode7_tick - dma0_blank_pulse_extended_end), (
@@ -476,6 +573,8 @@ pacing_renderer_ownership_guard = vid_off("ptw_renderer_ownership_guard")
 pacing_pending_direct_guard = vid_off("ptw_pending_direct_guard")
 pacing_snapshot_queued = vid_off("ptw_snapshot_queued")
 pacing_snapshot_publish = vid_off("ptw_snapshot_direct")
+pacing_vtime_publish_tail = vid_off("pacing_vtime_publish_tail")
+pacing_publish_vtime_joy = vid_off("pacing_publish_vtime_joy")
 pacing_helpers_end = vid_off("pacing_helpers_end")
 assert pacing_try_wake == 0x8E00
 assert (
@@ -484,9 +583,19 @@ assert (
     < pacing_pending_direct_guard
     < pacing_snapshot_queued
     < pacing_snapshot_publish
+    < pacing_vtime_publish_tail
+    < pacing_publish_vtime_joy
     < pacing_helpers_end
     <= 0x8F00
 ), "pacing direct-publication guard or helper seam moved out of order"
+assert pacing_vtime_publish_tail == 0x8EA8, (
+    "VTIME input publisher no longer begins at the historical sampler RTS seam"
+)
+assert VID[
+    pacing_vtime_publish_tail - 0x8000:pacing_publish_vtime_joy - 0x8000
+] == bytes.fromhex("4cab8e"), (
+    "VTIME input sampler tail no longer jumps to its adjacent publisher"
+)
 renderer_guard_offset = pacing_renderer_ownership_guard - 0x8000
 assert VID[renderer_guard_offset:renderer_guard_offset + 5] == bytes.fromhex(
     "af9c897ed0"
@@ -513,17 +622,25 @@ assert VID[pacing_helpers_end - 0x8000:0x0F00] == bytes(
 assert VID[0x0F00:0x0F3A] == bytes.fromhex(
     "08c23048da5a8be220a90048aba9808d"
     "0122af2a01411a8f2a014120008e2033"
-    "8a208a8e20008bad0233abe220a30829fb8308"
+    "8a208a8e20808fad0233ab"
+    "eaeaeaeaeaeaeaea"
     "c2307afa682840"
 ), (
-    "pacing NMI handler lost its leading-edge wake/DMA/boot-animation "
+    "pacing NMI handler lost its leading-edge wake/DMA/cache-scroll wrapper "
     "or A-preserving restore order"
 )
 assert VID[0x0F3A:0x0F40] == bytes(0x06), (
     "pacing NMI handler grew into the fixed coprocessor-IRQ handler"
 )
-assert VID[0x0F68:0x1000] == bytes(0x98), (
-    "pacing IRQ handler grew into the TAD $9000 island"
+assert VID[0x0F68:0x0F80] == bytes(0x18) and VID[0x0F96:0x1000] == bytes(0x6A), (
+    "pacing IRQ/cache-scroll handler grew into an adjacent reserved island"
+)
+assert VID[0x0F80:0x0F96] == bytes.fromhex(
+    "20008bad0233f00dc220a5d04820b0a16885d0e22060"
+), (
+    "NMI cache-scroll wrapper no longer preserves boot ownership, waits for an "
+    "acknowledged frame, preserves renderer DP scratch, or reapplies only the "
+    "cached BG scroll registers"
 )
 # Keep each renderer island inside its declared execution domain.  Symbol bounds
 # plus explicit zero seams catch Poppy's permissive .org overlap without freezing
@@ -532,6 +649,7 @@ palette_test = vid_off("pacing_palette_cache_test")
 palette_test_end = vid_off("pacing_palette_cache_test_end")
 bg_scroll = vid_off("bg_scroll")
 bg_scroll_end = vid_off("bg_scroll_end")
+bg_hscroll = vid_off("bg_hscroll")
 bg_test = vid_off("pacing_bg_cache_test")
 bg_test_end = vid_off("pacing_bg_cache_test_end")
 obj_y_transform = vid_off("obj_y_transform")
@@ -578,6 +696,13 @@ bg_incremental = vid_off("vid_bg_incremental")
 bg_incremental_end = vid_off("vid_bg_incremental_end")
 capture_bg_vscroll = vid_off("capture_bg_vscroll")
 capture_bg_vscroll_end = vid_off("capture_bg_vscroll_end")
+capture_bg_upper_snapshot = vid_off("capture_bg_upper_snapshot")
+capture_bg_upper_direct = vid_off("capture_bg_upper_direct")
+capture_bg_upper_primary = vid_off("capture_bg_upper_primary")
+capture_bg_upper_secondary = vid_off("capture_bg_upper_secondary")
+capture_bg_upper_end = vid_off("capture_bg_upper_end")
+bg_dispatch_dynamic = vid_off("bg_dispatch_dynamic")
+bg_dispatch_dynamic_end = vid_off("bg_dispatch_dynamic_end")
 bg_slot = vid_off("bg_slot")
 bg_tile_dma = vid_off("bg_tile_dma")
 bg_cache_reset_counts = vid_off("bg_cache_reset_counts")
@@ -598,6 +723,22 @@ title_bg_overlay_end = vid_off("title_bg_overlay_end")
 title_bg_upload = vid_off("title_bg_upload")
 title_font_codes = vid_off("title_font_codes")
 title_text_row14 = vid_off("title_text_row14")
+bg_write_cell = vid_off("bg_write_cell")
+bg_write_cell_end = vid_off("bg_write_cell_end")
+bg_column_map_update = vid_off("bg_column_map_update")
+bg_column_map_update_end = vid_off("bg_column_map_update_end")
+bg_offset_table_build = vid_off("bg_offset_table_build")
+bg_offset_table_build_end = vid_off("bg_offset_table_build_end")
+capture_bg_upper_full = vid_off("capture_bg_upper_full")
+capture_bg_upper_full_end = vid_off("capture_bg_upper_full_end")
+bg_hscroll_full = vid_off("bg_hscroll_full")
+bg_hscroll_full_end = vid_off("bg_hscroll_full_end")
+accept_bg_columns_snapshot = vid_off("accept_bg_columns_snapshot")
+accept_bg_columns_snapshot_end = vid_off("accept_bg_columns_snapshot_end")
+accept_bg_columns_direct = vid_off("accept_bg_columns_direct")
+accept_bg_columns_direct_end = vid_off("accept_bg_columns_direct_end")
+prepared_bg_map_remap = vid_off("prepared_bg_map_remap")
+prepared_bg_map_remap_end = vid_off("prepared_bg_map_remap_end")
 queue_promote = vid_off("render_queue_promote")
 queue_promote_end = vid_off("render_queue_promote_end")
 boot_screen_init = vid_off("boot_screen_init")
@@ -611,6 +752,16 @@ assert VID[
     "20998808e220afbf897e300eaf94897e8d0e21a9008d0e212860"
     "a9008d0e218d0e212860"
 ), "BG scroll dispatcher lost its title guard or two-write VOFS publication"
+assert VID[bg_hscroll - 0x8000:bg_hscroll - 0x8000 + 5] == bytes.fromhex(
+    "2200bbe960"
+), "BG hscroll wrapper no longer reaches the fixed ROM helper"
+bg_hscroll_full_bytes = VID[
+    bg_hscroll_full - 0x8000:bg_hscroll_full_end - 0x8000
+]
+assert bg_hscroll_full_bytes == bytes.fromhex(
+    "08c230e220af95897ec22029ff0085d0af96897ec9feffb00ca5d0291f0085d0a"
+    "94000800caf96897e290100eb1869400038e5d029ff03e2208d0d21eb8d0d21286b"
+), "BG hscroll helper changed without a fresh-boot-safe fixture"
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
     bg_test - palette_test_end
 ), "palette manifest consumer overlapped the fixed BG consumer"
@@ -713,9 +864,9 @@ assert bytes.fromhex("9f00ed7e") not in VID[
 assert bytes.fromhex("9f00ed7e") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
 ], "lazy queue installer no longer places the promoter at private $7E:ED00"
-assert bytes.fromhex("e02a02") in VID[
+assert bytes.fromhex("e05202") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
-], "lazy queue installer lost its pinned 554-byte copy bound"
+], "lazy queue installer lost its pinned 594-byte copy bound"
 assert bytes.fromhex("9f00f17f") not in VID, (
     "queue code must never overwrite live emulated 68000 RAM at $7F:F100"
 )
@@ -792,6 +943,13 @@ assert (
     < capture_bg_vscroll
     == 0xA7BC
     < capture_bg_vscroll_end
+    == capture_bg_upper_snapshot
+    < capture_bg_upper_direct
+    < capture_bg_upper_primary
+    < capture_bg_upper_secondary
+    < capture_bg_upper_end
+    == bg_dispatch_dynamic
+    < bg_dispatch_dynamic_end
     == bg_incremental_end
     <= 0xA800
 )
@@ -804,7 +962,19 @@ assert capture_vscroll_bytes == bytes.fromhex(
 assert VID.count(
     bytes((0x20, capture_bg_vscroll & 0xFF, capture_bg_vscroll >> 8))
 ) == 4, "all direct/queued/legacy snapshots must pack vertical scroll coherently"
-assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 2
+for helper in (
+    capture_bg_upper_snapshot,
+    capture_bg_upper_direct,
+    capture_bg_upper_primary,
+    capture_bg_upper_secondary,
+):
+    assert VID.count(bytes((0x20, helper & 0xFF, helper >> 8))) == 1, (
+        "each direct/queued/legacy snapshot must select one coherent X1 column-map destination"
+    )
+assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 3, (
+    "full, unchanged, and NMI cache-keepalive paths must each reapply the "
+    "same accepted BG scroll helper"
+)
 assert VID.count(bytes((0x4C, bg_scroll & 0xFF, bg_scroll >> 8))) == 1, (
     "full, incremental, and unchanged BG paths must all publish vertical scroll"
 )
@@ -849,9 +1019,83 @@ assert VID[
     "ROM-only secondary capture crossed the title BG2 island"
 )
 assert VID[
-    title_bg_overlay_end - 0x8000:queue_promote - 0x8000
-] == bytes(queue_promote - title_bg_overlay_end), (
-    "title BG2 island crossed the private-WRAM queue-promoter island"
+    title_bg_overlay_end - 0x8000:bg_write_cell - 0x8000
+] == bytes(bg_write_cell - title_bg_overlay_end), (
+    "title BG2 island crossed the dynamic-column renderer island"
+)
+assert (
+    bg_write_cell
+    == 0xB700
+    < bg_write_cell_end
+    <= bg_column_map_update
+    < bg_column_map_update_end
+    == bg_offset_table_build
+    < bg_offset_table_build_end
+    <= capture_bg_upper_full
+    < capture_bg_upper_full_end
+    <= bg_hscroll_full
+    < bg_hscroll_full_end
+    <= accept_bg_columns_snapshot
+    < accept_bg_columns_snapshot_end
+    <= accept_bg_columns_direct
+    < accept_bg_columns_direct_end
+    <= prepared_bg_map_remap
+    < prepared_bg_map_remap_end
+    <= queue_promote
+)
+bg_map_update_code = VID[
+    bg_column_map_update - 0x8000:bg_column_map_update_end - 0x8000
+]
+assert bg_map_update_code[:13] == bytes.fromhex(
+    "c230a20000bfe0897edff0897e"
+), "BG layout dispatch no longer compares the physical maps first"
+assert (
+    bg_map_update_code[13] == 0xD0
+    and bg_map_update_code[15:20] == bytes.fromhex("e8e8e01000")
+    and bg_map_update_code[20] == 0xD0
+    and bg_map_update_code[22:26] == bytes.fromhex("af96897e")
+), "BG layout dispatch regained a kind-only full-rebuild path"
+assert VID[
+    bg_offset_table_build_end - 0x8000:capture_bg_upper_full - 0x8000
+] == bytes(capture_bg_upper_full - bg_offset_table_build_end), (
+    "dynamic-column table builder crossed the full control-capture helper"
+)
+assert VID[
+    capture_bg_upper_full_end - 0x8000:bg_hscroll_full - 0x8000
+] == bytes(bg_hscroll_full - capture_bg_upper_full_end), (
+    "full control-capture helper crossed the horizontal-scroll helper"
+)
+assert VID[
+    bg_hscroll_full_end - 0x8000:accept_bg_columns_snapshot - 0x8000
+] == bytes(accept_bg_columns_snapshot - bg_hscroll_full_end), (
+    "horizontal-scroll helper crossed the snapshot column-acceptor"
+)
+assert VID[
+    accept_bg_columns_snapshot_end - 0x8000:accept_bg_columns_direct - 0x8000
+] == bytes(accept_bg_columns_direct - accept_bg_columns_snapshot_end), (
+    "snapshot column-acceptor crossed the direct-cache acceptor"
+)
+assert VID[
+    accept_bg_columns_direct_end - 0x8000:prepared_bg_map_remap - 0x8000
+] == bytes(prepared_bg_map_remap - accept_bg_columns_direct_end), (
+    "column acceptor crossed the prepared-map remap island"
+)
+assert VID[
+    prepared_bg_map_remap_end - 0x8000:queue_promote - 0x8000
+] == bytes(queue_promote - prepared_bg_map_remap_end), (
+    "prepared-map remap crossed the private-WRAM queue-promoter island"
+)
+assert VID[
+    prepared_bg_map_remap - 0x8000:prepared_bg_map_remap - 0x8000 + 36
+] == bytes.fromhex(
+    "088bc2308f8e747ea5d048a5d248a5d448a5d648a5d848a5da48da5ae220"
+    "a97e48abc220"
+), "prepared-map remap lost its saved WRAM DBR before 16-bit-only scratch opcodes"
+assert VID[
+    prepared_bg_map_remap_end - 0x8000 - 3:
+    prepared_bg_map_remap_end - 0x8000
+] == bytes.fromhex("ab286b"), (
+    "prepared-map remap no longer restores DBR/P before returning"
 )
 assert (
     VID[
@@ -869,7 +1113,7 @@ assert bytes.fromhex("a9618d0b21") in VID[
     bg_upload - 0x8000:bg_upload - 0x8000 + 0x80
 ], "BG upload no longer preserves the live title BG2 character base"
 assert queue_promote == 0xED00 and queue_promote < queue_promote_end <= 0xF000
-assert queue_promote_end - queue_promote == 0x022A, (
+assert queue_promote_end - queue_promote == 0x0252, (
     "pinned lazy-installer size no longer matches the queue promoter"
 )
 assert queue_promote_end <= boot_screen_init == 0xF000
@@ -899,6 +1143,219 @@ ROM[0x298000:0x298000+len(VID)] = VID                # @ $E9:8000 (file $298000)
 # escbank.pasm is assembled @ .org $8000, so escbank_entry ($8000) -> file $290000 = $92:8000.
 import os as _os
 import os.path as _osp
+
+# The staged virtual-MC68000-cycle diagnostic uses two otherwise unused linear
+# SA-1 ROM banks. $F1:0000 holds the source-authenticated 64 KiB CPU-000 static
+# opcode-cycle baseline; $F2:8000 holds the code and one pack-time enable byte.
+# Neither payload is an arcade-ROM redistribution. The diagnostic is opt-in and
+# deliberately incompatible with PC_RING, whose restored dbg_fetch body bypasses
+# the timing gateway.
+vtime_enabled = _os.environ.get("VTIME", "0") == "1"
+vtime_interpreter_only = _os.environ.get("VTIME_INTERPRETER_ONLY", "0") == "1"
+vtime_0818_interpreter_fallback = (
+    _os.environ.get("VTIME_0818_INTERPRETER_FALLBACK", "0") == "1"
+)
+if vtime_interpreter_only and not vtime_enabled:
+    raise AssertionError("VTIME_INTERPRETER_ONLY=1 requires VTIME=1")
+if vtime_0818_interpreter_fallback and not vtime_interpreter_only:
+    raise AssertionError(
+        "VTIME_0818_INTERPRETER_FALLBACK=1 requires "
+        "VTIME_INTERPRETER_ONLY=1"
+    )
+if vtime_enabled and _os.environ.get("PC_RING", "0") == "1":
+    raise AssertionError("VTIME=1 and PC_RING=1 are mutually exclusive diagnostic modes")
+VTIME_TABLE = Path("src/m68k_cpu000_static_cycles.bin")
+VTIME_CODE = Path("src/vtime.bin")
+VTIME_SYMS = Path("src/vtime.sym")
+VTIME_ESC5_ROOT = Path("src/vtime_esc5_root.bin")
+VTIME_ESC5_ROOT_SYMS = Path("src/vtime_esc5_root.sym")
+if not all(path.is_file() for path in (
+    VTIME_TABLE,
+    VTIME_CODE,
+    VTIME_SYMS,
+    VTIME_ESC5_ROOT,
+    VTIME_ESC5_ROOT_SYMS,
+)):
+    raise AssertionError("virtual-cycle payload missing; generate table and assemble src/vtime.pasm")
+vtime_table = VTIME_TABLE.read_bytes()
+assert len(vtime_table) == 0x10000
+assert hashlib.sha256(vtime_table).hexdigest() == (
+    "201cf148abf22ef763a55c6c086cc0eade0afb1f7185727d086f7b00a814914b"
+), "MAME CPU-000 static-cycle baseline changed; re-run its source-authenticated generator"
+vtime_code = VTIME_CODE.read_bytes()
+assert len(vtime_code) <= 0x8000
+vtime_symbols = VTIME_SYMS.read_text(encoding="utf-8-sig")
+vtime_esc5_root = VTIME_ESC5_ROOT.read_bytes()
+vtime_esc5_root_symbols = VTIME_ESC5_ROOT_SYMS.read_text(encoding="utf-8-sig")
+
+
+def vtime_off(symbol):
+    for line in vtime_symbols.splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[1] == symbol:
+            return int(fields[0].split(":", 1)[1], 16)
+    raise AssertionError("missing virtual-timer layout symbol %s" % symbol)
+
+
+def vtime_esc5_root_off(symbol):
+    for line in vtime_esc5_root_symbols.splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[1] == symbol:
+            return int(fields[0].split(":", 1)[1], 16)
+    raise AssertionError("missing VTIME $02429C root layout symbol %s" % symbol)
+
+
+assert (
+    vtime_off("vtime_enable_byte") == 0x8000
+    and vtime_off("vtime_prepare_gateway") == 0x8001
+    and vtime_off("vtime_consume") == 0x8400
+    and vtime_off("vtime_reload") == 0x8500
+    and vtime_off("vtime_load_next_deadline_end") <= 0x85A0
+    and vtime_off("vtime_irq_enter") == 0x85A0
+    and vtime_off("vtime_irq_enter_end") <= 0x8600
+    and vtime_off("vtime_esc3_charge") == 0x8600
+    and vtime_off("vtime_esc3_reset") == 0x8800
+    and vtime_off("vtime_esc3_finish") == 0x8820
+    and vtime_off("vtime_esc5_charge") == 0x8900
+    and vtime_off("vtime_esc5_finish") == 0x8B00
+    and vtime_off("vtime_esc5_charge_cost") == 0x8C00
+    and vtime_off("vtime_esc5_charge_pc") == 0x8C40
+    and vtime_off("vtime_esc5_charge_terminal") == 0x8C90
+    and vtime_off("vtime_esc5_metadata_end") == 0x8CD6
+    and vtime_off("vtime_esc3_charge_index") == 0x9000
+    and vtime_off("vtime_esc3_charge_cost") == 0xAC00
+    and vtime_off("vtime_esc3_charge_pc") == 0xAD00
+    and vtime_off("vtime_esc3_charge_terminal") == 0xAF00
+    and vtime_off("vtime_esc9_charge") == 0xB100
+    and vtime_off("vtime_esc9_finish") == 0xB300
+    and vtime_off("vtime_paced_release") == 0xB400
+    and vtime_off("vtime_choke_gateway") == 0xB480
+    and vtime_off("vtime_mvc_gateway") == 0xB4D1
+    and vtime_off("vtime_mvc_gateway_end") <= 0xB500
+    and vtime_off("vtime_dynamic_charge") == 0xB500
+    and vtime_off("vtime_dynamic_helpers_end") <= 0xB740
+    and vtime_off("vtime_input_p1_delayed") == 0xB740
+    and vtime_off("vtime_input_p1_delayed_end") <= 0xBA00
+    and vtime_off("vtime_esc9_charge_index") == 0xBA00
+    and vtime_off("vtime_esc9_charge_cost") == 0xFC80
+    and vtime_off("vtime_esc9_charge_pc") == 0xFCD3
+    and vtime_off("vtime_esc9_charge_terminal") == 0xFD80
+    and vtime_off("vtime_native_handoff_to_interpreter") == 0xFE40
+    and vtime_off("vtime_native_handoff_to_interpreter_end")
+    == vtime_off("vtime_image_end")
+    and 0xFE40 < vtime_off("vtime_image_end") <= 0xFF00
+), "virtual-timer callable layout moved; update the packed bank-$00 seams deliberately"
+if vtime_enabled:
+    assert (
+        vtime_off("vtime_clock_ensure") == 0x8200
+        and vtime_off("vtime_clock_finish_interval") < 0x8400
+        and vtime_off("vtime_clock_current_phase") < 0x8400
+        and vtime_off("vtime_clock_load_next_deadline") < 0x8400
+        and vtime_off("vtime_input_p1_delayed_end")
+        > vtime_off("vtime_input_p1_delayed")
+    ), "VTIME CPU-phase helpers escaped their fixed bank-$F2 island"
+assert vtime_code[0] == 0 and len(vtime_code) >= vtime_off("vtime_image_end") - 0x8000, (
+    "virtual timer native-block metadata/handoff was not assembled through its audited end"
+)
+assert (
+    vtime_esc5_root_off("vtime_entry_2429c") == 0x8000
+    and vtime_esc5_root_off("vtime_esc5_charge_gateway") < 0x8980
+    and vtime_esc5_root_off("vtime_esc5_return_dispatch") < 0x8A00
+    and vtime_esc5_root_off("vtime_esc5_return_dispatch_end")
+    == vtime_esc5_root_off("vtime_esc5_root_end")
+    and len(vtime_esc5_root)
+    == vtime_esc5_root_off("vtime_esc5_root_end") - 0x8000
+    and len(vtime_esc5_root) <= 0x1000
+), "VTIME `$02429C` root or exact-return dispatcher escaped its bank-$F3 island"
+ROM[0x310000:0x320000] = vtime_table                # SA-1 $F1:0000-$FFFF
+vtime_packed = bytearray(vtime_code)
+vtime_esc5_payload_start = vtime_off("vtime_esc5_charge") - 0x8000
+vtime_esc5_payload_end = vtime_off("vtime_esc5_metadata_end") - 0x8000
+vtime_mvc_payload_start = vtime_off("vtime_mvc_gateway") - 0x8000
+vtime_mvc_payload_end = vtime_off("vtime_mvc_gateway_end") - 0x8000
+if not vtime_enabled:
+    # This range was an all-zero diagnostic gap in the accepted production
+    # image.  Keep ordinary ROM bytes/hash unchanged while still assembling
+    # and auditing the opt-in root ledger on every build.
+    vtime_packed[vtime_esc5_payload_start:vtime_esc5_payload_end] = bytes(
+        vtime_esc5_payload_end - vtime_esc5_payload_start
+    )
+    # This island was zero in the accepted ordinary image. Keep the new
+    # diagnostic-only MOVE-collapse gateway out of the production hash too.
+    vtime_packed[vtime_mvc_payload_start:vtime_mvc_payload_end] = bytes(
+        vtime_mvc_payload_end - vtime_mvc_payload_start
+    )
+ROM[0x328000:0x328000 + len(vtime_packed)] = vtime_packed  # SA-1 $F2:8000+
+
+# The ordinary input mailbox is published only while `$410122` proves the SA-1
+# video shadow quiescent. VTIME can begin another emulated gameplay interval
+# before the scheduler returns to `$0818`; its P1 bridge therefore holds the
+# latest NMI-completed sample for one virtual tick while preserving any real
+# `$0818` mailbox publication. Patch only diagnostic ROMs: production keeps the
+# historical sampler RTS and bank-$00 input bytes exactly, with no extra
+# NMI/BW-RAM traffic.
+vtime_input_video_start = pacing_vtime_publish_tail - 0x8000
+vtime_input_video_end = pacing_helpers_end - 0x8000
+vtime_input_video_file = 0x298000 + vtime_input_video_start
+vtime_input_video_source = VID[vtime_input_video_start:vtime_input_video_end]
+assert bytes(ROM[
+    vtime_input_video_file:vtime_input_video_file + len(vtime_input_video_source)
+]) == vtime_input_video_source, "packed VTIME input publisher differs from video.bin"
+if not vtime_enabled:
+    ROM[
+        vtime_input_video_file:vtime_input_video_file + len(vtime_input_video_source)
+    ] = b"\x60" + bytes(len(vtime_input_video_source) - 1)
+
+joy_read = interp_symbol("joy_read")
+joy_read_original = bytes.fromhex("08c230af00004185662860")
+actual = bytes(ROM[joy_read:joy_read + len(joy_read_original)])
+assert actual == joy_read_original, (
+    "bank-$00 joy_read seam moved at file $%06X: expected %s, got %s"
+    % (joy_read, joy_read_original.hex(), actual.hex())
+)
+
+input_p1 = interp_symbol("input_p1")
+input_p1_original = bytes.fromhex("2056f8c230")
+input_p1_vtime = bytes.fromhex("2240b7f2ea")
+assert len(input_p1_original) == len(input_p1_vtime) == 5
+actual = bytes(ROM[input_p1:input_p1 + len(input_p1_original)])
+assert actual == input_p1_original, (
+    "bank-$00 input_p1 seam moved at file $%06X: expected %s, got %s"
+    % (input_p1, input_p1_original.hex(), actual.hex())
+)
+if vtime_enabled:
+    ROM[input_p1:input_p1 + len(input_p1_vtime)] = input_p1_vtime
+
+if vtime_enabled:
+    # Bit 1 is an explicit interpreter-only correctness probe. It is never
+    # packed into an ordinary image: the virtual clock first waits for the
+    # established task-context gate, then turns off the existing global
+    # gameplay-native and scheduler dispatch gates so unowned accelerated
+    # spans fall back to the per-fetch dynamic clock.
+    vtime_mode = 0x01
+    if vtime_interpreter_only:
+        vtime_mode |= 0x02
+    if vtime_0818_interpreter_fallback:
+        vtime_mode |= 0x04
+    ROM[0x328000] = vtime_mode
+    vtime_esc5_root_file = 0x338000                 # SA-1 $F3:8000+
+    assert ROM[
+        vtime_esc5_root_file:vtime_esc5_root_file + len(vtime_esc5_root)
+    ] == bytes(len(vtime_esc5_root)), (
+        "VTIME `$02429C` root would overwrite nonzero bank-$F3 data"
+    )
+    ROM[
+        vtime_esc5_root_file:vtime_esc5_root_file + len(vtime_esc5_root)
+    ] = vtime_esc5_root
+print(
+    "Virtual cycle timer: %s"
+    % (
+        "enabled interpreter-only diagnostic"
+        if vtime_interpreter_only
+        else ("enabled diagnostic" if vtime_enabled else "disabled")
+    )
+)
+
 if _osp.exists("src/escbank.bin"):
     ESC = Path("src/escbank.bin").read_bytes()
     assert len(ESC) <= 0x8000, ("escape bank %d bytes overflows the $290000..$298000 gap" % len(ESC))
@@ -929,6 +1386,32 @@ if _osp.exists("src/escbank.bin"):
                 return int(fields[0].split(":", 1)[1], 16)
         raise AssertionError("missing escbank layout symbol %s" % symbol)
 
+    entry_swo = esc_off("entry_swo")
+    entry_swo_vtime_go = esc_off("entry_swo_vtime_go")
+    swo_movem = esc_off("swo_movem")
+    swo_movem_done = esc_off("swo_movem_done")
+    assert (
+        entry_swo == 0xFA00
+        and entry_swo_vtime_go == 0xFA0F
+        and swo_movem == 0xFA1F
+        and swo_movem_done == 0xFA32
+    ), "native scheduler switch-out or its fixed $FA32 continuation moved"
+    assert ESC[0x7A00:0x7A0F] == bytes.fromhex(
+        "c230af0080f2290200f0045cc0f500"
+    ), "native scheduler switch-out lost its interpreter-only pre-mutation fallback"
+    assert ESC[0x7A23:0x7A32] == bytes(0x0F), (
+        "native scheduler switch-out consumed the zero seam before $92:FA32"
+    )
+
+    lhs_sel = esc_off("lhs_sel")
+    lhs_sel_end = esc_off("lhs_sel_end")
+    assert lhs_sel == 0xFD00 and lhs_sel < lhs_sel_end <= 0xFE00, (
+        "native scheduler selector moved or crossed the fixed $92:FE00 seam"
+    )
+    assert ESC[lhs_sel_end - 0x8000:0x7E00] == bytes(
+        0xFE00 - lhs_sel_end
+    ), "native scheduler selector consumed the zero seam before entry_d522@$92:FE00"
+
     entry_d3b0 = esc_off("entry_d3b0")
     entry_d226 = esc_off("entry_d226")
     assert entry_d3b0 == 0xEFFB and entry_d226 == 0xF18F, (
@@ -945,6 +1428,31 @@ if _osp.exists("src/escbank.bin"):
     assert ESC[entry_d226 - 0x8000:entry_d226 - 0x8000 + 2] == bytes.fromhex(
         "c230"
     ), "$D226 handler lost its fixed REP #$30 prologue"
+    jah2_ext_bsr = esc_off("jah2_ext_bsr")
+    jxb_b2 = esc_off("jxb_b2")
+    jxb_push_return = esc_off("jxb_push_return")
+    jxb_real = esc_off("jxb_real")
+    entry_d6b0 = esc_off("entry_d6b0")
+    assert (
+        jah2_ext_bsr == 0xF400
+        and jah2_ext_bsr < jxb_b2 < jxb_push_return < jxb_real
+        and jxb_real == 0xF5F8
+        and jxb_real + 8 == entry_d6b0 == 0xF600
+    ), "bank-$01/$02 BSR scan moved or overflowed the fixed $92:F400-$F5FF island"
+    assert ESC[
+        jxb_real + 8 - 0x8000:entry_d6b0 - 0x8000
+    ] == bytes(entry_d6b0 - (jxb_real + 8)), (
+        "bank-$01/$02 BSR scan consumed the zero seam before entry_d6b0@$92:F600"
+    )
+    for encoded, label in (
+        (bytes.fromhex("5c00e09f"), "$013282 -> $9F:E000"),
+        (bytes.fromhex("5c20db94"), "$0135E0 -> $94:DB20"),
+        (bytes.fromhex("5c00fd9f"), "bank-$01 player-hot scan -> $9F:FD00"),
+        (bytes.fromhex("5cb0fd9f"), "bank-$02 Stage-3 scan -> $9F:FDB0"),
+    ):
+        assert ESC[0x7400:0x7600].count(encoded) == 1, (
+            "Stage-3 BSR scan lost its sole target " + label
+        )
 
     entry_fb8 = esc_off("entry_fb8")
     entry_fb8_end = esc_off("entry_fb8_end")
@@ -960,12 +1468,46 @@ if _osp.exists("src/escbank.bin"):
         "5c00e09d"
     ), "$CE58->$CD1A guarded fusion no longer jumps to pinned $9D:E000"
 
+    # $00D18A's cleanup originally flowed into the fixed $AEFA entry_2e06
+    # .org.  Poppy accepts that overlap and the resulting native routine
+    # entered $2E06 with a corrupted virtual register/return frame.  Pin the
+    # explicit redirect and the relocated $F26B island so future growth fails
+    # loudly before it can recreate an invisible overlap.
+    d18a_cleanup = esc_off("Ld18a_d1fc")
+    d18a_tail_full = esc_off("d18a_tail_full")
+    d18a_tail_full_end = esc_off("d18a_tail_full_end")
+    entry_2e06 = esc_off("entry_2e06")
+    assert (
+        d18a_cleanup == 0xAE00
+        and d18a_tail_full == 0xF26B
+        and d18a_tail_full < d18a_tail_full_end <= 0xF400
+        and entry_2e06 == 0xAEFA
+    ), "$D18A cleanup relocation moved or crossed its fixed bank-$92 seams"
+    assert ESC[d18a_cleanup - 0x8000:d18a_cleanup - 0x8000 + 4] == (
+        bytes([0x5C]) + d18a_tail_full.to_bytes(2, "little") + bytes([0x92])
+    ), "$D18A cleanup no longer redirects away from the $AEFA overlap"
+    assert ESC[d18a_tail_full_end - 0x8000:0x7400] == bytes(
+        0xF400 - d18a_tail_full_end
+    ), "$D18A cleanup grew into the fixed $92:F400 JAH2 entry"
+
     ibridge = esc_off("ibridge")
+    ib_b0 = esc_off("ib_b0")
     ib_n4 = esc_off("ib_n4")
     ibridge_end = esc_off("ibridge_end")
     assert ibridge == 0xF828 and ibridge_end <= 0xF900, (
         "bank-$92 indirect bridge moved or crossed the fixed $F900 dispatcher"
     )
+    assert (
+        ibridge < ib_b0 < ib_n4 < ibridge_end
+        and ESC[ibridge - 0x8000:ibridge_end - 0x8000].count(
+            bytes.fromhex("5c80a69f")
+        )
+        == 1
+        and ESC[ibridge - 0x8000:ibridge_end - 0x8000].count(
+            bytes.fromhex("5c00d09f")
+        )
+        == 1
+    ), "$02F2E0 indirect callback lost its sole $9F:A680 bridge route"
     entry_20e8 = interp_symbol("entry_20e8")
     assert ESC[ib_n4 - 0x8000:ib_n4 - 0x8000 + 9] == (
         bytes.fromhex("c9e820d0045c")
@@ -1031,8 +1573,8 @@ if _osp.exists("src/escbank.bin"):
         "$2BE2 redirect/resume moved in tightly packed bank $92"
     )
     assert ESC[entry_2be2 - 0x8000:entry_2be2_resume - 0x8000] == bytes.fromhex(
-        "5c00969d"
-    ), "entry_2be2 lost its size-neutral JML $9D:9600 wrapper"
+        "5c20969d"
+    ), "entry_2be2 lost its size-neutral JML $9D:9620 wrapper"
     entry_3c36 = esc_off("entry_3c36")
     entry_3c36_resume = esc_off("entry_3c36_generated_resume")
     assert entry_3c36 == 0xD02A and entry_3c36_resume == 0xD02E, (
@@ -1073,14 +1615,62 @@ if _osp.exists("src/escbank2.bin"):
         "a538"
     ), "$08FA generated-body seam no longer begins with LDA $38"
     c172_flow_end = esc2_off("escbank2_flowing_end")
+    d3f6_move_nz = esc2_off("d3f6_readbyte_move_nz")
+    d3f6_move_nz_end = esc2_off("d3f6_readbyte_move_nz_end")
     entry_d3b0t = esc2_off("entry_d3b0t")
     entry_d3b0t_bridge_end = esc2_off("entry_d3b0t_bridge_end")
     brd3b0_1t = esc2_off("brd3b0_1t")
     entry_d3b0t_end = esc2_off("entry_d3b0t_end")
+    entry_27952 = esc2_off("entry_27952")
+    entry_27952_end = esc2_off("entry_27952_end")
+    entry_279d2 = esc2_off("entry_279d2")
+    entry_279d2_end = esc2_off("entry_279d2_end")
+    entry_2f3ba = esc2_off("entry_2f3ba")
+    entry_2f3ba_end = esc2_off("entry_2f3ba_end")
+    entry_27b44 = esc2_off("entry_27b44")
+    entry_27b44_end = esc2_off("entry_27b44_end")
+    entry_2f56a = esc2_off("entry_2f56a")
+    entry_2f56a_end = esc2_off("entry_2f56a_end")
+    entry_27b7c = esc2_off("entry_27b7c")
+    entry_27b7c_end = esc2_off("entry_27b7c_end")
+    entry_2f5a2 = esc2_off("entry_2f5a2")
+    entry_2f5a2_end = esc2_off("entry_2f5a2_end")
+    entry_2e49c = esc2_off("entry_2e49c")
+    entry_2e49c_end = esc2_off("entry_2e49c_end")
+    entry_296c6 = esc2_off("entry_296c6")
+    entry_296c6_end = esc2_off("entry_296c6_end")
+    entry_2e40e = esc2_off("entry_2e40e")
+    entry_2e40e_end = esc2_off("entry_2e40e_end")
+    entry_135e0 = esc2_off("entry_135e0")
+    h135e0_direct = esc2_off("h135e0_direct")
+    entry_135e0_end = esc2_off("entry_135e0_end")
+    xd_sparse_direct = esc2_off("xd_sparse_direct")
+    xlat_choke = esc2_off("xlat_choke")
+    xlat_choke_end = esc2_off("xlat_choke_end")
+    hce4_leaf_residue = esc2_off("hce4_leaf_residue")
+    hce4_entry = esc2_off("hce4_entry")
+    hce4_counter = esc2_off("hce4_counter")
+    hce4_shape_dispatch = esc2_off("hce4_shape_dispatch")
+    hce4_hot_done = esc2_off("hce4_hot_done")
+    hce4_ac_charge_exact = esc2_off("hce4_ac_charge_exact")
+    hce4_ac_charge_dispatch = esc2_off("hce4_ac_charge_dispatch")
+    hce4_ac_charge_fast_return = esc2_off(
+        "hce4_ac_charge_fast_return"
+    )
+    hce4_leaf_residue_end = esc2_off("hce4_leaf_residue_end")
     c172_optional = esc2_off("hc172_optional_hot")
     c172_optional_end = esc2_off("hc172_optional_hot_end")
-    assert c172_flow_end <= entry_d3b0t == 0xB400, (
+    assert (
+        c172_flow_end <= d3f6_move_nz == 0xB3E0
+        and d3f6_move_nz_end == 0xB3E4
+        and d3f6_move_nz_end <= entry_d3b0t == 0xB400
+    ), (
         "escbank2 flowing bodies crossed the fixed $B400 D3B0 relocation island"
+    )
+    assert ESC2[
+        d3f6_move_nz - 0x8000:d3f6_move_nz_end - 0x8000
+    ] == bytes.fromhex("5c709f95"), (
+        "$D3F6 MOVE.B byte-N/Z helper changed"
     )
     assert (
         entry_d3b0t < entry_d3b0t_bridge_end <= brd3b0_1t == 0xB580
@@ -1088,13 +1678,121 @@ if _osp.exists("src/escbank2.bin"):
     ), (
         "$D3B0 relocation crossed its continuation or the fixed $D800 C172 island"
     )
-    assert c172_optional == 0xD800 and c172_optional_end <= 0xE000, (
-        "$C172 optional-callback helper crossed its fixed $94:D800-$DFFF island"
+    assert (
+        entry_27952 == 0xB600
+        and entry_27952 < entry_27952_end <= 0xBC00
+        and entry_279d2 == 0xBC00
+        and entry_279d2 < entry_279d2_end <= 0xC200
+        and entry_2f3ba == 0xC200
+        and entry_2f3ba < entry_2f3ba_end <= 0xCA00
+    ), "Stage-3 hot bodies moved or overflowed their fixed bank-$94 islands"
+    assert (
+        hce4_leaf_residue == 0xCA00
+        and hce4_ac_charge_exact == 0xCA30
+        and hce4_ac_charge_dispatch == 0xCB37
+        and hce4_ac_charge_fast_return == 0xCB3B
+        and hce4_leaf_residue < hce4_leaf_residue_end <= 0xCB40
+    ), "$CE4 jsr(An)-to-semantic bridge moved or overflowed $94:CA00-$CB3F"
+    assert (
+        hce4_entry == 0xFA00
+        and hce4_counter == 0xFB24
+        and hce4_counter < hce4_shape_dispatch < hce4_hot_done < 0xFE00
+    ), "$CE4 semantic body or fused route moved without pack review"
+    ce4_stack_image = ESC2[
+        hce4_counter - 0x8000:hce4_shape_dispatch - 0x8000
+    ]
+    assert ce4_stack_image.count(bytes.fromhex("9f000040")) == 19, (
+        "$CE4 lost a mapped-BW-RAM LINK/MOVEM stack-image store"
+    )
+    ce4_fused_route = ESC2[
+        hce4_shape_dispatch - 0x8000 - 11:
+        hce4_shape_dispatch - 0x8000
+    ]
+    assert (
+        ce4_fused_route[:9] == bytes.fromhex("a56af0072200d29f4c")
+        and int.from_bytes(ce4_fused_route[9:], "little") == hce4_hot_done
+    ), (
+        "$CE4 fused 2x2 route lost its marker guard, direct emitter, or epilogue"
+    )
+    assert (
+        entry_27b44 == 0xCB40
+        and entry_27b44 < entry_27b44_end <= 0xCD00
+        and entry_2f56a == 0xCD00
+        and entry_2f56a < entry_2f56a_end <= 0xCEC0
+        and entry_27b7c == 0xCEC0
+        and entry_27b7c < entry_27b7c_end <= 0xD100
+        and entry_2f5a2 == 0xD100
+        and entry_2f5a2 < entry_2f5a2_end <= 0xD340
+        and entry_2e49c == 0xD340
+        and entry_2e49c < entry_2e49c_end <= 0xD480
+        and entry_296c6 == 0xD480
+        and entry_296c6 < entry_296c6_end <= 0xD600
+        and entry_2e40e == 0xD540
+        and entry_2e40e < entry_2e40e_end <= 0xD700
+    ), "Stage-3 output leaves moved or overflowed their fixed bank-$94 islands"
+    assert IMG[0x2E49C:0x2E4B8] == bytes.fromhex(
+        "4280302c000a41fa022ce54820700800302c000ce548207008004e75"
+    ), "$02E49C nine-instruction arcade lookup oracle changed"
+    assert hashlib.sha256(IMG[0x2E6D0:0x2E71C]).hexdigest() == (
+        "3caefa452d92bce123523a84548a941fa7e57b3d838e6ff3a4535269b39fa708"
+    ), "$02E49C nineteen-entry immutable first table changed"
+    e49c_table_bases = [
+        int.from_bytes(IMG[offset:offset + 4], "big")
+        for offset in range(0x2E6D0, 0x2E71C, 4)
+    ]
+    assert len(e49c_table_bases) == 19 and all(
+        base % 4 == 0 and base + 0xFFFF < len(IMG)
+        for base in e49c_table_bases
+    ), (
+        "$02E49C admitted table no longer keeps every shifted-word lookup "
+        "aligned, non-crossing, and inside the authenticated 512 KiB image"
+    )
+    assert entry_2e49c_end == 0xD425, (
+        "$02E49C hand-exact body changed size; re-audit guards and CCR/X/RTS"
+    )
+    assert hashlib.sha256(
+        ESC2[entry_2e49c - 0x8000:entry_2e49c_end - 0x8000]
+    ).hexdigest() == (
+        "24a383a57947dc2a735c8b2ee9270dedb414c2ac6e1586789e7ec1a3e64ce9c7"
+    ), "$02E49C hand-exact body bytes changed without differential review"
+    h8_mark_palette_dirty = esc2_off("h8_mark_palette_dirty")
+    h8_mark_palette_dirty_end = esc2_off("h8_mark_palette_dirty_end")
+    assert c172_optional == 0xD800 and c172_optional_end <= 0xDB00, (
+        "$C172 optional-callback helper crossed its fixed $94:D800-$DAFF island"
+    )
+    assert h8_mark_palette_dirty == 0xDB00 and h8_mark_palette_dirty_end <= 0xDB20, (
+        "$8C2 renderer-palette dirty helper moved outside its fixed $94:DB00 island"
+    )
+    assert (
+        entry_135e0 == 0xDB20
+        and entry_135e0 < h135e0_direct < entry_135e0_end <= 0xE000
+    ), (
+        "$0135E0 coordinate leaf/direct ABI moved or crossed the fixed "
+        "$94:E000 HLE island"
+    )
+    assert ESC2[
+        h135e0_direct - 0x8000:h135e0_direct - 0x8000 + 2
+    ] == bytes.fromhex("c230"), (
+        "$0135E0 direct ABI lost its explicit REP #$30 prologue"
     )
     for seam_start, seam_end, label in (
-        (c172_flow_end, entry_d3b0t, "flowing bodies -> $D3B0"),
+        (c172_flow_end, d3f6_move_nz, "flowing bodies -> $D3F6 N/Z helper"),
+        (d3f6_move_nz_end, entry_d3b0t, "$D3F6 N/Z helper -> $D3B0"),
         (entry_d3b0t_bridge_end, brd3b0_1t, "$D3B0 bridge -> continuation"),
-        (entry_d3b0t_end, c172_optional, "$D3B0 continuation -> $C172"),
+        (entry_d3b0t_end, entry_27952, "$D3B0 continuation -> $027952"),
+        (entry_27952_end, entry_279d2, "$027952 -> $0279D2"),
+        (entry_279d2_end, entry_2f3ba, "$0279D2 -> $02F3BA"),
+        (entry_2f3ba_end, hce4_leaf_residue, "$02F3BA -> $CE4 bridge"),
+        (hce4_leaf_residue_end, entry_27b44, "$CE4 bridge -> $027B44"),
+        (entry_27b44_end, entry_2f56a, "$027B44 -> $02F56A"),
+        (entry_2f56a_end, entry_27b7c, "$02F56A -> $027B7C"),
+        (entry_27b7c_end, entry_2f5a2, "$027B7C -> $02F5A2"),
+        (entry_2f5a2_end, entry_2e49c, "$02F5A2 -> $02E49C"),
+        (entry_2e49c_end, entry_296c6, "$02E49C -> $0296C6"),
+        (entry_296c6_end, entry_2e40e, "$0296C6 -> $02E40E"),
+        (entry_2e40e_end, c172_optional, "$02E40E -> $C172"),
+        (c172_optional_end, h8_mark_palette_dirty, "$C172 -> palette helper"),
+        (h8_mark_palette_dirty_end, entry_135e0, "palette helper -> $0135E0"),
     ):
         assert ESC2[
             seam_start - 0x8000:seam_end - 0x8000
@@ -1116,17 +1814,25 @@ if _osp.exists("src/escbank2.bin"):
     ] == bytes.fromhex("a90400"), (
         "$D3B0 continuation moved or lost its 16-bit prologue"
     )
-    h8_mark_palette_dirty = esc2_off("h8_mark_palette_dirty")
-    h8_mark_palette_dirty_end = esc2_off("h8_mark_palette_dirty_end")
-    assert h8_mark_palette_dirty == 0xDB00 and h8_mark_palette_dirty_end <= 0xDB20, (
-        "$8C2 renderer-palette dirty helper moved outside its fixed $94:DB00 island"
-    )
-    assert ESC2[c172_optional_end - 0x8000:0x5B00] == bytes(
-        0xDB00 - c172_optional_end
-    ), "$C172 helper grew into the fixed $94:DB00 palette-dirty island"
-    assert ESC2[h8_mark_palette_dirty_end - 0x8000:0x6000] == bytes(
-        0xE000 - h8_mark_palette_dirty_end
-    ), "$8C2 palette helper grew into the fixed $94:E000 HLE island"
+    for entry, label in (
+        (entry_27952, "$027952"),
+        (entry_279d2, "$0279D2"),
+        (entry_2f3ba, "$02F3BA"),
+        (entry_27b44, "$027B44"),
+        (entry_2f56a, "$02F56A"),
+        (entry_27b7c, "$027B7C"),
+        (entry_2f5a2, "$02F5A2"),
+        (entry_2e49c, "$02E49C"),
+        (entry_296c6, "$0296C6"),
+        (entry_2e40e, "$02E40E"),
+        (entry_135e0, "$0135E0"),
+    ):
+        assert ESC2[entry - 0x8000:entry - 0x8000 + 2] == bytes.fromhex(
+            "c230"
+        ), f"Stage-3 body {label} lost its REP #$30 prologue"
+    assert ESC2[entry_135e0_end - 0x8000:0x6000] == bytes(
+        0xE000 - entry_135e0_end
+    ), "$0135E0 coordinate leaf grew into the fixed $94:E000 HLE island"
     assert ESC2[c172_optional - 0x8000:c172_optional_end - 0x8000].count(
         bytes.fromhex("5c00fc9d")
     ) == 1, "$C172 optional helper lost its sole direct $9D:FC00 callback link"
@@ -1134,13 +1840,27 @@ if _osp.exists("src/escbank2.bin"):
         esc2_off("xlat_dispatch") == 0xF900
         and esc2_off("xd_table") == 0xF931
         and esc2_off("xd_dispatch_end") == 0xF97E
-        and esc2_off("xlat_choke") == 0xF980
+        and xlat_choke == 0xF980
+        and xlat_choke < xlat_choke_end <= 0xFA00
     ), "xlat direct/generic dispatcher crossed its fixed $94:F900-$F97F island"
     assert ESC2[0x7900:0x7931] == bytes.fromhex(
-        "c230a542f008c9030090228024eaa540eb29ff00c976009018c97800900f"
+        "c230a542f008c9030090228024eaa540eb29ff00c976009018c97b00900f"
         "c9c000"
         "f00ac9d7009009c9dd00b0045c00da9d"
     ), "gameplay-entry/combat/task sparse direct xlat arms changed bytes"
+    assert ESC2[
+        xd_sparse_direct - 0x8000:xd_sparse_direct - 0x8000 + 4
+    ] == bytes.fromhex("5c00da9d"), (
+        "xlat sparse-dispatch tail no longer has the VTIME-only patchable JML"
+    )
+    assert ESC2[
+        xlat_choke - 0x8000:xlat_choke_end - 0x8000
+    ].count(bytes.fromhex("5cf09995")) == 1, (
+        "$002D8A fetch-choke route lost its sole pinned $95:99F0 gateway"
+    )
+    assert ESC2[xlat_choke_end - 0x8000:0x7A00] == bytes(
+        0xFA00 - xlat_choke_end
+    ), "xlat_choke has nonzero overlap before hce4_entry@$94:FA00"
     # Poppy permits flowing code to cross a later .org silently.  The fixed
     # $FE00/$FEC4/$FED4/$FF00/$FF80 helper islands must retain zero seams so one
     # helper cannot overwrite the next while still producing an assembly.  Use
@@ -1187,14 +1907,24 @@ if _osp.exists("src/escbank6.bin"):
         raise AssertionError("missing escbank6 layout symbol %s" % symbol)
 
     generated_end = esc6_off("escbank6_end")
+    early_bodies_end = esc6_off("escbank6_early_bodies_end")
+    entry_2d8at = esc6_off("entry_2d8at")
     entry_c8e0 = esc6_off("entry_c8e0t")
     entry_c8e0_resume = esc6_off("entry_c8e0_generated_resume")
     hle_17b4 = esc6_off("hle_17b4")
     hle_17b4_end = esc6_off("hle_17b4_end")
     hle_8fa = esc6_off("hle_8fa")
     hle_8fa_end = esc6_off("hle_8fa_end")
+    d3f6_move_byte_nz = esc6_off("d3f6_move_byte_nz")
+    d3f6_move_byte_nz_end = esc6_off("d3f6_move_byte_nz_end")
     h8fa_validation_spin = esc6_off("h8fa_validation_spin")
     h8fa_validation_spin_end = esc6_off("h8fa_validation_spin_end")
+    h25110_tstw_e_dispatch = esc6_off("h25110_tstw_e_dispatch")
+    h25110_tstw_e_dispatch_end = esc6_off(
+        "h25110_tstw_e_dispatch_end"
+    )
+    esc6_udiv = esc6_off("esc_udiv")
+    esc6_udiv_end = esc6_off("esc_udiv_end")
     hle_96a = esc6_off("hle_96a")
     hle_96a_end = esc6_off("hle_96a_end")
     hle_c262 = esc6_off("hle_c262")
@@ -1205,6 +1935,7 @@ if _osp.exists("src/escbank6.bin"):
     hle_9ea_end = esc6_off("hle_9ea_end")
     entry_111at = esc6_off("entry_111at")
     entry_111at_end = esc6_off("entry_111at_end")
+    mid_bodies_end = esc6_off("escbank6_mid_bodies_end")
     hc262_generated_finish = esc6_off("hc262_generated_finish")
     hc262_generated_finish_end = esc6_off("hc262_generated_finish_end")
     entry_2a1b2 = esc6_off("entry_2a1b2")
@@ -1214,6 +1945,12 @@ if _osp.exists("src/escbank6.bin"):
     entry_29128 = esc6_off("entry_29128")
     entry_29144 = esc6_off("entry_29144")
     entry_2a61e = esc6_off("entry_2a61e")
+    post_late_bodies_end = esc6_off("escbank6_post_late_bodies_end")
+    h176f6_tstw_zero_root = esc6_off("h176f6_tstw_zero_root")
+    h176f6_move_one_root = esc6_off("h176f6_move_one_root")
+    h176f6_backedge_ccr_end = esc6_off(
+        "h176f6_backedge_ccr_end"
+    )
     h25110_stage1 = esc6_off("h25110_stage1")
     h25_fast_done = esc6_off("h25_fast_done")
     h25_fast_x_done = esc6_off("h25_fast_x_done")
@@ -1228,6 +1965,11 @@ if _osp.exists("src/escbank6.bin"):
     hcaf6_const_list_end = esc6_off("hcaf6_const_list_end")
     h25_predicates = esc6_off("h25_sgt")
     h25_predicates_end = esc6_off("h25_predicates_end")
+    h25_clear_response_c = esc6_off("h25_clear_response_c")
+    h25_clear_response_d = esc6_off("h25_clear_response_d")
+    h25_clear_response_helpers_end = esc6_off(
+        "h25_clear_response_helpers_end"
+    )
     entry_11bdc = esc6_off("entry_11bdc")
     entry_11c9a = esc6_off("entry_11c9a")
     landing_combat_continuations_end = esc6_off(
@@ -1239,6 +1981,15 @@ if _osp.exists("src/escbank6.bin"):
     hcaf6_const_332fe_end = esc6_off("hcaf6_const_332fe_end")
     assert generated_end <= 0x9B00 and hle_17b4 == 0x9B00, (
         "escbank6 generated bodies crossed the pinned $95:9B00 hle_17b4 slot"
+    )
+    assert early_bodies_end <= entry_2d8at == 0x99F0, (
+        "escbank6 early bodies crossed or moved the pinned $95:99F0 "
+        "$002D8A sparse-dispatch gateway"
+    )
+    assert ESC6[
+        early_bodies_end - 0x8000:entry_2d8at - 0x8000
+    ] == bytes(entry_2d8at - early_bodies_end), (
+        "escbank6 early bodies left nonzero overlap before entry_2d8at"
     )
     assert entry_c8e0 == 0x8000 and entry_c8e0_resume == 0x8004, (
         "$C8E0 generated entry seam moved from $95:8000/$8004"
@@ -1265,23 +2016,53 @@ if _osp.exists("src/escbank6.bin"):
     assert ESC6[0x1D00:0x1D04] == bytes.fromhex("c230a53e"), (
         "hle_8fa prologue moved or assembled with stale width state"
     )
-    assert hle_8fa < hle_8fa_end <= 0x9FA0, (
+    assert (
+        hle_8fa < hle_8fa_end <= d3f6_move_byte_nz == 0x9F70
+        and d3f6_move_byte_nz < d3f6_move_byte_nz_end <= 0x9FA0
+    ), (
         "hle_8fa crossed the fixed $95:9FA0 validation seam"
     )
     assert h8fa_validation_spin == 0x9FA0 and h8fa_validation_spin_end == 0x9FA2, (
         "hle_8fa validation spin moved from its fixed two-byte seam"
     )
-    assert ESC6[hle_8fa_end - 0x8000:0x1FA0] == bytes(
-        0x1FA0 - (hle_8fa_end - 0x8000)
-    ), "hle_8fa has nonzero overlap before its validation spin"
+    assert (
+        h25110_tstw_e_dispatch == 0x9FB0
+        and h25110_tstw_e_dispatch
+        < h25110_tstw_e_dispatch_end
+        <= esc6_udiv
+        < esc6_udiv_end
+        <= 0xA000
+    ), (
+        "$025110 word-sign dispatcher or bank-$95 divider crossed "
+        "hle_96a@$95:A000"
+    )
+    assert ESC6[hle_8fa_end - 0x8000:0x1F70] == bytes(
+        0x1F70 - (hle_8fa_end - 0x8000)
+    ), "hle_8fa has nonzero overlap before the $D3F6 flags helper"
+    assert ESC6[
+        d3f6_move_byte_nz_end - 0x8000:0x1FA0
+    ] == bytes(0x1FA0 - (d3f6_move_byte_nz_end - 0x8000)), (
+        "$D3F6 flags helper has nonzero overlap before the validation spin"
+    )
     assert ESC6[0x1FA0:0x1FA2] == bytes.fromhex("80fe"), (
         "hle_8fa validation spin is not BRA -2"
     )
     assert hle_96a == 0xA000 and hle_96a < hle_96a_end <= 0xA300, (
         "hle_96a moved from $95:A000 or crossed its reserved $95:A000-$A2FF island"
     )
-    assert ESC6[0x1FA2:0x2000] == bytes(0x005E), (
-        "bank-$95 validation seam has nonzero overlap before hle_96a"
+    assert ESC6[0x1FA2:0x1FB0] == bytes(0x000E), (
+        "bank-$95 validation seam has nonzero overlap before the $025110 "
+        "word-sign dispatcher"
+    )
+    assert ESC6[
+        h25110_tstw_e_dispatch_end - 0x8000:esc6_udiv - 0x8000
+    ] == bytes(esc6_udiv - h25110_tstw_e_dispatch_end), (
+        "$025110 word-sign dispatcher has nonzero overlap before esc_udiv"
+    )
+    assert ESC6[
+        esc6_udiv_end - 0x8000:0x2000
+    ] == bytes(0xA000 - esc6_udiv_end), (
+        "esc_udiv has nonzero overlap before hle_96a"
     )
     assert ESC6[0x2000:0x2004] == bytes.fromhex("c230a536"), (
         "hle_96a prologue moved or assembled with stale width state"
@@ -1310,11 +2091,21 @@ if _osp.exists("src/escbank6.bin"):
     assert entry_111at == 0xA700 and entry_111at < entry_111at_end <= 0xAF00, (
         "$111A table body moved from $95:A700 or crossed the $95:AF00 seam"
     )
-    assert ESC6[entry_111at_end - 0x8000:0x2F00] == bytes(
-        0x2F00 - (entry_111at_end - 0x8000)
+    assert (
+        entry_111at_end <= entry_2a53a < mid_bodies_end <= 0xAF00
     ), (
-        "rejected $C8E0 island has nonzero data after the $111A table body and "
-        "before hc262_generated_finish@$95:AF00"
+        "$02A53A moved outside the audited post-$111A $95:ADCC-$AEFF gap"
+    )
+    assert ESC6[
+        entry_111at_end - 0x8000:entry_2a53a - 0x8000
+    ] == bytes(entry_2a53a - entry_111at_end), (
+        "rejected $C8E0 island has nonzero data before entry_2a53a"
+    )
+    assert ESC6[mid_bodies_end - 0x8000:0x2F00] == bytes(
+        0xAF00 - mid_bodies_end
+    ), (
+        "$02A53A has nonzero overlap before "
+        "hc262_generated_finish@$95:AF00"
     )
     assert hc262_generated_finish == 0xAF00, (
         "the generated $C262 fallback finisher moved from $95:AF00"
@@ -1335,22 +2126,42 @@ if _osp.exists("src/escbank6.bin"):
         "$02A1B2 guarded adapter moved from the audited $95:B600 seam"
     )
     assert (
-        entry_2a1b2 < entry_2a190 < entry_2a1d8t < entry_2a53a
+        entry_2a1b2 < entry_2a190 < entry_2a1d8t
         < entry_29128 < entry_29144 < entry_2a61e
+        < post_late_bodies_end
+        <= h176f6_tstw_zero_root == 0xEFC0
+        < h176f6_move_one_root
+        < h176f6_backedge_ccr_end
         < h25110_stage1 == 0xF000 < h25110_xflag_stage1 == 0xF3E0
         < h25110_xflag_stage1_end == late_combat_bodies_end <= 0xF400
     ), "late-combat bodies overlap, reordered, or overflow bank $95"
+    assert ESC6[
+        post_late_bodies_end - 0x8000:
+        h176f6_tstw_zero_root - 0x8000
+    ] == bytes(
+        h176f6_tstw_zero_root - post_late_bodies_end
+    ), (
+        "cycle-accounted copied C-Chip body overlaps the fixed "
+        "$176F6 callback-CCR seam"
+    )
+    assert ESC6[
+        h176f6_backedge_ccr_end - 0x8000:0x7000
+    ] == bytes(
+        0xF000 - h176f6_backedge_ccr_end
+    ), "$176F6 callback-CCR helper overlaps h25110_stage1@$95:F000"
     esc3_import_symbols = Path("src/escbank3.sym").read_text(
         encoding="utf-8-sig"
     )
     esc3_stage1_done = None
+    esc3_stage1_entry = None
     for line in esc3_import_symbols.splitlines():
         fields = line.split()
         if len(fields) >= 2 and fields[1] == "h25110_stage1_done":
             esc3_stage1_done = int(fields[0].split(":", 1)[1], 16)
-            break
-    assert esc3_stage1_done is not None, (
-        "escbank3 lost the semantic $25110 stage-1 completion seam"
+        if len(fields) >= 2 and fields[1] == "L25110_25122":
+            esc3_stage1_entry = int(fields[0].split(":", 1)[1], 16)
+    assert esc3_stage1_done is not None and esc3_stage1_entry is not None, (
+        "escbank3 lost a semantic $25110 stage-1 seam"
     )
     assert ESC6[
         h25_fast_done_jump - 0x8000:h25_fast_done_jump - 0x8000 + 4
@@ -1369,9 +2180,17 @@ if _osp.exists("src/escbank6.bin"):
     assert ESC6[0x739F:0x73AF] == bytes.fromhex(
         "64a2a5503a0aaab580c9543cd002e6a2"
     ), "$25110 compact pass lost its final-physical-slot X publication"
-    assert ESC6[0x73E0:0x73FA] == bytes.fromhex(
-        "c230a91e00851ca5341869743a8520a53669000085225c4f8097"
-    ), "$25110 X-aware adapter moved or changed bytes at $95:F3E0"
+    assert ESC6[0x73E0:0x73FA] == (
+        bytes.fromhex("c230a91e00851ca5341869743a8520a5366900008522")
+        + bytes(
+            (
+                0x5C,
+                esc3_stage1_entry & 0xFF,
+                esc3_stage1_entry >> 8,
+                0x97,
+            )
+        )
+    ), "$25110 X-aware adapter moved or lost its current bank-$97 setup target"
     assert ESC6[late_combat_bodies_end - 0x8000:0x7400] == bytes(
         0x7400 - (late_combat_bodies_end - 0x8000)
     ), "late-combat bodies have nonzero overlap before hce4_shape_try@$95:F400"
@@ -1394,16 +2213,26 @@ if _osp.exists("src/escbank6.bin"):
         0x7BE0 - (hcaf6_const_list_end - 0x8000)
     ), "$CAF6 constant-list island has nonzero overlap before $95:FBE0"
     assert (
-        h25_predicates_end <= 0xFC20
+        h25_predicates_end
+        == h25_clear_response_c
+        < h25_clear_response_d
+        < h25_clear_response_helpers_end
+        <= 0xFC20
         == entry_11bdc
         < entry_11c9a
         < landing_combat_continuations_end
         <= hcaf6_const_33208
         == 0xFE20
     ), "landing/combat continuations moved or overflowed their bank-$95 tail"
-    assert ESC6[h25_predicates_end - 0x8000:0x7C20] == bytes(
-        0x7C20 - (h25_predicates_end - 0x8000)
-    ), "$25110 predicate tail overlaps the $011B/$011C continuation island"
+    assert ESC6[
+        h25_clear_response_c - 0x8000:h25_clear_response_helpers_end - 0x8000
+    ] == bytes.fromhex(
+        "e220a9009f0c0040c22060"
+        "e220a9009f0d0040c22060"
+    ), "$25110 response-clear helpers lost their explicit long BW-RAM stores"
+    assert ESC6[h25_clear_response_helpers_end - 0x8000:0x7C20] == bytes(
+        0x7C20 - (h25_clear_response_helpers_end - 0x8000)
+    ), "$25110 response-clear helpers overlap the $011B/$011C continuation island"
     assert ESC6[entry_11bdc - 0x8000:entry_11bdc - 0x8000 + 2] == bytes.fromhex(
         "c230"
     ), "$011BDC continuation lost its explicit REP #$30 prologue"
@@ -1446,6 +2275,26 @@ if _osp.exists("src/escbank6.bin"):
 if _osp.exists("src/xlat_table.bin"):
     XLAT = Path("src/xlat_table.bin").read_bytes()
     assert len(XLAT) <= 0x8000, ("xlat table %d bytes overflows the $2B0000..$2B8000 bank" % len(XLAT))
+    # $01D5F0's retained native physics body does not publish the CCR/X
+    # produced immediately before TRAP #5.  It is forensic material only:
+    # production must miss both the fast-RTE selector and this generic xlat
+    # table so op_rte resumes the canonical interpreter.  Its $01D5 page is
+    # necessarily present for neighboring safe continuations, so decode the
+    # generated two-level table and pin the individual entry to a zero miss.
+    parked_1d5f0_page = (0x01D5F0 >> 8) & 0x3FF
+    parked_1d5f0_page_slot = parked_1d5f0_page * 2
+    parked_1d5f0_subtable = int.from_bytes(
+        XLAT[parked_1d5f0_page_slot:parked_1d5f0_page_slot + 2],
+        "little",
+    )
+    assert parked_1d5f0_subtable != 0, (
+        "$01D5 xlat page unexpectedly vanished; cannot prove the individual "
+        "$01D5F0 parking entry"
+    )
+    parked_1d5f0_slot = parked_1d5f0_subtable + (0xF0 * 3)
+    assert XLAT[parked_1d5f0_slot:parked_1d5f0_slot + 3] == bytes(3), (
+        "$01D5F0 unsafe physics coroutine re-entered the production xlat table"
+    )
     ROM[0x2B0000:0x2B0000+len(XLAT)] = XLAT          # @ SA-1 $96:8000 (file $2B0000)
 
 # --- THIRD SA-1 escape bank ($97:8000, file $2B8000) ---
@@ -1491,6 +2340,9 @@ if _osp.exists("src/escbank4.bin"):
     assert esc4_off("h2429c_empty_helpers") == 0x8E53, (
         "escbank4 fused $02429C empty-helper entry moved from $98:8E53"
     )
+    assert esc4_off("entry_2335e_generated_end") == 0x8E53, (
+        "escbank4 $02335E body overlaps the fixed $98:8E53 island"
+    )
     h2429c_empty_end = esc4_off("h2429c_empty_helpers_end")
     assert h2429c_empty_end <= 0x8F00, (
         "escbank4 fused $02429C empty-helper body crossed the $8F00 island"
@@ -1508,11 +2360,48 @@ if _osp.exists("src/escbank4.bin"):
     assert ESC4[0x0F7A:0x0F80] == bytes(0x06), (
         "escbank4 $023342 call bridge crossed the fixed $8F80 island"
     )
-    assert ESC4[0x0FD9:0x1000] == bytes(0x27), (
-        "escbank4 h23e34_empty grew into the $8FD9-$8FFF seam"
+    assert (
+        esc4_off("h23e34_empty_end") == 0x8FD9
+        and esc4_off("readbyte_tst") == 0x8FD9
+        and esc4_off("readbyte_tst_native") == 0x8FEF
+        and esc4_off("readbyte_tst_end") == 0x8FFE
+    ), (
+        "escbank4 compact byte-TST helper moved within the $8FD9-$8FFF seam"
     )
-    assert ESC4[0x1061:0x1100] == bytes(0x9F), (
-        "escbank4 h235e0_empty grew into the $9061-$90FF seam"
+    assert ESC4[0x0FD9:0x0FFE] == bytes.fromhex(
+        "a518d01268a966338540a9020085422080905c28d100"
+        "22b6e50029ff0049800038e9800060"
+    ), (
+        "escbank4 compact byte-TST helper lost its final-iteration fallback "
+        "or no longer sign-normalizes bit 7"
+    )
+    assert ESC4[0x0FFE:0x1000] == bytes(0x02), (
+        "escbank4 compact byte-TST helper crossed the fixed $9000 island"
+    )
+    assert ESC4[0x0400:0x0E53].count(
+        bytes.fromhex("20d98fea")
+    ) == 4, (
+        "escbank4 $02335E does not route exactly four TST.B loads through "
+        "the size-neutral compact helper"
+    )
+    residue_2335e = esc4_off("restore_2335e_call_residue")
+    residue_2335e_end = esc4_off("restore_2335e_call_residue_end")
+    assert residue_2335e == 0x9080 and residue_2335e_end == 0x90B7, (
+        "escbank4 $02335E call-residue helper left its audited "
+        "$98:9080-$98:90B6 island"
+    )
+    assert ESC4[0x1061:0x1080] == bytes(0x1F), (
+        "escbank4 h235e0_empty grew into the pre-residue $9061-$907F seam"
+    )
+    assert ESC4[0x1080:0x10B7] == bytes.fromhex(
+        "a53c38e90e00aaa90200eb9f000040ebe8e8a93034eb9f000040eb"
+        "a53c38e90400aaa90200eb9f000040ebe8e8a93635eb9f000040eb60"
+    ), (
+        "escbank4 $02335E call-residue helper no longer restores "
+        "$023430 and $023536 below architectural A7"
+    )
+    assert ESC4[0x10B7:0x1100] == bytes(0x49), (
+        "escbank4 $02335E call-residue helper crossed the $9100 island"
     )
     assert ESC4[0x115F:0x1200] == bytes(0xA1), (
         "escbank4 MOVEM residue helper grew into entry_235e0 at $9200"
@@ -1525,8 +2414,29 @@ if _osp.exists("src/escbank4.bin"):
     h1e7c0_loop_done = esc4_off("Lf1e7c0_227")
     h1e7c0_generated_reentry = esc4_off("h1e7c0_generated_reentry")
     h1e7c0_script_seam = esc4_off("L1e7c0_1e94a")
-    assert h1e7c0_script_seam == 0xB7FD, (
-        "$01E7C0 generated script seam moved from $98:B7FD"
+    assert h1e7c0_script_seam == 0xB814, (
+        "$01E7C0 generated script seam moved from audited $98:B814"
+    )
+    c892_end = esc4_off("entry_c892_end")
+    residue_helper = esc4_off("restore_1e7c0_call_residue")
+    residue_helper_end = esc4_off("restore_1e7c0_call_residue_end")
+    byte_arith_helper = esc4_off("neg_d3_byte_1e7c0")
+    byte_arith_helper_end = esc4_off("byte_arith_1e7c0_end")
+    assert c892_end == 0xFF51, (
+        "escbank4 entry_c892 tail moved from audited $98:FF51"
+    )
+    assert residue_helper == 0xFF60 and residue_helper_end <= 0xFF80, (
+        "$01E7C0 shared call-residue helper left its audited "
+        "$98:FF60-$98:FF7F tail island"
+    )
+    assert byte_arith_helper == 0xFF80 and byte_arith_helper_end <= 0xFFD0, (
+        "$01E7C0 byte-arithmetic repair helpers left the audited "
+        "$98:FF80-$98:FFCF tail island"
+    )
+    assert ESC4[
+        c892_end - 0x8000:residue_helper - 0x8000
+    ] == bytes(residue_helper - c892_end), (
+        "$01E7C0 shared call-residue helper overlaps entry_c892"
     )
     assert h1e7c0_generated_reentry == 0xFA6A, (
         "$01E7C0 generated-record re-entry trampoline moved from $98:FA6A"
@@ -1559,6 +2469,14 @@ if _osp.exists("src/escbank4.bin"):
         "escbank4 entry_c7dc grew into the $FD56-$FD6F seam before entry_c892; "
         "relocate code instead of allowing .org overlap"
     )
+    assert (
+        ESC4.count(bytes.fromhex("5c46fc99")) == 2
+        and ESC4.count(bytes.fromhex("5c52fc99")) == 1
+        and ESC4.count(bytes.fromhex("5c61fc99")) == 1
+    ), (
+        "escbank4 entry_c7dc lost a source-specific terminal-CCR route to "
+        "the shared $99:FC46/$FC52/$FC61 helpers"
+    )
     ROM[0x2C0000:0x2C0000+len(ESC4)] = ESC4          # @ SA-1 $98:8000 (file $2C0000)
 if _osp.exists("src/escbank3.bin"):
     ESC3 = Path("src/escbank3.bin").read_bytes()
@@ -1577,22 +2495,40 @@ if _osp.exists("src/escbank3.bin"):
     h25110_stage1_done = esc3_off("h25110_stage1_done")
     h25110_stage2_generated_setup = esc3_off("h25110_stage2_generated_setup")
     h25110_stage5_select = esc3_off("h25110_stage5_select")
+    lf25110_281 = esc3_off("Lf25110_281")
+    l25110_259b0 = esc3_off("L25110_259b0")
     h25110_final_tst_done = esc3_off("h25110_final_tst_done")
+    h25110_canonical_a5 = esc3_off("h25110_canonical_a5")
+    h25110_vtime_finish_source = esc3_off("h25110_vtime_finish_source")
+    esc3_ac_charge_2 = esc3_off("esc3_ac_charge_2")
+    esc3_ac_charge_legacy_load = esc3_off("esc3_ac_charge_legacy_load")
+    esc3_ac_charge_legacy_sbc = esc3_off("esc3_ac_charge_legacy_sbc")
+    esc3_ac_charge_vtime_gateway = esc3_off("esc3_ac_charge_vtime_gateway")
+    h25110_vtime_entry_gateway = esc3_off("h25110_vtime_entry_gateway")
+    h25110_vtime_finish_gateway = esc3_off("h25110_vtime_finish_gateway")
+    esc3_vtime_gateway_end = esc3_off("esc3_vtime_gateway_end")
+    ors_pre_target = interp_symbol("ors_pre")
     entry_12e56 = esc3_off("entry_12e56")
     entry_1f1c0t = esc3_off("entry_1f1c0t")
     entry_1f1c0_generated = esc3_off("entry_1f1c0_generated")
     assert (
         entry_25110 == 0x8000
-        < lf25110_1 == 0x803E
-        < l25110_25122 == 0x804F
+        < lf25110_1
+        < l25110_25122
         < h25110_stage1_done
         < h25110_stage2_generated_setup
         < h25110_final_tst_done
         < entry_12e56 == 0xA000
     ), "$25110 adapters or semantic seams moved/reordered in bank $97"
-    assert ESC3[0x003E:0x004F] == bytes.fromhex(
-        "a5a280045ce0f3955c00f095eaeaeaeaea"
-    ), "$25110 X/compact routing seam moved or changed bytes"
+    assert Path("src/escbank3.pasm").read_text(encoding="utf-8").count(
+        "jsr esc3_ac_charge_"
+    ) == 226, "$25110 lost one or more of its 226 generated charge blocks"
+    assert ESC3[
+        lf25110_1 - 0x8000:l25110_25122 - 0x8000
+    ] == (
+        bytes((0x20, esc3_ac_charge_2 & 0xFF, esc3_ac_charge_2 >> 8))
+        + bytes.fromhex("ad3407f0045ce0f3955c00f095")
+    ), "$25110 paced/generated versus unpaced/compact Stage-1 route changed"
     assert entry_1f1c0t == 0xFC60 and entry_1f1c0_generated == 0xFC64, (
         "$01F1C0 fast redirect or generated fallback moved in bank $97"
     )
@@ -1600,17 +2536,32 @@ if _osp.exists("src/escbank3.bin"):
         "$01F1C0 table entry lost its size-neutral JML $9D:AB00 wrapper"
     )
     assert ESC3[
-        h25110_stage1_done - 0x8000:h25110_stage1_done - 0x8000 + 5
-    ] == bytes.fromhex("5c00809dea"), (
-        "$25110 stage-2 guarded redirect moved or is no longer size-neutral"
+        h25110_stage1_done - 0x8000:h25110_stage1_done - 0x8000 + 8
+    ] == (
+        bytes((0x20, esc3_off("esc3_ac_charge_3") & 0xFF,
+               esc3_off("esc3_ac_charge_3") >> 8))
+        + bytes.fromhex("5c00809dea")
+    ), (
+        "$25110 stage-2 charge/guarded redirect changed"
     )
-    assert h25110_stage2_generated_setup == h25110_stage1_done + 5, (
+    assert h25110_stage2_generated_setup == h25110_stage1_done + 8, (
         "$25110 generated stage-2 fallback no longer follows its redirect"
     )
     assert ESC3[
-        h25110_stage5_select - 0x8000:h25110_stage5_select - 0x8000 + 4
-    ] == bytes.fromhex("5c00829d"), (
-        "$025110 stage-5 inactive-list redirect moved or changed size"
+        h25110_stage5_select - 0x8000:h25110_stage5_select - 0x8000 + 7
+    ] == (
+        bytes((0x20, esc3_ac_charge_2 & 0xFF, esc3_ac_charge_2 >> 8))
+        + bytes.fromhex("5c00829d")
+    ), (
+        "$025110 stage-5 charge/inactive-list redirect changed"
+    )
+    assert lf25110_281 < l25110_259b0 < h25110_final_tst_done, (
+        "$025110 word-sign or Stage-5 continuations reordered"
+    )
+    assert ESC3[
+        lf25110_281 - 0x8000 - 6:lf25110_281 - 0x8000
+    ] == bytes.fromhex("5cb09f95eaea"), (
+        "$025110 TST.W $E(A2) lost its size-neutral word-sign dispatcher"
     )
     # The generated CAF6 body must end before its guarded production helper,
     # which is pinned at $DD00 and may use the remaining space before
@@ -1635,26 +2586,209 @@ if _osp.exists("src/escbank3.bin"):
         "escbank3 hcaf6_fast has nonzero overlap before h1e7c0_hot@$97:E000"
     )
     h1e7c0_hot_end = esc3_off("h1e7c0_hot_end")
-    assert 0xE000 < h1e7c0_hot_end <= 0xE800, (
-        "escbank3 h1e7c0_hot crossed the fixed entry_cb9e@$97:E800 slot"
+    h1e7c0_hot_timer_delta_select = esc3_off(
+        "h1e7c0_hot_timer_delta_select"
+    )
+    h1e7c0_hot_timer_delta_ready = esc3_off(
+        "h1e7c0_hot_timer_delta_ready"
+    )
+    assert 0xE000 < h1e7c0_hot_end <= 0xE500, (
+        "escbank3 h1e7c0_hot crossed the fixed $01E7C0 X-helper slots"
+    )
+    assert (
+        0xE000
+        < h1e7c0_hot_timer_delta_select
+        < h1e7c0_hot_timer_delta_ready
+        < h1e7c0_hot_end
+    ), "$01E7C0 mode-dependent object-timer delta moved outside its hot body"
+    assert ESC3[
+        h1e7c0_hot_timer_delta_select - 0x8000:
+        h1e7c0_hot_timer_delta_ready - 0x8000
+    ] == bytes.fromhex("af322940ebf007a90200858e641e"), (
+        "$01E7C0 hot path no longer selects timer delta 2 while $2932 is "
+        "active or no longer clears D7's MOVEQ high word"
     )
     assert ESC3[
-        h1e7c0_hot_end - 0x8000:0x6800
-    ] == bytes(0xE800 - h1e7c0_hot_end), (
-        "escbank3 h1e7c0_hot has nonzero overlap before entry_cb9e@$97:E800"
+        h1e7c0_hot_end - 0x8000:0x6500
+    ] == bytes(0xE500 - h1e7c0_hot_end), (
+        "escbank3 h1e7c0_hot has nonzero overlap before the X helpers"
     )
-    # entry_1d5f0 ends at file-relative $7911 and the guarded callable CB9E
-    # helper is pinned at $7A00 ($97:FA00).  Poppy permits flowing code to
-    # overwrite a later .org silently, so keep this seam explicit.
-    assert ESC3[0x7911:0x7A00] == bytes(0xEF), (
-        "escbank3 entry_1d5f0 grew into the $F911-$F9FF seam before hcb9e_fast; "
+    x_helper_slots = (
+        ("h1e7c0_x_sub_d2_9e", "h1e7c0_x_sub_d2_9e_end", 0xE500, 0xE520),
+        ("h1e7c0_x_sub_d4_9e", "h1e7c0_x_sub_d4_9e_end", 0xE520, 0xE540),
+        (
+            "h1e7c0_x_sub_d2_0078",
+            "h1e7c0_x_sub_d2_0078_end",
+            0xE540,
+            0xE560,
+        ),
+        (
+            "h1e7c0_x_sub_d2_0010",
+            "h1e7c0_x_sub_d2_0010_end",
+            0xE560,
+            0xE580,
+        ),
+        (
+            "h1e7c0_x_sub_d7_0001",
+            "h1e7c0_x_sub_d7_0001_end",
+            0xE580,
+            0xE5A0,
+        ),
+        (
+            "h1e7c0_x_add_be_351c",
+            "h1e7c0_x_add_be_351c_end",
+            0xE5A0,
+            0xE5C0,
+        ),
+    )
+    for helper, helper_end, start, end in x_helper_slots:
+        assert esc3_off(helper) == start, (
+            "escbank3 %s moved from its pinned $97:%04X slot"
+            % (helper, start)
+        )
+        resolved_end = esc3_off(helper_end)
+        assert start < resolved_end <= end, (
+            "escbank3 %s crossed its $97:%04X-$%04X slot"
+            % (helper, start, end)
+        )
+        assert ESC3[
+            resolved_end - 0x8000:end - 0x8000
+        ] == bytes(end - resolved_end), (
+            "escbank3 %s left nonzero overlap after its end symbol" % helper
+        )
+    campaign_irq_reload = esc3_off("campaign_irq_reload")
+    campaign_irq_reload_end = esc3_off("campaign_irq_reload_end")
+    h25110_native_guard = esc3_off("h25110_native_guard")
+    h25110_native_guard_end = esc3_off("h25110_native_guard_end")
+    h25110_yield_2582a = esc3_off("h25110_yield_2582a")
+    h25110_yield_end = esc3_off("h25110_yield_end")
+    entry_25110_resume_2582a = esc3_off("entry_25110_resume_2582a")
+    entry_25110_resume_end = esc3_off("entry_25110_resume_end")
+    esc3_ac_charge_1 = esc3_off("esc3_ac_charge_1")
+    esc3_ac_charge_end = esc3_off("esc3_ac_charge_end")
+    assert (
+        campaign_irq_reload == 0xE5C0
+        < campaign_irq_reload_end
+        == h25110_native_guard
+        < h25110_native_guard_end
+        == h25110_yield_2582a
+        < h25110_yield_end
+        == entry_25110_resume_2582a
+        < entry_25110_resume_end
+        == esc3_ac_charge_1
+        < esc3_ac_charge_end
+        <= 0xE800
+    ), (
+        "campaign IRQ/yield/resume/charge helpers moved, reordered, or crossed "
+        "entry_cb9e@$97:E800"
+    )
+    assert (
+        esc3_ac_charge_end <= 0xE680
+        and esc3_ac_charge_vtime_gateway == 0xE680
+        < h25110_vtime_entry_gateway
+        < h25110_vtime_finish_gateway
+        < esc3_vtime_gateway_end
+        <= 0xE700
+    ), "VTIME-only bank-$97 gateway moved or crossed its reserved seam"
+    assert ESC3[esc3_ac_charge_end - 0x8000:0x6680] == bytes(
+        0xE680 - esc3_ac_charge_end
+    ), "campaign IRQ helpers overlap the VTIME-only gateway seam"
+    assert ESC3[esc3_vtime_gateway_end - 0x8000:0x6800] == bytes(
+        0xE800 - esc3_vtime_gateway_end
+    ), "VTIME-only gateway overlaps entry_cb9e@$97:E800"
+    assert ESC3[
+        h25110_canonical_a5 - 0x8000:h25110_canonical_a5 - 0x8000 + 3
+    ] == bytes((0x20, esc3_ac_charge_2 & 0xFF, esc3_ac_charge_2 >> 8)), (
+        "$025110 default entry charge is no longer a patchable same-bank JSR"
+    )
+    assert ESC3[
+        esc3_ac_charge_legacy_load - 0x8000:esc3_ac_charge_legacy_load - 0x8000 + 3
+    ] == bytes.fromhex("a5ac38"), (
+        "$025110 default legacy charge load/seC seam changed"
+    )
+    assert ESC3[
+        h25110_vtime_finish_source - 0x8000:h25110_vtime_finish_source - 0x8000 + 4
+    ] == bytes.fromhex("5c") + ors_pre_target.to_bytes(2, "little") + bytes([0x00]), (
+        "$025110 default RTS tail is no longer a patchable ors_pre JML"
+    )
+    # Every bank-$97 hot-helper exit into the generated bank-$98 body must be
+    # assembled from the current escbank4 symbols.  Byte-width fixes can move
+    # these targets; stale numeric JMLs previously survived assembly and sent
+    # organic collision/render execution into the middle of instructions.
+    esc4_symbols_for_cross = Path("src/escbank4.sym").read_text(
+        encoding="utf-8-sig"
+    )
+    def esc4_cross_off(symbol):
+        for line in esc4_symbols_for_cross.splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[1] == symbol:
+                return int(fields[0].split(":", 1)[1], 16)
+        raise AssertionError(
+            "missing escbank4 cross-bank layout symbol %s" % symbol
+        )
+
+    for cross_symbol in (
+        "L1e7c0_1e7cc",
+        "L1e7c0_1e94a",
+        "L1e7c0_1ee3a",
+        "br1e7c0_10",
+        "Lf1e7c0_227",
+        "entry_d96t",
+    ):
+        target = esc4_cross_off(cross_symbol)
+        encoded_jml = bytes((0x5C, target & 0xFF, target >> 8, 0x98))
+        assert ESC3.count(encoded_jml) == 1, (
+            "escbank3 $01E7C0 helper does not contain exactly one current "
+            "JML to escbank4 %s@$98:%04X" % (cross_symbol, target)
+        )
+    # The guarded callable CB9E helper is pinned at $7A00 ($97:FA00).
+    # Resolve the generated physics body's explicit end symbol so a faithful
+    # lowering may change size without weakening Poppy's overlap guard.
+    entry_1d5f0_end = esc3_off("entry_1d5f0_end")
+    assert 0xEC00 < entry_1d5f0_end <= 0xFA00, (
+        "escbank3 entry_1d5f0 crossed hcb9e_fast@$97:FA00"
+    )
+    assert ESC3[
+        entry_1d5f0_end - 0x8000:0x7A00
+    ] == bytes(0xFA00 - entry_1d5f0_end), (
+        "escbank3 entry_1d5f0 has nonzero overlap before hcb9e_fast; "
         "relocate code instead of allowing .org overlap"
     )
     assert ESC3[0x7C48:0x7C60] == bytes(0x18), (
         "escbank3 hcb9e_fast helpers grew into the $FC48-$FC5F seam before "
         "entry_1f1c0t; relocate code instead of allowing .org overlap"
     )
-    ROM[0x2B8000:0x2B8000+len(ESC3)] = ESC3          # @ SA-1 $97:8000 (file $2B8000)
+    esc3_packed = bytearray(ESC3)
+    vtime_irq_reload = bytes.fromhex("5c0085f2eaeaeaea")
+    legacy_irq_reload = bytes.fromhex("c230a9007085ac6b")
+    irq_reload_offset = campaign_irq_reload - 0x8000
+    assert ESC3[irq_reload_offset:irq_reload_offset + len(vtime_irq_reload)] == (
+        vtime_irq_reload
+    ), "campaign IRQ reload no longer has the patchable VTIME gateway footprint"
+    if vtime_enabled:
+        # Keep VTIME completely out of the production native path.  The three
+        # substitutions are source-byte asserted above and target fixed local
+        # gateways; only the diagnostic ROM executes their cross-bank JSLs.
+        esc3_packed[
+            h25110_canonical_a5 - 0x8000:h25110_canonical_a5 - 0x8000 + 3
+        ] = bytes((0x20, h25110_vtime_entry_gateway & 0xFF, h25110_vtime_entry_gateway >> 8))
+        esc3_packed[
+            esc3_ac_charge_legacy_load - 0x8000:esc3_ac_charge_legacy_load - 0x8000 + 3
+        ] = bytes((0x20, esc3_ac_charge_vtime_gateway & 0xFF, esc3_ac_charge_vtime_gateway >> 8))
+        esc3_packed[
+            h25110_vtime_finish_source - 0x8000:h25110_vtime_finish_source - 0x8000 + 4
+        ] = bytes(
+            (0x5C, h25110_vtime_finish_gateway & 0xFF,
+             h25110_vtime_finish_gateway >> 8, 0x97)
+        )
+    else:
+        # The production interrupt path must use the old local $7000 reload,
+        # not make an otherwise-disabled F2 JML/RTL round trip every IRQ.
+        # This exact eight-byte sequence is the accepted f369 implementation.
+        esc3_packed[
+            irq_reload_offset:irq_reload_offset + len(legacy_irq_reload)
+        ] = legacy_irq_reload
+    ROM[0x2B8000:0x2B8000+len(esc3_packed)] = esc3_packed  # @ SA-1 $97:8000 (file $2B8000)
 
 # --- FIFTH SA-1 escape bank ($99:8000, file $2C8000) ---
 # The $023-25xxx trap#5-cluster SHELL segments (coroutine yield-loop bodies + their callees;
@@ -1709,8 +2843,27 @@ if _osp.exists("src/escbank5.bin"):
                 return int(fields[0].split(":", 1)[1], 16)
         raise AssertionError("missing escbank5 layout symbol %s" % symbol)
 
+    esc5_root_2429c = esc5_off("entry_2429c")
+    assert ESC5[
+        esc5_root_2429c - 0x8000:esc5_root_2429c - 0x8000 + 4
+    ] == bytes.fromhex("c230a534"), (
+        "$02429C production entry lost its VTIME-only patchable REP/LDA seam"
+    )
     assert esc5_off("entry_24cb6") == esc5_off("L24bc2_24cb6"), (
         "$024CB6 exported continuation no longer aliases the original native loop seam"
+    )
+    long_or_region = ESC5[
+        esc5_off("entry_24cb6") - 0x8000:
+        esc5_off("Ltj24bc2_24bc0") - 0x8000
+    ]
+    assert bytes.fromhex(
+        "a50405008504"  # ORA $00 / D1.lo
+        "a50405088504"  # ORA $08 / D2.lo
+        "a506050a8506"  # ORA $0A / D2.hi
+        "a504859aa506859c"
+    ) in long_or_region, (
+        "$024CB6 lost the high-word half of OR.L D2,D1; task spawn arguments "
+        "would silently lose their 16.16 integer component"
     )
     d28_stub = esc5_off("Ltj24bc2_24d28") - 0x8000
     assert ESC5[d28_stub:d28_stub + 16].count(bytes.fromhex("5c00da9d")) == 1, (
@@ -1723,6 +2876,26 @@ if _osp.exists("src/escbank5.bin"):
     assert esc5_off("br2429c_3") == 0x8613, (
         "$02429C br2429c_3 moved; update the bank-$98 fused-helper constant"
     )
+    assert esc5_off("entry_242be") == esc5_off("br2429c_4"), (
+        "$0242BE xlat return no longer aliases the native post-$25110 continuation"
+    )
+    if _osp.exists("src/xlat_table.bin"):
+        ret_242be_page = (0x0242BE >> 8) & 0x3FF
+        ret_242be_page_slot = ret_242be_page * 2
+        ret_242be_subtable = int.from_bytes(
+            XLAT[ret_242be_page_slot:ret_242be_page_slot + 2],
+            "little",
+        )
+        assert ret_242be_subtable != 0, (
+            "$0242BE xlat page vanished; native $025110 cannot return to its caller"
+        )
+        ret_242be_slot = ret_242be_subtable + ((0x0242BE & 0xFF) * 3)
+        ret_242be_target = (0x990000 | esc5_off("entry_242be")).to_bytes(
+            3, "little"
+        )
+        assert XLAT[ret_242be_slot:ret_242be_slot + 3] == ret_242be_target, (
+            "$0242BE xlat slot no longer targets the bank-$99 post-$25110 continuation"
+        )
     assert esc5_off("br23e34_1") == 0x8C04, (
         "$23E34 inner return moved; update the bank-$98 fused-helper constant"
     )
@@ -1730,6 +2903,25 @@ if _osp.exists("src/escbank5.bin"):
     assert ESC5[fused_redirect:fused_redirect + 14] == bytes.fromhex(
         "5c538e98" + "ea" * 10
     ), "$02429C fused empty-helper redirect moved or changed size"
+    collision_cmp_start = esc5_off("Lf2429c_20") - 0x8000
+    collision_cmp_end = esc5_off("Lf2429c_21") - 0x8000
+    assert bytes.fromhex(
+        # MOVE.B $18(A4),D1 preserves D1.bits8-31.  The following CMPI.B
+        # must therefore execute with M=8; REP deliberately preserves its Z
+        # result for BEQ.  A 16-bit SBC here caused the organic tick-12070
+        # collision-row retirement failure when D1.w was $0105.
+        "e2208504c220"      # SEP; STA $04; REP
+        "a504e220c905c220"  # LDA $04; SEP; CMP #$05; REP
+    ) in ESC5[collision_cmp_start:collision_cmp_end], (
+        "$02429C collision cleanup lost byte-width CMPI.B #5,D1 semantics"
+    )
+    collision_fallthrough = esc5_off("L2429c_243b8") - 0x8000
+    assert bytes.fromhex("8504859a") in ESC5[
+        collision_fallthrough:collision_fallthrough + 20
+    ], (
+        "$02429C width repair lost its size-neutral D1 sign-extension store; "
+        "following bank-$99 symbols may have moved"
+    )
 
     round_roots = ["entry_c262", "entry_8d72", "entry_c3f6", "entry_7c22", "entry_ce48"]
     round_offsets = [esc5_off(symbol) for symbol in round_roots]
@@ -1853,18 +3045,222 @@ if _osp.exists("src/escbank5.bin"):
         "production pacing no longer saturates catch-up debt at ten frames"
     )
     paced_end = esc5_off("lh_0818_paced_end")
+    paced_gateway = esc5_off("lh_0818_vtime_gateway")
+    paced_gateway_end = esc5_off("lh_0818_vtime_gateway_end")
+    paced_release = esc5_off("lhp_vtime_release_seam")
     charge_12b6c = esc5_off("h11752_charge_12b6c")
     charge_12b6c_end = esc5_off("h11752_charge_12b6c_end")
-    assert paced_end <= 0xFBE0 and charge_12b6c == 0xFBE0 and charge_12b6c_end <= 0xFC10, (
-        "$11752 AC-charge tail moved, or $0818 pacing grew into its $99:FBE0 island"
+    task24bc2_ccr = esc5_off("h24bc2_tst_zero_yield")
+    task24bc2_ccr_end = esc5_off("h24bc2_tst_zero_yield_end")
+    h13be_inext = esc5_off("h13be_exit_flags_inext")
+    h13be_inext_end = esc5_off("h13be_exit_flags_inext_end")
+    h13be_write = esc5_off("h13be_writeword_flags")
+    h13be_write_end = esc5_off("h13be_writeword_flags_end")
+    h13be_ors = esc5_off("h13be_exit_flags_ors")
+    h13be_ors_end = esc5_off("h13be_exit_flags_ors_end")
+    c846_clear = esc5_off("hc846_clear_nzvc")
+    c846_clear_end = esc5_off("hc846_clear_nzvc_end")
+    c846_z = esc5_off("hc846_z_preserve_x")
+    c846_z_end = esc5_off("hc846_z_preserve_x_end")
+    c846_tst = esc5_off("hc846_tst_d7")
+    c846_tst_end = esc5_off("hc846_tst_d7_end")
+    h13be_table_store = esc5_off("h13be_store_flags_table")
+    h13be_table_store_end = esc5_off("h13be_store_flags_table_end")
+    task24bc2_cmp = esc5_off("h24bc2_cmp_d1_d0_yield")
+    task24bc2_cmp_end = esc5_off("h24bc2_cmp_d1_d0_yield_end")
+    task24bc2_tst_word = esc5_off("h24bc2_tst_word_zero_yield")
+    task24bc2_tst_word_end = esc5_off(
+        "h24bc2_tst_word_zero_yield_end"
     )
-    assert ESC5[paced_end - 0x8000:charge_12b6c - 0x8000] == bytes(
-        charge_12b6c - paced_end
-    ), "$0818 pacing has nonzero overlap before the $11752 AC-charge tail"
-    assert len(ESC5) == charge_12b6c_end - 0x8000, (
-        "escbank5 data unexpectedly follows the guarded $11752 AC-charge tail"
+    task24bc2_tst_byte = esc5_off(
+        "h24bc2_tst_byte_nonzero_yield"
     )
-    ROM[0x2C8000:0x2C8000+len(ESC5)] = ESC5          # @ SA-1 $99:8000 (file $2C8000)
+    task24bc2_tst_byte_end = esc5_off(
+        "h24bc2_tst_byte_nonzero_yield_end"
+    )
+    task24bc2_move_byte = esc5_off(
+        "h24bc2_move_byte_one_yield"
+    )
+    task24bc2_move_byte_end = esc5_off(
+        "h24bc2_move_byte_one_yield_end"
+    )
+    task2429c_tst_byte = esc5_off("h2429c_tst_byte19_branch")
+    task2429c_tst_byte_end = esc5_off("h2429c_tst_byte19_branch_end")
+    task259ca_tst_byte = esc5_off("h259ca_tst_byte_branch")
+    task259ca_tst_byte_end = esc5_off("h259ca_tst_byte_branch_end")
+    assert (
+        paced_end <= paced_gateway == 0xFBB0
+        and paced_gateway < paced_gateway_end <= 0xFBE0
+        and charge_12b6c == 0xFBE0
+        and charge_12b6c_end == task24bc2_ccr
+        and task24bc2_ccr_end == h13be_inext == 0xFC0C
+        and h13be_inext_end == h13be_write == 0xFC10
+        and h13be_write_end <= h13be_ors == 0xFC2C
+        and h13be_ors_end <= c846_clear == 0xFC46
+        and c846_clear_end == c846_z
+        and c846_z_end == c846_tst
+        and c846_tst_end == h13be_table_store == 0xFC7B
+        and h13be_table_store_end <= 0xFCA0
+        and task24bc2_cmp == 0xFCA0
+        and task24bc2_cmp_end <= task24bc2_tst_word == 0xFCD0
+        and task24bc2_tst_word_end == task24bc2_tst_byte
+        and task24bc2_tst_byte_end == task24bc2_move_byte
+        and task24bc2_move_byte_end <= 0xFD00
+        and task2429c_tst_byte == 0xFD00
+        and task2429c_tst_byte_end == task259ca_tst_byte
+        and task259ca_tst_byte_end <= 0xFD40
+    ), (
+        "$11752/$24BC2/$13BE/$C78E/$C7DC/$C846 terminal island layout "
+        "moved, or $0818 pacing grew into its $99:FBE0 island"
+    )
+    assert ESC5[
+        task24bc2_ccr - 0x8000:task24bc2_ccr_end - 0x8000
+    ] == bytes.fromhex("64706472646ea9010085604c9b85"), (
+        "$024BC2 TST-zero terminal-CCR island moved or changed"
+    )
+    assert ESC5[
+        h13be_inext - 0x8000:h13be_inext_end - 0x8000
+    ] == bytes.fromhex("5c28d100"), (
+        "$0013BE direct-entry terminal bridge moved or changed"
+    )
+    assert ESC5[
+        h13be_write - 0x8000:h13be_write_end - 0x8000
+    ] == bytes.fromhex(
+        "22bae500646e647264706460a504f0051002e6706be6606b"
+    ), "$0013BE direct write/CCR island moved or changed"
+    assert ESC5[
+        h13be_ors - 0x8000:h13be_ors_end - 0x8000
+    ] == bytes.fromhex("5c6fd100"), (
+        "$0013BE table-entry terminal bridge moved or changed"
+    )
+    assert ESC5[
+        c846_clear - 0x8000:c846_clear_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646e64605c28d100"
+    ), "$00C846 clear-NZVC exit island moved or changed"
+    assert ESC5[
+        c846_z - 0x8000:c846_z_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646ea9010085605c28d100"
+    ), "$00C846 Z-preserving exit island moved or changed"
+    assert ESC5[
+        c846_tst - 0x8000:c846_tst_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646e6460a51cf0081002e6705c28d100e6605c28d100"
+    ), "$00C846 TST.W-D7 exit island moved or changed"
+    assert ESC5[
+        h13be_table_store - 0x8000:h13be_table_store_end - 0x8000
+    ] == bytes.fromhex(
+        "9f00004048646e647264706460a504f0061002e670686be660686b"
+    ), "$0013BE table write/CCR island moved or changed"
+    assert ESC5[paced_end - 0x8000:paced_gateway - 0x8000] == bytes(
+        paced_gateway - paced_end
+    ), "$0818 pacing has nonzero overlap before its fallback gateway"
+    assert ESC5[
+        paced_gateway - 0x8000:paced_gateway_end - 0x8000
+    ] == bytes.fromhex(
+        "af0080f2290200f0045cc0f5002200fb995c9bf500"
+    ), "$0818 fallback gateway moved or lost its pre-mutation mode split"
+    assert ESC5[paced_gateway_end - 0x8000:charge_12b6c - 0x8000] == bytes(
+        charge_12b6c - paced_gateway_end
+    ), "$0818 fallback gateway overlaps the $11752 AC-charge tail"
+    assert ESC5[
+        h13be_write_end - 0x8000:h13be_ors - 0x8000
+    ] == bytes(h13be_ors - h13be_write_end), (
+        "$0013BE direct write helper overlaps its fixed table bridge"
+    )
+    assert ESC5[
+        h13be_ors_end - 0x8000:c846_clear - 0x8000
+    ] == bytes(c846_clear - h13be_ors_end), (
+        "$0013BE table bridge overlaps the fixed $00C846 helpers"
+    )
+    assert (
+        ESC5.count(bytes.fromhex("5c46fc99")) == 4
+        and ESC5.count(bytes.fromhex("5c52fc99")) == 2
+        and ESC5.count(bytes.fromhex("5c61fc99")) == 2
+    ), (
+        "escbank5 entry_c78e/entry_c846 lost a source-specific "
+        "terminal-CCR route"
+    )
+    assert ESC5[
+        h13be_table_store_end - 0x8000:task24bc2_cmp - 0x8000
+    ] == bytes(task24bc2_cmp - h13be_table_store_end), (
+        "$024BC2 CMP terminal bridge overlaps the $0013BE table write helper"
+    )
+    assert ESC5[
+        task24bc2_cmp_end - 0x8000:task24bc2_tst_word - 0x8000
+    ] == bytes(task24bc2_tst_word - task24bc2_cmp_end), (
+        "$024BC2 source-specific terminal bridges overlap at $99:FCD0"
+    )
+    assert ESC5[
+        task24bc2_cmp - 0x8000:task24bc2_cmp_end - 0x8000
+    ] == bytes.fromhex(
+        "08e22068c23029ff0085502902008560a5502980008570"
+        "a5502940008572a550290100490100856e4cc585"
+    ), "$024BC2 CMP/BGT terminal-CCR bridge moved or changed"
+    assert ESC5[
+        task24bc2_tst_word - 0x8000:task24bc2_tst_word_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646ea9010085604cc585"
+    ), "$024BC2 TST.W-zero terminal-CCR bridge moved or changed"
+    assert ESC5[
+        task24bc2_tst_byte - 0x8000:task24bc2_tst_byte_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646e6460298000f002e6704cc585"
+    ), "$024BC2 TST.B-nonzero terminal-CCR bridge moved or changed"
+    assert ESC5[
+        task24bc2_move_byte - 0x8000:task24bc2_move_byte_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646e64604cc585"
+    ), "$024BC2 MOVE.B-one terminal-CCR bridge moved or changed"
+    assert ESC5[
+        task2429c_tst_byte - 0x8000:task2429c_tst_byte_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646e646029ff00f00a298000f002e6704c9286e6604c2f8b"
+    ), "$02429C inactive-record TST.B terminal-CCR bridge moved or changed"
+    assert ESC5[
+        task259ca_tst_byte - 0x8000:task259ca_tst_byte_end - 0x8000
+    ] == bytes.fromhex(
+        "64706472646e646029ff00f00a298000f002e6704ce896e6604c5e98"
+    ), "$0259CA inactive-record TST.B terminal-CCR bridge moved or changed"
+    assert len(ESC5) == task259ca_tst_byte_end - 0x8000, (
+        "escbank5 data unexpectedly follows the terminal-CCR bridges"
+    )
+    assert paced_release == 0xFBA1 and ESC5[
+        paced_release - 0x8000:paced_release - 0x8000 + 5
+    ] == bytes.fromhex("a9010085ac"), (
+        "$0818 release no longer has the VTIME-only patchable legacy `$AC` seam"
+    )
+    esc5_packed = bytearray(ESC5)
+    if vtime_enabled:
+        # Route only the opt-in diagnostic through the complete bank-$F3 copy.
+        # Its child calls carry real return PCs and the patched sparse xlat
+        # front end maps those eleven exact returns back to F3 continuations.
+        esc5_packed[
+            esc5_root_2429c - 0x8000:esc5_root_2429c - 0x8000 + 4
+        ] = bytes.fromhex("5c0080f3")
+        # `$0818` has already completed its real S-CPU/NMI wait here.  Only
+        # the opt-in diagnostic routes that hardware deadline into VTIME; the
+        # normal image retains the exact legacy instruction-count write.
+        esc5_packed[
+            paced_release - 0x8000:paced_release - 0x8000 + 5
+        ] = bytes((
+            0x22,
+            vtime_off("vtime_paced_release") & 0xFF,
+            vtime_off("vtime_paced_release") >> 8,
+            0xF2,
+            0xEA,
+        ))
+        # The old `$0818` interpreter-fallback experiment keyed directly on
+        # interpreter-only bit 1 and therefore bypassed the complete S-CPU/NMI
+        # input/render rendezvous in every interpreter-only VTIME image. Keep
+        # the source/ordinary ROM bytes exact, but make that rejected experiment
+        # require its own opt-in bit 2 in packed VTIME images. Default
+        # interpreter-only mode retains the hardware wait and VTIME release.
+        gateway_mode_immediate = paced_gateway - 0x8000 + 5
+        assert esc5_packed[gateway_mode_immediate] == 0x02
+        esc5_packed[gateway_mode_immediate] = 0x04
+    ROM[0x2C8000:0x2C8000+len(esc5_packed)] = esc5_packed  # @ SA-1 $99:8000
 
 # --- TAD audio-data blob (sound port P3: 21 songs + real samples, multi-bank) ---
 # Self-contained: [loader.bin(116)][audio-driver.bin(3218)][DataTable][common+21 songs]. Placed at
@@ -1911,6 +3307,16 @@ if _osp.exists("src/escbank7.bin"):
     assert "00:8400 hfast_rte_entry" in esc7_symbols, (
         "scheduler fast-RTE helper moved from its fixed $9D:8400 redirect target"
     )
+    hfr_bank1 = esc7_off("hfr_bank1")
+    hfr_bank2 = esc7_off("hfr_bank2")
+    hfr_bank1_blob = ESC7[hfr_bank1 - 0x8000:hfr_bank2 - 0x8000]
+    assert hfr_bank1_blob.count(bytes.fromhex("c9f1d5")) == 1, (
+        "$01D5F0 parking guard no longer uses the impossible aligned-PC "
+        "selector CMP #$D5F1"
+    )
+    assert bytes.fromhex("c9f0d5") not in hfr_bank1_blob, (
+        "$01D5F0 unsafe physics coroutine became reachable through fast RTE"
+    )
     assert "00:87C0 hobj_capture_reset" in esc7_symbols, (
         "paced OBJ token reset moved from fixed $9D:87C0"
     )
@@ -1926,9 +3332,19 @@ if _osp.exists("src/escbank7.bin"):
     assert ESC7[0x400:0x404] == bytes.fromhex("c230ad1a"), (
         "scheduler fast-RTE helper prologue changed unexpectedly"
     )
-    assert ESC7[0:4] == bytes.fromhex("c230a254"), (
-        "$25110 stage-2 helper prologue changed unexpectedly"
+    assert ESC7[0:5] == bytes.fromhex("c230ad3407"), (
+        "$25110 stage-2 helper lost its explicit paced-path gate"
     )
+    assert ESC7[0x200:0x205] == bytes.fromhex("c230ad3407"), (
+        "$25110 stage-5 helper lost its explicit paced-path gate"
+    )
+    hfr_bank2_blob = ESC7[
+        hfr_bank2 - 0x8000:esc7_off("hfr_b2_miss") - 0x8000
+    ]
+    for resume_cmp in ("c92a58", "c92e58", "c9b059"):
+        assert hfr_bank2_blob.count(bytes.fromhex(resume_cmp)) == 1, (
+            "$25110 mid-routine resume selector missing from scheduler fast RTE"
+        )
     hfast_rte_end = esc7_off("hfast_rte_end")
     assert 0x8400 < hfast_rte_end <= 0x87C0, (
         "scheduler fast-RTE body crossed the paced OBJ reset seam"
@@ -1952,6 +3368,8 @@ if _osp.exists("src/escbank7.bin"):
     entry_2a86et_end = None
     h2be2_fast = None
     h2be2_fast_end = None
+    hce4_ext_prepare_2x2 = None
+    hce4_ext_prepare_2x2_end = None
     h26_unrolled_ordered = None
     h26_unrolled_ordered_end = None
     h3c36_fast = None
@@ -1986,6 +3404,14 @@ if _osp.exists("src/escbank7.bin"):
             h2be2_fast = int(fields[0].split(":", 1)[1], 16)
         elif len(fields) >= 2 and fields[1] == "h2be2_fast_end":
             h2be2_fast_end = int(fields[0].split(":", 1)[1], 16)
+        elif len(fields) >= 2 and fields[1] == "hce4_ext_prepare_2x2":
+            hce4_ext_prepare_2x2 = int(
+                fields[0].split(":", 1)[1], 16
+            )
+        elif len(fields) >= 2 and fields[1] == "hce4_ext_prepare_2x2_end":
+            hce4_ext_prepare_2x2_end = int(
+                fields[0].split(":", 1)[1], 16
+            )
         elif len(fields) >= 2 and fields[1] == "h26_unrolled_ordered":
             h26_unrolled_ordered = int(fields[0].split(":", 1)[1], 16)
         elif len(fields) >= 2 and fields[1] == "h26_unrolled_ordered_end":
@@ -2058,20 +3484,35 @@ if _osp.exists("src/escbank7.bin"):
     assert ESC7[0x1000:0x1002] == bytes.fromhex("c230"), (
         "$02A86E table body lost its explicit REP #$30 prologue"
     )
-    assert entry_2a86et_end is not None and entry_2a86et_end <= 0x9600, (
-        "$02A86E table body crossed h2be2_fast@$9D:9600"
+    assert entry_2a86et_end is not None and entry_2a86et_end <= 0x9620, (
+        "$02A86E table body crossed h2be2_fast@$9D:9620"
     )
-    assert ESC7[entry_2a86et_end - 0x8000:0x1600] == bytes(
-        0x1600 - (entry_2a86et_end - 0x8000)
-    ), "nonzero bank-$9D bytes overlap h2be2_fast@$9D:9600"
-    assert h2be2_fast == 0x9600 and h2be2_fast_end is not None, (
-        "$2BE2 canonical-work-RAM helper moved from its fixed $9D:9600 island"
+    assert ESC7[entry_2a86et_end - 0x8000:0x1620] == bytes(
+        0x1620 - (entry_2a86et_end - 0x8000)
+    ), "nonzero bank-$9D bytes overlap h2be2_fast@$9D:9620"
+    assert h2be2_fast == 0x9620 and h2be2_fast_end is not None, (
+        "$2BE2 canonical-work-RAM helper moved from its fixed $9D:9620 island"
     )
     assert h2be2_fast_end <= 0x9800, (
         "$2BE2 canonical-work-RAM helper crossed the $26A0 ordered island"
     )
-    assert ESC7[h2be2_fast_end - 0x8000:0x1800] == bytes(
-        0x1800 - (h2be2_fast_end - 0x8000)
+    assert hce4_ext_prepare_2x2 == 0x9700 and hce4_ext_prepare_2x2_end is not None, (
+        "CE4 2x2 preparation helper moved from its fixed $9D:9700 island"
+    )
+    assert h2be2_fast_end <= hce4_ext_prepare_2x2, (
+        "$2BE2 helper crossed the CE4 2x2 preparation island"
+    )
+    assert ESC7[
+        h2be2_fast_end - 0x8000:
+        hce4_ext_prepare_2x2 - 0x8000
+    ] == bytes(hce4_ext_prepare_2x2 - h2be2_fast_end), (
+        "nonzero bank-$9D bytes overlap the CE4 2x2 preparation island"
+    )
+    assert hce4_ext_prepare_2x2_end <= 0x9800, (
+        "CE4 2x2 preparation helper crossed the $26A0 ordered island"
+    )
+    assert ESC7[hce4_ext_prepare_2x2_end - 0x8000:0x1800] == bytes(
+        0x1800 - (hce4_ext_prepare_2x2_end - 0x8000)
     ), "nonzero bank-$9D bytes overlap the $26A0 ordered island"
     assert (
         h26_unrolled_ordered == 0x9800
@@ -2185,21 +3626,9 @@ if _osp.exists("src/escbank7.bin"):
     assert entry_2498c == 0xB000 and entry_2498c_end is not None, (
         "$02498C pool scanner moved from its fixed $9D:B000 island"
     )
-    assert entry_2498c_end <= 0xB800, (
-        "$02498C pool scanner crossed the fixed $0249C2 island"
-    )
-    assert ESC7[entry_2498c_end - 0x8000:0x3800] == bytes(
-        0x3800 - (entry_2498c_end - 0x8000)
-    ), "nonzero escbank7 bytes overlap entry_249c2@$9D:B800"
     assert entry_249c2 == 0xB800 and entry_249c2_end is not None, (
         "$0249C2 pool scanner moved from its fixed $9D:B800 island"
     )
-    assert entry_249c2_end <= 0xC000, (
-        "$0249C2 pool scanner crossed the fixed $01F2E4 island"
-    )
-    assert ESC7[entry_249c2_end - 0x8000:0x4000] == bytes(
-        0x4000 - (entry_249c2_end - 0x8000)
-    ), "nonzero escbank7 bytes overlap entry_1f2e4@$9D:C000"
     assert entry_1f2e4 == 0xC000 and entry_1f2e4_end is not None, (
         "$01F2E4 allocator moved from its fixed $9D:C000 island"
     )
@@ -2231,10 +3660,83 @@ if _osp.exists("src/escbank7.bin"):
 
     xdd = esc7_off("xlat_da_dispatch")
     xdd_end = esc7_off("xlat_da_dispatch_end")
+    entry_2e4b8 = esc7_off("entry_2e4b8")
+    entry_2e4b8_end = esc7_off("entry_2e4b8_end")
+    entry_2e524 = esc7_off("entry_2e524")
+    entry_2e524_end = esc7_off("entry_2e524_end")
+    stage3_2e42c_bsr_trampoline = esc7_off(
+        "stage3_2e42c_bsr_trampoline"
+    )
+    stage3_2e42c_callback_trampoline = esc7_off(
+        "stage3_2e42c_callback_trampoline"
+    )
+    stage3_bd1c_callback_trampoline_1 = esc7_off(
+        "stage3_bd1c_callback_trampoline_1"
+    )
+    stage3_bd1c_callback_trampoline_2 = esc7_off(
+        "stage3_bd1c_callback_trampoline_2"
+    )
+    stage3_bd1c_callback_trampoline_3 = esc7_off(
+        "stage3_bd1c_callback_trampoline_3"
+    )
+    stage3_bd1c_callback_trampoline_4 = esc7_off(
+        "stage3_bd1c_callback_trampoline_4"
+    )
+    stage3_278e8_callback_trampoline_1 = esc7_off(
+        "stage3_278e8_callback_trampoline_1"
+    )
+    stage3_278e8_callback_trampoline_2 = esc7_off(
+        "stage3_278e8_callback_trampoline_2"
+    )
+    stage3_278e8_callback_trampoline_3 = esc7_off(
+        "stage3_278e8_callback_trampoline_3"
+    )
+    stage3_2e42c_trampolines_end = esc7_off(
+        "stage3_2e42c_trampolines_end"
+    )
+    stage3_13282_callback_trampoline_1 = esc7_off(
+        "stage3_13282_callback_trampoline_1"
+    )
+    stage3_13282_callback_trampoline_2 = esc7_off(
+        "stage3_13282_callback_trampoline_2"
+    )
+    stage3_13282_trampolines_end = esc7_off(
+        "stage3_13282_trampolines_end"
+    )
+    stage3_2e42c_fast_callback_trampoline = esc7_off(
+        "stage3_2e42c_fast_callback_trampoline"
+    )
+    stage3_2e42c_fast_trampolines_end = esc7_off(
+        "stage3_2e42c_fast_trampolines_end"
+    )
     hcd1a_fb8 = esc7_off("hcd1a_fb8")
     hcd1a_fb8_end = esc7_off("hcd1a_fb8_end")
     hce4_shape_try_ext = esc7_off("hce4_shape_try_ext")
     hce4_shape_try_ext_end = esc7_off("hce4_shape_try_ext_end")
+    stage3_133ea_trampoline_1 = esc7_off(
+        "stage3_133ea_trampoline_1"
+    )
+    stage3_133ea_trampoline_2 = esc7_off(
+        "stage3_133ea_trampoline_2"
+    )
+    stage3_133ea_trampoline_3 = esc7_off(
+        "stage3_133ea_trampoline_3"
+    )
+    stage3_13468_trampoline_1 = esc7_off(
+        "stage3_13468_trampoline_1"
+    )
+    stage3_13538_trampoline_1 = esc7_off(
+        "stage3_13538_trampoline_1"
+    )
+    stage3_13538_trampoline_2 = esc7_off(
+        "stage3_13538_trampoline_2"
+    )
+    stage3_1337e_trampoline_1 = esc7_off(
+        "stage3_1337e_trampoline_1"
+    )
+    stage3_player_hot_trampolines_end = esc7_off(
+        "stage3_player_hot_trampolines_end"
+    )
     h25110_stage2_overlap = esc7_off("h25110_stage2_overlap")
     h25110_stage2_overlap_end = esc7_off("h25110_stage2_overlap_end")
     entry_24aa8t = esc7_off("entry_24aa8t")
@@ -2256,8 +3758,38 @@ if _osp.exists("src/escbank7.bin"):
     hcaf6_late_selector = esc7_off("hcaf6_late_selector")
     hcaf6_late_selector_end = esc7_off("hcaf6_late_selector_end")
     esc7_end = esc7_off("escbank7_end")
-    assert xdd == 0xDA00 and xdd < xdd_end <= 0xDB00, (
-        "sparse $D7-$DC direct dispatcher moved or overflowed its $9D:DA00 island"
+    assert xdd == 0xDA00 and xdd < xdd_end <= 0xDC00, (
+        "sparse direct dispatcher moved or overflowed its $9D:DA00-$DBFF island"
+    )
+    assert (
+        entry_2e4b8 == 0xDC00
+        and entry_2e4b8 < entry_2e4b8_end <= 0xE000
+        and entry_2e524 == 0xE190
+        and entry_2e524 < entry_2e524_end
+        <= stage3_2e42c_bsr_trampoline
+        == 0xE3C0
+        and stage3_2e42c_callback_trampoline == 0xE3C4
+        and stage3_bd1c_callback_trampoline_1 == 0xE3C8
+        and stage3_bd1c_callback_trampoline_2 == 0xE3CC
+        and stage3_bd1c_callback_trampoline_3 == 0xE3D0
+        and stage3_bd1c_callback_trampoline_4 == 0xE3D4
+        and stage3_278e8_callback_trampoline_1 == 0xE3D8
+        and stage3_278e8_callback_trampoline_2 == 0xE3DC
+        and stage3_278e8_callback_trampoline_3 == 0xE3E0
+        and stage3_2e42c_trampolines_end == 0xE3E4
+        and stage3_13282_callback_trampoline_1 == 0xE3E4
+        and stage3_13282_callback_trampoline_2 == 0xE3E8
+        and stage3_13282_trampolines_end == 0xE3EC
+        and stage3_2e42c_fast_callback_trampoline == 0xE3F0
+        and stage3_2e42c_fast_trampolines_end == 0xE3F4
+    ), "Stage-3 draw wrappers moved or overflowed their fixed bank-$9D islands"
+    assert ESC7[xdd_end - 0x8000:entry_2e4b8 - 0x8000] == bytes(
+        entry_2e4b8 - xdd_end
+    ), "sparse dispatcher consumed the zero seam before $02E4B8"
+    assert ESC7[
+        entry_2e4b8_end - 0x8000:hcd1a_fb8 - 0x8000
+    ] == bytes(hcd1a_fb8 - entry_2e4b8_end), (
+        "$02E4B8 draw wrapper consumed the zero seam before $CD1A/$0FB8"
     )
     assert ESC7[xdd - 0x8000:xdd - 0x8000 + 4] == bytes.fromhex("c230a542"), (
         "sparse direct dispatcher lost its REP/LDA bank prologue"
@@ -2281,13 +3813,51 @@ if _osp.exists("src/escbank7.bin"):
     assert xdd_bytes.count(bytes.fromhex("5c00d89e")) == 1, (
         "sparse dispatcher lost its sole $9E:D800 entry_d7be target"
     )
+    assert xdd_bytes.count(bytes.fromhex("5c00a79e")) == 1, (
+        "sparse dispatcher lost its sole $9E:A700 one-shot task fan-out"
+    )
+    assert xdd_bytes.count(bytes.fromhex("5cf09995")) == 0, (
+        "shared dispatcher re-admitted the unproven $002D8A direct route"
+    )
+    # The Stage-3 direct routes are deliberately not admitted through this
+    # shared dispatcher.  The fresh current-ROM controller replay reaches
+    # $02xxxx and $01xxxx addresses during Stage 1 as well; canonical pointer
+    # guards alone cannot establish Stage-3 provenance.  Routing those shared
+    # PCs into the Stage-3 bodies created a deterministic long-update burst
+    # before tick 2956, then delayed Button 1 response.  Keep the conservative
+    # dispatcher until a live-stage discriminator is compared three-way.
+    for encoded, label in (
+        (bytes.fromhex("5c00b694"), "$027952 -> $94:B600"),
+        (bytes.fromhex("5c00bc94"), "$0279D2 -> $94:BC00"),
+        (bytes.fromhex("5c00c294"), "$02F3BA -> $94:C200"),
+        (bytes.fromhex("5c00d09f"), "$0278E8 -> $9F:D000"),
+        (bytes.fromhex("5c00c09f"), "$027AEA -> $9F:C000"),
+        (bytes.fromhex("5c40cb94"), "$027B44 -> $94:CB40"),
+        (bytes.fromhex("5cc0ce94"), "$027B7C -> $94:CEC0"),
+        (bytes.fromhex("5c00cd94"), "$02F56A -> $94:CD00"),
+        (bytes.fromhex("5c00d194"), "$02F5A2 -> $94:D100"),
+        (bytes.fromhex("5c40d394"), "$02E49C -> $94:D340"),
+        (bytes.fromhex("5c80d494"), "$0296C6 -> $94:D480"),
+        (bytes.fromhex("5c40d594"), "$02E40E -> $94:D540"),
+        (bytes.fromhex("5c40a19f"), "$02E42C -> $9F:A140"),
+        (bytes.fromhex("5c00a59f"), "$027912 -> $9F:A500"),
+        (bytes.fromhex("5c80a69f"), "$02F2E0 -> $9F:A680"),
+        (bytes.fromhex("5c00e09f"), "$013282 -> $9F:E000"),
+        (bytes.fromhex("5c00d89f"), "$013314 -> $9F:D800"),
+        (bytes.fromhex("5c00ba9f"), "$01337E -> $9F:BA00"),
+        (bytes.fromhex("5c00e49f"), "$02E676 -> $9F:E400"),
+        (bytes.fromhex("5c00fe9f"), "$02F542 -> $9F:FE00"),
+        (bytes.fromhex("5c00ec9f"), "$0133EA -> $9F:EC00"),
+        (bytes.fromhex("5c00f19f"), "$013468 -> $9F:F100"),
+        (bytes.fromhex("5c00f79f"), "$013538 -> $9F:F700"),
+        (bytes.fromhex("5c20db94"), "$0135E0 -> $94:DB20"),
+    ):
+        assert xdd_bytes.count(encoded) == 0, (
+            "shared dispatcher re-admitted unproven Stage-3 target " + label
+        )
     # Same-bank targets must be absolute JMPs: a local JML would encode bank
     # $00 from Poppy's logical .org and escape the physical bank-$9D mapping.
     for stub, target in (
-        ("xdd_2a86e", "entry_2a86et"),
-        ("xdd_2ad4c", "entry_2ad4ct"),
-        ("xdd_24aa8", "entry_24aa8t"),
-        ("xdd_28f92", "entry_28f92t"),
         ("xdd_122a4", "entry_122a4"),
         ("xdd_91e", "entry_91et"),
         ("xdd_c0bc", "entry_c0bc"),
@@ -2302,29 +3872,159 @@ if _osp.exists("src/escbank7.bin"):
     ):
         stub_off = esc7_off(stub)
         target_off = esc7_off(target)
-        assert ESC7[stub_off - 0x8000:stub_off - 0x8000 + 3] == bytes(
-            (0x4C, target_off & 0xFF, target_off >> 8)
-        ), f"{stub} is no longer a bank-preserving JMP to {target}"
-    assert hcd1a_fb8 == 0xE000 and xdd_end <= 0xE000, (
+        encoded = bytes((0x4C, target_off & 0xFF, target_off >> 8))
+        assert ESC7[
+            stub_off - 0x8000:stub_off - 0x8000 + 3
+        ] == encoded, f"{stub} is no longer a bank-preserving JMP to {target}"
+    assert hcd1a_fb8 == 0xE000 and entry_2e4b8_end <= hcd1a_fb8, (
         "$CD1A/$0FB8 guarded fusion moved from its pinned $9D:E000 island"
     )
-    assert ESC7[xdd_end - 0x8000:0x6000] == bytes(
-        0x6000 - (xdd_end - 0x8000)
-    ), "nonzero escbank7 bytes overlap the $CD1A/$0FB8 fusion island"
-    assert 0xE000 < hcd1a_fb8_end <= 0xE400, (
-        "$CD1A/$0FB8 guarded fusion overflowed its reserved island"
+    assert 0xE000 < hcd1a_fb8_end <= entry_2e524 == 0xE190, (
+        "$CD1A/$0FB8 guarded fusion overflowed into the $02E524 wrapper"
     )
-    assert ESC7[hcd1a_fb8_end - 0x8000:0x6400] == bytes(
-        0x6400 - (hcd1a_fb8_end - 0x8000)
-    ), "nonzero bank-$9D bytes overlap the fixed $CE4 extension island"
+    assert ESC7[
+        hcd1a_fb8_end - 0x8000:entry_2e524 - 0x8000
+    ] == bytes(entry_2e524 - hcd1a_fb8_end), (
+        "$CD1A/$0FB8 fusion consumed the zero seam before $02E524"
+    )
+    assert ESC7[
+        entry_2e524_end - 0x8000:
+        stage3_2e42c_bsr_trampoline - 0x8000
+    ] == bytes(stage3_2e42c_bsr_trampoline - entry_2e524_end), (
+        "$02E524 draw wrapper consumed the selector-trampoline seam"
+    )
+    for wrapper_start, wrapper_end, continuation, label in (
+        (
+            entry_2e4b8,
+            entry_2e4b8_end,
+            esc7_off("br2e4b8_1"),
+            "$02E4B8->$02E49C",
+        ),
+        (
+            entry_2e524,
+            entry_2e524_end,
+            esc7_off("br2e524_1"),
+            "$02E524->$02E49C",
+        ),
+    ):
+        wrapper = ESC7[
+            wrapper_start - 0x8000:wrapper_end - 0x8000
+        ]
+        exact_edge = bytes(
+            (
+                0xA9,
+                continuation & 0xFF,
+                continuation >> 8,
+                0x85,
+                0x54,
+                0xA9,
+                0xF8,
+                0x00,
+                0x85,
+                0x56,
+                0x22,
+                0xAE,
+                0xE5,
+                0x00,
+                0x5C,
+                0x40,
+                0xD3,
+                0x94,
+            )
+        )
+        assert wrapper.count(exact_edge) == 1, (
+            f"{label} lost its exact sentinel push and direct guarded "
+            "bank-$94 call edge"
+        )
+    assert ESC7[
+        stage3_2e42c_bsr_trampoline - 0x8000:
+        stage3_2e42c_trampolines_end - 0x8000
+    ] == bytes.fromhex(
+        "5c00a89f5c03a89f"
+        "5c06a89f5c09a89f5c0ca89f5c0fa89f"
+        "5c12a89f5c15a89f5c18a89f"
+    ), (
+        "Stage-3 selector/scroll return trampolines moved or changed bank targets"
+    )
+    assert ESC7[
+        stage3_13282_callback_trampoline_1 - 0x8000:
+        stage3_13282_trampolines_end - 0x8000
+    ] == bytes.fromhex("5c80a89f5c83a89f"), (
+        "$013282 return trampolines moved or changed bank targets"
+    )
+    assert ESC7[
+        stage3_13282_trampolines_end - 0x8000:
+        stage3_2e42c_fast_callback_trampoline - 0x8000
+    ] == bytes(
+        stage3_2e42c_fast_callback_trampoline
+        - stage3_13282_trampolines_end
+    ), "nonzero bytes consumed the selector fast-trampoline alignment seam"
+    assert ESC7[
+        stage3_2e42c_fast_callback_trampoline - 0x8000:
+        stage3_2e42c_fast_trampolines_end - 0x8000
+    ] == bytes.fromhex("5c00a99f"), (
+        "$02E42C fast callback trampoline moved or changed bank target"
+    )
+    assert ESC7[
+        stage3_2e42c_fast_trampolines_end - 0x8000:0x6400
+    ] == bytes(0xE400 - stage3_2e42c_fast_trampolines_end), (
+        "selector trampolines consumed the zero seam before the $CE4 extension"
+    )
     assert hce4_shape_try_ext == 0xE400, (
         "$CE4 extension moved from its fixed $9D:E400 entry"
     )
     assert ESC7[0x6400:0x6404] == bytes.fromhex("c230a582"), (
         "$CE4 extension lost its explicit REP/LDA mapped-source prologue"
     )
-    assert 0xE400 < hce4_shape_try_ext_end <= 0xE800, (
+    hce4_ext_miss = esc7_off("hce4_ext_miss")
+    hce4_ext_after_panel = esc7_off("hce4_ext_after_panel")
+    assert hce4_ext_after_panel == 0xE446, (
+        "$CE4 extension's size-neutral Stage-3 panel resume moved"
+    )
+    assert ESC7[
+        hce4_ext_miss - 0x8000:hce4_ext_after_panel - 0x8000
+    ] == bytes.fromhex("5c00d49fea"), (
+        "$CE4 extension lost its exact bank-$9F panel redirect/NOP seam"
+    )
+    assert 0xE400 < hce4_shape_try_ext_end <= 0xE7E0, (
         "$CE4 extension overflowed its reserved $9D:E400-$E7FF island"
+    )
+    assert ESC7[
+        hce4_shape_try_ext_end - 0x8000:
+        stage3_133ea_trampoline_1 - 0x8000
+    ] == bytes(stage3_133ea_trampoline_1 - hce4_shape_try_ext_end), (
+        "$CE4 extension consumed the player-hot trampoline seam"
+    )
+    assert (
+        stage3_133ea_trampoline_1 == 0xE7E0
+        and stage3_133ea_trampoline_2 == 0xE7E4
+        and stage3_133ea_trampoline_3 == 0xE7E8
+        and stage3_13468_trampoline_1 == 0xE7EC
+        and stage3_13538_trampoline_1 == 0xE7F0
+        and stage3_13538_trampoline_2 == 0xE7F4
+        and stage3_1337e_trampoline_1 == 0xE7F8
+        and stage3_player_hot_trampolines_end == 0xE7FC
+    ), "Stage-3 player-hot return trampolines moved"
+    assert ESC7[
+        stage3_133ea_trampoline_1 - 0x8000:
+        stage3_1337e_trampoline_1 - 0x8000
+    ] == bytes.fromhex(
+        "5c40eb9f5c43eb9f5c46eb9f"
+        "5c49eb9f5c4ceb9f5c4feb9f"
+    ), "Stage-3 player-hot return trampolines changed targets"
+    trampoline_1337e = ESC7[
+        stage3_1337e_trampoline_1 - 0x8000:
+        stage3_player_hot_trampolines_end - 0x8000
+    ]
+    assert (
+        trampoline_1337e == bytes.fromhex("5c18bd9f")
+    ), (
+        "$01337E return trampoline changed its exact bank-$9F target"
+    )
+    assert ESC7[
+        stage3_player_hot_trampolines_end - 0x8000:0x6800
+    ] == bytes(0xE800 - stage3_player_hot_trampolines_end), (
+        "player-hot return trampolines consumed the $025110 seam"
     )
     assert h25110_stage2_overlap == 0xE800, (
         "$25110 stage-2 overlap continuation moved from fixed $9D:E800"
@@ -2458,6 +4158,7 @@ if _osp.exists("src/escbank8.bin"):
     rmb_bg_select_8 = esc8_off("rmb_bg_select")
     rmb_bg_dirty_default_8 = esc8_off("rmb_bg_dirty_default")
     rmb_bg_full_scan_8 = esc8_off("rmb_bg_full_scan")
+    rmb_bg_clean_8 = esc8_off("rmb_bg_clean")
     rmb_bg_clean_jump_8 = esc8_off("rmb_bg_clean_jump")
     rmb_bg_reconcile_8 = esc8_off("rmb_bg_reconcile")
     rmb_bg_reconcile_end_8 = esc8_off("rmb_bg_reconcile_done")
@@ -2465,6 +4166,9 @@ if _osp.exists("src/escbank8.bin"):
     rmb_bg_revert_8 = esc8_off("rmb_bg_revert")
     rmb_obj_done_8 = esc8_off("rmb_obj_done")
     rmb_obj_pack_8 = esc8_off("rmb_obj_pack")
+    rmb_obj_pack_bottom_status_8 = esc8_off("rmb_obj_pack_bottom_status")
+    rmb_obj_pack_bottom_y_8 = esc8_off("rmb_obj_pack_bottom_y")
+    rmb_obj_pack_x_8 = esc8_off("rmb_obj_pack_x")
     rmb_obj_pack_8_end = esc8_off("rmb_obj_pack_end")
     rmb_title_detect_8 = esc8_off("rmb_title_detect")
     rmb_title_detect_8_end = esc8_off("rmb_title_detect_end")
@@ -2472,6 +4176,11 @@ if _osp.exists("src/escbank8.bin"):
     rmb_obj_fast_loop_8 = esc8_off("rmb_obj_fast_loop")
     rmb_obj_fast_done_8 = esc8_off("rmb_obj_fast_done")
     rmb_obj_fast_scan_8_end = esc8_off("rmb_obj_fast_scan_end")
+    render_bg_dirty_sparse_8 = esc8_off("render_bg_dirty_sparse")
+    rbds_done_8 = esc8_off("rbds_done")
+    rbds_clean_8 = esc8_off("rbds_clean")
+    rbds_default_8 = esc8_off("rbds_default")
+    render_bg_dirty_sparse_8_end = esc8_off("render_bg_dirty_sparse_end")
     shadow_dirty_publish_8 = esc8_off("shadow_dirty_publish")
     shadow_dirty_publish_8_end = esc8_off("shadow_dirty_publish_end")
     mark_bg_dirty_8 = esc8_off("mark_bg_dirty")
@@ -2600,6 +4309,34 @@ if _osp.exists("src/escbank8.bin"):
     assert clean_jump_target == rmb_obj_begin_8, (
         "clean-BG manifest branch no longer lands on the packed-OBJ redirect"
     )
+    assert (
+        render_bg_dirty_sparse_8
+        < rbds_done_8
+        < rbds_clean_8
+        < rbds_default_8
+        < render_bg_dirty_sparse_8_end
+    ), "sparse-BG route island labels are no longer ordered"
+    for route_name, route_offset, route_target in (
+        ("done", rbds_done_8, rmb_obj_begin_8),
+        ("clean", rbds_clean_8, rmb_bg_clean_8),
+        ("default", rbds_default_8, rmb_bg_dirty_default_8),
+    ):
+        packed_target = 0x9E0000 | route_target
+        expected_jml = bytes(
+            (
+                0x5C,
+                packed_target & 0xFF,
+                (packed_target >> 8) & 0xFF,
+                (packed_target >> 16) & 0xFF,
+            )
+        )
+        observed_jml = ESC8[
+            route_offset - 0x8000:route_offset - 0x8000 + 4
+        ]
+        assert observed_jml == expected_jml, (
+            f"sparse-BG {route_name} route {observed_jml.hex()} no longer "
+            f"targets packed ${packed_target:06X}"
+        )
     assert ESC8[
         rmb_obj_begin_8 - 0x8000:rmb_obj_begin_8 - 0x8000 + 6
     ] == bytes.fromhex("5c00e69eeaea"), (
@@ -2727,12 +4464,33 @@ if _osp.exists("src/escbank8.bin"):
     assert rmb_obj_pack_8 == 0xE540
     assert (
         rmb_obj_pack_8
+        < rmb_obj_pack_bottom_status_8
+        < rmb_obj_pack_bottom_y_8
+        < rmb_obj_pack_x_8
         < rmb_obj_pack_8_end
+        == 0xE5BF
         <= rmb_title_detect_8
-        == 0xE5B0
+        == 0xE5C0
         < rmb_title_detect_8_end
         <= rmb_obj_fast_scan_8
     )
+    packed_obj_helper = ESC8[
+        rmb_obj_pack_8 - 0x8000:rmb_obj_pack_8_end - 0x8000
+    ]
+    assert ESC8[
+        rmb_obj_pack_bottom_status_8 - 0x8000:rmb_obj_pack_x_8 - 0x8000
+    ] == bytes.fromhex(
+        "e00400f00ae048009017e07200b012bd0030c9000af04ce06a009005c9001af042"
+    ), (
+        "packed OBJ helper lost its exact bottom-status/ROUND source and Y filters"
+    )
+    for encoding, label in (
+        (bytes.fromhex("e06a00"), "ROUND first source slot"),
+        (bytes.fromhex("c9001a"), "ROUND Y=$1A row"),
+    ):
+        assert encoding in packed_obj_helper, (
+            f"packed OBJ helper lost its {label} filter"
+        )
     assert rmb_obj_fast_scan_8 == 0xE600
     assert rmb_obj_fast_scan_8 < rmb_obj_fast_loop_8 < rmb_obj_fast_done_8
     assert rmb_obj_fast_done_8 < rmb_obj_fast_scan_8_end <= render_bg_offset_table_8
@@ -2837,6 +4595,1009 @@ if _osp.exists("src/escbank8.bin"):
         c0bc_prepared_offset:c0bc_prepared_offset + len(C0BC_PREPARED_BLOB)
     ] = C0BC_PREPARED_BLOB
 
+# --- NINTH SA-1 escape region ($9F:A100+, file $2FA100) ---
+# The front of bank $9F is occupied by the two renderer payloads above.
+# Poppy anchors this standalone binary at its first logical origin ($A100).
+# Pack that complete audited payload at the matching file offset and prove
+# both sides of the seam.
+if _osp.exists("src/escbank9.bin"):
+    ESC9 = Path("src/escbank9.bin").read_bytes()
+    assert len(ESC9) <= 0x8000, "escbank9 overflows logical bank $9F"
+    esc9_symbols = Path("src/escbank9.sym").read_text(encoding="utf-8-sig")
+
+    def esc9_off(symbol):
+        for line in esc9_symbols.splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[1] == symbol:
+                return int(fields[0].split(":", 1)[1], 16)
+        raise AssertionError("missing escbank9 layout symbol %s" % symbol)
+
+    esc9_ac_charge = esc9_off("esc9_ac_charge")
+    esc9_ac_charge_end = esc9_off("esc9_ac_charge_end")
+    entry_2e42c_9 = esc9_off("entry_2e42c")
+    entry_2e42c_9_end = esc9_off("entry_2e42c_end")
+    entry_27912t_9 = esc9_off("entry_27912t")
+    entry_27912t_9_end = esc9_off("entry_27912t_end")
+    entry_2f2e0t_9 = esc9_off("entry_2f2e0t")
+    entry_2f2e0t_9_end = esc9_off("entry_2f2e0t_end")
+    entry_2e42c_bsr_resume = esc9_off("entry_2e42c_bsr_resume")
+    entry_2e42c_callback_resume = esc9_off(
+        "entry_2e42c_callback_resume"
+    )
+    entry_2e42c_resumes_end = esc9_off("entry_2e42c_resumes_end")
+    entry_bd1c_callback_resume_1 = esc9_off(
+        "entry_bd1c_callback_resume_1"
+    )
+    entry_bd1c_callback_resume_2 = esc9_off(
+        "entry_bd1c_callback_resume_2"
+    )
+    entry_bd1c_callback_resume_3 = esc9_off(
+        "entry_bd1c_callback_resume_3"
+    )
+    entry_bd1c_callback_resume_4 = esc9_off(
+        "entry_bd1c_callback_resume_4"
+    )
+    entry_bd1c_resumes_end = esc9_off("entry_bd1c_resumes_end")
+    entry_278e8_callback_resume_1 = esc9_off(
+        "entry_278e8_callback_resume_1"
+    )
+    entry_278e8_callback_resume_2 = esc9_off(
+        "entry_278e8_callback_resume_2"
+    )
+    entry_278e8_callback_resume_3 = esc9_off(
+        "entry_278e8_callback_resume_3"
+    )
+    entry_278e8_resumes_end = esc9_off("entry_278e8_resumes_end")
+    entry_13282_callback_resume_1 = esc9_off(
+        "entry_13282_callback_resume_1"
+    )
+    entry_13282_callback_resume_2 = esc9_off(
+        "entry_13282_callback_resume_2"
+    )
+    entry_13282_resumes_end = esc9_off("entry_13282_resumes_end")
+    entry_2e42c_fast_callback_resume = esc9_off(
+        "entry_2e42c_fast_callback_resume"
+    )
+    h2e42c_fast_entry = esc9_off("h2e42c_fast_entry")
+    entry_2e42c_fast_end = esc9_off("entry_2e42c_fast_end")
+    hbd1c_callback_charge = esc9_off("hbd1c_callback_charge")
+    hbd1c_callback_charge_end = esc9_off(
+        "hbd1c_callback_charge_end"
+    )
+    entry_bd1c_9 = esc9_off("entry_bd1c")
+    entry_bd1c_9_end = esc9_off("entry_bd1c_end")
+    entry_1337et = esc9_off("entry_1337et")
+    br1337e_1_9 = esc9_off("br1337e_1")
+    entry_1337et_end = esc9_off("entry_1337et_end")
+    stage3_79_sparse_dispatch = esc9_off(
+        "stage3_79_sparse_dispatch"
+    )
+    stage3_79_sparse_dispatch_end = esc9_off(
+        "stage3_79_sparse_dispatch_end"
+    )
+    entry_79fe_9 = esc9_off("entry_79fe")
+    entry_7ac6_9 = esc9_off("entry_7ac6")
+    entry_stage3_79_loop_end = esc9_off(
+        "entry_stage3_79_loop_end"
+    )
+    entry_27aea_9 = esc9_off("entry_27aea")
+    entry_27aea_9_end = esc9_off("entry_27aea_end")
+    entry_278e8_9 = esc9_off("entry_278e8")
+    entry_278e8_9_end = esc9_off("entry_278e8_end")
+    hce4_fast_render_2x2 = esc9_off("hce4_fast_render_2x2")
+    hce4_fast_render_2x2_end = esc9_off(
+        "hce4_fast_render_2x2_end"
+    )
+    hce4_charge_2x2_dynamic = esc9_off(
+        "hce4_charge_2x2_dynamic"
+    )
+    hce4_charge_2x2_dynamic_end = esc9_off(
+        "hce4_charge_2x2_dynamic_end"
+    )
+    hce4_stage3_panel_try = esc9_off("hce4_stage3_panel_try")
+    hce4_stage3_panel_end = esc9_off("hce4_stage3_panel_end")
+    entry_13314t_9 = esc9_off("entry_13314t")
+    entry_13314t_9_end = esc9_off("entry_13314t_end")
+    entry_13282t_9 = esc9_off("entry_13282t")
+    entry_13282t_9_end = esc9_off("entry_13282t_end")
+    entry_2e676t_9 = esc9_off("entry_2e676t")
+    entry_2e676t_9_end = esc9_off("entry_2e676t_end")
+    hce4_ac_charge_fast_2x2 = esc9_off("hce4_ac_charge_fast_2x2")
+    hce4_ac_charge_fast_2x2_end = esc9_off(
+        "hce4_ac_charge_fast_2x2_end"
+    )
+    hstage3_box_leaf = esc9_off("hstage3_box_leaf")
+    hstage3_box_leaf_end = esc9_off("hstage3_box_leaf_end")
+    hstage3_collision_leaf = esc9_off("hstage3_collision_leaf")
+    hstage3_collision_leaf_end = esc9_off(
+        "hstage3_collision_leaf_end"
+    )
+    hrdw_ea_l = esc9_off("hrdw_ea_l")
+    hrdw_ea_l_end = esc9_off("hrdw_ea_l_end")
+    entry_133ea_resume_1 = esc9_off("entry_133ea_resume_1")
+    entry_133ea_resume_2 = esc9_off("entry_133ea_resume_2")
+    entry_133ea_resume_3 = esc9_off("entry_133ea_resume_3")
+    entry_13468_resume_1 = esc9_off("entry_13468_resume_1")
+    entry_13538_resume_1 = esc9_off("entry_13538_resume_1")
+    entry_13538_resume_2 = esc9_off("entry_13538_resume_2")
+    stage3_player_hot_resumes_end = esc9_off(
+        "stage3_player_hot_resumes_end"
+    )
+    br133ea_1_9 = esc9_off("br133ea_1")
+    br133ea_2_9 = esc9_off("br133ea_2")
+    br133ea_3_9 = esc9_off("br133ea_3")
+    br13468_1_9 = esc9_off("br13468_1")
+    br13538_1_9 = esc9_off("br13538_1")
+    br13538_2_9 = esc9_off("br13538_2")
+    entry_133eat = esc9_off("entry_133eat")
+    entry_133eat_end = esc9_off("entry_133eat_end")
+    entry_13468t = esc9_off("entry_13468t")
+    entry_13468t_end = esc9_off("entry_13468t_end")
+    entry_13538t = esc9_off("entry_13538t")
+    entry_13538t_end = esc9_off("entry_13538t_end")
+    stage3_player_bsr_ext = esc9_off("stage3_player_bsr_ext")
+    stage3_player_bsr_ext_end = esc9_off("stage3_player_bsr_ext_end")
+    stage3_bank2_bsr_ext = esc9_off("stage3_bank2_bsr_ext")
+    stage3_bank2_bsr_ext_end = esc9_off("stage3_bank2_bsr_ext_end")
+    entry_2f542t = esc9_off("entry_2f542t")
+    entry_2f542t_end = esc9_off("entry_2f542t_end")
+    esc9_vtime_charge_gateway = esc9_off("esc9_vtime_charge_gateway")
+    esc9_vtime_ojmp_gateway = esc9_off("esc9_vtime_ojmp_gateway")
+    esc9_vtime_ibridge_gateway = esc9_off("esc9_vtime_ibridge_gateway")
+    esc9_vtime_ors_gateway = esc9_off("esc9_vtime_ors_gateway")
+    esc9_vtime_handoff_due = esc9_off("esc9_vtime_handoff_due")
+    esc9_vtime_gateway_end = esc9_off("esc9_vtime_gateway_end")
+    esc9_end = esc9_off("escbank9_end")
+    assert (
+        esc9_ac_charge == 0xA100
+        and esc9_ac_charge < esc9_ac_charge_end <= entry_2e42c_9
+        == 0xA140
+        and entry_2e42c_9 < entry_2e42c_9_end <= entry_27912t_9
+        == 0xA500
+        and entry_27912t_9 < entry_27912t_9_end <= entry_2f2e0t_9
+        == 0xA680
+        and entry_2f2e0t_9 < entry_2f2e0t_9_end <= 0xA800
+        and entry_2e42c_bsr_resume == 0xA800
+        and entry_2e42c_callback_resume == 0xA803
+        and entry_2e42c_resumes_end
+        == entry_bd1c_callback_resume_1
+        == 0xA806
+        and entry_bd1c_callback_resume_2 == 0xA809
+        and entry_bd1c_callback_resume_3 == 0xA80C
+        and entry_bd1c_callback_resume_4 == 0xA80F
+        and entry_bd1c_resumes_end
+        == entry_278e8_callback_resume_1
+        == 0xA812
+        and entry_278e8_callback_resume_2 == 0xA815
+        and entry_278e8_callback_resume_3 == 0xA818
+        and entry_278e8_resumes_end == 0xA81B
+        and hbd1c_callback_charge == 0xA820
+        and hbd1c_callback_charge
+        < hbd1c_callback_charge_end
+        <= entry_13282_callback_resume_1
+        == 0xA880
+        and entry_13282_callback_resume_2 == 0xA883
+        and entry_13282_resumes_end == 0xA886
+        and entry_2e42c_fast_callback_resume == 0xA900
+        and entry_2e42c_fast_callback_resume
+        < h2e42c_fast_entry
+        < entry_2e42c_fast_end
+        <= 0xB000
+        and entry_bd1c_9 == 0xB000
+        and entry_bd1c_9 < entry_bd1c_9_end <= entry_1337et
+        == 0xBA00
+        and entry_1337et < br1337e_1_9 == 0xBD18
+        and entry_1337et_end == 0xBD6D
+        and entry_1337et_end <= stage3_79_sparse_dispatch
+        == 0xBD80
+        and stage3_79_sparse_dispatch
+        < stage3_79_sparse_dispatch_end
+        <= entry_79fe_9
+        == 0xBE00
+        and entry_7ac6_9 == 0xBE10
+        and entry_7ac6_9 < entry_stage3_79_loop_end
+        <= entry_27aea_9
+        == 0xC000
+        and entry_27aea_9 < entry_27aea_9_end <= entry_278e8_9
+        == 0xD000
+        and entry_278e8_9 < entry_278e8_9_end <= hce4_fast_render_2x2
+        == 0xD200
+        and hce4_fast_render_2x2
+        < hce4_fast_render_2x2_end
+        <= hce4_charge_2x2_dynamic
+        == 0xD300
+        and hce4_charge_2x2_dynamic
+        < hce4_charge_2x2_dynamic_end
+        <= hce4_stage3_panel_try
+        == 0xD400
+        and hce4_stage3_panel_try
+        < hce4_stage3_panel_end
+        <= entry_13314t_9
+        == 0xD800
+        and entry_13314t_9 < entry_13314t_9_end == 0xD99E
+        and entry_13314t_9_end <= entry_13282t_9
+        == 0xE000
+        and entry_13282t_9 < entry_13282t_9_end == 0xE3F2
+        and entry_13282t_9_end <= entry_2e676t_9
+        == 0xE400
+        and entry_2e676t_9 < entry_2e676t_9_end <= 0xE800
+        and entry_2e676t_9_end <= hce4_ac_charge_fast_2x2
+        == 0xE700
+        and hce4_ac_charge_fast_2x2
+        < hce4_ac_charge_fast_2x2_end
+        <= 0xE800
+        and hce4_ac_charge_fast_2x2_end <= hstage3_box_leaf
+        == 0xE800
+        and hstage3_box_leaf < hstage3_box_leaf_end <= 0xF000
+        and hstage3_box_leaf_end <= hstage3_collision_leaf
+        == 0xE900
+        and hstage3_collision_leaf < hstage3_collision_leaf_end <= 0xF000
+        and hstage3_collision_leaf_end <= hrdw_ea_l
+        == 0xEB00
+        and hrdw_ea_l < hrdw_ea_l_end <= 0xEC00
+        and hrdw_ea_l_end <= entry_133ea_resume_1
+        == 0xEB40
+        and entry_133ea_resume_2 == 0xEB43
+        and entry_133ea_resume_3 == 0xEB46
+        and entry_13468_resume_1 == 0xEB49
+        and entry_13538_resume_1 == 0xEB4C
+        and entry_13538_resume_2 == 0xEB4F
+        and stage3_player_hot_resumes_end == 0xEB52
+        and stage3_player_hot_resumes_end <= entry_133eat
+        == 0xEC00
+        and entry_133eat < entry_133eat_end <= entry_13468t
+        == 0xF100
+        and entry_13468t < entry_13468t_end <= entry_13538t
+        == 0xF700
+        and entry_13538t < entry_13538t_end <= stage3_player_bsr_ext
+        == 0xFD00
+        and stage3_player_bsr_ext
+        < stage3_player_bsr_ext_end
+        <= stage3_bank2_bsr_ext
+        == 0xFDB0
+        and stage3_bank2_bsr_ext
+        < stage3_bank2_bsr_ext_end
+        <= entry_2f542t
+        == 0xFE00
+        and entry_2f542t < entry_2f542t_end
+        == esc9_vtime_charge_gateway
+        == 0xFFA1
+        and esc9_vtime_charge_gateway
+        < esc9_vtime_ojmp_gateway
+        < esc9_vtime_ibridge_gateway
+        < esc9_vtime_ors_gateway
+        < esc9_vtime_handoff_due
+        < esc9_vtime_gateway_end
+        == esc9_end
+        <= 0x10000
+    ), "bank-$9F Stage-3 selector/scroll task moved or overflowed a fixed island"
+    assert len(ESC9) == esc9_end - esc9_ac_charge, (
+        "unexpected bank-$9F bytes follow the Stage-3 player-hot bodies"
+    )
+    assert ESC9[
+        esc9_ac_charge_end - esc9_ac_charge:
+        entry_2e42c_9 - esc9_ac_charge
+    ] == bytes(entry_2e42c_9 - esc9_ac_charge_end), (
+        "bank-$9F AC helper consumed the selector seam"
+    )
+    assert ESC9[
+        entry_2e42c_9_end - esc9_ac_charge:
+        entry_27912t_9 - esc9_ac_charge
+    ] == bytes(entry_27912t_9 - entry_2e42c_9_end), (
+        "$02E42C selector consumed the $027912 dispatcher seam"
+    )
+    assert ESC9[
+        entry_27912t_9_end - esc9_ac_charge:
+        entry_2f2e0t_9 - esc9_ac_charge
+    ] == bytes(entry_2f2e0t_9 - entry_27912t_9_end), (
+        "$027912 dispatcher consumed the $02F2E0 dispatcher seam"
+    )
+    assert ESC9[
+        entry_2f2e0t_9_end - esc9_ac_charge:
+        entry_2e42c_bsr_resume - esc9_ac_charge
+    ] == bytes(entry_2e42c_bsr_resume - entry_2f2e0t_9_end), (
+        "$02F2E0 dispatcher consumed the fixed resume-adapter seam"
+    )
+    assert ESC9[
+        entry_278e8_resumes_end - esc9_ac_charge:
+        hbd1c_callback_charge - esc9_ac_charge
+    ] == bytes(hbd1c_callback_charge - entry_278e8_resumes_end), (
+        "bank-$9F resume adapters consumed the callback-charge seam"
+    )
+    assert ESC9[
+        hbd1c_callback_charge_end - esc9_ac_charge:
+        entry_13282_callback_resume_1 - esc9_ac_charge
+    ] == bytes(
+        entry_13282_callback_resume_1 - hbd1c_callback_charge_end
+    ), "bank-$9F callback-charge helper consumed the $013282 resume seam"
+    assert ESC9[
+        entry_13282_resumes_end - esc9_ac_charge:
+        entry_2e42c_fast_callback_resume - esc9_ac_charge
+    ] == bytes(
+        entry_2e42c_fast_callback_resume - entry_13282_resumes_end
+    ), "bank-$9F $013282 resumes consumed the fast-selector seam"
+    assert ESC9[
+        entry_2e42c_fast_end - esc9_ac_charge:
+        entry_bd1c_9 - esc9_ac_charge
+    ] == bytes(entry_bd1c_9 - entry_2e42c_fast_end), (
+        "$02E42C fast selector consumed the scroll-task seam"
+    )
+    assert ESC9[
+        entry_bd1c_9_end - esc9_ac_charge:
+        entry_1337et - esc9_ac_charge
+    ] == bytes(entry_1337et - entry_bd1c_9_end), (
+        "bank-$9F scroll task consumed the $01337E seam"
+    )
+    body_1337e_bytes = ESC9[
+        entry_1337et - esc9_ac_charge:
+        entry_1337et_end - esc9_ac_charge
+    ]
+    assert body_1337e_bytes.startswith(
+        bytes.fromhex(
+            "c230a536c9f000d02ca534d028a53ac9f000d021"
+            "a538c96c00901ac90040b015"
+            "a53ec9f000d00ea53cc950009007c9fd3fb002800e"
+        )
+    ), (
+        "$01337E lost its exact A5/A6-$006C/A7-$0050 canonical guard"
+    )
+    assert body_1337e_bytes.count(bytes.fromhex("2000a1")) == 9, (
+        "$01337E lost an AC-charge basic block"
+    )
+    assert body_1337e_bytes.count(bytes.fromhex("5c28f892")) == 1, (
+        "$01337E lost its sole bank-$92 indirect-call bridge"
+    )
+    assert body_1337e_bytes.count(
+        bytes.fromhex("a9f8e78540a9f8008542")
+    ) == 1, (
+        "$01337E lost its pinned bank-$9D return trampoline tag"
+    )
+    assert body_1337e_bytes.count(bytes.fromhex("1a3a")) == 2, (
+        "$01337E lost one of its two exact TST.W N/Z materializers"
+    )
+    assert body_1337e_bytes.endswith(bytes.fromhex("5c6fd100")), (
+        "$01337E lost its exact terminal mapped-RTS jump"
+    )
+    assert ESC9[
+        entry_1337et_end - esc9_ac_charge:
+        stage3_79_sparse_dispatch - esc9_ac_charge
+    ] == bytes(stage3_79_sparse_dispatch - entry_1337et_end), (
+        "$01337E consumed the $0079FE sparse-dispatch seam"
+    )
+    stage3_79_dispatch_bytes = ESC9[
+        stage3_79_sparse_dispatch - esc9_ac_charge:
+        stage3_79_sparse_dispatch_end - esc9_ac_charge
+    ]
+    for encoded, label in (
+        (bytes.fromhex("4c00be"), "$0079FE local entry"),
+        (bytes.fromhex("4c10be"), "$007AC6 local entry"),
+        (bytes.fromhex("5c00a79e"), "$76/$77 fan-out"),
+        (bytes.fromhex("5c31f994"), "generic xlat miss"),
+    ):
+        assert stage3_79_dispatch_bytes.count(encoded) == 1, (
+            "Stage-3 low-page sparse dispatcher lost its sole " + label
+        )
+    assert ESC9[
+        stage3_79_sparse_dispatch_end - esc9_ac_charge:
+        entry_79fe_9 - esc9_ac_charge
+    ] == bytes(entry_79fe_9 - stage3_79_sparse_dispatch_end), (
+        "Stage-3 low-page dispatcher consumed the $0079FE entry seam"
+    )
+    stage3_79_loop_bytes = ESC9[
+        entry_79fe_9 - esc9_ac_charge:
+        entry_stage3_79_loop_end - esc9_ac_charge
+    ]
+    assert stage3_79_loop_bytes.count(bytes.fromhex("2000a1")) == 1, (
+        "$0079FE hot path lost its cumulative AC charge"
+    )
+    assert stage3_79_loop_bytes.count(bytes.fromhex("5c28d100")) == 2, (
+        "$0079FE hot/cold paths lost an interpreter delegation"
+    )
+    assert ESC9[
+        entry_stage3_79_loop_end - esc9_ac_charge:
+        entry_27aea_9 - esc9_ac_charge
+    ] == bytes(entry_27aea_9 - entry_stage3_79_loop_end), (
+        "$0079FE loop consumed the $027AEA leaf seam"
+    )
+    leaf_27aea_bytes = ESC9[
+        entry_27aea_9 - esc9_ac_charge:
+        entry_27aea_9_end - esc9_ac_charge
+    ]
+    assert leaf_27aea_bytes.count(bytes.fromhex("2000a1")) == 8, (
+        "$027AEA lost an AC-charge basic block"
+    )
+    assert ESC9[
+        entry_27aea_9_end - esc9_ac_charge:
+        entry_278e8_9 - esc9_ac_charge
+    ] == bytes(entry_278e8_9 - entry_27aea_9_end), (
+        "bank-$9F $027AEA leaf consumed the $0278E8 parent seam"
+    )
+    parent_278e8_bytes = ESC9[
+        entry_278e8_9 - esc9_ac_charge:
+        entry_278e8_9_end - esc9_ac_charge
+    ]
+    assert parent_278e8_bytes.count(bytes.fromhex("2000a1")) == 6
+    assert parent_278e8_bytes.count(bytes.fromhex("5c00a59f")) == 2
+    for encoded in (
+        bytes.fromhex("a9d8e38554a9f8008556"),
+        bytes.fromhex("a9dce38554a9f8008556"),
+        bytes.fromhex("a9e0e38554a9f8008556"),
+    ):
+        assert parent_278e8_bytes.count(encoded) == 1, (
+            "$0278E8 lost a pinned bank-$9D callback continuation"
+        )
+    assert ESC9[
+        entry_278e8_9_end - esc9_ac_charge:
+        hce4_fast_render_2x2 - esc9_ac_charge
+    ] == bytes(hce4_fast_render_2x2 - entry_278e8_9_end), (
+        "bank-$9F $0278E8 parent consumed the CE4 fused-render seam"
+    )
+    ce4_fast_render_bytes = ESC9[
+        hce4_fast_render_2x2 - esc9_ac_charge:
+        hce4_fast_render_2x2_end - esc9_ac_charge
+    ]
+    assert sum(
+        ce4_fast_render_bytes.count(bytes((0x97, pointer)))
+        for pointer in (0x54, 0x58, 0x5C)
+    ) == 12, (
+        "CE4 fused 2x2 renderer lost one of its twelve output-word writes"
+    )
+    assert ce4_fast_render_bytes.count(
+        bytes.fromhex("a9ffff8592a901008570856e85a2646064726b")
+    ) == 1, "CE4 fused 2x2 renderer lost its exact exhausted-D7 CCR/X tail"
+    assert ESC9[
+        hce4_fast_render_2x2_end - esc9_ac_charge:
+        hce4_charge_2x2_dynamic - esc9_ac_charge
+    ] == bytes(
+        hce4_charge_2x2_dynamic - hce4_fast_render_2x2_end
+    ), "CE4 fused renderer consumed its dynamic-charge seam"
+    ce4_dynamic_charge_bytes = ESC9[
+        hce4_charge_2x2_dynamic - esc9_ac_charge:
+        hce4_charge_2x2_dynamic_end - esc9_ac_charge
+    ]
+    assert ce4_dynamic_charge_bytes.count(bytes.fromhex("2000a1")) == 1, (
+        "CE4 dynamic 2x2 charge lost its sole scheduler charge"
+    )
+    assert ce4_dynamic_charge_bytes.endswith(
+        bytes.fromhex("1865ae85ae60")
+    ), (
+        "CE4 dynamic 2x2 charge lost its add-and-return tail"
+    )
+    assert ESC9[
+        hce4_charge_2x2_dynamic_end - esc9_ac_charge:
+        hce4_stage3_panel_try - esc9_ac_charge
+    ] == bytes(
+        hce4_stage3_panel_try - hce4_charge_2x2_dynamic_end
+    ), "CE4 dynamic charge consumed the Stage-3 panel seam"
+    panel_bytes = ESC9[
+        hce4_stage3_panel_try - esc9_ac_charge:
+        hce4_stage3_panel_end - esc9_ac_charge
+    ]
+    assert panel_bytes.startswith(
+        bytes.fromhex("c230a582c9c500")
+    ), "CE4 Stage-3 panel lost its mapped-source-bank guard"
+    assert panel_bytes.count(bytes.fromhex("205ed5")) == 19, (
+        "CE4 Stage-3 panel lost one of its variant/common emit call sites"
+    )
+    for tile in (
+        0x21BF, 0x21C0, 0x21C1, 0x21C2, 0x21C3,
+        0x21C4, 0x21C5, 0x21C6, 0x21C7, 0x21C8, 0x21C9,
+        0x21CA, 0x21CB, 0x21CC,
+        0x21CD, 0x21CE, 0x21CF, 0x21D0,
+    ):
+        encoded = bytes((0xA9, tile & 0xFF, tile >> 8))
+        assert panel_bytes.count(encoded) >= 1, (
+            f"CE4 Stage-3 panel lost authenticated tile ${tile:04X}"
+        )
+    assert panel_bytes.endswith(
+        bytes.fromhex("a584c901005c46e49d")
+    ), "CE4 Stage-3 panel lost its size-neutral bank-$9D fallback"
+    assert ESC9[
+        hce4_stage3_panel_end - esc9_ac_charge:
+        entry_13314t_9 - esc9_ac_charge
+    ] == bytes(entry_13314t_9 - hce4_stage3_panel_end), (
+        "CE4 Stage-3 panel consumed the $013314 seam"
+    )
+    body_13314_bytes = ESC9[
+        entry_13314t_9 - esc9_ac_charge:
+        entry_13314t_9_end - esc9_ac_charge
+    ]
+    assert body_13314_bytes.startswith(
+        bytes.fromhex(
+            "c230a53ac9f000d01ca538c940009015c90040b010"
+            "a53ec9f000d009a53cc9fd3fb002800e"
+            "a914338540a9010085425c28d100"
+        )
+    ), "$013314 lost its exact A6/A7 canonical guard"
+    assert body_13314_bytes.count(bytes.fromhex("2000a1")) == 9, (
+        "$013314 lost an AC-charge basic block"
+    )
+    assert body_13314_bytes.endswith(bytes.fromhex("5c6fd100")), (
+        "$013314 lost its exact terminal mapped-RTS jump"
+    )
+    assert ESC9[
+        entry_13314t_9_end - esc9_ac_charge:
+        entry_13282t_9 - esc9_ac_charge
+    ] == bytes(entry_13282t_9 - entry_13314t_9_end), (
+        "bank-$9F $013314 clamp consumed the $013282 seam"
+    )
+    body_13282_bytes = ESC9[
+        entry_13282t_9 - esc9_ac_charge:
+        entry_13282t_9_end - esc9_ac_charge
+    ]
+    assert body_13282_bytes.count(bytes.fromhex("2000a1")) == 9, (
+        "$013282 lost an AC-charge basic block"
+    )
+    for encoded in (
+        bytes.fromhex("a9e4e38554a9f8008556"),
+        bytes.fromhex("a9e8e38554a9f8008556"),
+    ):
+        assert body_13282_bytes.count(encoded) == 1, (
+            "$013282 lost a pinned bank-$9D callback continuation"
+        )
+    assert ESC9[
+        entry_13282t_9_end - esc9_ac_charge:
+        entry_2e676t_9 - esc9_ac_charge
+    ] == bytes(entry_2e676t_9 - entry_13282t_9_end), (
+        "bank-$9F $013282 consumed the $02E676 seam"
+    )
+    body_2e676_bytes = ESC9[
+        entry_2e676t_9 - esc9_ac_charge:
+        entry_2e676t_9_end - esc9_ac_charge
+    ]
+    assert body_2e676_bytes.count(bytes.fromhex("2000a1")) == 8, (
+        "$02E676 lost an AC-charge basic block"
+    )
+    assert ESC9[
+        entry_2e676t_9_end - esc9_ac_charge:
+        hce4_ac_charge_fast_2x2 - esc9_ac_charge
+    ] == bytes(hce4_ac_charge_fast_2x2 - entry_2e676t_9_end), (
+        "bank-$9F $02E676 body consumed the CE4 charge-helper seam"
+    )
+    ce4_fast_charge_bytes = ESC9[
+        hce4_ac_charge_fast_2x2 - esc9_ac_charge:
+        hce4_ac_charge_fast_2x2_end - esc9_ac_charge
+    ]
+    assert ce4_fast_charge_bytes.count(bytes.fromhex("2000d3")) == 1, (
+        "CE4 2x2 shortcut lost its dynamic clipping-aware AC charge"
+    )
+    assert ce4_fast_charge_bytes.count(
+        bytes.fromhex("a94d012000a1")
+    ) == 1, (
+        "CE4 Stage-3 panel shortcut lost its exact 333-instruction AC charge"
+    )
+    for encoded, label in (
+        (bytes.fromhex("c9ee2a"), "$042AEA source"),
+        (bytes.fromhex("c91c2b"), "$042B18 source"),
+    ):
+        assert ce4_fast_charge_bytes.count(encoded) == 1, (
+            "CE4 Stage-3 panel charge guard lost its sole " + label
+        )
+    for retained_word in (0x74, 0x76, 0x78, 0x7A):
+        assert ce4_fast_charge_bytes.count(
+            bytes((0x85, retained_word))
+        ) == 1, (
+            "CE4 2x2 shortcut lost a retained source word"
+        )
+    assert ce4_fast_charge_bytes.count(bytes.fromhex("a90100856a")) == 1, (
+        "CE4 2x2 shortcut lost its fused-render route marker"
+    )
+    assert ce4_fast_charge_bytes.count(bytes.fromhex("646a")) == 2, (
+        "CE4 charge shortcuts lost a panel/fallback route-marker clear"
+    )
+    assert ce4_fast_charge_bytes.count(bytes.fromhex("5c3bcb94")) == 2, (
+        "CE4 2x2/panel shortcuts lost a fixed bank-$94 RTS return"
+    )
+    assert ce4_fast_charge_bytes.count(bytes.fromhex("5c30ca94")) == 1, (
+        "CE4 2x2 shortcut lost its exact-counter fallback"
+    )
+    assert ESC9[
+        hce4_ac_charge_fast_2x2_end - esc9_ac_charge:
+        hstage3_box_leaf - esc9_ac_charge
+    ] == bytes(hstage3_box_leaf - hce4_ac_charge_fast_2x2_end), (
+        "CE4 charge shortcut consumed the Stage-3 box-emitter seam"
+    )
+    box_leaf_bytes = ESC9[
+        hstage3_box_leaf - esc9_ac_charge:
+        hstage3_box_leaf_end - esc9_ac_charge
+    ]
+    assert box_leaf_bytes.count(bytes.fromhex("a910002000a1")) == 1, (
+        "Stage-3 box emitter lost its exact 16-instruction AC charge"
+    )
+    assert ESC9[
+        hstage3_box_leaf_end - esc9_ac_charge:
+        hstage3_collision_leaf - esc9_ac_charge
+    ] == bytes(hstage3_collision_leaf - hstage3_box_leaf_end), (
+        "Stage-3 box emitter consumed the collision-emitter seam"
+    )
+    collision_leaf_bytes = ESC9[
+        hstage3_collision_leaf - esc9_ac_charge:
+        hstage3_collision_leaf_end - esc9_ac_charge
+    ]
+    assert (
+        collision_leaf_bytes.count(bytes.fromhex("a90400")) >= 2
+        and collision_leaf_bytes.count(bytes.fromhex("a90300")) == 1
+        and collision_leaf_bytes.count(bytes.fromhex("2000a1")) == 3
+    ), (
+        "Stage-3 collision emitter lost its parent/callee AC charges"
+    )
+    assert collision_leaf_bytes.count(bytes.fromhex("a910002000a1")) == 1, (
+        "Stage-3 collision emitter lost its exact 16-instruction tail charge"
+    )
+    assert ESC9[
+        hstage3_collision_leaf_end - esc9_ac_charge:
+        hrdw_ea_l - esc9_ac_charge
+    ] == bytes(hrdw_ea_l - hstage3_collision_leaf_end), (
+        "Stage-3 collision emitter consumed the rdw_ea_l seam"
+    )
+    assert ESC9[
+        hrdw_ea_l_end - esc9_ac_charge:
+        entry_133ea_resume_1 - esc9_ac_charge
+    ] == bytes(entry_133ea_resume_1 - hrdw_ea_l_end), (
+        "rdw_ea_l consumed the player-hot resume seam"
+    )
+    player_hot_resume_bytes = b"".join(
+        bytes((0x4C, target & 0xFF, target >> 8))
+        for target in (
+            br133ea_1_9,
+            br133ea_2_9,
+            br133ea_3_9,
+            br13468_1_9,
+            br13538_1_9,
+            br13538_2_9,
+        )
+    )
+    assert ESC9[
+        entry_133ea_resume_1 - esc9_ac_charge:
+        stage3_player_hot_resumes_end - esc9_ac_charge
+    ] == player_hot_resume_bytes, (
+        "Stage-3 player-hot resume adapters no longer JMP to their "
+        "assembled continuation labels"
+    )
+    assert ESC9[
+        stage3_player_hot_resumes_end - esc9_ac_charge:
+        entry_133eat - esc9_ac_charge
+    ] == bytes(entry_133eat - stage3_player_hot_resumes_end), (
+        "player-hot resume adapters consumed the $0133EA seam"
+    )
+    assert ESC9[
+        entry_133eat_end - esc9_ac_charge:
+        entry_13468t - esc9_ac_charge
+    ] == bytes(entry_13468t - entry_133eat_end), (
+        "$0133EA consumed the $013468 seam"
+    )
+    assert ESC9[
+        entry_13468t_end - esc9_ac_charge:
+        entry_13538t - esc9_ac_charge
+    ] == bytes(entry_13538t - entry_13468t_end), (
+        "$013468 consumed the $013538 seam"
+    )
+    assert ESC9[
+        entry_13538t_end - esc9_ac_charge:
+        stage3_player_bsr_ext - esc9_ac_charge
+    ] == bytes(stage3_player_bsr_ext - entry_13538t_end), (
+        "$013538 consumed the player-hot BSR-extension seam"
+    )
+    player_13538_bytes = ESC9[
+        entry_13538t - esc9_ac_charge:
+        entry_13538t_end - esc9_ac_charge
+    ]
+    h135e0_direct_jsl = bytes(
+        (0x22, h135e0_direct & 0xFF, h135e0_direct >> 8, 0x94)
+    )
+    assert player_13538_bytes.count(h135e0_direct_jsl) == 2, (
+        "$013538 lost one of its two guarded direct $0135E0 call sites"
+    )
+    player_bsr_bytes = ESC9[
+        stage3_player_bsr_ext - esc9_ac_charge:
+        stage3_player_bsr_ext_end - esc9_ac_charge
+    ]
+    for encoded, label in (
+        (bytes.fromhex("5cf8f592"), "miss -> $92:F5F8"),
+        (bytes.fromhex("5c00d89f"), "$013314 -> $9F:D800"),
+        (bytes.fromhex("5c00ba9f"), "$01337E -> $9F:BA00"),
+        (bytes.fromhex("5c00ec9f"), "$0133EA -> $9F:EC00"),
+        (bytes.fromhex("5c00f19f"), "$013468 -> $9F:F100"),
+        (bytes.fromhex("5c00f79f"), "$013538 -> $9F:F700"),
+    ):
+        assert player_bsr_bytes.count(encoded) == 1, (
+            "player-hot BSR extension lost its sole " + label
+        )
+    assert ESC9[
+        stage3_player_bsr_ext_end - esc9_ac_charge:
+        stage3_bank2_bsr_ext - esc9_ac_charge
+    ] == bytes(stage3_bank2_bsr_ext - stage3_player_bsr_ext_end), (
+        "player-hot BSR extension consumed the bank-$02 BSR seam"
+    )
+    bank2_bsr_bytes = ESC9[
+        stage3_bank2_bsr_ext - esc9_ac_charge:
+        stage3_bank2_bsr_ext_end - esc9_ac_charge
+    ]
+    for encoded, label in (
+        (bytes.fromhex("5cf8f592"), "miss -> $92:F5F8"),
+        (bytes.fromhex("5c40a19f"), "$02E42C -> $9F:A140"),
+        (bytes.fromhex("5c40d594"), "$02E40E -> $94:D540"),
+        (bytes.fromhex("5c40d394"), "$02E49C -> $94:D340"),
+        (bytes.fromhex("5c00a59f"), "$027912 -> $9F:A500"),
+        (bytes.fromhex("5c00fe9f"), "$02F542 -> $9F:FE00"),
+    ):
+        assert bank2_bsr_bytes.count(encoded) == 1, (
+            "bank-$02 BSR extension lost its sole " + label
+        )
+    assert ESC9[
+        stage3_bank2_bsr_ext_end - esc9_ac_charge:
+        entry_2f542t - esc9_ac_charge
+    ] == bytes(entry_2f542t - stage3_bank2_bsr_ext_end), (
+        "bank-$02 BSR extension consumed the $02F542 seam"
+    )
+    body_2f542_bytes = ESC9[
+        entry_2f542t - esc9_ac_charge:
+        entry_2f542t_end - esc9_ac_charge
+    ]
+    assert body_2f542_bytes.count(bytes.fromhex("2000a1")) == 6, (
+        "$02F542 lost an AC-charge basic block"
+    )
+    selector_bytes = ESC9[
+        entry_2e42c_9 - esc9_ac_charge:
+        entry_2e42c_9_end - esc9_ac_charge
+    ]
+    assert selector_bytes.count(bytes.fromhex("a9c0e38554a9f8008556")) == 1, (
+        "$02E42C lost its sole bank-$9D BSR return trampoline tag"
+    )
+    assert selector_bytes.count(bytes.fromhex("a9c4e38540a9f8008542")) == 1, (
+        "$02E42C lost its sole bank-$9D callback return trampoline tag"
+    )
+    selector_fast_bytes = ESC9[
+        entry_2e42c_fast_callback_resume - esc9_ac_charge:
+        entry_2e42c_fast_end - esc9_ac_charge
+    ]
+    assert selector_fast_bytes.count(
+        bytes.fromhex("a9f0e385408554")
+    ) == 1, (
+        "$02E42C fast loop lost its callback return low-word publication"
+    )
+    assert selector_fast_bytes.count(
+        bytes.fromhex("a9f80085428556")
+    ) == 1, (
+        "$02E42C fast loop lost its callback return bank publication"
+    )
+    assert selector_fast_bytes.count(bytes.fromhex("22aee500")) == 1, (
+        "$02E42C fast loop lost its sole callback return push"
+    )
+    assert selector_fast_bytes.count(bytes.fromhex("5c28f892")) == 0, (
+        "$02E42C fast loop unexpectedly retained the generic indirect bridge"
+    )
+    assert selector_fast_bytes.count(bytes.fromhex("4c80a6")) == 1, (
+        "$02E42C fast loop lost its direct $02F2E0 callback edge"
+    )
+    assert selector_fast_bytes.count(bytes.fromhex("4c00d0")) == 1, (
+        "$02E42C fast loop lost its direct $0278E8 callback edge"
+    )
+    assert selector_fast_bytes.count(bytes.fromhex("9f000040")) == 3, (
+        "$02E42C fast loop lost its base big-endian frame/residue stores"
+    )
+    assert selector_fast_bytes.count(bytes.fromhex("bf000040")) == 3, (
+        "$02E42C fast loop lost its base big-endian frame/return reads"
+    )
+    dispatcher_27912_bytes = ESC9[
+        entry_27912t_9 - esc9_ac_charge:
+        entry_27912t_9_end - esc9_ac_charge
+    ]
+    dispatcher_2f2e0_bytes = ESC9[
+        entry_2f2e0t_9 - esc9_ac_charge:
+        entry_2f2e0t_9_end - esc9_ac_charge
+    ]
+    assert dispatcher_27912_bytes.count(bytes.fromhex("5c00b694")) == 1
+    assert dispatcher_27912_bytes.count(bytes.fromhex("5c00bc94")) == 1
+    assert dispatcher_2f2e0_bytes.count(bytes.fromhex("5c00c294")) == 1
+    assert dispatcher_27912_bytes.count(bytes.fromhex("2000a1")) == 1
+    assert dispatcher_2f2e0_bytes.count(bytes.fromhex("2000a1")) == 1
+    bsr_cont = esc9_off("br2e42c_1")
+    callback_cont = esc9_off("br2e42c_2")
+    assert ESC9[
+        entry_2e42c_bsr_resume - esc9_ac_charge:
+        entry_2e42c_resumes_end - esc9_ac_charge
+    ] == bytes(
+        (
+            0x4C,
+            bsr_cont & 0xFF,
+            bsr_cont >> 8,
+            0x4C,
+            callback_cont & 0xFF,
+            callback_cont >> 8,
+        )
+    ), "bank-$9F selector resume adapters no longer JMP locally"
+    bd1c_conts = [esc9_off(f"brbd1c_{index}") for index in range(1, 5)]
+    assert ESC9[
+        entry_bd1c_callback_resume_1 - esc9_ac_charge:
+        entry_bd1c_resumes_end - esc9_ac_charge
+    ] == bytes(
+        byte
+        for cont in bd1c_conts
+        for byte in (0x4C, cont & 0xFF, cont >> 8)
+    ), "bank-$9F scroll-task resume adapters no longer JMP locally"
+    body_13282_conts = [
+        esc9_off(f"br13282_{index}") for index in range(1, 3)
+    ]
+    assert ESC9[
+        entry_13282_callback_resume_1 - esc9_ac_charge:
+        entry_13282_resumes_end - esc9_ac_charge
+    ] == bytes(
+        byte
+        for cont in body_13282_conts
+        for byte in (0x4C, cont & 0xFF, cont >> 8)
+    ), "bank-$9F $013282 resume adapters no longer JMP locally"
+    scroll_bytes = ESC9[
+        entry_bd1c_9 - esc9_ac_charge:
+        entry_bd1c_9_end - esc9_ac_charge
+    ]
+    assert ESC9[
+        hbd1c_callback_charge - esc9_ac_charge:
+        hbd1c_callback_charge_end - esc9_ac_charge
+    ] == bytes.fromhex(
+        "a522d017a520c95a29f00ac94227d00b"
+        "a94d018003a90e002000a160"
+    ), "$00BD1C callback-charge helper moved or changed its exact source classes"
+    assert scroll_bytes.count(bytes.fromhex("2020a8")) == 4, (
+        "$00BD1C lost one of its four callback-charge calls"
+    )
+    for trampoline in (0xE3C8, 0xE3CC, 0xE3D0, 0xE3D4):
+        tag = bytes(
+            (0xA9, trampoline & 0xFF, trampoline >> 8,
+             0x85, 0x40, 0xA9, 0xF8, 0x00, 0x85, 0x42)
+        )
+        assert scroll_bytes.count(tag) == 1, (
+            "$00BD1C lost its sole pinned callback trampoline "
+            f"${trampoline:04X}"
+        )
+
+    # The diagnostic player ledger is intentionally narrower than a common
+    # clock, but it must still be internally complete: all 83 table entries
+    # are real generated block charges in the six admitted player bodies, and
+    # every terminal JSR/RTS handoff flushes its pending block before leaving
+    # that ledger.  Do this with pack-time byte substitutions only for
+    # VTIME=1; normal ROMs preserve every original helper target exactly.
+    VTIME_ESC9_RETURN_BASE = 0xBA00
+    vtime_esc9_index = Path("src/vtime_esc9_charge_index.bin").read_bytes()
+    vtime_esc9_cost = Path("src/vtime_esc9_charge_cost.bin").read_bytes()
+    vtime_esc9_pc = Path("src/vtime_esc9_charge_pc.bin").read_bytes()
+    vtime_esc9_terminal = Path("src/vtime_esc9_charge_terminal.bin").read_bytes()
+    assert (
+        len(vtime_esc9_index) == 17011
+        and len(vtime_esc9_cost) == 83
+        and len(vtime_esc9_pc) == 166
+        and len(vtime_esc9_terminal) == 166
+    ), "bank-$9F VTIME metadata changed; regenerate and audit its fixed layout"
+    assert (
+        vtime_code[0x3A00:0x3A00 + len(vtime_esc9_index)] == vtime_esc9_index
+        and vtime_code[0x7C80:0x7C80 + len(vtime_esc9_cost)] == vtime_esc9_cost
+        and vtime_code[0x7CD3:0x7CD3 + len(vtime_esc9_pc)] == vtime_esc9_pc
+        and vtime_code[0x7D80:0x7D80 + len(vtime_esc9_terminal)] == vtime_esc9_terminal
+    ), "bank-$9F VTIME metadata was not packed at its audited F2 offsets"
+    player_vtime_ranges = (
+        (entry_13282t_9, entry_13282t_9_end),
+        (entry_13314t_9, entry_13314t_9_end),
+        (entry_1337et, entry_1337et_end),
+        (entry_133eat, entry_133eat_end),
+        (entry_13468t, entry_13468t_end),
+        (entry_13538t, entry_13538t_end),
+    )
+    player_vtime_returns = [
+        VTIME_ESC9_RETURN_BASE + offset
+        for offset, ordinal in enumerate(vtime_esc9_index)
+        if ordinal
+    ]
+    assert (
+        len(player_vtime_returns) == 83
+        and sorted(vtime_esc9_index[offset] for offset, ordinal in enumerate(vtime_esc9_index) if ordinal)
+        == list(range(1, 84))
+    ), "bank-$9F VTIME sparse index lost a block or ordinal"
+    player_vtime_call_offsets = []
+    legacy_esc9_charge_call = bytes(
+        (0x20, esc9_ac_charge & 0xFF, esc9_ac_charge >> 8)
+    )
+    for return_pc in player_vtime_returns:
+        call_pc = return_pc - 3
+        assert any(
+            start <= call_pc and return_pc <= end
+            for start, end in player_vtime_ranges
+        ), (
+            "bank-$9F VTIME table return $%04X is outside an admitted "
+            "Stage-3 player body" % return_pc
+        )
+        call_offset = call_pc - esc9_ac_charge
+        assert ESC9[call_offset:call_offset + 3] == legacy_esc9_charge_call, (
+            "bank-$9F VTIME table return $%04X no longer follows an "
+            "esc9_ac_charge JSR" % return_pc
+        )
+        charge_context = ESC9[call_offset - 6:call_offset]
+        assert (
+            len(charge_context) == 6
+            and charge_context[:4] == bytes.fromhex("08c230a9")
+            and charge_context[4]
+            and charge_context[5] == 0
+        ), (
+            "bank-$9F VTIME table return $%04X no longer has the required "
+            "PHP/REP/LDA immediate charge frame" % return_pc
+        )
+        player_vtime_call_offsets.append(call_offset)
+
+    def esc9_jml(target):
+        return bytes((0x5C, target & 0xFF, target >> 8, 0x9F))
+
+    def player_jml_offsets(encoded):
+        offsets = []
+        for start, end in player_vtime_ranges:
+            first = start - esc9_ac_charge
+            last = end - esc9_ac_charge
+            offsets.extend(
+                offset
+                for offset in range(first, last - len(encoded) + 1)
+                if ESC9[offset:offset + len(encoded)] == encoded
+            )
+        return offsets
+
+    player_ojmp_offsets = player_jml_offsets(bytes.fromhex("5cb3d100"))
+    player_ibridge_offsets = player_jml_offsets(bytes.fromhex("5c28f892"))
+    player_ors_offsets = player_jml_offsets(bytes.fromhex("5c6fd100"))
+    assert len(player_ojmp_offsets) == 8, (
+        "admitted player bodies lost or gained a logical-JSR OJMP handoff"
+    )
+    assert len(player_ibridge_offsets) == 1, (
+        "admitted player bodies lost their indirect-JSR bridge handoff"
+    )
+    assert len(player_ors_offsets) == 6, (
+        "admitted player bodies lost or gained a final RTS/ORS handoff"
+    )
+
+    esc9_packed = bytearray(ESC9)
+    if vtime_enabled:
+        for call_offset in player_vtime_call_offsets:
+            esc9_packed[call_offset + 1:call_offset + 3] = bytes(
+                (esc9_vtime_charge_gateway & 0xFF,
+                 esc9_vtime_charge_gateway >> 8)
+            )
+        for offset in player_ojmp_offsets:
+            esc9_packed[offset:offset + 4] = esc9_jml(
+                esc9_vtime_ojmp_gateway
+            )
+        for offset in player_ibridge_offsets:
+            esc9_packed[offset:offset + 4] = esc9_jml(
+                esc9_vtime_ibridge_gateway
+            )
+        for offset in player_ors_offsets:
+            esc9_packed[offset:offset + 4] = esc9_jml(
+                esc9_vtime_ors_gateway
+            )
+        assert (
+            esc9_packed.count(
+                bytes((0x20, esc9_vtime_charge_gateway & 0xFF,
+                       esc9_vtime_charge_gateway >> 8))
+            ) == 83
+        ), "VTIME player block-charge substitutions are incomplete"
+    print(
+        "VTIME Stage-3 player ledger: %s"
+        % ("enabled diagnostic (83 blocks, 15 handoffs)" if vtime_enabled else "disabled")
+    )
+
+    esc9_file_start = 0x2F8000 + (esc9_ac_charge - 0x8000)
+    esc9_payload = esc9_packed
+    prepared_end = c0bc_prepared_offset + len(C0BC_PREPARED_BLOB)
+    assert prepared_end <= esc9_file_start, (
+        "bank-$9F selector overlaps the derived renderer payload"
+    )
+    assert ROM[prepared_end:esc9_file_start] == bytes(
+        esc9_file_start - prepared_end
+    ), "nonzero data occupies the renderer-payload/selector seam"
+    assert ROM[
+        esc9_file_start:esc9_file_start + len(esc9_payload)
+    ] == bytes(len(esc9_payload)), (
+        "bank-$9F selector would overwrite existing ROM data"
+    )
+    ROM[
+        esc9_file_start:esc9_file_start + len(esc9_payload)
+    ] = esc9_payload
+
 # --- SA-1 LoROM mirror of the interpreter ---
 # Under the SA-1 cart map, the 5A22 (and the SA-1) see $00-$1F:8000-FFFF as LoROM-style
 # (32KB/bank): $00:8000-FFFF -> FILE $0-$7FFF, so $00:FFFC (reset) -> FILE $7FFC and the
@@ -2847,6 +5608,86 @@ if _osp.exists("src/escbank8.bin"):
 # for (DBR=$00). The 5A22 boots into it at $00:8000 with NO interp.pasm changes; the interp
 # also stays reachable at $C0:8000 (HiROM-linear) for when it moves to the SA-1 (Phase A2).
 ROM[0x0000:0x8000] = INTERP                          # interp mirror @ $00-$1F:8000 (LoROM)
+
+# The LoROM mirror did not exist when the VTIME input seam above patched the
+# linear bank-$00 copy. Apply the same exact-byte guards and diagnostic patch
+# now that the mirror has been materialized.
+joy_read_mirror = joy_read - 0x8000
+actual = bytes(ROM[
+    joy_read_mirror:joy_read_mirror + len(joy_read_original)
+])
+assert actual == joy_read_original, (
+    "bank-$00 joy_read mirror moved at file $%06X: expected %s, got %s"
+    % (joy_read_mirror, joy_read_original.hex(), actual.hex())
+)
+input_p1_mirror = input_p1 - 0x8000
+actual = bytes(ROM[
+    input_p1_mirror:input_p1_mirror + len(input_p1_original)
+])
+assert actual == input_p1_original, (
+    "bank-$00 input_p1 mirror moved at file $%06X: expected %s, got %s"
+    % (input_p1_mirror, input_p1_original.hex(), actual.hex())
+)
+if vtime_enabled:
+    ROM[input_p1_mirror:input_p1_mirror + len(input_p1_vtime)] = input_p1_vtime
+
+# A VTIME IRQ owns two costs that the ordinary fetch choke cannot represent:
+# any instruction staged while a pending level-6 request was mask-blocked,
+# followed by the CPU-000's 66-cycle exception-entry edge.  Patch only the
+# opt-in diagnostic into the nine-byte NOP island in `take_irq`; production
+# retains those exact source bytes and therefore its existing ROM behavior.
+take_irq_vtime_entry_seam = interp_symbol("take_irq_vtime_entry_seam")
+take_irq_vtime_entry_seam_end = interp_symbol("take_irq_vtime_entry_seam_end")
+vtime_irq_entry_call = bytes((
+    0x22,
+    vtime_off("vtime_irq_enter") & 0xFF,
+    vtime_off("vtime_irq_enter") >> 8,
+    0xF2,
+))
+assert (
+    take_irq_vtime_entry_seam_end - take_irq_vtime_entry_seam == 9
+), "take_irq VTIME entry seam is no longer the pinned nine-byte NOP island"
+for take_irq_vtime_offset in (
+    take_irq_vtime_entry_seam - 0x8000,
+    take_irq_vtime_entry_seam,
+):
+    assert ROM[
+        take_irq_vtime_offset:take_irq_vtime_offset + 9
+    ] == bytes.fromhex("ea" * 9), (
+        "take_irq VTIME entry seam changed at file $%06X"
+        % take_irq_vtime_offset
+    )
+    if vtime_enabled:
+        ROM[
+            take_irq_vtime_offset:
+            take_irq_vtime_offset + len(vtime_irq_entry_call)
+        ] = vtime_irq_entry_call
+
+# The diagnostic root deliberately interprets each child with the global
+# native gate temporarily clear.  Patch both bank-$00 ROM views so op_rts can
+# recognize the eleven genuine bank-$02 parent returns before consulting that
+# gate, then restore the gate and resume the bank-$F3 continuation.  The F3
+# front end reproduces the original $00FF and ordinary xlat/miss behavior for
+# every other return.  Normal images retain these exact source bytes.
+op_rts_sentinel = interp_symbol("op_rts_sentinel")
+op_rts_source = bytes.fromhex("a542c9ff")
+return_dispatch = vtime_esc5_root_off("vtime_esc5_return_dispatch")
+op_rts_vtime = bytes((
+    0x5C,
+    return_dispatch & 0xFF,
+    return_dispatch >> 8,
+    0xF3,
+))
+for op_rts_file in (
+    op_rts_sentinel - 0x8000,
+    op_rts_sentinel,
+):
+    assert ROM[op_rts_file:op_rts_file + 4] == op_rts_source, (
+        "op_rts_sentinel lost its VTIME-only patchable LDA/CMP seam"
+    )
+    if vtime_enabled:
+        ROM[op_rts_file:op_rts_file + 4] = op_rts_vtime
+
 # A2 boot-flow swap: the 5A22 reset vector ($00:FFFC -> file $7FFC) points at cpu5a22_boot
 # ($FC00), NOT the interp reset. The 5A22 bootstraps the SA-1 (CRV=$8000 = interp reset)
 # then halts; the SA-1 runs the interpreter. (The mirror set $7FFC = interp reset $8000;
@@ -2904,13 +5745,15 @@ assert ROM[0x77E0] == 0 and ROM[0xF7E0] == 0, (
     % (ROM[0x77E0], ROM[0xF7E0]))
 
 # Per-fetch PC logging is a diagnostic build feature, not production game
-# behavior.  Keeping the JSR in interp.bin preserves one exact source-level
-# enable path, while the ROM pack replaces it size-neutrally in both bank-$00
-# mirrors by default.  tools/profile_tick_ring.py requires PC_RING=1 and fails
-# loud on a production ROM so cycle attribution can never silently read an
-# inert ring.
+# behavior. Ordinary production skips its JSR while PC_RING restores the
+# original debug body. The VTIME diagnostic reuses the already-called choke
+# trampoline instead: before `$072E` opens it has the same local gated return
+# as production; after that established game gate it can call the cycle helper.
+# The modes are asserted mutually exclusive above.
 pc_ring_enabled = _os.environ.get("PC_RING", "0") == "1"
 pc_ring_call = bytes.fromhex("2081e2")       # jsr dbg_fetch ($E281)
+vtime_consume_call = bytes.fromhex("220084f2ea")  # source: jsl $F2:8400 / nop
+legacy_consume = bytes.fromhex("a5ac3a85ac")      # lda/dec/sta $AC
 
 
 def production_skip(length):
@@ -2921,6 +5764,43 @@ def production_skip(length):
 
 
 pc_ring_disabled = production_skip(len(pc_ring_call))
+
+# `interp.pasm` carries the VTIME consumer at the top of iloop only to reserve
+# its exact five-byte seam. Every packed image, including VTIME diagnostics,
+# restores the proven local `LDA/DEC/STA $AC` there. The VTIME choke gateway
+# suppresses that legacy countdown only after it has initialized a virtual
+# state; no pre-self-test per-fetch helper is allowed.
+dbg_fetch = interp_symbol("dbg_fetch")
+op_movem_d16 = interp_symbol("op_movem_d16")
+choke_tramp = interp_symbol("choke_tramp")
+ct_ret = interp_symbol("ct_ret")
+lh_sched_pre = interp_symbol("lh_sched_pre")
+choke_original_size = lh_sched_pre - choke_tramp
+# The pre-arm test is the absolute loop-hook gate `$072E`.  The earlier
+# two-byte `LDA $2E` accidentally read emulated A3.H from the direct-page
+# register file; task 13 changes that register after its first fetch and then
+# bypasses VTIME prepare for the rest of the pool scan.  The gateway has ample
+# audited slack, so use the exact three-byte absolute load and keep the branch
+# displacement/remaining control flow unchanged.
+choke_gateway = bytes.fromhex(
+    "c230ad2e07f00f2280b4f2d005685ca580005c81e20060"
+)
+assert (
+    dbg_fetch == 0xE281
+    and choke_tramp == 0xF980
+    and ct_ret == 0xF9A7
+    and choke_original_size == 42
+    and len(choke_gateway) <= choke_original_size
+    and dbg_fetch + choke_original_size <= op_movem_d16
+), "VTIME choke gateway no longer fits its audited diagnostic seams"
+for vtime_consume_offset in (0x00A5, 0x80A5):
+    actual = bytes(ROM[vtime_consume_offset:vtime_consume_offset + 5])
+    assert actual == vtime_consume_call, (
+        "VTIME consume seam moved at file $%06X: expected %s, got %s"
+        % (vtime_consume_offset, vtime_consume_call.hex(), actual.hex())
+    )
+    ROM[vtime_consume_offset:vtime_consume_offset + 5] = legacy_consume
+
 for pc_ring_offset in (0x00EB, 0x80EB):
     actual = bytes(ROM[pc_ring_offset:pc_ring_offset + 3])
     assert actual == pc_ring_call, (
@@ -2928,9 +5808,79 @@ for pc_ring_offset in (0x00EB, 0x80EB):
         "update the size-neutral PC_RING pack patch"
         % (pc_ring_offset, pc_ring_call.hex(), actual.hex())
     )
-    if not pc_ring_enabled:
+    if vtime_enabled:
+        original = bytes(ROM[pc_ring_offset:pc_ring_offset + 6])
+        assert original == bytes.fromhex("2081e2ad2e07"), (
+            "VTIME fetch seam moved: expected JSR dbg_fetch / LDA $072E at file $%06X, "
+            "got %s" % (pc_ring_offset, original.hex())
+        )
         ROM[pc_ring_offset:pc_ring_offset + 3] = pc_ring_disabled
-print("PC ring: %s" % ("enabled (diagnostic)" if pc_ring_enabled else "disabled (production)"))
+    elif not pc_ring_enabled:
+        ROM[pc_ring_offset:pc_ring_offset + 3] = pc_ring_disabled
+
+dbg_fetch_relative = dbg_fetch - 0x8000
+dbg_fetch_gateway = bytes.fromhex("5c0180f2ea")
+dbg_fetch_original = bytes.fromhex("daa448a540")  # PHX / LDY $48 / LDA $40
+for dbg_fetch_offset in (dbg_fetch_relative, dbg_fetch_relative + 0x8000):
+    actual = bytes(ROM[dbg_fetch_offset:dbg_fetch_offset + 5])
+    assert actual == dbg_fetch_gateway, (
+        "dbg_fetch virtual-cycle gateway moved or changed at file $%06X: %s"
+        % (dbg_fetch_offset, actual.hex())
+    )
+    if vtime_enabled:
+        # dbg_fetch is skipped in a VTIME image; borrow its unused diagnostic
+        # body as the byte-exact legacy choke tail. The VTIME choke returns here
+        # after accounting so the original xlat/RTS contract stays intact.
+        choke_source_offset = choke_tramp - 0x8000
+        choke_original = bytes(
+            ROM[choke_source_offset:choke_source_offset + choke_original_size]
+        )
+        assert choke_original == bytes.fromhex(
+            "c230ad3a07f020a542f0034c20d3a540c9e40cf00dc9be13f008"
+            "c9fa08f0034ce8d2685c00f99460eaea"
+        ), "legacy choke body changed; re-audit the VTIME relocation"
+        ROM[dbg_fetch_offset:dbg_fetch_offset + choke_original_size] = choke_original
+    elif not vtime_enabled or pc_ring_enabled:
+        ROM[dbg_fetch_offset:dbg_fetch_offset + 5] = dbg_fetch_original
+print(
+    "PC ring: %s"
+    % (
+        "enabled (diagnostic)"
+        if pc_ring_enabled
+        else ("choke-gated VTIME gateway" if vtime_enabled else "disabled (production)")
+    )
+)
+
+if vtime_enabled:
+    choke_packed = choke_gateway + bytes(choke_original_size - len(choke_gateway))
+    for choke_offset in (choke_tramp - 0x8000, choke_tramp - 0x8000 + 0x8000):
+        original = bytes(ROM[choke_offset:choke_offset + choke_original_size])
+        assert original == choke_original, (
+            "legacy choke copy differs across ROM views at file $%06X" % choke_offset
+        )
+        ROM[choke_offset:choke_offset + choke_original_size] = choke_packed
+
+# `mvc_check` is an unconditional bank-$00 optimization: repeated identical
+# MOVE.L (An)+,(An)+ opcodes are bulk-copied after only the first fetch. That is
+# valid for production semantics but bypasses the VTIME per-fetch clock. Route
+# only VTIME images through the fixed $F2 gateway; ordinary images retain the
+# byte-identical REP/LDA prefix. Bit 1 declines to op_move_g, while bit 0 resumes
+# the collapse after re-materializing this prefix in the gateway.
+mvc_check = interp_symbol("mvc_check")
+op_move_g = interp_symbol("op_move_g")
+mvc_prefix = bytes.fromhex("c230a544")       # REP #$30 / LDA $44
+mvc_vtime_gateway = bytes.fromhex("5cd1b4f2") # JML $F2:B4D1
+assert mvc_check == 0x95EE and op_move_g == 0xFA00, (
+    "VTIME mvc gateway fixed bank-$00 continuations moved"
+)
+for mvc_offset in (mvc_check - 0x8000, mvc_check):
+    actual = bytes(ROM[mvc_offset:mvc_offset + len(mvc_prefix)])
+    assert actual == mvc_prefix, (
+        "mvc_check prefix changed at file $%06X: expected %s, got %s"
+        % (mvc_offset, mvc_prefix.hex(), actual.hex())
+    )
+    if vtime_enabled:
+        ROM[mvc_offset:mvc_offset + len(mvc_prefix)] = mvc_vtime_gateway
 
 # The scheduler fire counters are validation telemetry, not emulated game
 # state.  Keep them in PC_RING diagnostic ROMs for the existing scheduler
@@ -3001,7 +5951,6 @@ interp_counter_specs = [
     ("cb9e", "entry_cb9e", bytes.fromhex("ee1e07")),
     ("15b4", "entry_15b4_gap", bytes.fromhex("ee2007")),
     ("3e6a", "entry_3e6a_gap", bytes.fromhex("ee2207")),
-    ("ce4", "entry_ce4", bytes.fromhex("ee2407")),
     ("111a", "entry_111a", bytes.fromhex("ee2607")),
     ("20e8", "entry_20e8", bytes.fromhex("ee2c07")),
 ]
@@ -3027,7 +5976,7 @@ fixed_counter_specs = [
         "ce4-semantic",
         0x2A0000,
         "src/escbank2.sym",
-        "hce4_guards_done",
+        "hce4_counter",
         0,
         bytes.fromhex("ad24071a8d2407"),
     ),
@@ -3084,7 +6033,7 @@ def patch_counter_pattern(name, bank_file_base, start, end, pattern, expected_co
 
 
 patch_counter_pattern(
-    "jah2-dispatch", 0x290000, 0xF000, 0xF600, bytes.fromhex("ee6407"), 22
+    "jah2-dispatch", 0x290000, 0xF000, 0xF600, bytes.fromhex("ee6407"), 23
 )
 patch_counter_pattern(
     "jah2-b0-dispatch", 0x2E8000, 0xFB00, 0xFC00, bytes.fromhex("ee6407"), 8

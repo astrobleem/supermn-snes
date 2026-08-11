@@ -317,7 +317,12 @@ def entry_24d28() -> str:
 
 def entry_24d64() -> str:
     body = transpile(0x024D64, "--coroutine", "--xflag")
-    tst_d7 = "    lda $1C\n    bne Lf24d64_1"
+    tst_d7 = (
+        "    lda $1C\n"
+        "    inc a\n"
+        "    dec a\n"
+        "    bne Lf24d64_1"
+    )
     if body.count(tst_d7) != 1:
         raise SystemExit("unexpected $024D64 TST.W D7 branch")
     body = body.replace(
@@ -608,10 +613,9 @@ def entry_8b46_cluster() -> str:
         "--rom=a0",
     )
     inner = sync_trap(inner, "8b7a")
-    x_tail = "    sta $6E\n    sta $A2\n    lda #$8BA2"
-    if inner.count(x_tail) != 1:
+    x_tail = "    sta $6E\n    lda #$8BA2"
+    if inner.count(x_tail) != 1 or "    sta $6E\n    sta $A2\n" in inner:
         raise SystemExit("unexpected $008B7A CMP tail")
-    inner = inner.replace(x_tail, "    sta $6E\n    lda #$8BA2", 1)
     inner_seam = (
         "    lda #$8BA2\n"
         "    sta $40\n"

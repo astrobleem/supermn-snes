@@ -2,7 +2,7 @@
 # rts), from the SAME deterministic FF as extract_frame.py. R = [SP] read from the captured entry
 # frame. Tapping the rts itself is WRONG: MAME read-taps fire at PREFETCH, before the immediately-
 # preceding store commits. Usage: extract_exit.py <hex-addr> [start-frame]  (matches extract_frame).
-import sys, shutil, struct
+import os, sys, shutil, struct
 from pathlib import Path
 sys.path.insert(0,"/home/chad/mame-mcp"); from mame_mcp.session import MameSession
 ADDR=int(sys.argv[1],16) if len(sys.argv)>1 else 0xCC10
@@ -17,8 +17,9 @@ def be32(d,o): return (d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3]
 entry=(OUT/"entry_wram.bin").read_bytes(); regs=(OUT/"entry_regs.bin").read_bytes()
 SP=be32(regs,15*4)&0xFFFFFF; R=be32(entry, SP-0xF00000)&0xFFFFFF   # [SP] at entry = return addr
 print("$%06X: entry SP=$%06X  return R=[SP]=$%06X"%(ADDR,SP,R),flush=True)
+PLAYBACK=os.environ.get("MAME_PLAYBACK","vplay.inp")
 s=MameSession(mame="mame", system="superman", rompath=str(HERE/"roms"), workdir=str(HERE), state_directory=str(HERE/"sta"),
-              extra_args=["-playback","vplay.inp","-input_directory","/home/chad/supermn-snes/inp"])
+              extra_args=["-playback",PLAYBACK,"-input_directory","/home/chad/supermn-snes/inp"])
 try:
     s.launch(boot_wait=25); frame=0
     while frame < START-10:

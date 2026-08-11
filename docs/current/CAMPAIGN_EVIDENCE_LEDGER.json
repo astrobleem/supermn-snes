@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "purpose": "Reuse authenticated gameplay evidence and resume from the newest compatible checkpoint instead of replaying accepted prefixes.",
+    "fresh_power_on_required_when": [
+      "ROM identity changes",
+      "boot, scheduler, virtual-clock, input scheduling, or state-serialization behavior changes",
+      "the release acceptance gate explicitly requires a fresh run"
+    ],
+    "checkpoint_resume_allowed_when": [
+      "ROM, MAME oracle, timeline, boss fixtures, emulator, bridge, and exact-boundary identities match",
+      "the parent checkpoint hash matches the continuation summary",
+      "the accepted segment has no oracle divergence, halt, or gate drift"
+    ],
+    "cross_rom_diagnostic_resume_allowed_when": [
+      "--allow-resume-rom-migration is explicit and the selected ROM differs from the authenticated checkpoint ROM",
+      "the entire fresh-root/checkpoint lineage and all non-ROM oracle, emulator, bridge, input, and exact-boundary identities authenticate",
+      "the checkpoint is an atomic post-entry safe boundary",
+      "the only architectural writes are the verified reset-equivalent $7F:8000-$7F:AFFF selected-ROM code refresh",
+      "serialized game, CPU, PPU, SA-1 IRAM, VRAM, CGRAM, OAM, SPC, and VTIME layouts remain compatible"
+    ],
+    "cross_rom_diagnostic_never_proves": [
+      "fresh boot or prefix behavior under the selected ROM",
+      "renderer/HUD acceptance",
+      "FPS, full-playthrough, production, or release acceptance"
+    ],
+    "narrow_rerun_rule": "After a divergence, retain and rerun the smallest exact boundary window that attributes it; do not replay the accepted prefix unless an identity dependency invalidates it."
+  },
+  "lineages": {
+    "vtime_interpreter_only_gate_restore_v1": {
+      "description": "Repaired e00f VTIME interpreter-only correctness fallback with mode-aware $071A restoration.",
+      "rom": "build/interp-vtime-interpreter-only-e00f-gate-restore-v1.sfc",
+      "rom_sha256": "96d1b1935b3913400776e18c02c13591551d5e3cae98d714de80e76d118e1a99",
+      "dependencies": {
+        "mame_sha256": "297843036f728695878300f3bd9949122907cd83bfd6d501875e9a49cd950c6f",
+        "mame_timeline_sha256": "653e515ffbea416077fab5669cb0196efbcba2f1818ba2a15a2a5653414a7d9c",
+        "boss_fixtures_sha256": "8ddd9dbfccfd2e06c7242ba4d05d292711849adb7ed2f76e37c26449224e95e0",
+        "emulator_sha256": "17d243c404b8ef32bbb1754a5b026584f2ae24cb047f54b9f250a6f4b721650a",
+        "nexen_bridge_sha256": "3578cda641e1a3f7e5d196cf55bc4a367f8b9199e31725c38c7f4740ef54cf86",
+        "exact_boundary_tool": "run_to_exact_exec_stop"
+      },
+      "expected_runtime": {
+        "result": "partial-green",
+        "xlat_gate_071a": 0,
+        "choke_gate_073a": 0,
+        "halt": 0
+      },
+      "segments": [
+        {
+          "kind": "fresh_power_on_root",
+          "segment_origin_tick": 221,
+          "end_tick": 806,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-fresh-to806-v1/run/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-fresh-to806-v1/watcher-report.json",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-fresh-to806-v1/run/states/safe-checkpoint-00806.mss",
+          "checkpoint_sha256": "4107fc4bc322e3c1e89730407193770cb36d0c0735252ecb94e57f0ba629db99",
+          "resume_tick": 807,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 807,
+          "end_tick": 1100,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume807-to1100-v1/run-v2/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume807-to1100-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "4107fc4bc322e3c1e89730407193770cb36d0c0735252ecb94e57f0ba629db99",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume807-to1100-v1/run-v2/states/safe-checkpoint-01100.mss",
+          "checkpoint_sha256": "adf24d89561b9893ea533a5d05fd0c745a2a9c35708a9d38148e135ada6f4c25",
+          "resume_tick": 1101,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 1101,
+          "end_tick": 3000,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume1101-to3000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume1101-to3000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "adf24d89561b9893ea533a5d05fd0c745a2a9c35708a9d38148e135ada6f4c25",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume1101-to3000-v1/run/states/safe-checkpoint-03000.mss",
+          "checkpoint_sha256": "3df18b319f5e81cb531fe44800181a523773df570f91b5ca664ec53070ddbd2f",
+          "resume_tick": 3001,
+          "identical_checkpoint_copies": 3
+        }
+      ],
+      "recovered_checkpoints": [
+        {
+          "accepted_through_tick": 4000,
+          "source_segment_origin_tick": 3001,
+          "source_summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume3001-to6000-v1/run/summary.json",
+          "source_events": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume3001-to6000-v1/run/events.jsonl",
+          "source_state": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume3001-to6000-v1/run/states/checkpoint-04000.mss",
+          "source_state_sha256": "1cb4dfdcaf0a01fcdcef0a0eefbca46a3617581190e8a96fa883ad22b82239e1",
+          "recovery_summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-recover4000-v3/summary.json",
+          "recovery_events": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-recover4000-v3/events.jsonl",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-recover4000-v3/states/safe-checkpoint-04000.mss",
+          "checkpoint_sha256": "786f2f7248909fbbd3115d9c96f64a9b265a6ce59a34cf2307b8314195f70e13",
+          "resume_tick": 4001,
+          "identical_checkpoint_copies": 3
+        }
+      ],
+      "post_recovery_segments": [
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 4001,
+          "end_tick": 6000,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume4001-to6000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume4001-to6000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "786f2f7248909fbbd3115d9c96f64a9b265a6ce59a34cf2307b8314195f70e13",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume4001-to6000-v1/run/states/safe-checkpoint-06000.mss",
+          "checkpoint_sha256": "3841f747658fc20de8e2a9705d1ee0cccd0f9d505843c4fb5b0804dc0349a1e1",
+          "resume_tick": 6001,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 6001,
+          "end_tick": 8000,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume6001-to8000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume6001-to8000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "3841f747658fc20de8e2a9705d1ee0cccd0f9d505843c4fb5b0804dc0349a1e1",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume6001-to8000-v1/run/states/safe-checkpoint-08000.mss",
+          "checkpoint_sha256": "25c8804e03d4fe0b8c931ad928ac1feb8e1e64d41b7e2e0c9b65c287aa5362b5",
+          "resume_tick": 8001,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 8001,
+          "end_tick": 10000,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume8001-to10000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume8001-to10000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "25c8804e03d4fe0b8c931ad928ac1feb8e1e64d41b7e2e0c9b65c287aa5362b5",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume8001-to10000-v1/run/states/safe-checkpoint-10000.mss",
+          "checkpoint_sha256": "1016c4c14529f4ad0624432b4bc2a3852425948754b159b4db0d0ff6c10f4bb5",
+          "resume_tick": 10001,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 10001,
+          "end_tick": 12000,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume10001-to12000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume10001-to12000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "1016c4c14529f4ad0624432b4bc2a3852425948754b159b4db0d0ff6c10f4bb5",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume10001-to12000-v1/run/states/safe-checkpoint-12000.mss",
+          "checkpoint_sha256": "03e50335a1033b1983720f0fb4bdfb75d348c8a48127e0ea9b82a650e8fe409e",
+          "resume_tick": 12001,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 12001,
+          "end_tick": 14000,
+          "summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume12001-to14000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume12001-to14000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "03e50335a1033b1983720f0fb4bdfb75d348c8a48127e0ea9b82a650e8fe409e",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume12001-to14000-v1/run/states/safe-checkpoint-14000.mss",
+          "checkpoint_sha256": "9a7173a17641a8ab89e08a36919e0c128da28bc1a82350567ed8d67b03c7bd9d",
+          "resume_tick": 14001,
+          "identical_checkpoint_copies": 3
+        }
+      ],
+      "red_prefix_checkpoints": [
+        {
+          "segment_origin_tick": 14001,
+          "requested_end_tick": 15000,
+          "first_divergence_tick": 14841,
+          "accepted_through_tick": 14743,
+          "source_summary": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume14001-to15000-v1/run/summary.json",
+          "source_report": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume14001-to15000-v1/watcher-report.json",
+          "source_events": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume14001-to15000-v1/run/events.jsonl",
+          "parent_checkpoint_sha256": "9a7173a17641a8ab89e08a36919e0c128da28bc1a82350567ed8d67b03c7bd9d",
+          "checkpoint": "build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-resume14001-to15000-v1/run/states/safe-checkpoint-14743.mss",
+          "checkpoint_sha256": "5ccbc5096c50e301331bd67e382e54c1e4d2afbdd31fd75405f8f5bb4102bfec",
+          "resume_tick": 14744,
+          "identical_checkpoint_copies": 3
+        }
+      ]
+    },
+    "vtime_interpreter_only_paced0818_dbcc_v1": {
+      "description": "Default paced-$0818 interpreter-only VTIME diagnostic with the four-byte DBcc register-stride repair.",
+      "rom": "build/interp-vtime-interpreter-only-e00f-gate-restore-scheduler-0818-paced-mvc-fallback-choke-gate-dbcc-stride-v1.sfc",
+      "rom_sha256": "14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750",
+      "dependencies": {
+        "mame_sha256": "297843036f728695878300f3bd9949122907cd83bfd6d501875e9a49cd950c6f",
+        "mame_timeline_sha256": "653e515ffbea416077fab5669cb0196efbcba2f1818ba2a15a2a5653414a7d9c",
+        "boss_fixtures_sha256": "8ddd9dbfccfd2e06c7242ba4d05d292711849adb7ed2f76e37c26449224e95e0",
+        "emulator_sha256": "17d243c404b8ef32bbb1754a5b026584f2ae24cb047f54b9f250a6f4b721650a",
+        "emulator_managed_assembly_sha256": "7e15c1d8ac5157be5df8c6419ffc91ee84f662454c0a15d4edde457258e3ebc6",
+        "nexen_bridge_sha256": "3578cda641e1a3f7e5d196cf55bc4a367f8b9199e31725c38c7f4740ef54cf86",
+        "exact_boundary_tool": "run_to_exact_exec_stop"
+      },
+      "expected_runtime": {
+        "result": "partial-green",
+        "oracle_divergence_count": 0,
+        "xlat_gate_071a": 0,
+        "pacing_gate_0734": 1,
+        "choke_gate_073a": 0,
+        "halt": 0
+      },
+      "segments": [
+        {
+          "kind": "fresh_power_on_root",
+          "segment_origin_tick": 221,
+          "end_tick": 250,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-fresh-to250-calibrated-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-fresh-to250-calibrated-v1/watcher-report.json",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-fresh-to250-calibrated-v1/run/states/safe-checkpoint-00250.mss",
+          "checkpoint_sha256": "ba6f04907d203c41ebc788f9349c2020bb84f22d855fc9c2b2e2dfbe38448653",
+          "checkpoint_sa1_iram_sha256": "8950c547eec8e31a68cac091fa45c5b3100ce5172b4cef537e91d8de37ce57c7",
+          "resume_tick": 251,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 251,
+          "end_tick": 806,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume251-to806-v2/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume251-to806-v2/watcher-report.json",
+          "parent_checkpoint_sha256": "ba6f04907d203c41ebc788f9349c2020bb84f22d855fc9c2b2e2dfbe38448653",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume251-to806-v2/run/states/safe-checkpoint-00806.mss",
+          "checkpoint_sha256": "fe4a54092b40787fa1dffca7f227d7f9312a1542bde487627f99beeda7e066df",
+          "checkpoint_sa1_iram_sha256": "f5cba5ea913f94b2bc5209da734d1ab9667d6ca2ad3959b2945f012c26fd4a79",
+          "resume_tick": 807,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 807,
+          "end_tick": 1100,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume807-to1100-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume807-to1100-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "fe4a54092b40787fa1dffca7f227d7f9312a1542bde487627f99beeda7e066df",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume807-to1100-v1/run/states/safe-checkpoint-01100.mss",
+          "checkpoint_sha256": "27207e5f414062e449ffa4dc2712a1607817022b73a5969a5b1613fd5f0fbef9",
+          "checkpoint_sa1_iram_sha256": "5cb96e4f00177531b7ff0c4f1c0df4ff1192d2e77d891064d85359734b8d35a7",
+          "resume_tick": 1101,
+          "identical_checkpoint_copies": 3
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 1101,
+          "end_tick": 3000,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume1101-to3000-v2/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume1101-to3000-v2/watcher-report.json",
+          "parent_checkpoint_sha256": "27207e5f414062e449ffa4dc2712a1607817022b73a5969a5b1613fd5f0fbef9",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume1101-to3000-v2/run/states/safe-checkpoint-03000.mss",
+          "checkpoint_sha256": "47dc58a19558fa1a9c2ccea0f251d0ba199d4f6d0e721419efbd8bac810a45e8",
+          "checkpoint_sa1_iram_sha256": "4ee691019a2dbaa913f337532d64d5a0c663fa4986d24bb0d2071d7667ccfe8c",
+          "resume_tick": 3001,
+          "identical_checkpoint_copies": 3,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 1500,
+              "sha256": "2bc18e328d81931d1fa977507f26cf4f778de4d6f23d2b54d6be67948d93e05a"
+            },
+            {
+              "tick": 2000,
+              "sha256": "54f7f81b398a5a5ed60faca867636eac523512613af61c5e1b314bad4533b7e0"
+            },
+            {
+              "tick": 2500,
+              "sha256": "dbd37db11e1c422f78ce71196d20666c7ed313750cd6d9fe5fa1a7fe63a6515e"
+            }
+          ]
+        }
+      ],
+      "transport_failures": [
+        {
+          "kind": "mcp_server_closed_mid_call",
+          "segment_origin_tick": 3001,
+          "requested_end_tick": 5000,
+          "last_green_tick": 4559,
+          "oracle_divergence_count": 0,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume3001-to5000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume3001-to5000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "47dc58a19558fa1a9c2ccea0f251d0ba199d4f6d0e721419efbd8bac810a45e8",
+          "last_safe_checkpoint_tick": 4500,
+          "last_safe_checkpoint_sha256": "fb53de19185f1893d9b2ce46910b089bc3bc68e38ba5d9c59792107ee65c7d13",
+          "last_safe_checkpoint_sa1_iram_sha256": "be81a79251f3d049a828bdabb19e7dd3bdec3818257a98e9534ab2677b4dc6ac",
+          "classification": "transport_only_not_gameplay_divergence"
+        }
+      ],
+      "harness_failures": [
+        {
+          "kind": "resume_tick_zero_entry_span_index",
+          "segment_origin_tick": 6501,
+          "requested_end_tick": 8000,
+          "completed_entries": 0,
+          "oracle_divergence_count": 0,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume6501-to8000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume6501-to8000-v1/watcher-report.json",
+          "diagnostic": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume6501-to8000-v1/transport-diagnostic.json",
+          "parent_checkpoint_sha256": "fb9644dd343dc0e3fa1bf49bd61200a2e5eacceb84ffdff3c268a39b1bf5a245",
+          "classification": "harness_only_not_transport_or_gameplay",
+          "root_cause": "resume tick was an input edge, so the event loop had zero entries to execute and indexed an empty spans list",
+          "regression": "tools/test_campaign_resume_input_edge.py",
+          "invalidated_evidence": "failed child only; accepted tick-6500 parent remains valid"
+        }
+      ],
+      "preflight_negatives": [
+        {
+          "kind": "campaign_runner_identity_mismatch",
+          "segment_origin_tick": 6501,
+          "requested_end_tick": 8000,
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume6501-to8000-v2/watcher-report.json",
+          "emulator_launched": false,
+          "parent_runner_sha256": "2030c2135c724b172670f4322630bbaa9112ef3e941e64dc478d8d1043e179a6",
+          "rejected_runner_sha256": "46de996bc69e1869a922ed8399df6e58efa2a8198e0e3ae1839c27f039d48b7f",
+          "resolution": "finite predecessor allowlist after reviewed zero-entry-only harness change",
+          "regression": "tools/test_campaign_resume_lineage.py",
+          "invalidated_evidence": "none; preflight executed no emulator playback"
+        }
+      ],
+      "post_transport_segments": [
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 4501,
+          "end_tick": 5000,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume4501-to5000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume4501-to5000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "fb53de19185f1893d9b2ce46910b089bc3bc68e38ba5d9c59792107ee65c7d13",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume4501-to5000-v1/run/states/safe-checkpoint-05000.mss",
+          "checkpoint_sha256": "0fd2e312a06c220fb4572e648efd5c59d93c5e6da8ddb3c586a95bb00a5d2fbd",
+          "checkpoint_sa1_iram_sha256": "9e6e7605597e25a8e93ad526a0a49a8e9be75f63755928fcb46cc351961d3901",
+          "resume_tick": 5001,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 5001,
+          "end_tick": 6500,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume5001-to6500-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume5001-to6500-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "0fd2e312a06c220fb4572e648efd5c59d93c5e6da8ddb3c586a95bb00a5d2fbd",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume5001-to6500-v1/run/states/safe-checkpoint-06500.mss",
+          "checkpoint_sha256": "fb9644dd343dc0e3fa1bf49bd61200a2e5eacceb84ffdff3c268a39b1bf5a245",
+          "checkpoint_sa1_iram_sha256": "26c824b337bd76248ceb6a43c43dbc81f6794fdc8d8bfa613dafad5c460847e4",
+          "resume_tick": 6501,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 5500,
+              "sha256": "6a34042a1e67bbe41db8b2aada996078b1c259c3c4df400172876132a375175e"
+            },
+            {
+              "tick": 6000,
+              "sha256": "8af44725c93f1c20158637bdf3a8cd98039e00038b0d772ae9888d711e42cc6b"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 6501,
+          "end_tick": 8000,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume6501-to8000-v3/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume6501-to8000-v3/watcher-report.json",
+          "parent_checkpoint_sha256": "fb9644dd343dc0e3fa1bf49bd61200a2e5eacceb84ffdff3c268a39b1bf5a245",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume6501-to8000-v3/run/states/safe-checkpoint-08000.mss",
+          "checkpoint_sha256": "aea7ce50e4c3fe4fe00ed6779d4291ba4696c92360125915aa66e5f16b06d263",
+          "checkpoint_sa1_iram_sha256": "99bab411b54c3f4492fa4d2deee64b4e526edd3001cb1244174ac15d49e5746e",
+          "resume_tick": 8001,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 7000,
+              "sha256": "c8804f498bfe443553ff5655c7aec6cba718424ece1c7a2c6a7536a876662c14"
+            },
+            {
+              "tick": 7500,
+              "sha256": "09097de10aa8fbfae694a3a7883e55f63b2da0288a3231de1882c2b2d2e2d489"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 8001,
+          "end_tick": 9500,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume8001-to9500-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume8001-to9500-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "aea7ce50e4c3fe4fe00ed6779d4291ba4696c92360125915aa66e5f16b06d263",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume8001-to9500-v1/run/states/safe-checkpoint-09500.mss",
+          "checkpoint_sha256": "efd193b09317cf0ef2404956591a6d7f7b892b2a23e969838647e0a901b56106",
+          "checkpoint_sa1_iram_sha256": "fabcd9191dc1c46135d978901eb729d9fa331f5b78559332bd9cc69b3c93b1b1",
+          "resume_tick": 9501,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 8500,
+              "sha256": "accaea42dfaaa50636a4115ef7a904f77a69937f35bed9a74e26bc316008d27f"
+            },
+            {
+              "tick": 9000,
+              "sha256": "bd265e56519a007c61f8a852add39bf018f77f9b850c2077e6f27b788f54d846"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 9501,
+          "end_tick": 11000,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume9501-to11000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume9501-to11000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "efd193b09317cf0ef2404956591a6d7f7b892b2a23e969838647e0a901b56106",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume9501-to11000-v1/run/states/safe-checkpoint-11000.mss",
+          "checkpoint_sha256": "6fd495085a0653c49cb3018fe9aff1cbce618b4ce756c5abd74f81363f127024",
+          "checkpoint_sa1_iram_sha256": "ef9a80338ec0d4d125a088e1f177c65f860a86d42408d1c64ffd7627dbfb5b62",
+          "resume_tick": 11001,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 10000,
+              "sha256": "eaa3c27f6440e76d1cdb4364693ae283128a2e6fdeacc31b204ee5fabca02f49"
+            },
+            {
+              "tick": 10500,
+              "sha256": "a4dca9624051ac4d9bad09e821458232711e802f0cf6f0e64a0c6bc394d3620d"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 11001,
+          "end_tick": 12500,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume11001-to12500-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume11001-to12500-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "6fd495085a0653c49cb3018fe9aff1cbce618b4ce756c5abd74f81363f127024",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume11001-to12500-v1/run/states/safe-checkpoint-12500.mss",
+          "checkpoint_sha256": "0ff1242f92e3e4b179233ecb628e5c6e4139006ba15b1e5eb6cfa55a761a746a",
+          "checkpoint_sa1_iram_sha256": "83608462cf23ad1c9801fef72de5be7fa1f4495cfbf24e25399841e17e29480e",
+          "resume_tick": 12501,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 11500,
+              "sha256": "4612ce8e4fa7c7c0e5eb228ba2b2594c0ddc871bd4dd4e8ac09f7ffdec3a3c87"
+            },
+            {
+              "tick": 12000,
+              "sha256": "aceb4565c8b2a58fc78d13f5bc916bf0465c1179bd0fb38f589a69a8f6bb65b0"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation",
+          "segment_origin_tick": 12501,
+          "end_tick": 14000,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume12501-to14000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume12501-to14000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "0ff1242f92e3e4b179233ecb628e5c6e4139006ba15b1e5eb6cfa55a761a746a",
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume12501-to14000-v1/run/states/safe-checkpoint-14000.mss",
+          "checkpoint_sha256": "234ef4ade73d9c1df5fa653d1feedf332b454a3916b8168c1759161255675315",
+          "checkpoint_sa1_iram_sha256": "a5d1d340a1144e8dd0c70ce60230dd1bc2a3e40671bf9e4a499a824cfffbed5c",
+          "resume_tick": 14001,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 13000,
+              "sha256": "cd685b5476bdae3eb782824e552430fca55a93b900af03f8e5ecd9344956d967"
+            },
+            {
+              "tick": 13500,
+              "sha256": "2daae83a5444a52fa22ce48fee63923463fc10817351baa8a0aec23e52d0c503"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation_with_oracle_divergences",
+          "segment_origin_tick": 14001,
+          "end_tick": 15500,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume14001-to15500-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume14001-to15500-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "234ef4ade73d9c1df5fa653d1feedf332b454a3916b8168c1759161255675315",
+          "first_divergence_tick": 14748,
+          "oracle_divergence_count": 27,
+          "mismatch_class": "player_y_only",
+          "last_mismatch_tick": 14866,
+          "continued_safely_after_divergence": true,
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume14001-to15500-v1/run/states/safe-checkpoint-15500.mss",
+          "checkpoint_sha256": "43f9c07c04389a85783d4e5ac689e5039d3d9caf3fcf336680203c15ad916beb",
+          "checkpoint_sa1_iram_sha256": "d5dff99d0810bf9a59444ca90ae9055a1daf0b415a0e17dfbe108cd4c5a7fba7",
+          "resume_tick": 15501,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 14500,
+              "sha256": "36ca846dc380f922e81fb79850d9fa4c3e775c3fd9fde3353400befd72528e97"
+            },
+            {
+              "tick": 15000,
+              "sha256": "9d0403e2327ea2db441f913462bac17900421a9961dbdfe75390fb61ef059b24"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation_with_oracle_and_boss_divergences",
+          "segment_origin_tick": 15501,
+          "end_tick": 17000,
+          "summary": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume15501-to17000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume15501-to17000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "43f9c07c04389a85783d4e5ac689e5039d3d9caf3fcf336680203c15ad916beb",
+          "inherited_first_divergence_tick": 14748,
+          "segment_oracle_divergence_count": 38,
+          "segment_input_compare_divergences": 13,
+          "segment_input_response_divergences": 14,
+          "segment_boss_divergences": 11,
+          "boss_failure_boundary_tick": 16998,
+          "boss_green_count": 0,
+          "boss_reduction": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume15501-to17000-v1/focused-boss-mismatch-v1/boss-report.json",
+          "boss_classification": "bounded_downstream_of_inherited_timing_drift",
+          "boss_tick_relation": "SNES game tick equals MAME tick minus 6 for all 11 rows",
+          "continued_safely_after_divergence": true,
+          "checkpoint": "build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume15501-to17000-v1/run/states/safe-checkpoint-17000.mss",
+          "checkpoint_sha256": "a9826e63926461858b844dd861c8506d3bdb22d0c441d976e4b093774c268089",
+          "checkpoint_sa1_iram_sha256": "cdf1a8c78b1744d7b34d437114fec61d2cdb6af731e9a53f96ff51a52b946387",
+          "resume_tick": 17001,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 16000,
+              "sha256": "3f03fa0f2415045a9d5a4fecebb3f0a78bfbcf9da6906a7766ba51ad112b5888"
+            },
+            {
+              "tick": 16500,
+              "sha256": "4a515ca0372dfa985bebb082f2237e55bba030f6139d221c0e0285d8c707deba"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation_with_inherited_oracle_and_boss_divergences",
+          "segment_origin_tick": 17001,
+          "end_tick": 18500,
+          "summary": "build/playback-watcher-20260811/vtime-interpreter-only-paced0818-dbcc-resume17001-to18500-v1/run/summary.json",
+          "report": "build/playback-watcher-20260811/vtime-interpreter-only-paced0818-dbcc-resume17001-to18500-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "a9826e63926461858b844dd861c8506d3bdb22d0c441d976e4b093774c268089",
+          "inherited_first_divergence_tick": 14748,
+          "cumulative_oracle_divergence_count": 41,
+          "cumulative_input_compare_divergences": 13,
+          "cumulative_input_response_divergences": 14,
+          "cumulative_boss_divergences": 14,
+          "boss_green_count": 0,
+          "new_boss_ticks": [17018, 17560, 17654],
+          "new_boss_health_expected_observed": [[6, 9], [2, 6], [65535, 2]],
+          "continued_safely_after_divergence": true,
+          "checkpoint": "build/playback-watcher-20260811/vtime-interpreter-only-paced0818-dbcc-resume17001-to18500-v1/run/states/safe-checkpoint-18500.mss",
+          "checkpoint_sha256": "718d3dd320187bd259f19a2dfe58f94f7410b26102f29314defac53381fd828e",
+          "checkpoint_sa1_iram_sha256": "a14d74b781f42fb5e5756416091eba87f861a194dd1b01d7fd130f858b098d58",
+          "resume_tick": 18501,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 17500,
+              "sha256": "87174e2d70a5907bf13310e90358e34d42cd1d39a1628ac0cb55426b72c41f21"
+            },
+            {
+              "tick": 18000,
+              "sha256": "e6965f29cf394ff696a4fe0fb1c1a69a914471275002847e0f0df833b05c2550"
+            }
+          ]
+        },
+        {
+          "kind": "checkpoint_continuation_with_inherited_divergence_no_new_rows",
+          "segment_origin_tick": 18501,
+          "end_tick": 20000,
+          "summary": "build/playback-watcher-20260811/vtime-interpreter-only-paced0818-dbcc-resume18501-to20000-v1/run/summary.json",
+          "report": "build/playback-watcher-20260811/vtime-interpreter-only-paced0818-dbcc-resume18501-to20000-v1/watcher-report.json",
+          "parent_checkpoint_sha256": "718d3dd320187bd259f19a2dfe58f94f7410b26102f29314defac53381fd828e",
+          "inherited_first_divergence_tick": 14748,
+          "cumulative_oracle_divergence_count": 41,
+          "cumulative_input_compare_divergences": 13,
+          "cumulative_input_response_divergences": 14,
+          "cumulative_boss_divergences": 14,
+          "new_segment_divergence_count": 0,
+          "boss_green_count": 0,
+          "continued_safely_after_divergence": true,
+          "checkpoint": "build/playback-watcher-20260811/vtime-interpreter-only-paced0818-dbcc-resume18501-to20000-v1/run/states/safe-checkpoint-20000.mss",
+          "checkpoint_sha256": "caf9df722b039d7eaa05b79b60ed6f39d0ad41254eb3a4213680a5c51206fcd8",
+          "checkpoint_sa1_iram_sha256": "f06ec2ad4c05a7d5ef5cecd8dc7631f07c1a99d1ad08031bf18be8b4ee52a704",
+          "resume_tick": 20001,
+          "identical_checkpoint_copies": 3,
+          "continue_oracle_divergences": true,
+          "intermediate_safe_checkpoints": [
+            {
+              "tick": 19000,
+              "sha256": "8981eb4d9adfe36577ba7a82eada8d242d7e0eb7df5fe174c368b49f840f2f95"
+            },
+            {
+              "tick": 19500,
+              "sha256": "71c44bba68bd16d7220c3aca0700723875fdf29c8e81e3847f3f4b77bded08a7"
+            }
+          ]
+        }
+      ],
+      "accepted_through_tick": 14000,
+      "coverage_through_tick": 20000,
+      "next_resume_tick": 20001
+    }
+  }
+}

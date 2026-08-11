@@ -27,6 +27,16 @@ ors_pre=$00D16F
 h1e7c0_hot_reentry=$97E02F
 ; <<< ESCBANK4_SYMS <<<
 
+; Pinned bank-$97 helpers used by size-neutral repairs in the generated
+; $01E7C0 cold-record body.  Their source owns explicit .org slots and the
+; focused regression audits these numeric cross-bank calls.
+h1e7c0_x_sub_d2_9e=$97E500
+h1e7c0_x_sub_d4_9e=$97E520
+h1e7c0_x_sub_d2_0078=$97E540
+h1e7c0_x_sub_d2_0010=$97E560
+h1e7c0_x_sub_d7_0001=$97E580
+h1e7c0_x_add_be_351c=$97E5A0
+
 ; Cross-bank static callee used by entry_c7dc.  The ROM pack asserts this
 ; escbank5 symbol remains at $99:A4E1 so a source relocation cannot go silent.
 entry_4a9e=$99A4E1
@@ -690,25 +700,29 @@ brc7dc_2:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; MOVE.W #$4F,D2 is the last original flag setter before TRAP #5.
+    jml.l $99FC46
 Ltjc7dc_c7da:
     lda #$C7DA
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; DBRA preserves the preceding zero-result BTST/TST flags.
+    jml.l $99FC52
 Ltjc7dc_c8ba:
     lda #$C8BA
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; Taken TST.W D7 edge: publish dynamic N/Z and clear V/C.
+    jml.l $99FC61
 Ltjc7dc_c8da:
     lda #$C8DA
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; TST.W D7 fell through at zero; taken BTST then sets Z=0.
+    jml.l $99FC46
 
 ; --- entry_c892: post-yield continuation for the $C890 delay loop.
 ; The first pass enters native entry_c846, but resumes after trap #0 at $C892 and
@@ -955,6 +969,7 @@ Ltjc892_c8da:
     lda #$0000
     sta $42
     jml.l inext
+entry_c892_end:
 
     .org $8400
 ; --- transpiled from $02335E (124 instrs) by tools/transpile.py [bank1] ---
@@ -983,7 +998,10 @@ L2335e_23366:
     lda $32
     adc #$0000
     sta $52
-    jsl.l readbyte_l
+    ; Size-neutral TST.B load: the compact helper sign-extends bit 7 so the
+    ; fused native branch consumes 68000 byte N/Z, not 16-bit $00xx N/Z.
+    jsr readbyte_tst
+    nop
     bne Lf2335e_1
     jmp L2335e_23536
 Lf2335e_1:
@@ -1127,7 +1145,8 @@ Lf2335e_7:
     lda $32
     adc #$0000
     sta $52
-    jsl.l readbyte_l
+    jsr readbyte_tst
+    nop
     beq Lf2335e_8
     jmp L2335e_233b6
 Lf2335e_8:
@@ -1229,7 +1248,8 @@ Lf2335e_10:
     lda $32
     adc #$0000
     sta $52
-    jsl.l readbyte_l
+    jsr readbyte_tst
+    nop
     bpl Lf2335e_11
     jmp L2335e_233d4
 Lf2335e_11:
@@ -1269,7 +1289,8 @@ L2335e_233d8:
     lda $32
     adc #$0000
     sta $52
-    jsl.l readbyte_l
+    jsr readbyte_tst
+    nop
     bne Lf2335e_12
     jmp L2335e_23418
 Lf2335e_12:
@@ -2209,6 +2230,7 @@ Lf2335e_27:
     adc #$0004
     sta $3C
     jml.l ors_pre
+entry_2335e_generated_end:
 
 ; Guarded fusion for the three consecutive $02429C no-work helpers.  Each
 ; individual helper writes the same 48-byte D0-D6/A0-A4 MOVEM residue at the
@@ -2416,6 +2438,38 @@ h23e34_empty_miss:
     jml.l entry_23e34_after_return
 h23e34_empty_end:
 
+    ; $02335E is pinned flush against the $8E53 island, so its four TST.B
+    ; sites cannot inline the normal 10-byte sign normalization.  Replacing
+    ; each existing four-byte readbyte JSL with a three-byte local JSR plus
+    ; NOP preserves layout while implementing normalize_tst_nz("b") exactly.
+    ;
+    ; The final DBRA iteration must also export the last record's exact CCR.
+    ; On D6==0 this helper is reached at the iteration's first TST, before any
+    ; emulated state changes.  Balance our native JSR and hand that complete
+    ; final record to the interpreter at $023366.  Active and inactive second
+    ; records therefore retain original CCR/X and return semantics.
+    .org $8FD9
+readbyte_tst:
+    .a16
+    .i16
+    lda $18
+    bne readbyte_tst_native
+    pla
+    lda #$3366
+    sta $40
+    lda #$0002
+    sta $42
+    jsr restore_2335e_call_residue
+    jml.l inext
+readbyte_tst_native:
+    jsl.l readbyte_l
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    rts
+readbyte_tst_end:
+
     .org $9000
 h235e0_empty:
     rep #$30
@@ -2457,6 +2511,46 @@ h235e0_empty_miss:
     jsl.l push32_l
     jmp entry_235e0_after_return
 h235e0_empty_end:
+
+    ; The first native $02335E record has already popped two synthetic bank-
+    ; $98 sentinels when the final-iteration fallback runs.  Architectural A7
+    ; is exact, but real 68000 return bytes remain observable below it.  With
+    ; A7 at the outer $023358 return ($3C), restore JSR (A0)'s $023430 at
+    ; A7-$0E and BSR $23542's $023536 at A7-$04.
+    .org $9080
+restore_2335e_call_residue:
+    .a16
+    .i16
+    lda $3C
+    sec
+    sbc #$000E
+    tax
+    lda #$0002
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$3430
+    xba
+    sta $400000,x
+    xba
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0002
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$3536
+    xba
+    sta $400000,x
+    xba
+    rts
+restore_2335e_call_residue_end:
 
     .org $9100
 hmovem_d0_a4_with_inner:
@@ -4792,7 +4886,9 @@ h23b52_write_a2_generic:
 ; docs/history/designs/OBJECT_PROCESSOR_CAMPAIGN_20260703.md) — Phase-2.1 A2 main body.
 ; xlat bank-$01 dispatch like entry_1d5f0. --jt=1EE6C:-16:0 (anim-op DOWNWARD table, ops 0..-8) +
 ; 1F0B6:0:6 (mode table); --escapes=D96 (F1: jsr(a4) -> entry_d96t same-bank, PUSHED-sentinel
-; return); --bail (8 cold edges: 2 divs, 4 muls, 2 dyn-bclr). Sentinels sed $00FD->$00FB.
+; return); --restore-static-residue; --restore-indirect-residue; --bail
+; (8 cold edges: 2 divs, 4 muls,
+; 2 dyn-bclr). Sentinels sed $00FD->$00FB.
     .org $AE00
 ; --- transpiled from $01E7C0 (751 instrs) by tools/transpile.py [bank1] ---
 entry_1e7c0:
@@ -5046,7 +5142,13 @@ L1e7c0_1e7f4:
     sep #$20
     sta $1C
     rep #$20
+    ; MOVE.B $3(A0),D7 feeds BLE at $01E7F8.  D7's preserved upper
+    ; bytes must not supply the native 16-bit N bit.
     lda $1C
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
     beq Lf1e7c0_8
     bmi Lf1e7c0_8
     bra Lf1e7c0_9
@@ -5054,8 +5156,10 @@ Lf1e7c0_8:
     jmp L1e7c0_1e832
 Lf1e7c0_9:
     lda $1C
+    sep #$20
     sec
-    sbc #$0005
+    sbc #$05
+    rep #$20
     beq Lf1e7c0_12
     bvs Lf1e7c0_10
     bpl Lf1e7c0_11
@@ -5072,8 +5176,10 @@ Lf1e7c0_12:
     tax
     lda $400000,x
     and #$00FF
+    sep #$20
     sec
-    sbc #$0001
+    sbc #$01
+    rep #$20
     php
     pha
     lda $20
@@ -5298,7 +5404,12 @@ Lf1e7c0_17:
     adc #$0003
     tax
     lda $400000,x
+    ; TST.B $3(A0) feeds BLE at $01E848.  Sign-extend bit 7 before
+    ; the native BMI arm consumes N.
     and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
     beq Lf1e7c0_18
     bmi Lf1e7c0_18
     bra Lf1e7c0_19
@@ -5727,9 +5838,7 @@ L1e7c0_1e8d6:
     adc #$351C
     tax
     lda $400000,x
-    xba
-    clc
-    adc $1C
+    jsl.l h1e7c0_x_add_be_351c
     xba
     sta $400000,x
     xba
@@ -6190,14 +6299,18 @@ L1e7c0_1e94a:
     jmp L1e7c0_1e96a
 Lf1e7c0_58:
     lda $1C
+    sep #$20
     sec
-    sbc #$0081
+    sbc #$81
+    rep #$20
     bne Lf1e7c0_59
     jmp L1e7c0_1e964
 Lf1e7c0_59:
     lda $1C
+    sep #$20
     sec
-    sbc #$0082
+    sbc #$82
+    rep #$20
     beq Lf1e7c0_60
     jmp L1e7c0_1e980
 Lf1e7c0_60:
@@ -6265,14 +6378,18 @@ L1e7c0_1e980:
     jmp L1e7c0_1e99c
 Lf1e7c0_63:
     lda $1C
+    sep #$20
     sec
-    sbc #$0081
+    sbc #$81
+    rep #$20
     bne Lf1e7c0_64
     jmp L1e7c0_1e994
 Lf1e7c0_64:
     lda $1C
+    sep #$20
     sec
-    sbc #$0082
+    sbc #$82
+    rep #$20
     beq Lf1e7c0_65
     jmp L1e7c0_1ebae
 Lf1e7c0_65:
@@ -6313,8 +6430,12 @@ L1e7c0_1e9a4:
     and #$00FF
     sta $9E
     lda $1C
+    ; The historical generated body predates exact native byte subtraction.
+    ; Preserve D7's upper bytes while deriving CMP.B flags from its low byte.
+    sep #$20
     sec
     sbc $9E
+    rep #$20
     bne Lf1e7c0_67
     jmp L1e7c0_1ebb2
 Lf1e7c0_67:
@@ -6329,8 +6450,10 @@ Lf1e7c0_67:
     sta $400000,x
     rep #$20
     lda $1C
+    sep #$20
     sec
-    sbc #$009D
+    sbc #$9D
+    rep #$20
     bne Lf1e7c0_68
     jmp L1e7c0_1ebb2
 Lf1e7c0_68:
@@ -6401,6 +6524,8 @@ L1e7c0_1e9d0:
     sta $42
     jml.l ojmp_hook
 br1e7c0_1:
+    lda #$E9D4
+    jsr restore_1e7c0_call_residue
     lda $3C
     clc
     adc #$0002
@@ -6411,14 +6536,18 @@ br1e7c0_1:
     jmp L1e7c0_1eba8
 L1e7c0_1e9da:
     lda $1C
+    sep #$20
     sec
-    sbc #$0024
+    sbc #$24
+    rep #$20
     bne Lf1e7c0_71
     jmp L1e7c0_1e9e6
 Lf1e7c0_71:
     lda $1C
+    sep #$20
     sec
-    sbc #$0044
+    sbc #$44
+    rep #$20
     beq Lf1e7c0_72
     jmp L1e7c0_1e9ea
 Lf1e7c0_72:
@@ -6430,8 +6559,10 @@ L1e7c0_1e9e6:
     jmp L1e7c0_1ea20
 L1e7c0_1e9ea:
     lda $1C
+    sep #$20
     sec
-    sbc #$0001
+    sbc #$01
+    rep #$20
     beq Lf1e7c0_73
     jmp L1e7c0_1e9f4
 Lf1e7c0_73:
@@ -6442,8 +6573,10 @@ Lf1e7c0_73:
     jmp L1e7c0_1e9fc
 L1e7c0_1e9f4:
     lda $1C
+    sep #$20
     sec
-    sbc #$0002
+    sbc #$02
+    rep #$20
     beq Lf1e7c0_74
     jmp L1e7c0_1ea0a
 Lf1e7c0_74:
@@ -6475,8 +6608,10 @@ L1e7c0_1ea08:
     jmp L1e7c0_1ea20
 L1e7c0_1ea0a:
     lda $1C
+    sep #$20
     sec
-    sbc #$0081
+    sbc #$81
+    rep #$20
     beq Lf1e7c0_76
     jmp L1e7c0_1ea16
 Lf1e7c0_76:
@@ -6491,8 +6626,10 @@ Lf1e7c0_76:
     jmp L1e7c0_1ea20
 L1e7c0_1ea16:
     lda $1C
+    sep #$20
     sec
-    sbc #$0082
+    sbc #$82
+    rep #$20
     beq Lf1e7c0_77
     jmp L1e7c0_1ea3e
 Lf1e7c0_77:
@@ -6608,8 +6745,10 @@ L1e7c0_1ea3e:
     jsl.l readbyte_l
     sep #$20
     sta $0C
-    rep #$20
+    ; MOVE.B preserves D3[31:8], but the following BEQ tests only the moved
+    ; byte.  Set N/Z while M=8 before restoring 16-bit accumulator mode.
     lda $0C
+    rep #$20
     bne Lf1e7c0_80
     jmp L1e7c0_1ebb2
 Lf1e7c0_80:
@@ -6620,8 +6759,13 @@ L1e7c0_1ea48:
     tax
     lda $400000,x
     and #$00FF
+    ; SUB.B must use only the low byte of D3 for both the stored health and
+    ; BLE decision.  A 16-bit SBC kept the correct low health byte but used
+    ; stale D3 high bits to take the lethal branch.
+    sep #$20
     sec
     sbc $0C
+    rep #$20
     php
     pha
     lda $20
@@ -6644,8 +6788,10 @@ Lf1e7c0_82:
     jmp L1e7c0_1ea98
 Lf1e7c0_83:
     lda $0C
+    sep #$20
     sec
-    sbc #$0001
+    sbc #$01
+    rep #$20
     beq Lf1e7c0_84
     jmp L1e7c0_1ea60
 Lf1e7c0_84:
@@ -6733,21 +6879,27 @@ L1e7c0_1ea60:
     xba
 L1e7c0_1ea6a:
     lda $1C
+    sep #$20
     sec
-    sbc #$0020
+    sbc #$20
+    rep #$20
     bcs Lf1e7c0_85
     jmp L1e7c0_1ea96
 Lf1e7c0_85:
     lda $1C
+    sep #$20
     sec
-    sbc #$005F
+    sbc #$5F
+    rep #$20
     bcc Lf1e7c0_86
     beq Lf1e7c0_86
     jmp L1e7c0_1ea96
 Lf1e7c0_86:
     lda $1C
+    sep #$20
     sec
-    sbc #$0040
+    sbc #$40
+    rep #$20
     bcs Lf1e7c0_87
     jmp L1e7c0_1ea8a
 Lf1e7c0_87:
@@ -6806,9 +6958,11 @@ L1e7c0_1ea98:
     and #$00FF
     sta $9E
     lda $0C
+    sep #$20
     clc
     adc $9E
     sta $0C
+    rep #$20
     lda $20
     clc
     adc #$005A
@@ -6887,14 +7041,18 @@ Lf1e7c0_90:
     xba
 L1e7c0_1eab2:
     lda $1C
+    sep #$20
     sec
-    sbc #$0020
+    sbc #$20
+    rep #$20
     bcs Lf1e7c0_91
     jmp L1e7c0_1eae0
 Lf1e7c0_91:
     lda $1C
+    sep #$20
     sec
-    sbc #$005F
+    sbc #$5F
+    rep #$20
     bcc Lf1e7c0_92
     beq Lf1e7c0_92
     jmp L1e7c0_1eae0
@@ -6986,8 +7144,10 @@ Lf1e7c0_92:
     sta $400000,x
     xba
     lda $1C
+    sep #$20
     sec
-    sbc #$0040
+    sbc #$40
+    rep #$20
     bcs Lf1e7c0_93
     jmp L1e7c0_1ead2
 Lf1e7c0_93:
@@ -7036,6 +7196,8 @@ L1e7c0_1ead6:
     sta $42
     jml.l ojmp_hook
 br1e7c0_2:
+    lda #$EADA
+    jsr restore_1e7c0_call_residue
     lda $3C
     clc
     adc #$0004
@@ -7280,6 +7442,8 @@ L1e7c0_1eaf8:
     sta $42
     jml.l ojmp_hook
 br1e7c0_3:
+    lda #$EAFE
+    jsr restore_1e7c0_call_residue
     lda $3C
     clc
     adc #$0002
@@ -7292,7 +7456,12 @@ br1e7c0_3:
     adc #$0003
     tax
     lda $400000,x
+    ; TST.B $3(A0) feeds BGT at $01EB04.  The old zero-extend then
+    ; BMI sequence treated every negative byte as positive.
     and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
     beq Lf1e7c0_95
     bmi Lf1e7c0_95
     jmp L1e7c0_1eb10
@@ -7304,10 +7473,14 @@ Lf1e7c0_95:
     lda $400000,x
     and #$00FF
     sta $9E
+    ; SUB.B $3(A0),D3 preserves D3 bits 8-31 and derives its word
+    ; multiplier input from the updated low byte only.
     lda $0C
+    sep #$20
     sec
     sbc $9E
     sta $0C
+    rep #$20
     lda #$0003
     sta $52
     lda $0C
@@ -7643,46 +7816,51 @@ Lf1e7c0_104:
     sta $18
     lda $9C
     sta $1A
+    ; $01EB76-$01EB84 contains six ADD.L operations which scale the two
+    ; table vectors by six.  This generated body predated the transpiler's
+    ; full-width Dn ADD.L lowering and repeatedly changed only the low word.
+    ; An organic Stage-1 launch with table value $00010000 therefore stayed
+    ; $00010000 instead of becoming $00060000, and the following DIVS
+    ; published $00000444 instead of the arcade's $00001999.  Use the
+    ; equivalent compact pair-word form so carry crosses both halves without
+    ; growing this tightly packed bank.
+    asl $18
+    rol $1A
     lda $18
-    clc
-    adc $18
-    sta $18
-    lda $18
-    sta $9A
+    sta $1C
     lda $1A
-    sta $9C
-    lda $9A
-    sta $1C
-    lda $9C
     sta $1E
-    lda $18
-    clc
-    adc $18
-    sta $18
+    asl $18
+    rol $1A
     lda $18
     clc
     adc $1C
     sta $18
+    lda $1A
+    adc $1E
+    sta $1A
+    asl $10
+    rol $12
     lda $10
-    clc
-    adc $10
-    sta $10
-    lda $10
-    sta $9A
+    sta $1C
     lda $12
-    sta $9C
-    lda $9A
-    sta $1C
-    lda $9C
     sta $1E
-    lda $10
-    clc
-    adc $10
-    sta $10
+    asl $10
+    rol $12
     lda $10
     clc
     adc $1C
     sta $10
+    lda $12
+    adc $1E
+    sta $12
+    ; MOVE.L and DIVS preserve X.  Publish the final ADD.L carry before the
+    ; cold DIVS bridge so the interpreter inherits the exact 68000 X bit.
+    php
+    lda #$0000
+    rol a
+    sta $A2
+    plp
     lda $18
     sta $9A
     lda $1A
@@ -7889,6 +8067,9 @@ Lf1e7c0_109:
     tax
     lda $400000,x
     and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
     bmi Lf1e7c0_110
     jmp L1e7c0_1ec96
 Lf1e7c0_110:
@@ -8083,43 +8264,47 @@ Lf1e7c0_121:
     and #$00FF
     sep #$20
     sta $18
-    rep #$20
     lda $18
+    rep #$20
     bne Lf1e7c0_122
     jmp L1e7c0_1ec92
 Lf1e7c0_122:
     lda $18
     sep #$20
     sta $0C
-    rep #$20
     lda $0C
+    rep #$20
     bmi Lf1e7c0_123
     jmp L1e7c0_1ec50
 Lf1e7c0_123:
-    lda $0C
-    eor #$FFFF
-    inc a
-    sta $0C
+    jsr neg_d3_byte_1e7c0
+    nop
+    nop
+    nop
+    nop
+    nop
 L1e7c0_1ec50:
     lda $1C
     sep #$20
     sta $10
-    rep #$20
     lda $10
+    rep #$20
     bne Lf1e7c0_124
     jmp L1e7c0_1ec5c
 Lf1e7c0_124:
     bmi Lf1e7c0_125
     jmp L1e7c0_1ec58
 Lf1e7c0_125:
-    lda $10
-    eor #$FFFF
-    inc a
-    sta $10
+    jsr neg_d4_byte_1e7c0
+    nop
+    nop
+    nop
+    nop
+    nop
 L1e7c0_1ec58:
-    lda $0C
-    sec
-    sbc $10
+    jsr cmp_d3_d4_byte_1e7c0
+    nop
+    nop
     bvs Lf1e7c0_126
     bpl Lf1e7c0_127
     bra Lf1e7c0_128
@@ -8279,6 +8464,9 @@ Lf1e7c0_137:
     tax
     lda $400000,x
     and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
     bmi Lf1e7c0_138
     jmp L1e7c0_1ed7e
 Lf1e7c0_138:
@@ -8473,43 +8661,47 @@ Lf1e7c0_149:
     and #$00FF
     sep #$20
     sta $18
-    rep #$20
     lda $18
+    rep #$20
     bne Lf1e7c0_150
     jmp L1e7c0_1ed7a
 Lf1e7c0_150:
     lda $18
     sep #$20
     sta $0C
-    rep #$20
     lda $0C
+    rep #$20
     bmi Lf1e7c0_151
     jmp L1e7c0_1ed38
 Lf1e7c0_151:
-    lda $0C
-    eor #$FFFF
-    inc a
-    sta $0C
+    jsr neg_d3_byte_1e7c0
+    nop
+    nop
+    nop
+    nop
+    nop
 L1e7c0_1ed38:
     lda $1C
     sep #$20
     sta $10
-    rep #$20
     lda $10
+    rep #$20
     bne Lf1e7c0_152
     jmp L1e7c0_1ed44
 Lf1e7c0_152:
     bmi Lf1e7c0_153
     jmp L1e7c0_1ed40
 Lf1e7c0_153:
-    lda $10
-    eor #$FFFF
-    inc a
-    sta $10
+    jsr neg_d4_byte_1e7c0
+    nop
+    nop
+    nop
+    nop
+    nop
 L1e7c0_1ed40:
-    lda $0C
-    sec
-    sbc $10
+    jsr cmp_d3_d4_byte_1e7c0
+    nop
+    nop
     bvs Lf1e7c0_154
     bpl Lf1e7c0_155
     bra Lf1e7c0_156
@@ -9726,6 +9918,8 @@ L1e7c0_1eeda:
     sta $42
     jml.l ojmp_hook
 br1e7c0_4:
+    lda #$EEEA
+    jsr restore_1e7c0_call_residue
     lda $20
     clc
     adc #$004A
@@ -9890,6 +10084,8 @@ L1e7c0_1ef1e:
     sta $42
     jml.l ojmp_hook
 br1e7c0_5:
+    lda #$EF2E
+    jsr restore_1e7c0_call_residue
     lda $20
     clc
     adc #$004A
@@ -9928,6 +10124,8 @@ br1e7c0_5:
     sta $42
     jml.l ojmp_hook
 br1e7c0_6:
+    lda #$EF3A
+    jsr restore_1e7c0_call_residue
     jmp L1e7c0_1ee46
 L1e7c0_1ef3e:
     lda $20
@@ -9963,6 +10161,8 @@ L1e7c0_1ef3e:
     sta $42
     jmp entry_1f1fe
 br1e7c0_7:
+    lda #$EF4A
+    jsr restore_1e7c0_call_residue
     jmp L1e7c0_1ee46
 L1e7c0_1ef4e:
     lda #$00FF
@@ -10212,6 +10412,8 @@ L1e7c0_1ef9e:
     sta $42
     jml.l ojmp_hook
 br1e7c0_8:
+    lda #$EFA4
+    jsr restore_1e7c0_call_residue
     lda $3C
     clc
     adc #$0002
@@ -11145,6 +11347,23 @@ Lf1e7c0_211:
     sta $42
     jml.l ojmp_hook
 br1e7c0_10:
+    ; The original JSR (A4) at $01F096 leaves return $0001F098 below A7
+    ; after the callback returns.  Replace the popped bank-$FB continuation
+    ; before consuming the fourteen-byte argument frame.
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$F098
+    xba
+    sta $400000,x
+    xba
     lda #$000E
     sta $9A
     lda $9A
@@ -11263,10 +11482,9 @@ L1e7c0_1f0be:
     lda $400000,x
     xba
     sta $9E
-    lda $08
-    sec
-    sbc $9E
+    jsl.l h1e7c0_x_sub_d2_9e
     sta $08
+    nop
     lda $34
     clc
     adc #$2A4C
@@ -11304,10 +11522,9 @@ L1e7c0_1f0d4:
     lda $400000,x
     xba
     sta $9E
-    lda $08
-    sec
-    sbc $9E
+    jsl.l h1e7c0_x_sub_d2_9e
     sta $08
+    nop
     lda $34
     clc
     adc #$2A58
@@ -11416,10 +11633,9 @@ L1e7c0_1f120:
     lda $400000,x
     xba
     sta $9E
-    lda $08
-    sec
-    sbc $9E
+    jsl.l h1e7c0_x_sub_d2_9e
     sta $08
+    nop
     lda $04
     sta $00
     ; BAIL to interp @ $01F12E: muls.w d0, d0   (opcode muls.w)
@@ -11458,10 +11674,9 @@ L1e7c0_1f120:
     lda $400000,x
     xba
     sta $9E
-    lda $10
-    sec
-    sbc $9E
+    jsl.l h1e7c0_x_sub_d4_9e
     sta $10
+    nop
     lda $0C
     sta $18
     ; BAIL to interp @ $01F140: muls.w d6, d6   (opcode muls.w)
@@ -11557,9 +11772,9 @@ L1e7c0_1f166:
     sec
     sbc #$00C0
     sta $04
-    lda $08
-    sec
-    sbc #$0078
+    jsl.l h1e7c0_x_sub_d2_0078
+    nop
+    nop
     sta $08
     jmp L1e7c0_1f178
 L1e7c0_1f170:
@@ -11603,9 +11818,9 @@ L1e7c0_1f180:
     beq Lf1e7c0_226
     jmp L1e7c0_1f18a
 Lf1e7c0_226:
-    lda $08
-    sec
-    sbc #$0010
+    jsl.l h1e7c0_x_sub_d2_0010
+    nop
+    nop
     sta $08
 L1e7c0_1f18a:
     lda $04
@@ -11653,9 +11868,9 @@ Lf1e7c0_227:
 Lf1e7c0_228:
     jmp L1e7c0_1f1ac
 Lf1e7c0_229:
-    lda $1C
-    sec
-    sbc #$0001
+    jsl.l h1e7c0_x_sub_d7_0001
+    nop
+    nop
     sta $1C
     lda $1C
     pha
@@ -13368,15 +13583,20 @@ Ld96_e42:
 ; 68K state at $01E780, 16-bit M/X. CCR at the yield: Z=1 N=V=C=0 (from
 ; move.w $34c2,d7 == 0), X untouched (no X-setter on the path).
 ; GUARDS (all BEFORE any memory write; miss -> restart interp at $01E780,
-; idempotent): a6/a7 hi16==$00F0, a6 lo16>=$20, [$3506]==$0001C99E. The mid-latch
+; idempotent): a6/a7 hi16==$00F0, a6 lo16>=$20, [$3506]==$0001C99E, and all
+; sixteen $31c2 records inactive. The active-record materialization below was
+; never covered by the original all-zero triples and failed organically when
+; the first record changed from $FE to $01: native-on skipped the handler while
+; interpreted execution and MAME matched. Keep that cold edge interpreted from
+; the exact pre-latch seam instead of claiming an unsupported native handoff.
+; The mid-latch
 ; object-ptr guard (hi16==$00F0) and the stack-underflow bcc bail AFTER earlier
 ; latch copies are still restart-safe: the copies are pure obj->obj moves the
 ; interp re-executes identically.
 ; BAILS (cold, faithful mid-flow state materialized -- see spec derivation):
 ;   slot status byte != 0 -> PC=$01C9B0 (a0=slot, d4.b=status, d5=15-i, d3/a1 set,
-;     a6=$0001C99E, a7=A7-8, CCR from the move.b; the beq/bgt + per-slot handlers
-;     interpret). NOTE: no current triple lights the $31c2 table (all-zero on every
-;     capture) — this edge is faithful-by-construction, unexercised by the gates.
+;     a6=$0001C99E, a7=A7-8, CCR from the move.b; retained as dead defensive
+;     materialization after the pre-guard).
 ;   w($34c2) != 0 -> PC=$01CD44 (d7.w=the word, CCR from the move.w; the $1c9a
 ;     jsr (a4) cold path interprets).
 objproc_mid:
@@ -13404,6 +13624,32 @@ objproc_mid:
     lda $400000,x        ; [$3506] lo16
     xba
     cmp #$C99E
+    bne omid_b780a
+    ; The optimized continuation is proven only for an inactive side-A table.
+    ; Inspect the complete table before the first latch/stack/register effect.
+    ; Any active record restarts at the exact $01E780 interpreted seam.
+    lda $34
+    clc
+    adc #$31C2
+    tax
+    sep #$20
+    lda $400000,x
+    ora $400030,x
+    ora $400060,x
+    ora $400090,x
+    ora $4000C0,x
+    ora $4000F0,x
+    ora $400120,x
+    ora $400150,x
+    ora $400180,x
+    ora $4001B0,x
+    ora $4001E0,x
+    ora $400210,x
+    ora $400240,x
+    ora $400270,x
+    ora $4002A0,x
+    ora $4002D0,x
+    rep #$20
     bne omid_b780a
     bra omid_latchset
 omid_b780a:              ; guard miss: zero writes done -> interp restarts at $01E780
@@ -14805,6 +15051,69 @@ L1f1fet_1f246:
     adc #$0004
     sta $3C
     jml.l ors_pre
+
+; All eight static JSR/BSR bridges in entry_1e7c0 use this compact shared
+; equivalent of tools/transpile.py's --restore-static-residue lowering.
+; A contains the real MC68000 return low word; every call is in bank $01.
+; The early entry_c892 body ends at $FF51, leaving this audited tail island.
+.org $FF60
+restore_1e7c0_call_residue:
+    .a16
+    .i16
+    pha
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0001
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    pla
+    xba
+    sta $400000,x
+    xba
+    rts
+restore_1e7c0_call_residue_end:
+
+; Size-neutral byte-arithmetic repair helpers for the two mirrored
+; $01EC3A/$01ED22 motion blocks.  The original MOVE.B/NEG.B/CMP.B operations
+; preserve the upper register bytes and branch from 8-bit N/V/Z/C.  Keeping
+; the calls within the exact old instruction footprints prevents every
+; generated continuation and cross-bank import from moving.
+.org $FF80
+neg_d3_byte_1e7c0:
+    .a16
+    .i16
+    sep #$20
+    lda #$00
+    sec
+    sbc $0C
+    sta $0C
+    rep #$20
+    rts
+neg_d4_byte_1e7c0:
+    .a16
+    .i16
+    sep #$20
+    lda #$00
+    sec
+    sbc $10
+    sta $10
+    rep #$20
+    rts
+cmp_d3_d4_byte_1e7c0:
+    .a16
+    .i16
+    sep #$20
+    lda $0C
+    sec
+    sbc $10
+    rep #$20
+    rts
+byte_arith_1e7c0_end:
 
 ; Fixed trampoline in the audited $FA6A-$FA7F seam.  The generated loop's
 ; three-byte absolute JMP cannot reach bank $97 directly, so keep the original

@@ -14,12 +14,20 @@ The port boots, accepts real controller input, renders recognizable gameplay, an
 plays VGM-derived TAD audio in controlled tests. It is an **interactive technical-demo
 response candidate, not playable or shippable**.
 
-The current v135 ROM is 4 MiB with SHA-256
-`5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`.
-It fixes a reproduced IRAM-erasure freeze and restores the top HUD, but it has not
-passed a fresh full-stage or full-game playtest. Renderer conservation, attack
-animation tiles, organic Stage 2 scrolling, musical fidelity, aligned MAME pixels,
-formal current-candidate performance, and hardware acceptance remain open.
+The best evidence-backed ordinary candidate is the preserved 4 MiB `a976…`
+image, SHA-256
+`a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60`.
+It has a fresh controller campaign through tick 10,000, but it is not a full-stage,
+full-game, performance, or release result. A normal build of current source produces
+the distinct, unpromoted ordinary image `2dadd12c…`; diagnostic VTIME images and
+checkpoint migrations do not inherit the ordinary candidate's acceptance evidence.
+See the [August 11 engineering checkpoint](docs/current/ENGINEERING_CHECKPOINT_20260811.md)
+for the exact ROM identities, long campaign coverage, save-state workflow, and the
+focused v7 input-order repair.
+
+Renderer conservation, attack-animation tiles, organic Stage 2 scrolling, musical
+fidelity, aligned MAME pixels, formal current-candidate performance, and hardware
+acceptance remain open.
 
 The latest end-to-end measurement satisfying the evidence protocol is older v124:
 29.700167 game-fps and 360,990.164 SA-1 cycles/tick. It misses the current 30 Hz and
@@ -54,10 +62,10 @@ See [complete build and toolchain setup](docs/current/BUILDING.md) and
 | Start | Start |
 | D-pad | Move |
 | B or Y | Button 1: punch/fire; hold and release for charged shot |
-| A or X | Button 2: jump |
+| A or X | Button 2: kick |
 
-The arcade game has two action buttons; there is no separate kick input. See
-[controls and playtesting](docs/current/CONTROLS.md).
+The arcade game has two action buttons: punch/fire and kick. Pressing Up makes
+Superman fly; there is no jump action. See [controls and playtesting](docs/current/CONTROLS.md).
 
 ## Documentation
 

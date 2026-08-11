@@ -14,7 +14,7 @@ echo "Recording to inp/$NAME — play, then close the window when done."
 echo
 echo "Default keyboard controls:"
 echo "  5 = insert coin     1 = 1-player start"
-echo "  arrow keys = move    Left-Ctrl = punch/fire   Left-Alt = jump"
+echo "  arrows = move/fly    Left-Ctrl = punch/fire   Left-Alt = kick"
 echo "  Tab = MAME menu (remap controls under 'Input (this Machine)')"
 echo "  Esc = quit (stops the recording)"
 echo

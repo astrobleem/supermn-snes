@@ -2,9 +2,10 @@
 """Replay short real-controller action schedules in exact Mesen.
 
 This is an interactive-path crash diagnostic, not performance evidence.  It
-loads a caller-supplied checkpoint, applies only port-0 controller input, and
-records player state, liveness, renderer state, task-stack floors, screenshots,
-and a save state at the first halt/stall/invalid saved stack.
+either starts from fresh power-on or loads a caller-supplied checkpoint,
+applies only port-0 controller input, and records player state, liveness,
+renderer state, task-stack floors, screenshots, and a save state at the first
+halt/stall/invalid saved stack.
 
 Schedule syntax is a comma-separated list of ``buttons:frames`` actions:
 
@@ -72,7 +73,7 @@ class Action:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rom", type=Path, required=True)
-    parser.add_argument("--state", type=Path, required=True)
+    parser.add_argument("--state", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mesen", type=Path, default=DEFAULT_MESEN)
     parser.add_argument("--port", type=int, default=8930)
@@ -82,6 +83,24 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated buttons:frames actions; combine buttons with +.",
     )
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument(
+        "--cold-boot-frame",
+        type=int,
+        default=0,
+        help=(
+            "With no --state, advance the same fresh process neutrally to this "
+            "absolute video frame before taking the initial capture."
+        ),
+    )
+    parser.add_argument(
+        "--max-action-chunk",
+        type=int,
+        default=120,
+        help=(
+            "Maximum requested video frames per controller call. Actions are "
+            "reissued until their exact requested frame delta is observed."
+        ),
+    )
     parser.add_argument(
         "--screenshot-every",
         type=int,
@@ -325,21 +344,27 @@ def snapshot(
 def main() -> int:
     args = parse_args()
     args.rom = args.rom.resolve()
-    args.state = args.state.resolve()
+    if args.state is not None:
+        args.state = args.state.resolve()
     args.output = args.output.resolve()
     args.mesen = args.mesen.resolve()
     if args.repeat <= 0:
         raise SystemExit("--repeat must be positive")
+    if args.cold_boot_frame < 0:
+        raise SystemExit("--cold-boot-frame cannot be negative")
+    if args.max_action_chunk <= 0:
+        raise SystemExit("--max-action-chunk must be positive")
+    if args.state is not None and args.cold_boot_frame:
+        raise SystemExit("--cold-boot-frame cannot be combined with --state")
     if args.screenshot_every < 0 or args.save_every < 0:
         raise SystemExit("capture cadences must be non-negative")
     if args.stall_video_frames <= 0:
         raise SystemExit("--stall-video-frames must be positive")
     actions = parse_schedule(args.schedule) * args.repeat
-    for label, path in (
-        ("ROM", args.rom),
-        ("state", args.state),
-        ("Mesen", args.mesen),
-    ):
+    required_paths = [("ROM", args.rom), ("Mesen", args.mesen)]
+    if args.state is not None:
+        required_paths.append(("state", args.state))
+    for label, path in required_paths:
         if not path.is_file():
             raise FileNotFoundError(f"{label} not found: {path}")
     args.output.mkdir(parents=True, exist_ok=False)
@@ -347,20 +372,33 @@ def main() -> int:
 
     result: dict[str, Any] = {
         "scope": (
-            "checkpointed exact-Mesen real-controller action diagnostic; "
+            (
+                "checkpointed "
+                if args.state is not None
+                else "fresh-power-on "
+            )
+            + "exact-Mesen real-controller action diagnostic; "
             + (
                 "selected-ROM video mirror injected after state load; "
                 if args.refresh_video_mirror
                 else "no runtime memory writes; "
             )
-            + "not FPS or cold-boot evidence"
+            + (
+                "not FPS or cold-boot evidence"
+                if args.state is not None
+                else "continuous cold-boot lineage; not FPS evidence"
+            )
         ),
         "project_commit": git_value("rev-parse", "HEAD"),
         "project_status": git_value("status", "--short").splitlines(),
         "rom": str(args.rom.resolve()),
         "rom_sha256": sha256(args.rom),
-        "state": str(args.state.resolve()),
-        "state_sha256": sha256(args.state),
+        "state": (
+            str(args.state.resolve()) if args.state is not None else None
+        ),
+        "state_sha256": (
+            sha256(args.state) if args.state is not None else None
+        ),
         "mesen": str(args.mesen.resolve()),
         "mesen_sha256": sha256(args.mesen),
         "schedule": [
@@ -368,6 +406,9 @@ def main() -> int:
             for action in actions
         ],
         "runtime_memory_writes": [],
+        "cold_boot_frame": args.cold_boot_frame,
+        "max_action_chunk": args.max_action_chunk,
+        "boot_advance": [],
         "samples": [],
         "screenshots": [],
         "states": [],
@@ -385,8 +426,35 @@ def main() -> int:
         stderr_log=args.output / "mesen.stderr.log",
     ) as m:
         m.pause()
-        m.load_state(args.state.resolve())
-        m.pause()
+        if args.state is not None:
+            m.load_state(args.state.resolve())
+            m.pause()
+        elif args.cold_boot_frame:
+            while True:
+                before = int(m.get_state().get("frameCount", 0))
+                if before >= args.cold_boot_frame:
+                    break
+                requested = min(
+                    args.max_action_chunk,
+                    args.cold_boot_frame - before,
+                )
+                response = m.set_input(0, requested)
+                m.pause()
+                after = int(m.get_state().get("frameCount", 0))
+                advanced = after - before
+                result["boot_advance"].append(
+                    {
+                        "before": before,
+                        "after": after,
+                        "requested": requested,
+                        "advanced": advanced,
+                        "response": response,
+                    }
+                )
+                if advanced <= 0:
+                    raise RuntimeError(
+                        "fresh-boot neutral advance made no video progress"
+                    )
         if args.refresh_video_mirror:
             video_mirror = args.rom.read_bytes()[
                 VIDEO_FILE_BASE : VIDEO_FILE_BASE + VIDEO_WRAM_LENGTH
@@ -437,8 +505,33 @@ def main() -> int:
         failed = False
         for index, action in enumerate(actions):
             before_frame = int(m.get_state().get("frameCount", 0))
-            input_response = m.set_input(action.buttons, action.frames)
-            m.pause()
+            action_responses: list[dict[str, Any]] = []
+            while True:
+                current_frame = int(m.get_state().get("frameCount", 0))
+                advanced_frames = current_frame - before_frame
+                if advanced_frames >= action.frames:
+                    break
+                requested = min(
+                    args.max_action_chunk,
+                    action.frames - advanced_frames,
+                )
+                response = m.set_input(action.buttons, requested)
+                m.pause()
+                after_chunk = int(m.get_state().get("frameCount", 0))
+                chunk_advanced = after_chunk - current_frame
+                action_responses.append(
+                    {
+                        "before": current_frame,
+                        "after": after_chunk,
+                        "requested": requested,
+                        "advanced": chunk_advanced,
+                        "response": response,
+                    }
+                )
+                if chunk_advanced <= 0:
+                    raise RuntimeError(
+                        f"action {index} made no video progress"
+                    )
             after_frame = int(m.get_state().get("frameCount", 0))
             advanced_frames = after_frame - before_frame
             sample = snapshot(
@@ -449,7 +542,7 @@ def main() -> int:
                     "buttons": action.buttons,
                     "requested_frames": action.frames,
                     "advanced_frames": advanced_frames,
-                    "input_response": input_response,
+                    "input_response": action_responses,
                 }
             )
             if sample["tick"] == previous_tick:

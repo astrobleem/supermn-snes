@@ -1,7 +1,7 @@
 # Capture a 68K function's ENTRY frame (regfile + 64KB work RAM at $F0xxxx) from MAME's deterministic
 # playback, for escape-vs-MAME ground-truth validation. The 64KB carries the a6 frame (own link OR a
 # frame-sharing caller's). Usage: extract_frame.py <hex-addr> [start-frame]  (default $00CC10, 1500).
-import sys, struct, shutil
+import os, sys, struct, shutil
 from pathlib import Path
 sys.path.insert(0,"/home/chad/mame-mcp"); from mame_mcp.session import MameSession
 ADDR=int(sys.argv[1],16) if len(sys.argv)>1 else 0xCC10
@@ -15,8 +15,9 @@ for d in ("cfg","nvram"):
 def regsA(r):
     v=[r["D%d"%i] for i in range(8)]+[r["A%d"%i] for i in range(7)]+[r["SP"]&0xFFFFFFFF, r.get("USP",0), r.get("SR",0)]
     return b"".join(struct.pack(">I",x&0xFFFFFFFF) for x in v)
+PLAYBACK=os.environ.get("MAME_PLAYBACK","vplay.inp")
 s=MameSession(mame="mame", system="superman", rompath=str(HERE/"roms"), workdir=str(HERE), state_directory=str(HERE/"sta"),
-              extra_args=["-playback","vplay.inp","-input_directory","/home/chad/supermn-snes/inp"])
+              extra_args=["-playback",PLAYBACK,"-input_directory","/home/chad/supermn-snes/inp"])
 try:
     s.launch(boot_wait=25); frame=0
     while frame < START-10:
@@ -29,8 +30,7 @@ try:
     # does nothing / reads garbage), which produce false escape-vs-MAME REDs (the escape and MAME can
     # map a null/edge read differently, and val only injects $F0 work RAM). Walk nth=1.. until a call
     # with a non-zero A-register, or fall back to nth=1. Override with NTH=<n> env.
-    import os as _os
-    forced=_os.environ.get("NTH")
+    forced=os.environ.get("NTH")
     def be32(d,o): return ((d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3])&0xFFFFFF
     E=None
     for nth in ([int(forced)] if forced else range(1,25)):

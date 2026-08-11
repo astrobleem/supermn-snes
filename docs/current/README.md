@@ -12,6 +12,8 @@ This directory is the onboarding path for the active Superman SNES/SA-1 port.
 5. Select the appropriate gate from [VALIDATION.md](VALIDATION.md).
 6. Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing CPU ownership, memory
    routing, rendering, input, sound, or timing.
+7. Use [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md)
+   for the latest exact hashes, completed campaign work, and next decisions.
 
 ## Superman-specific deep dives
 

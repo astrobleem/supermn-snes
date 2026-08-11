@@ -51,10 +51,33 @@ entry_c9a6=$94B0CB
 entry_d3b0t=$94B400
 entry_d3b0t_bridge_end=$94B567
 entry_d3b0t_end=$94B5AE
+entry_27952=$94B600
+entry_27952_end=$94BA96
+entry_279d2=$94BC00
+entry_279d2_end=$94C0C5
+entry_2f3ba=$94C200
+entry_2f3ba_end=$94C9FE
+entry_27b44=$94CB40
+entry_27b44_end=$94CB5A
+entry_2f56a=$94CD00
+entry_2f56a_end=$94CD1A
+entry_27b7c=$94CEC0
+entry_27b7c_end=$94CEE9
+entry_2f5a2=$94D100
+entry_2f5a2_end=$94D129
+entry_2e49c=$94D340
+entry_2e49c_end=$94D425
+entry_296c6=$94D480
+entry_296c6_end=$94D532
+entry_2e40e=$94D540
+entry_2e40e_end=$94D5FF
+entry_135e0=$94DB20
+entry_135e0_end=$94DD91
 entry_d6e6=$94E2C2
 entry_d64a=$94E32E
 entry_d3de=$94E5F8
 entry_cfa4=$94E688
+entry_ce4_after_counter=$94E8A7
 entry_cec2=$94E994
 entry_d52e=$94EE35
 entry_25110=$978000
@@ -67,14 +90,22 @@ entry_117b4=$97C800
 entry_cc44=$97D000
 entry_cc80=$97D400
 entry_caf6=$97D800
+entry_25110_resume_2582a=$97E603
+entry_25110_resume_2582e=$97E606
+entry_25110_resume_2582e_taken=$97E613
+entry_25110_resume_259b0=$97E616
+entry_25110_resume_end=$97E619
 entry_cb9e=$97E800
 entry_1d5f0=$97EC00
+entry_1d5f0_end=$97F915
 entry_1f1c0t=$97FC60
 entry_1f1c0_generated=$97FC64
 entry_96a=$99C200
 entry_9ea=$99C500
 ; <<< ESCBANK_SYMS <<<
 entry_d232=$99EB00   ; pt.22 P3b: --bank5 $99 body, .org-fixed (gen_escbank_syms doesn't harvest $99; hand const)
+h13be_exit_flags_inext=$99FC0C ; direct-entry return after captured MOVE.W CCR
+h13be_writeword_flags=$99FC10 ; write closing D1.w and capture CCR before MOVEM restores D1
 hle_158e=$99F800     ; guarded direct sprite-shadow bulk copy (fixed escbank5 tail slot)
 swo_movem_unrolled=$99FA00 ; fixed-offset scheduler switch-out register save (escbank5 tail)
 h8_clear_ccr_x=$94FEC4 ; escbank2 tail leaf; final $8C2 CLR/ADDQ C/N/V/X result
@@ -2151,6 +2182,26 @@ Lf26fa_3:
     jsl.l rdw_ea_l
     sec
     sbc #$0001
+    ; SUBI.W #1,$1B18(A5): publish X and commit the modified word before
+    ; continuing.  The stale native body only computed the result in A;
+    ; arcade code decrements the shake duration on every call.
+    php
+    pha
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    pla
+    plp
+    sta $80
+    lda $34
+    clc
+    adc #$1B18
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
 L26fa_2718:
     lda $34
     clc
@@ -2203,6 +2254,24 @@ Lf26fa_4:
     jsl.l rdw_ea_l
     sec
     sbc #$0001
+    ; Second SUBI.W #1,$1B18(A5), on the equal-offset path.
+    php
+    pha
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    pla
+    plp
+    sta $80
+    lda $34
+    clc
+    adc #$1B18
+    sta $54
+    lda $36
+    adc #$0000
+    sta $52
+    jsl.l writeword_l
 L26fa_272c:
     lda #$000D
     sta $00
@@ -4830,9 +4899,13 @@ Lf13be_7:
     rep #$20
     sta $04
     lda $04
-    clc
-    adc #$0000
-    sta $04
+    ; $001404 ADDI.W #0,D1 leaves D1 unchanged but clears 68000 X.
+    ; Keep this packed body size-neutral (six replaced bytes).
+    stz $A2
+    nop
+    nop
+    nop
+    nop
     lda $04
     sec
     sbc #$FFF0
@@ -4907,7 +4980,7 @@ L13be_1418:
     lda $2E
     adc #$0000
     sta $52
-    jsl.l writeword_l
+    jsl.l h13be_writeword_flags
     ldx $3C
     sep #$20
     lda $400000,x
@@ -5041,7 +5114,9 @@ L13be_1418:
     clc
     adc #$0004
     sta $3C
-    jml.l inext
+    ; The closing MOVE.W flags were captured at the store, before the MOVEM
+    ; epilogue restored D1.  This terminal bridge must not overwrite them.
+    jml.l h13be_exit_flags_inext
 
 ; --- transpiled from $00D9CC (25 instrs) by tools/transpile.py [bank1] ---
 entry_d9cc:
@@ -5354,6 +5429,10 @@ entry_d18a:
     lda $42
     sta $56
     jsl.l push32_l
+; Internal continuations that have already supplied a virtual 68K return frame
+; may enter here.  Ordinary xlat and CE58 BSR bridges use entry_d18a above so
+; the cleanup's final pop balances its synthetic push.
+entry_d18a_body:
     lda $34
     clc
     adc #$2A4C
@@ -5568,23 +5647,21 @@ Lfd18a_19:
     lda $30
     clc
     adc #$0004
-    sta $54
-    lda $32
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc $00
+    jsr d18a_sub_store
     lda $2C
     clc
     adc #$FFE2
-    sta $54
-    lda $2E
-    adc #$FFFF
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc $00
+    jsr d18a_sub_store
 Ld18a_d1ec:
     lda $34
     clc
@@ -5601,24 +5678,38 @@ Lfd18a_20:
     lda $28
     clc
     adc #$0004
-    sta $54
-    lda $2A
-    adc #$0000
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc $00
+    jsr d18a_sub_store
     lda $24
     clc
     adc #$FFE2
-    sta $54
-    lda $26
-    adc #$FFFF
-    sta $52
-    jsl.l rdw_ea_l
+    tax
+    lda $400000,x
+    xba
     sec
     sbc $00
+    jsr d18a_sub_store
 Ld18a_d1fc:
+    ; The original inline cleanup no longer fits before the fixed $AEFA
+    ; entry_2e06 seam.  Poppy silently lets that later .org overwrite its
+    ; final stores and return path, which used to fall through into $2E06.
+    ; Route every D18A cleanup through the audited $F26B island instead.
+    jml.l $92F26B
+
+; Full non-overlapping D18A cleanup.  $F26B-$F3FF was verified zero in the
+; packed bank before this relocation; build_interp_rom.py guards both the
+; redirect and the remaining seam so this cannot silently collide again.
+    .org $F26B
+.a16
+.i16
+d18a_tail_full:
+    ; Labels can reset Poppy's inferred accumulator width.  Make the native
+    ; width explicit in the emitted stream as well as in the source mode.
+    rep #$30
     lda $2C
     clc
     adc #$FFA4
@@ -5747,7 +5838,11 @@ Ld18a_d1fc:
     adc #$0004
     sta $3C
     jml.l ors_pre
+d18a_tail_full_end:
 
+; Keep every following established bank-$92 entry fixed; hardcoded dispatch
+; consumers must not inherit a layout shift.
+    .org $AEFA
 ; --- transpiled from $002E06 (9 instrs) by tools/transpile.py [bank1] ---
 entry_2e06:
     rep #$30
@@ -6879,7 +6974,7 @@ entry_2bda_generated_resume:
 entry_2be2:
     ; Size-neutral redirect to the guarded canonical-work-RAM path in bank $9D.
     ; A rejected state replays REP/LDA and resumes at the first untouched byte.
-    jml.l $9D9600
+    jml.l $9D9620
 entry_2be2_generated_resume:
     ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
     sta $54
@@ -12711,7 +12806,9 @@ Lfce58_4:
     beq Lfce58_5
     jmp Lce58_ceb2
 Lfce58_5:
-    ; CALL-BRIDGE bsr.w $d18a -> entry_d18a (NATIVE escape), resume brce58_7
+    ; CALL-BRIDGE bsr.w $d18a -> entry_d18a (NATIVE escape), resume brce58_7.
+    ; The relocated D18A cleanup consumes the ordinary BSR return frame, so
+    ; this coroutine bridge must take the generic push path as well.
     lda #brce58_7
     sta $40
     lda #$00FE
@@ -13732,6 +13829,26 @@ jx_real:
     plp                  ; restore carry for push32r (matches the original jah2_miss)
     jml jsrabs_hook
 
+; $00D1E4/$00D1E8/$00D1F4/$00D1F8 are SUB.W D0,<work-RAM>.
+; The 2026-06-27 generated body performed each read and subtraction but
+; discarded the result.  The repaired call sites arrive with logical result
+; in A, destination low word in X, and the subtraction carry still live.
+; Store the big-endian word and publish MC68000 X=borrow without changing the
+; fixed flowing-body layout below $F000.
+    .org $F100
+.a16
+.i16
+d18a_sub_store:
+    xba
+    sta $400000,x
+    xba
+    lda #$0000
+    rol a
+    eor #$0001
+    sta $A2
+    rts
+d18a_sub_store_end:
+
 ; ======================= JAH2 BSR/PCREL EXTENSION CHAIN =======================
 ; Shift-safe dispatch for bsr / jsr(d16,PC)-reached escapes (the SEPARATE bsr_hookpush path,
 ; target in $5C not $52). Reached from bank-$00 bhp_push via `jml $92F400` (size-neutral
@@ -13747,7 +13864,31 @@ jah2_ext_bsr:
 jxb_on:
     lda $5E
     beq jxb_b0           ; bank 0 -> scan
-    jmp jxb_real         ; bank != 0 -> real miss
+    cmp #$0002
+    bne jxb_other_bank
+    jmp jxb_b2           ; bank 2 -> Stage-3 table/rts callees
+jxb_other_bank:
+    cmp #$0001
+    beq jxb_b1
+    jmp jxb_real
+jxb_b1:
+    lda $5C
+    cmp #$3282           ; Stage-3 player/render record update
+    beq jxb_hit_13282
+    cmp #$35E0           ; Stage-3 coordinate/object record leaf
+    beq jxb_hit_135e0
+    ; The fixed $92:F400-$F5FF scan has one byte left.  Continue the three
+    ; player-hot comparisons in bank $9F; misses return to jxb_real below
+    ; with the original bsr_hookpush native return still on the stack.
+    jml.l $9FFD00
+jxb_hit_13282:
+    jsr jxb_push_return
+    pla                  ; drop bsr_hookpush's 65816 return
+    jml.l $9FE000        ; entry_13282t
+jxb_hit_135e0:
+    jsr jxb_push_return
+    pla                  ; drop bsr_hookpush's 65816 return
+    jml entry_135e0
 jxb_b0:
     lda $5C              ; bsr target low16
     ; >>> JAH2_EXT_BSR_SCAN — deploy_escape inserts `cmp/bne/dispatch` blocks before jxb_real <<<
@@ -13929,6 +14070,30 @@ bjx_cc80:
     pla
     jml entry_caf6
 bjx_caf6:
+jxb_b2:
+    ; Keep this packed scan extensible in bank $9F.  The extension owns every
+    ; established bank-$02 hit plus $02F542 and returns misses to jxb_real.
+    jml.l $9FFDB0
+
+    ; The BSR hook runs before the ordinary interpreter path pushes its
+    ; return.  Materialize that exact 24-bit return for table/rts-convention
+    ; leaves, then return to the target-specific long jump above.
+    .org $F5DD
+jxb_push_return:
+    inc $0764
+    lda $54
+    cmp $40
+    lda $42
+    bcs jxb_return_bank
+    inc a
+jxb_return_bank:
+    sta $56
+    jsl.l push32_l
+    lda $5C
+    sta $40
+    lda $5E
+    sta $42
+    rts
 jxb_real:
     lda $54              ; redo the bytes the bhp_push redirect overwrote (sets carry for bhp_after)
     cmp $40
@@ -14062,14 +14227,44 @@ cd_b2:                   ; --- bank-$02 bodies ---
 ; ===================== INDIRECT-BRIDGE-TO-ESCAPE =====================
 ; ibridge — reached from a coroutine body's `jsr (An)` bridge. The runtime target An is in $50(hi)/
 ; $52(lo); the bridge-to-escape state ($40=cont, $42=$00FE) is pre-set. If An is a bridge-to-escape-
-; able escape (an entity DRAW routine or the guarded $20E8 tile-strip body) -> enter it NATIVELY
-; (its prologue re-pushes the caller's bank-tagged continuation, and its
-; ors_pre rts resumes the continuation). MISS -> push $00FE:cont and interpret An (the old behavior).
+; able escape (an entity DRAW routine, the guarded $20E8 tile-strip body, or a Stage-3
+; table/parent dispatcher) -> enter it NATIVELY after preserving the caller's bank-tagged
+; continuation. The callee's ors_pre rts resumes that continuation. MISS -> push
+; $00FE:cont and interpret An (the old behavior).
 ; This reclaims the draw routines that a jsr(a0) used to stream interpreted (e.g. $295A ~168 PCs).
 ; Extend the scan with one cmp/bne/jmp per bridge-to-escape-able jsr(An) target.
 ibridge:
     lda $50
-    bne ib_miss          ; An bank != 0 -> not a bank-$00 escape -> interpret
+    beq ib_b0
+    cmp #$0002
+    bne ib_miss
+    lda $52
+    cmp #$F2E0
+    beq ib_b2_f2e0
+    cmp #$78E8
+    bne ib_miss
+    ; $0278E8 is the dynamic two-record callback supplied by $0278D4.
+    ; Preserve the private selector continuation exactly as the old miss
+    ; path did, then enter the guarded parent in bank $9F.
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    jml.l $9FD000
+ib_b2_f2e0:
+    ; $02F2E0 is the dynamic callback supplied by the Stage-3 $02F2CC
+    ; parent. Unlike ojmp_hook, ibridge misses go directly to inext and
+    ; therefore never consult the sparse xlat table. Push the exact private
+    ; continuation that the miss path would have pushed, then enter the
+    ; already-proven table/rts dispatcher.
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    jml.l $9FA680
+ib_b0:
     lda $52
     cmp #$295A
     bne ib_n0
@@ -14128,6 +14323,17 @@ ibridge_end:
 .org $FA00
 entry_swo:
     rep #$30
+    ; A completed native switch-out must eventually share the same virtual
+    ; clock as scan/select/switch-in, including a due-IRQ handoff through the
+    ; restored task's RTE.  Until that ownership protocol exists, the explicit
+    ; interpreter-only VTIME diagnostic declines before touching SR, A7, task
+    ; frames, or descriptors.  The loop-hook caller then decodes `$0532`
+    ; normally.  Ordinary VTIME and production routing remain unchanged.
+    lda.l $F28000
+    and #$0002
+    beq entry_swo_vtime_go
+    jml.l lh_nofire
+entry_swo_vtime_go:
     lda $7C              ; $0532 ori #$700,sr : mask |= 7
     ora #$0007
     sta $7C
@@ -14161,7 +14367,7 @@ swo_movem_done:
     lda $3E              ; a7 high word
     xba
     sta $400000,x
-    lda $3C              ; a7 low word
+    lda $3C
     xba
     sta $400002,x
     ; --- $0540 movea.l $4a(a5),a4 : a4 = BE long at (a5+$4a) ---
@@ -14516,6 +14722,9 @@ sels_diag_counter_end:
     lda $00
     asl a
     asl a
+    ; The scheduler proves idx is 0..15, so the second bit shifted out by
+    ; the original ASL.W #2,D1 is zero and MC68000 X must be cleared.
+    stz $A2
     sta $04              ; d1 lo16
     ; --- $0762 lea $4a(a4,d1.w),a3: a3 = a4 + $4a + d1.lo16 (stays in-bank -> hi16 = a4 hi16 + carry) ---
     lda $30
@@ -14588,6 +14797,7 @@ lsel_set:
     stz $42
     pla                  ; drop the jsr loop_hook return
     jml.l irq_none       ; re-fetch $40 (no $AC dec, matching the original lhs_found handoff)
+lhs_sel_end:
 
 ; --- $00D522 jmp-table state handler (pt.22 P2 MECHANIZED; .org $FE00 = free $92 tail,
 ; --- ESCBANK_BODIES_END overflows into the .org $F400 jah2_ext_bsr region -> corruption). ---

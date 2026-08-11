@@ -27,8 +27,10 @@ h96a_generated_resume=$99C204
 h9ea_generated_resume=$99C504
 entry_c262_generated_resume=$99C906
 entry_2742t=$99DE0E
-L25110_25122=$97804F
-h25110_stage1_done=$9785DA
+L25110_25122=$978051
+h25110_stage1_done=$978684
+Lf25110_281=$9797BF
+L25110_259b0=$979B0C
 Lcaf6_cb9c=$97DC50
 entry_12a92=$97B800
 entry_caf6=$97D800
@@ -103,6 +105,8 @@ entry_c8e0_generated_resume:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bne Lfc8e0_1
     jmp Lc8e0_c906
 Lfc8e0_1:
@@ -758,6 +762,8 @@ Lfc9a6_4:
 Lfc9a6_5:
 Lc9a6_c9e4:
     lda $1C
+    inc a
+    dec a
     bne Lfc9a6_6
     php
     sep #$20
@@ -952,6 +958,8 @@ entry_c722t:
     lda #$0000
     sta $26
     lda $04
+    inc a
+    dec a
     bne Lfc722_1
     jmp Lc722_c746
 Lfc722_1:
@@ -987,6 +995,8 @@ Lc722_c746:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     beq Lfc722_2
     jmp Lc722_c764
 Lfc722_2:
@@ -1009,6 +1019,8 @@ Lfc722_2:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bne Lfc722_3
     jmp Lc722_c76a
 Lfc722_3:
@@ -1031,6 +1043,8 @@ Lfc722_3:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bne Lfc722_4
     jmp Lc722_c76a
 Lfc722_4:
@@ -1245,6 +1259,8 @@ entry_bba4t:
     xba
     sta $00
     lda $00
+    inc a
+    dec a
     beq Lfbba4_1
     jmp Lbba4_bbba
 Lfbba4_1:
@@ -1405,6 +1421,8 @@ Lfbba4_3:
 Lfbba4_4:
 Lbba4_bbdc:
     lda $04
+    inc a
+    dec a
     beq Lfbba4_5
     jmp Ltjbba4_bbe2
 Lfbba4_5:
@@ -1456,11 +1474,16 @@ Ltjbba4_bbe2:
     sta $42
     jml.l inext
 
-; command: tools/transpile.py 00C60E --bank6 --table --exitccr --xflag --workram=a0 --escapes=00295a,0029b6
+; command: tools/transpile.py 00C60E --bank6 --table --exitccr --xflag --workram=a0 --escapes=00295a,0029b6 --accharge --restore-indirect-residue
 ; --- transpiled from $00C60E (36 instrs) by tools/transpile.py [bank1] ---
 entry_c60et:
     rep #$30
     ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    php
+    rep #$30
+    lda #$0004
+    jsr esc6_ac_charge
+    plp
     lda $20
     sta $54
     lda $22
@@ -1539,6 +1562,8 @@ entry_c60et:
     sta $400000,x
     xba
     lda $00
+    inc a
+    dec a
     bmi Lfc60e_1
     jmp Lc60e_c61c
 Lfc60e_1:
@@ -1555,10 +1580,22 @@ Lfc60e_1:
     sta $70
     stz $72
     stz $6E
+    php
+    rep #$30
+    lda #$0001
+    jsr esc6_ac_charge
+    plp
     lda #$0000
     sta $00
 Lc60e_c61c:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
     lda $04
+    inc a
+    dec a
     beq Lfc60e_2
     jmp Ltjc60e_c682
 Lfc60e_2:
@@ -1575,6 +1612,11 @@ Lfc60e_2:
     sta $70
     stz $72
     stz $6E
+    php
+    rep #$30
+    lda #$0008
+    jsr esc6_ac_charge
+    plp
     lda #$E01A
     sta $18
     lda #$0040
@@ -1621,6 +1663,11 @@ Lfc60e_2:
     adc #$0000
     sta $22
 Lc60e_c640:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
     lda $0C
     pha
     ldx $20
@@ -1642,6 +1689,11 @@ Lc60e_c640:
     beq Lfc60e_3
     jmp Lc60e_c640
 Lfc60e_3:
+    php
+    rep #$30
+    lda #$0003
+    jsr esc6_ac_charge
+    plp
     lda $00
     clc
     adc #$0003
@@ -1668,6 +1720,11 @@ Lfc60e_3:
     bne Lfc60e_4
     jmp Lc60e_c658
 Lfc60e_4:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
     lda $00
     sec
     sbc #$0001
@@ -1686,6 +1743,11 @@ Lfc60e_4:
     adc #$0000
     sta $22
 Lc60e_c652:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
     lda $18
     pha
     ldx $20
@@ -1708,6 +1770,11 @@ Lc60e_c652:
     jmp Lc60e_c652
 Lfc60e_5:
 Lc60e_c658:
+    php
+    rep #$30
+    lda #$0008
+    jsr esc6_ac_charge
+    plp
     lda #$0004
     pha
     lda $3C
@@ -1842,6 +1909,26 @@ Lfc60e_7:
     sta $50
     jml.l ibridge
 brc60e_1:
+    ; restore real 68K call return residue below A7: $00C672
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0000
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$C672
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0004
+    jsr esc6_ac_charge
+    plp
     lda $3C
     clc
     adc #$000E
@@ -2009,11 +2096,16 @@ Ltjc60e_c682:
     sta $42
     jml.l inext
 
-; command: tools/transpile.py 00C6BC --bank6 --table --exitccr --xflag --workram=a0 --escapes=00295a,0029b6
+; command: tools/transpile.py 00C6BC --bank6 --table --exitccr --xflag --workram=a0 --escapes=00295a,0029b6 --accharge --restore-indirect-residue
 ; --- transpiled from $00C6BC (29 instrs) by tools/transpile.py [bank1] ---
 entry_c6bct:
     rep #$30
     ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    php
+    rep #$30
+    lda #$000A
+    jsr esc6_ac_charge
+    plp
     lda $20
     sta $54
     lda $22
@@ -2133,6 +2225,8 @@ entry_c6bct:
     lda #$0048
     sta $10
     lda $04
+    inc a
+    dec a
     bne Lfc6bc_1
     jmp Lc6bc_c6ec
 Lfc6bc_1:
@@ -2149,6 +2243,11 @@ Lfc6bc_1:
     sta $70
     stz $72
     stz $6E
+    php
+    rep #$30
+    lda #$0003
+    jsr esc6_ac_charge
+    plp
     lda #$E096
     sta $18
     lda #$0140
@@ -2156,6 +2255,11 @@ Lfc6bc_1:
     lda #$0058
     sta $10
 Lc6bc_c6ec:
+    php
+    rep #$30
+    lda #$000C
+    jsr esc6_ac_charge
+    plp
     lda $18
     pha
     ldx $20
@@ -2336,6 +2440,26 @@ Lfc6bc_3:
     sta $50
     jml.l ibridge
 brc6bc_1:
+    ; restore real 68K call return residue below A7: $00C712
+    lda $3C
+    sec
+    sbc #$0004
+    tax
+    lda #$0000
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda #$C712
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0004
+    jsr esc6_ac_charge
+    plp
     lda $3C
     clc
     adc #$000E
@@ -3058,303 +3182,13 @@ Ltj74ec_7554:
     and #$0001
     eor #$0001
     sta $6E
-    sta $A2
     lda #$7554
     sta $40
     lda #$0000
     sta $42
     jml.l inext
-
-; command: tools/transpile.py F01B20 --bank6 --table --exitccr --xflag --workram=a0 --code-base=F01B20 --code-file=data/cchip_boot_response.bin
-; --- transpiled from $F01B20 (28 instrs) by tools/transpile.py [bank1] ---
-entry_f01b20t:
-    rep #$30
-    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
-    lda $38
-    sta $54
-    lda $3A
-    sta $56
-    jsl.l push32_l
-    lda $3C
-    sta $38
-    lda $3E
-    sta $3A
-    lda $1C
-    sta $54
-    lda $1E
-    sta $56
-    jsl.l push32_l
-    lda $38
-    clc
-    adc #$0008
-    tax
-    lda $400000,x
-    xba
-    sta $1C
-    lda $1C
-    sep #$20
-    sec
-    sbc #$FF
-    rep #$20
-    bne Lff01b20_1
-    php
-    sep #$20
-    pla
-    rep #$30
-    and #$00FF
-    sta $50
-    and #$0002
-    sta $60
-    lda $50
-    and #$0080
-    sta $70
-    lda $50
-    and #$0040
-    sta $72
-    lda $50
-    and #$0001
-    eor #$0001
-    sta $6E
-    sta $A2
-    jmp Lf01b20_f01b74
-Lff01b20_1:
-    lda $34
-    clc
-    adc #$1CCA
-    tax
-    lda $400000,x
-    xba
-    sec
-    sbc #$0003
-    beq Lff01b20_2
-    jmp Lf01b20_f01b48
-Lff01b20_2:
-    lda $34
-    clc
-    adc #$1C4B
-    tax
-    lda $400000,x
-    and #$00FF
-    and #$0008
-    php
-    php
-    sep #$20
-    pla
-    rep #$30
-    and #$0002
-    sta $60
-    plp
-    beq Lff01b20_3
-    jmp Lf01b20_f01b48
-Lff01b20_3:
-    lda $1C
-    sep #$20
-    sec
-    sbc #$19
-    rep #$20
-    beq Lff01b20_4
-    php
-    sep #$20
-    pla
-    rep #$30
-    and #$00FF
-    sta $50
-    and #$0002
-    sta $60
-    lda $50
-    and #$0080
-    sta $70
-    lda $50
-    and #$0040
-    sta $72
-    lda $50
-    and #$0001
-    eor #$0001
-    sta $6E
-    sta $A2
-    jmp Lf01b20_f01b74
-Lff01b20_4:
-Lf01b20_f01b48:
-    lda $20
-    sta $54
-    lda $22
-    sta $56
-    jsl.l push32_l
-    lda $34
-    clc
-    adc #$1C40
-    tax
-    lda $400000,x
-    xba
-    sta $22
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $20
-    lda $1C
-    pha
-    ldx $20
-    pla
-    sep #$20
-    sta $400000,x
-    rep #$20
-    lda $20
-    clc
-    adc #$0001
-    sta $20
-    lda $22
-    adc #$0000
-    sta $22
-    lda #$1C40
-    sta $9A
-    lda #$00F0
-    sta $9C
-    lda $9A
-    sta $1C
-    lda $9C
-    sta $1E
-    lda $20
-    sec
-    sbc $1C
-    sta $8A
-    lda $22
-    sbc $1E
-    bne Lff01b20_5
-    lda $8A
-    beq Lff01b20_6
-Lff01b20_5:
-    jmp Lf01b20_f01b62
-Lff01b20_6:
-    lda $34
-    clc
-    adc #$1C20
-    sta $20
-    lda $36
-    adc #$0000
-    sta $22
-    jmp Lf01b20_f01b6c
-Lf01b20_f01b62:
-    lda $34
-    clc
-    adc #$1C44
-    tax
-    lda $400000,x
-    xba
-    sta $9C
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $9A
-    lda $9A
-    sta $1C
-    lda $9C
-    sta $1E
-    lda $20
-    sec
-    sbc $1C
-    sta $8A
-    lda $22
-    sbc $1E
-    bne Lff01b20_7
-    lda $8A
-    beq Lff01b20_8
-Lff01b20_7:
-    jmp Lf01b20_f01b6c
-Lff01b20_8:
-    lda $20
-    sec
-    sbc #$0001
-    sta $20
-    lda $22
-    sbc #$0000
-    sta $22
-Lf01b20_f01b6c:
-    lda $20
-    sta $9A
-    lda $22
-    sta $9C
-    lda $9C
-    pha
-    lda $34
-    clc
-    adc #$1C40
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-    lda $9A
-    pha
-    lda $34
-    clc
-    adc #$1C42
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-    ldx $3C
-    lda $400000,x
-    xba
-    sta $22
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $20
-    lda $3C
-    clc
-    adc #$0004
-    sta $3C
-Lf01b20_f01b74:
-    ldx $3C
-    lda $400000,x
-    xba
-    sta $1E
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $1C
-    lda $3C
-    clc
-    adc #$0004
-    sta $3C
-    lda $38
-    sta $3C
-    lda $3A
-    sta $3E
-    ldx $3C
-    lda $400000,x
-    xba
-    sta $3A
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $38
-    lda $3C
-    clc
-    adc #$0004
-    sta $3C
-    ldx $3C
-    lda $400000,x
-    xba
-    and #$00FF
-    sta $42
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $40
-    lda $3C
-    clc
-    adc #$0004
-    sta $3C
-    jml.l ors_pre
 ; <<< ESCBANK6_BODIES <<<
+escbank6_early_bodies_end:
 
 ; Dynamic-RAM tail-call gateway.  $002D8A is `jmp $1B20(a5)`, and production
 ; copies the first $5C bytes of the C-Chip response to that exact RAM address.
@@ -3362,6 +3196,7 @@ Lf01b20_f01b74:
 ; before changing any emulated state.  A mismatch re-executes $002D8A through
 ; the interpreter with the real caller return still untouched on the stack.
 ; --- transpiled from $002D8A (gateway; guarded RAM body follows) ---
+.org $99F0
 entry_2d8at:
     rep #$30
     lda $34
@@ -3385,31 +3220,6 @@ e2d8a_fallback:
     stz $42
     jml.l inext
 
-; Bank-local unsigned 32/16 divider used by transpiled DIVU.W.  `jsr` cannot
-; cross program banks, so this mirrors the proven escbank2/escbank4 helper.
-; in: $50/$52 dividend, $54 divisor; out: $50 quotient, $94 remainder.
-esc_udiv:
-    rep #$30
-    stz $94
-    ldy #$0020
-es6ud_l:
-    asl $50
-    rol $52
-    rol $94
-    bcs es6ud_sub
-    lda $94
-    cmp $54
-    bcc es6ud_no
-es6ud_sub:
-    lda $94
-    sec
-    sbc $54
-    sta $94
-    inc $50
-es6ud_no:
-    dey
-    bne es6ud_l
-    rts
 escbank6_end:
 
 ; ============================================================================
@@ -4073,12 +3883,94 @@ h8fa_payload_dma:
 
 hle_8fa_end:
 
+; $00D3F6 MOVE.B-to-memory flags consumed by BLE.  readbyte_l returns a
+; zero-extended byte; refresh native N/Z in byte mode, capture those flags into
+; the emulated 68000 N/Z variables, clear MOVE's V/C, preserve X, restore
+; 16-bit accumulator mode without disturbing N/Z, and return through the JSL
+; originally made to bank $94's fixed trampoline.
+.org $9F70
+d3f6_move_byte_nz:
+    rep #$30
+.a16
+.i16
+    jsl.l readbyte_l
+    sep #$20
+.a8
+    ora #$00
+    php
+    php
+    pla
+    rep #$30
+.a16
+    pha
+    and #$0080
+    sta $70
+    pla
+    and #$0002
+    sta $60
+    stz $72
+    stz $6E
+    plp
+    rep #$20
+    rtl
+d3f6_move_byte_nz_end:
+
 ; Dedicated function-differential return seam.  A synthetic $00F9 sentinel
 ; routes ors_pre here without crossing the interpreter's inext body.
 .org $9FA0
 h8fa_validation_spin:
     bra h8fa_validation_spin
 h8fa_validation_spin_end:
+
+; $025898 TST.W $E(A2) branch dispatcher.  The generated bank-$97 lowering
+; previously used XBA's byte-wide N flag directly, so logical positive words
+; $0080-$00FF took the negative skip.  Rebuild exact word N/Z after the swap,
+; clear V/C like 68000 TST, preserve the separately stored emulated X, then
+; continue at the original pass or inner-next seam without changing the
+; tightly packed bank-$97 body.
+.org $9FB0
+h25110_tstw_e_dispatch:
+    rep #$30
+.a16
+.i16
+    xba
+    ora #$0000
+    clc
+    clv
+    bmi h25110_tstw_e_negative
+    jml.l Lf25110_281
+h25110_tstw_e_negative:
+    jml.l L25110_259b0
+h25110_tstw_e_dispatch_end:
+
+; Bank-local unsigned 32/16 divider used by transpiled DIVU.W.  `jsr` cannot
+; cross program banks, so this mirrors the proven escbank2/escbank4 helper.
+; It lives in the audited post-dispatch gap because the generated early bodies
+; now carry exact virtual-cycle and indirect-return accounting.
+; in: $50/$52 dividend, $54 divisor; out: $50 quotient, $94 remainder.
+esc_udiv:
+    rep #$30
+    stz $94
+    ldy #$0020
+es6ud_l:
+    asl $50
+    rol $52
+    rol $94
+    bcs es6ud_sub
+    lda $94
+    cmp $54
+    bcc es6ud_no
+es6ud_sub:
+    lda $94
+    sec
+    sbc $54
+    sta $94
+    inc $50
+es6ud_no:
+    dey
+    bne es6ud_l
+    rts
+esc_udiv_end:
 
 ; ============================================================================
 ; $00096A guarded exact palette-step HLE.
@@ -5915,6 +5807,166 @@ e111at_hot_emit:
     rts
 entry_111at_end:
 
+; $02A53A is generated into the remaining rejected-$C8E0 island.  Its former
+; late-bank slot is needed by the cycle-accounted copied C-Chip routine.
+; >>> ESCBANK6_MID_BODIES — generated by tools/gen_escbank6_bodies.py <<<
+; command: tools/transpile.py 02A53A --bank6 --exitccr --xflag --workram=a3,a4
+; --- transpiled from $02A53A (18 instrs) by tools/transpile.py [bank1] ---
+entry_2a53a:
+    rep #$30
+    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
+    lda $40
+    sta $54
+    lda $42
+    sta $56
+    jsl.l push32_l
+    lda #$0000
+    sta $1C
+    lda #$0000
+    sta $00
+    lda $30
+    clc
+    adc #$0030
+    tax
+    lda $400000,x
+    xba
+    sta $2E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $2C
+    lda #$FFFF
+    pha
+    ldx $2C
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    lda $400000,x
+    xba
+    sta $04
+    lda $04
+    inc a
+    dec a
+    bne Lf2a53a_1
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    stz $72
+    stz $6E
+    jmp L2a53a_2a572
+Lf2a53a_1:
+    lda #$0000
+    pha
+    lda $2C
+    clc
+    adc #$000E
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $04
+    and #$8000
+    php
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$0002
+    sta $60
+    plp
+    bne Lf2a53a_2
+    jmp L2a53a_2a564
+Lf2a53a_2:
+    lda $04
+    and #$00FF
+    sta $04
+    lda $2C
+    clc
+    adc #$000D
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $00
+    rep #$20
+    lda #$0001
+    sta $1C
+    lda $1C
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $1C
+    bne Lf2a53a_3
+    inc $60
+Lf2a53a_3:
+    jmp L2a53a_2a572
+L2a53a_2a564:
+    lda $2C
+    clc
+    adc #$000C
+    tax
+    lda $400000,x
+    and #$00FF
+    sep #$20
+    sta $00
+    rep #$20
+    lda $00
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    sta $00
+    lda $04
+    and #$00FF
+    sta $04
+    lda #$0002
+    sta $1C
+    lda $1C
+    and #$8000
+    sta $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $1C
+    bne Lf2a53a_4
+    inc $60
+Lf2a53a_4:
+L2a53a_2a572:
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+; <<< ESCBANK6_MID_BODIES <<<
+escbank6_mid_bodies_end:
+
 ; ============================================================================
 ; Rejected $C8E0 compact-HLE island.
 ;
@@ -6108,6 +6160,8 @@ h2a190_after_bsr_normal:
     adc #$0000
     sta $52
     jsl.l rdw_ea_l
+    inc a
+    dec a
     bne Lf2a190_1
     jmp Ltj2a190_2a18e
 Lf2a190_1:
@@ -6177,6 +6231,8 @@ br2a1d8_1:
     sta $400000,x
     xba
     lda $1C
+    inc a
+    dec a
     bne Lf2a1d8_1
     jmp L2a1d8_2a2a6
 Lf2a1d8_1:
@@ -6331,6 +6387,8 @@ L2a1d8_2a22e:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bne Lf2a1d8_9
     jmp L2a1d8_2a23c
 Lf2a1d8_9:
@@ -6422,6 +6480,8 @@ br2a1d8_3:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bne Lf2a1d8_12
     jmp L2a1d8_2a26c
 Lf2a1d8_12:
@@ -6604,6 +6664,12 @@ br2a1d8_7:
     sep #$20
     sta $400000,x
     rep #$20
+    lda #$0000
+    sta $70
+    stz $72
+    stz $6E
+    lda #$0000
+    sta $60
     jmp L2a1d8_2a2c2
 L2a1d8_2a2a6:
     ; CALL-BRIDGE jsr $29128(pc) -> entry_29128 (NATIVE escape), resume br2a1d8_8
@@ -6629,6 +6695,8 @@ br2a1d8_8:
     sta $400000,x
     xba
     lda $1C
+    inc a
+    dec a
     beq Lf2a1d8_13
     jmp L2a1d8_2a2b8
 Lf2a1d8_13:
@@ -6711,150 +6779,13 @@ L2a1d8_2a2b8:
     sep #$20
     sta $400000,x
     rep #$20
-L2a1d8_2a2c2:
-    ldx $3C
-    lda $400000,x
-    xba
-    and #$00FF
-    sta $42
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $40
-    lda $3C
-    clc
-    adc #$0004
-    sta $3C
-    jml.l ors_pre
-
-; command: tools/transpile.py 02A53A --bank6 --exitccr --xflag --workram=a3,a4
-; --- transpiled from $02A53A (18 instrs) by tools/transpile.py [bank1] ---
-entry_2a53a:
-    rep #$30
-    ; re-simulate the jsr return-push the hook skipped (frame must match the real 68K)
-    lda $40
-    sta $54
-    lda $42
-    sta $56
-    jsl.l push32_l
     lda #$0000
-    sta $1C
-    lda #$0000
-    sta $00
-    lda $30
-    clc
-    adc #$0030
-    tax
-    lda $400000,x
-    xba
-    sta $2E
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $2C
-    lda #$FFFF
-    pha
-    ldx $2C
-    pla
-    xba
-    sta $400000,x
-    xba
-    lda $2C
-    clc
-    adc #$000E
-    tax
-    lda $400000,x
-    xba
-    sta $04
-    lda $04
-    bne Lf2a53a_1
-    php
-    sep #$20
-    pla
-    rep #$30
-    and #$00FF
-    sta $50
-    and #$0002
-    sta $60
-    lda $50
-    and #$0080
     sta $70
     stz $72
     stz $6E
-    jmp L2a53a_2a572
-Lf2a53a_1:
-    lda #$0000
-    pha
-    lda $2C
-    clc
-    adc #$000E
-    tax
-    pla
-    xba
-    sta $400000,x
-    xba
-    lda $04
-    and #$8000
-    php
-    php
-    sep #$20
-    pla
-    rep #$30
-    and #$0002
-    sta $60
-    plp
-    bne Lf2a53a_2
-    jmp L2a53a_2a564
-Lf2a53a_2:
-    lda $04
-    and #$00FF
-    sta $04
-    lda $2C
-    clc
-    adc #$000D
-    tax
-    lda $400000,x
-    and #$00FF
-    sep #$20
-    sta $00
-    rep #$20
     lda #$0001
-    sta $1C
-    jmp L2a53a_2a572
-L2a53a_2a564:
-    lda $2C
-    clc
-    adc #$000C
-    tax
-    lda $400000,x
-    and #$00FF
-    sep #$20
-    sta $00
-    rep #$20
-    lda $00
-    and #$00FF
-    eor #$0080
-    sec
-    sbc #$0080
-    sta $00
-    lda $04
-    and #$00FF
-    sta $04
-    lda #$0002
-    sta $1C
-    lda $1C
-    and #$8000
-    sta $70
-    stz $72
-    stz $6E
-    stz $60
-    lda $1C
-    bne Lf2a53a_3
-    inc $60
-Lf2a53a_3:
-L2a53a_2a572:
+    sta $60
+L2a1d8_2a2c2:
     ldx $3C
     lda $400000,x
     xba
@@ -6964,19 +6895,31 @@ Lf29128_2:
     and #$0001
     eor #$0001
     sta $6E
-    sta $A2
     jmp L29128_29142
 Lf29128_3:
     lda $1C
     clc
     adc #$0001
-    php
     pha
-    lda #$0000
-    rol a
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    sta $6E
     sta $A2
     pla
-    plp
     sta $1C
 L29128_29142:
     ldx $3C
@@ -7187,6 +7130,8 @@ br29144_1:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bne Lf29144_1
     jmp L29144_2917c
 Lf29144_1:
@@ -7556,6 +7501,8 @@ L175a0_175b6:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     beq Lf175a0_1
     jmp L175a0_17604
 Lf175a0_1:
@@ -7633,6 +7580,8 @@ Lf175a0_5:
     pla
     sta $04
     lda $04
+    inc a
+    dec a
     beq Lf175a0_6
     jmp L175a0_175d4
 Lf175a0_6:
@@ -8136,7 +8085,6 @@ Ltj175a0_1757a:
     and #$0001
     eor #$0001
     sta $6E
-    sta $A2
     lda #$757A
     sta $40
     lda #$0001
@@ -8154,19 +8102,25 @@ L176f6_176f6:
     lda #$0006
     jsr esc6_ac_charge
     plp
-    ldx $3C
-    lda $400000,x
-    xba
-    sta $26
-    inx
-    inx
-    lda $400000,x
-    xba
-    sta $24
-    lda $3C
+    lda $24
     clc
-    adc #$0004
-    sta $3C
+    adc #$0068
+    tax
+    lda $26
+    xba
+    sta $400000,x
+    xba
+    inx
+    inx
+    lda $24
+    xba
+    sta $400000,x
+    xba
+    php
+    rep #$30
+    lda #$0005
+    jsr esc6_ac_charge
+    plp
     lda $7C
     ora #$0007
     sta $7C
@@ -8232,6 +8186,11 @@ br176f6_1:
     lda $400000,x
     xba
     sta $24
+    php
+    rep #$30
+    lda #$0006
+    jsr esc6_ac_charge
+    plp
     lda $24
     clc
     adc #$003E
@@ -8393,6 +8352,8 @@ L176f6_1774c:
     lda $00
     sta $18
     lda $18
+    inc a
+    dec a
     bpl Lf176f6_10
     jmp L176f6_17756
 Lf176f6_10:
@@ -8513,9 +8474,16 @@ Lf176f6_12:
     sta $8E
     lda $30
     clc
-    adc $8C
+    adc #$0000
     sta $54
     lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
+    adc $8C
+    sta $54
+    lda $52
     adc $8E
     sta $52
     jsl.l readbyte_l
@@ -8660,10 +8628,17 @@ Lf176f6_20:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -8696,10 +8671,17 @@ Lf176f6_22:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -8839,6 +8821,8 @@ L176f6_177b6:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     beq Lf176f6_32
     bmi Lf176f6_32
     jmp L176f6_177cc
@@ -8918,6 +8902,8 @@ L176f6_177cc:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bmi Lf176f6_33
     jmp L176f6_177d4
 Lf176f6_33:
@@ -9060,7 +9046,39 @@ Lf176f6_39:
     lda #$0004
     jsr esc6_ac_charge
     plp
-    ; BAIL to interp @ $0177FA: bset.b d6, d4   (bset dynamic bit operand Dn dst Dn)
+    lda $18
+    and #$001F
+    sta $8C
+    and #$000F
+    tax
+    lda #$0001
+Lf176f6_40:
+    cpx #$0000
+    beq Lf176f6_41
+    asl a
+    dex
+    bra Lf176f6_40
+Lf176f6_41:
+    sta $8E
+    lda $8C
+    and #$0010
+    bne Lf176f6_42
+    lda $10
+    sta $8C
+    ora $8E
+    sta $10
+    lda $8C
+    and $8E
+    bra Lf176f6_43
+Lf176f6_42:
+    lda $12
+    sta $8C
+    ora $8E
+    sta $12
+    lda $8C
+    and $8E
+Lf176f6_43:
+    ; BAIL to interp @ $0177FA: bset.b d6, d4   (dynamic register bset without fused beq/bne)
     lda #$77FA
     sta $40
     lda #$0001
@@ -9079,9 +9097,11 @@ Lf176f6_39:
     sta $400000,x
     rep #$20
     lda $04
-    bpl Lf176f6_40
+    inc a
+    dec a
+    bpl Lf176f6_44
     jmp L176f6_17808
-Lf176f6_40:
+Lf176f6_44:
     php
     sep #$20
     pla
@@ -9178,9 +9198,11 @@ L176f6_17814:
     adc #$0000
     sta $52
     jsl.l rdw_ea_l
-    bne Lf176f6_41
-    jmp L176f6_176f6
-Lf176f6_41:
+    inc a
+    dec a
+    bne Lf176f6_45
+    jmp h176f6_tstw_zero_root
+Lf176f6_45:
     php
     sep #$20
     pla
@@ -9237,7 +9259,7 @@ Lf176f6_41:
     xba
     sta $400000,x
     xba
-    jmp L176f6_176f6
+    jmp h176f6_move_one_root
 L176f6_17838:
     php
     rep #$30
@@ -9264,9 +9286,11 @@ L176f6_17838:
     adc #$0000
     sta $52
     jsl.l rdw_ea_l
-    bne Lf176f6_42
-    jmp L176f6_176f6
-Lf176f6_42:
+    inc a
+    dec a
+    bne Lf176f6_46
+    jmp h176f6_tstw_zero_root
+Lf176f6_46:
     php
     sep #$20
     pla
@@ -9323,7 +9347,7 @@ Lf176f6_42:
     xba
     sta $400000,x
     xba
-    jmp L176f6_176f6
+    jmp h176f6_move_one_root
 L176f6_1785c:
     php
     rep #$30
@@ -9390,13 +9414,13 @@ L176f6_17870:
     and #$0007
     tax
     lda #$0001
-Lf176f6_43:
+Lf176f6_47:
     cpx #$0000
-    beq Lf176f6_44
+    beq Lf176f6_48
     asl a
     dex
-    bra Lf176f6_43
-Lf176f6_44:
+    bra Lf176f6_47
+Lf176f6_48:
     eor #$FFFF
     sta $8E
     lda $34
@@ -9421,13 +9445,13 @@ Lf176f6_44:
     and #$0007
     tax
     lda #$0001
-Lf176f6_45:
+Lf176f6_49:
     cpx #$0000
-    beq Lf176f6_46
+    beq Lf176f6_50
     asl a
     dex
-    bra Lf176f6_45
-Lf176f6_46:
+    bra Lf176f6_49
+Lf176f6_50:
     eor #$FFFF
     sta $8E
     lda $34
@@ -9472,6 +9496,12 @@ L176f6_17886:
     xba
     sta $400000,x
     xba
+    lda #$0000
+    sta $70
+    stz $72
+    stz $6E
+    lda #$0001
+    sta $60
     ldx $3C
     lda $400000,x
     xba
@@ -9947,6 +9977,8 @@ L1c11a_1c18a:
     lda $00
     sta $18
     lda $18
+    inc a
+    dec a
     bpl Lf1c11a_18
     jmp L1c11a_1c194
 Lf1c11a_18:
@@ -10034,9 +10066,16 @@ Lf1c11a_20:
     sta $8E
     lda $30
     clc
-    adc $8C
+    adc #$0000
     sta $54
     lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
+    adc $8C
+    sta $54
+    lda $52
     adc $8E
     sta $52
     jsl.l readbyte_l
@@ -10161,10 +10200,17 @@ Lf1c11a_28:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -10197,10 +10243,17 @@ Lf1c11a_30:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -10312,6 +10365,8 @@ L1c11a_1c1e2:
     lda $00
     sta $18
     lda $18
+    inc a
+    dec a
     bpl Lf1c11a_31
     jmp L1c11a_1c1ec
 Lf1c11a_31:
@@ -10399,9 +10454,16 @@ Lf1c11a_33:
     sta $8E
     lda $30
     clc
-    adc $8C
+    adc #$0000
     sta $54
     lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
+    adc $8C
+    sta $54
+    lda $52
     adc $8E
     sta $52
     jsl.l readbyte_l
@@ -10526,10 +10588,17 @@ Lf1c11a_41:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -10562,10 +10631,17 @@ Lf1c11a_43:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -10736,9 +10812,16 @@ Lf1c11a_45:
     sta $8E
     lda $30
     clc
-    adc $8C
+    adc #$0000
     sta $54
     lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
+    adc $8C
+    sta $54
+    lda $52
     adc $8E
     sta $52
     jsl.l readbyte_l
@@ -10758,6 +10841,8 @@ Lf1c11a_45:
     lda $00
     sta $1C
     lda $1C
+    inc a
+    dec a
     bmi Lf1c11a_46
     jmp L1c11a_1c25a
 Lf1c11a_46:
@@ -10805,6 +10890,8 @@ Lf1c11a_54:
     lda $04
     sta $1C
     lda $1C
+    inc a
+    dec a
     bmi Lf1c11a_55
     jmp L1c11a_1c26c
 Lf1c11a_55:
@@ -10838,16 +10925,16 @@ Lf1c11a_59:
     jmp L1c11a_1c278
 Lf1c11a_60:
     lda $18
+    sep #$20
     clc
-    adc #$0080
+    adc #$80
+    sta $18
+    rep #$20
     php
-    pha
     lda #$0000
     rol a
     sta $A2
-    pla
     plp
-    sta $18
     jmp L1c11a_1c28a
 L1c11a_1c278:
     lda $24
@@ -10885,16 +10972,16 @@ Lf1c11a_61:
     jmp L1c11a_1c28a
 L1c11a_1c286:
     lda $18
+    sep #$20
     clc
-    adc #$0040
+    adc #$40
+    sta $18
+    rep #$20
     php
-    pha
     lda #$0000
     rol a
     sta $A2
-    pla
     plp
-    sta $18
 L1c11a_1c28a:
     lda $18
     sep #$20
@@ -11004,10 +11091,17 @@ Lf1c11a_69:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -11040,10 +11134,17 @@ Lf1c11a_71:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -11227,6 +11328,8 @@ L1c11a_1c2d8:
     adc #$0000
     sta $52
     jsl.l rdw_ea_l
+    inc a
+    dec a
     beq Lf1c11a_86
     bmi Lf1c11a_86
     jmp L1c11a_1c2ee
@@ -11322,6 +11425,8 @@ br1c11a_1:
     sta $400000,x
     xba
     lda $1C
+    inc a
+    dec a
     bne Lf1c11a_87
     jmp Ltj1c11a_1c118
 Lf1c11a_87:
@@ -11595,10 +11700,17 @@ Lf1c11a_96:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -11631,10 +11743,17 @@ Lf1c11a_98:
     sta $8E
     lda $30
     clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
+    clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -11825,6 +11944,8 @@ L1c11a_1c376:
     adc #$0000
     sta $52
     jsl.l rdw_ea_l
+    inc a
+    dec a
     bmi Lf1c11a_99
     jmp L1c11a_1c37e
 Lf1c11a_99:
@@ -11873,6 +11994,8 @@ br1c11a_2:
     sta $400000,x
     xba
     lda $1C
+    inc a
+    dec a
     bne Lf1c11a_102
     jmp L1c11a_1c3a2
 Lf1c11a_102:
@@ -12166,7 +12289,39 @@ Lf1c11a_107:
 Lf1c11a_108:
     jmp L1c11a_1c3fc
 Lf1c11a_109:
-    ; BAIL to interp @ $01C3E8: bset.b d6, d4   (bset dynamic bit operand Dn dst Dn)
+    lda $18
+    and #$001F
+    sta $8C
+    and #$000F
+    tax
+    lda #$0001
+Lf1c11a_110:
+    cpx #$0000
+    beq Lf1c11a_111
+    asl a
+    dex
+    bra Lf1c11a_110
+Lf1c11a_111:
+    sta $8E
+    lda $8C
+    and #$0010
+    bne Lf1c11a_112
+    lda $10
+    sta $8C
+    ora $8E
+    sta $10
+    lda $8C
+    and $8E
+    bra Lf1c11a_113
+Lf1c11a_112:
+    lda $12
+    sta $8C
+    ora $8E
+    sta $12
+    lda $8C
+    and $8E
+Lf1c11a_113:
+    ; BAIL to interp @ $01C3E8: bset.b d6, d4   (dynamic register bset without fused beq/bne)
     lda #$C3E8
     sta $40
     lda #$0001
@@ -12180,9 +12335,11 @@ Lf1c11a_109:
     sta $400000,x
     rep #$20
     lda $04
-    bpl Lf1c11a_110
+    inc a
+    dec a
+    bpl Lf1c11a_114
     jmp L1c11a_1c3f6
-Lf1c11a_110:
+Lf1c11a_114:
     php
     sep #$20
     pla
@@ -12279,9 +12436,11 @@ br1c11a_3:
     sta $400000,x
     xba
     lda $1C
-    bne Lf1c11a_111
+    inc a
+    dec a
+    bne Lf1c11a_115
     jmp L1c11a_1c432
-Lf1c11a_111:
+Lf1c11a_115:
     php
     sep #$20
     pla
@@ -12376,9 +12535,11 @@ Lf1c11a_111:
     jml.l inext
 L1c11a_1c432:
     lda $00
-    bmi Lf1c11a_112
+    inc a
+    dec a
+    bmi Lf1c11a_116
     jmp L1c11a_1c438
-Lf1c11a_112:
+Lf1c11a_116:
     php
     sep #$20
     pla
@@ -12398,12 +12559,12 @@ Lf1c11a_112:
     php
     pha
     and #$FFFF
-    beq Lf1c11a_113
+    beq Lf1c11a_117
     lda #$0001
-    bra Lf1c11a_114
-Lf1c11a_113:
+    bra Lf1c11a_118
+Lf1c11a_117:
     lda #$0000
-Lf1c11a_114:
+Lf1c11a_118:
     sta $A2
     pla
     plp
@@ -12412,19 +12573,21 @@ L1c11a_1c438:
     lda $00
     sec
     sbc #$0040
-    bvs Lf1c11a_115
-    bpl Lf1c11a_116
-    bra Lf1c11a_117
-Lf1c11a_115:
-    bmi Lf1c11a_116
-    bra Lf1c11a_117
-Lf1c11a_116:
+    bvs Lf1c11a_119
+    bpl Lf1c11a_120
+    bra Lf1c11a_121
+Lf1c11a_119:
+    bmi Lf1c11a_120
+    bra Lf1c11a_121
+Lf1c11a_120:
     jmp L1c11a_1c448
-Lf1c11a_117:
+Lf1c11a_121:
     lda $04
-    bpl Lf1c11a_118
+    inc a
+    dec a
+    bpl Lf1c11a_122
     jmp L1c11a_1c448
-Lf1c11a_118:
+Lf1c11a_122:
     php
     sep #$20
     pla
@@ -12441,15 +12604,15 @@ Lf1c11a_118:
     lda $04
     sec
     sbc #$0038
-    bvs Lf1c11a_119
-    bmi Lf1c11a_120
-    bra Lf1c11a_121
-Lf1c11a_119:
-    bpl Lf1c11a_120
-    bra Lf1c11a_121
-Lf1c11a_120:
+    bvs Lf1c11a_123
+    bmi Lf1c11a_124
+    bra Lf1c11a_125
+Lf1c11a_123:
+    bpl Lf1c11a_124
+    bra Lf1c11a_125
+Lf1c11a_124:
     jmp L1c11a_1c454
-Lf1c11a_121:
+Lf1c11a_125:
 L1c11a_1c448:
     lda #$0000
     pha
@@ -12520,9 +12683,11 @@ br1c11a_4:
     sta $400000,x
     xba
     lda $1C
-    bne Lf1c11a_122
+    inc a
+    dec a
+    bne Lf1c11a_126
     jmp L1c11a_1c47c
-Lf1c11a_122:
+Lf1c11a_126:
     php
     sep #$20
     pla
@@ -12617,9 +12782,11 @@ Lf1c11a_122:
     jml.l inext
 L1c11a_1c47c:
     lda $00
-    bmi Lf1c11a_123
+    inc a
+    dec a
+    bmi Lf1c11a_127
     jmp L1c11a_1c482
-Lf1c11a_123:
+Lf1c11a_127:
     php
     sep #$20
     pla
@@ -12639,12 +12806,12 @@ Lf1c11a_123:
     php
     pha
     and #$FFFF
-    beq Lf1c11a_124
+    beq Lf1c11a_128
     lda #$0001
-    bra Lf1c11a_125
-Lf1c11a_124:
+    bra Lf1c11a_129
+Lf1c11a_128:
     lda #$0000
-Lf1c11a_125:
+Lf1c11a_129:
     sta $A2
     pla
     plp
@@ -12653,20 +12820,22 @@ L1c11a_1c482:
     lda $00
     sec
     sbc #$0040
-    bvs Lf1c11a_126
-    bpl Lf1c11a_127
-    bra Lf1c11a_128
-Lf1c11a_126:
-    bmi Lf1c11a_127
-    bra Lf1c11a_128
-Lf1c11a_127:
+    bvs Lf1c11a_130
+    bpl Lf1c11a_131
+    bra Lf1c11a_132
+Lf1c11a_130:
+    bmi Lf1c11a_131
+    bra Lf1c11a_132
+Lf1c11a_131:
     jmp L1c11a_1c492
-Lf1c11a_128:
+Lf1c11a_132:
     lda $04
-    beq Lf1c11a_129
-    bmi Lf1c11a_129
+    inc a
+    dec a
+    beq Lf1c11a_133
+    bmi Lf1c11a_133
     jmp L1c11a_1c492
-Lf1c11a_129:
+Lf1c11a_133:
     php
     sep #$20
     pla
@@ -12683,16 +12852,16 @@ Lf1c11a_129:
     lda $04
     sec
     sbc #$FFC8
-    beq Lf1c11a_132
-    bvs Lf1c11a_130
-    bpl Lf1c11a_131
-    bra Lf1c11a_132
-Lf1c11a_130:
-    bmi Lf1c11a_131
-    bra Lf1c11a_132
-Lf1c11a_131:
+    beq Lf1c11a_136
+    bvs Lf1c11a_134
+    bpl Lf1c11a_135
+    bra Lf1c11a_136
+Lf1c11a_134:
+    bmi Lf1c11a_135
+    bra Lf1c11a_136
+Lf1c11a_135:
     jmp L1c11a_1c49e
-Lf1c11a_132:
+Lf1c11a_136:
 L1c11a_1c492:
     lda #$0000
     pha
@@ -12763,9 +12932,11 @@ L1c11a_1c4a2:
     adc #$0000
     sta $52
     jsl.l rdw_ea_l
-    bne Lf1c11a_133
+    inc a
+    dec a
+    bne Lf1c11a_137
     jmp Ltj1c11a_1c118
-Lf1c11a_133:
+Lf1c11a_137:
     php
     sep #$20
     pla
@@ -12870,13 +13041,13 @@ L1c11a_1c4d4:
     and #$0007
     tax
     lda #$0001
-Lf1c11a_134:
+Lf1c11a_138:
     cpx #$0000
-    beq Lf1c11a_135
+    beq Lf1c11a_139
     asl a
     dex
-    bra Lf1c11a_134
-Lf1c11a_135:
+    bra Lf1c11a_138
+Lf1c11a_139:
     eor #$FFFF
     sta $8E
     lda $34
@@ -12901,13 +13072,13 @@ Lf1c11a_135:
     and #$0007
     tax
     lda #$0001
-Lf1c11a_136:
+Lf1c11a_140:
     cpx #$0000
-    beq Lf1c11a_137
+    beq Lf1c11a_141
     asl a
     dex
-    bra Lf1c11a_136
-Lf1c11a_137:
+    bra Lf1c11a_140
+Lf1c11a_141:
     eor #$FFFF
     sta $8E
     lda $34
@@ -12953,9 +13124,13 @@ L1c11a_1c4ea:
     sta $18
     rep #$20
     lda $18
-    bne Lf1c11a_138
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
+    bne Lf1c11a_142
     jmp L1c11a_1c514
-Lf1c11a_138:
+Lf1c11a_142:
     lda #$0000
     sta $1C
     lda #$0000
@@ -12972,15 +13147,15 @@ Lf1c11a_138:
     lda $1C
     sec
     sbc #$0040
-    bvs Lf1c11a_139
-    bmi Lf1c11a_140
-    bra Lf1c11a_141
-Lf1c11a_139:
-    bpl Lf1c11a_140
-    bra Lf1c11a_141
-Lf1c11a_140:
+    bvs Lf1c11a_143
+    bmi Lf1c11a_144
+    bra Lf1c11a_145
+Lf1c11a_143:
+    bpl Lf1c11a_144
+    bra Lf1c11a_145
+Lf1c11a_144:
     jmp L1c11a_1c514
-Lf1c11a_141:
+Lf1c11a_145:
     lda $1C
     cmp #$8000
     ror a
@@ -13016,19 +13191,26 @@ Lf1c11a_141:
     lda $18
     sta $8C
     and #$8000
-    bne Lf1c11a_142
+    bne Lf1c11a_146
     lda #$0000
-    bra Lf1c11a_143
-Lf1c11a_142:
+    bra Lf1c11a_147
+Lf1c11a_146:
     lda #$FFFF
-Lf1c11a_143:
+Lf1c11a_147:
     sta $8E
     lda $30
+    clc
+    adc #$0000
+    sta $54
+    lda $32
+    adc #$0000
+    sta $52
+    lda $54
     clc
     adc $8C
     sta $54
     sta $8C
-    lda $32
+    lda $52
     adc $8E
     sta $52
     sta $8E
@@ -13138,6 +13320,434 @@ esc6_ac_clamp:
     sta $AC
     pla
     rts
+
+; The copied C-Chip byte-queue routine is hot on player death.  It is generated
+; here so its per-basic-block virtual-cycle charges cannot displace the pinned
+; $95:99F0 gateway or the $95:F000 collision-pass island.
+; >>> ESCBANK6_POST_LATE_BODIES — generated by tools/gen_escbank6_bodies.py <<<
+; command: tools/transpile.py F01B20 --bank6 --table --exitccr --xflag --workram=a0 --code-base=F01B20 --code-file=data/cchip_boot_response.bin --accharge
+; --- transpiled from $F01B20 (28 instrs) by tools/transpile.py [bank1] ---
+entry_f01b20t:
+    rep #$30
+    ; AOT-table/rts dispatch: caller return ALREADY on the 68K stack -> NO re-simulate push
+    php
+    rep #$30
+    lda #$0005
+    jsr esc6_ac_charge
+    plp
+    lda $38
+    sta $54
+    lda $3A
+    sta $56
+    jsl.l push32_l
+    lda $3C
+    sta $38
+    lda $3E
+    sta $3A
+    lda $1C
+    sta $54
+    lda $1E
+    sta $56
+    jsl.l push32_l
+    lda $38
+    clc
+    adc #$0008
+    tax
+    lda $400000,x
+    xba
+    sta $1C
+    lda $1C
+    sep #$20
+    sec
+    sbc #$FF
+    rep #$20
+    bne Lff01b20_1
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    jmp Lf01b20_f01b74
+Lff01b20_1:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
+    lda $34
+    clc
+    adc #$1CCA
+    tax
+    lda $400000,x
+    xba
+    sec
+    sbc #$0003
+    beq Lff01b20_2
+    jmp Lf01b20_f01b48
+Lff01b20_2:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
+    lda $34
+    clc
+    adc #$1C4B
+    tax
+    lda $400000,x
+    and #$00FF
+    and #$0008
+    php
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$0002
+    sta $60
+    plp
+    beq Lff01b20_3
+    jmp Lf01b20_f01b48
+Lff01b20_3:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
+    lda $1C
+    sep #$20
+    sec
+    sbc #$19
+    rep #$20
+    beq Lff01b20_4
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    jmp Lf01b20_f01b74
+Lff01b20_4:
+Lf01b20_f01b48:
+    php
+    rep #$30
+    lda #$0006
+    jsr esc6_ac_charge
+    plp
+    lda $20
+    sta $54
+    lda $22
+    sta $56
+    jsl.l push32_l
+    lda $34
+    clc
+    adc #$1C40
+    tax
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $1C
+    pha
+    ldx $20
+    pla
+    sep #$20
+    sta $400000,x
+    rep #$20
+    lda $20
+    clc
+    adc #$0001
+    sta $20
+    lda $22
+    adc #$0000
+    sta $22
+    lda #$1C40
+    sta $9A
+    lda #$00F0
+    sta $9C
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda $20
+    sec
+    sbc $1C
+    sta $8A
+    lda $22
+    sbc $1E
+    bne Lff01b20_5
+    lda $8A
+    beq Lff01b20_6
+Lff01b20_5:
+    jmp Lf01b20_f01b62
+Lff01b20_6:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
+    lda $34
+    clc
+    adc #$1C20
+    sta $20
+    lda $36
+    adc #$0000
+    sta $22
+    jmp Lf01b20_f01b6c
+Lf01b20_f01b62:
+    php
+    rep #$30
+    lda #$0003
+    jsr esc6_ac_charge
+    plp
+    lda $34
+    clc
+    adc #$1C44
+    tax
+    lda $400000,x
+    xba
+    sta $9C
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $9A
+    lda $9A
+    sta $1C
+    lda $9C
+    sta $1E
+    lda $20
+    sec
+    sbc $1C
+    sta $8A
+    lda $22
+    sbc $1E
+    bne Lff01b20_7
+    lda $8A
+    beq Lff01b20_8
+Lff01b20_7:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    jmp Lf01b20_f01b6c
+Lff01b20_8:
+    php
+    sep #$20
+    pla
+    rep #$30
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60
+    lda $50
+    and #$0080
+    sta $70
+    lda $50
+    and #$0040
+    sta $72
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E
+    php
+    rep #$30
+    lda #$0001
+    jsr esc6_ac_charge
+    plp
+    lda $20
+    sec
+    sbc #$0001
+    sta $20
+    lda $22
+    sbc #$0000
+    sta $22
+Lf01b20_f01b6c:
+    php
+    rep #$30
+    lda #$0002
+    jsr esc6_ac_charge
+    plp
+    lda $20
+    sta $9A
+    lda $22
+    sta $9C
+    lda $9C
+    pha
+    lda $34
+    clc
+    adc #$1C40
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    lda $9A
+    pha
+    lda $34
+    clc
+    adc #$1C42
+    tax
+    pla
+    xba
+    sta $400000,x
+    xba
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $22
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $20
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+Lf01b20_f01b74:
+    php
+    rep #$30
+    lda #$0003
+    jsr esc6_ac_charge
+    plp
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $1E
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $1C
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    lda $38
+    sta $3C
+    lda $3A
+    sta $3E
+    ldx $3C
+    lda $400000,x
+    xba
+    sta $3A
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $38
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    ldx $3C
+    lda $400000,x
+    xba
+    and #$00FF
+    sta $42
+    inx
+    inx
+    lda $400000,x
+    xba
+    sta $40
+    lda $3C
+    clc
+    adc #$0004
+    sta $3C
+    jml.l ors_pre
+; <<< ESCBANK6_POST_LATE_BODIES <<<
+escbank6_post_late_bodies_end:
+
+; $0176F6 state-4/state-5 callback backedge CCR publication.
+;
+; The native body loops directly through another dynamic callback.  Publish
+; the final 68000 flag producer before that callback can yield or an IRQ can
+; save SR.  TST.W zero stores the interpreter's native-P Z mask ($0002);
+; MOVE.W #1 clears N/Z/V/C.  Both instructions preserve X, so $A2 is
+; deliberately untouched.  The work was already charged in the generated
+; block; these helpers only publish its architectural effect.
+    .org $EFC0
+h176f6_tstw_zero_root:
+    rep #$30
+    .a16
+    .i16
+    lda #$0002
+    sta $60
+    bra h176f6_backedge_common
+
+h176f6_move_one_root:
+    rep #$30
+    .a16
+    .i16
+    stz $60
+
+h176f6_backedge_common:
+    stz $70
+    stz $72
+    stz $6E
+    jmp L176f6_176f6
+h176f6_backedge_ccr_end:
 
 ; ============================================================================
 ; $025110 stage-1 compact-active collision pass.
@@ -13425,9 +14035,11 @@ h25_x_clear:
     lda $40000E,x
     xba
     bne h25_x_clear_a1
-    sep #$20
-    stz $40000C,x
-    rep #$20
+    jsr h25_clear_response_c
+    nop
+    nop
+    nop
+    nop
 h25_x_clear_a1:
     ldx $5A
     lda $40000E,x
@@ -13435,9 +14047,11 @@ h25_x_clear_a1:
     beq h25_x_clear_store_a1
     jmp h25_meta
 h25_x_clear_store_a1:
-    sep #$20
-    stz $40000C,x
-    rep #$20
+    jsr h25_clear_response_c
+    nop
+    nop
+    nop
+    nop
 
     ; Y-axis response (same topology, fields +6/+8 and byte +$0D).
 h25_y_begin:
@@ -13552,17 +14166,21 @@ h25_y_clear:
     lda $40000E,x
     xba
     bne h25_y_clear_a1
-    sep #$20
-    stz $40000D,x
-    rep #$20
+    jsr h25_clear_response_d
+    nop
+    nop
+    nop
+    nop
 h25_y_clear_a1:
     ldx $5A
     lda $40000E,x
     xba
     bne h25_meta
-    sep #$20
-    stz $40000D,x
-    rep #$20
+    jsr h25_clear_response_d
+    nop
+    nop
+    nop
+    nop
 
     ; Collision-type propagation at $252A8-$25312.
 h25_meta:
@@ -14723,6 +15341,29 @@ h25_pred_true:
     sec
     rts
 h25_predicates_end:
+
+; 65816 STZ has no long-addressing form.  Keep the four compact collision
+; clear sites size-neutral with JSRs into these helpers; spelling the target
+; as `stz $40000C,x`/`stz $40000D,x` silently truncates the bank and clears
+; IRAM instead of the emulated 68000 collision record in BW-RAM.
+h25_clear_response_c:
+    sep #$20
+    .a8
+    lda #$00
+    sta $40000C,x
+    rep #$20
+    .a16
+    rts
+
+h25_clear_response_d:
+    sep #$20
+    .a8
+    lda #$00
+    sta $40000D,x
+    rep #$20
+    .a16
+    rts
+h25_clear_response_helpers_end:
 
 ; Correct landing/combat continuations after hle_12b6c.  The old HLE forced
 ; every caller to $01177C; once it returned to the real BSR sites these two

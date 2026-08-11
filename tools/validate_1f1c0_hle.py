@@ -28,6 +28,9 @@ DEFAULT_NEXEN = Path(
 )
 DEFAULT_ROM = ROOT / "build" / "interp.sfc"
 DEFAULT_NAT = Path("/tmp/b0_native.mss")
+MAME_EXE = Path(
+    os.environ.get("SUPERMN_MAME_EXE", "/snap/mame/4339/mame")
+)
 
 sys.path.insert(0, str(MAME_MCP))
 sys.path.insert(0, str(MESEN_PY))
@@ -144,6 +147,12 @@ def make_cases() -> list[Case]:
                    [], 0x2410, source_addr=0x01C602),
         build_case("rom-negative-1c60c", 0x1F1C006, 0xFFFF,
                    [], 0x2400, source_addr=0x01C60C),
+        # Organic Stage-1 object-list source observed immediately before the
+        # first deterministic movement mismatch.  This address exercises the
+        # same ROM-bank mapping as the live $F03A74 producer, rather than the
+        # earlier generic animation-table fixtures.
+        build_case("rom-organic-1daca", 0x1F1C008, 0x0000,
+                   [], 0x2410, source_addr=0x01DACA),
         # Valid ROM read spanning a 64 KiB bank: deliberately outside the
         # direct helper's non-wrapping proof, so it exercises the generated
         # fallback without using an invalid address-space shape.
@@ -296,7 +305,7 @@ def main() -> int:
     # next synthetic entry/exit pair.
     for case in cases:
         mame = MameSession(
-            mame="/snap/bin/mame",
+            mame=str(MAME_EXE),
             system="superman",
             rompath=str(MAME_TRACE / "roms"),
             workdir=str(MAME_TRACE),

@@ -33,6 +33,8 @@ XBANK = [
     ("entry_2742t", "src/escbank5.sym", 0x99),
     ("L25110_25122", "src/escbank3.sym", 0x97),
     ("h25110_stage1_done", "src/escbank3.sym", 0x97),
+    ("Lf25110_281", "src/escbank3.sym", 0x97),
+    ("L25110_259b0", "src/escbank3.sym", 0x97),
     ("Lcaf6_cb9c", "src/escbank3.sym", 0x97),
     ("entry_12a92", "src/escbank3.sym", 0x97),
     ("entry_caf6", "src/escbank3.sym", 0x97),

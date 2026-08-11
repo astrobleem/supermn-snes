@@ -44,6 +44,10 @@ VIDTEST=$E98008
 CPU5A22_VIDEO=$E9800B
 BOOT_ARM=$E98900         ; video-bank free space: production escape-gate enable (Option A);
                          ; jsl'd from the notest boot in place of the no-op VID_INIT (zero-shift)
+IRQ_RELOAD=$97E5C0      ; bank-$97 helper: boot $7000, paced gameplay $2328;
+                         ; five-byte JSL+NOP replaces the packed immediate/store below
+VTIME_PREPARE=$F28001   ; staged virtual-MC68000-cycle fetch gateway (VTIME=1 diagnostic only)
+VTIME_CONSUME=$F28400   ; staged top-of-iloop cycle consumer; same footprint as LDA/DEC/STA $AC
 
 .bank 0
 .org $8000
@@ -199,12 +203,14 @@ iloop:
     ; NOTE: countdown/pending live at $AC/$AA, NOT $8A/$88 -- op_bitop and two other
     ; handlers use $88/$8A/$8C as scratch, which would otherwise corrupt the frame pacing
     ; (a BTST setting $8A=mask -> spurious frame IRQ every bit-op). $AA/$AC are private.
-    lda $AC
-    dec a
-    sta $AC
+    ; Disabled mode reproduces LDA/DEC/STA $AC exactly. VTIME=1 consumes
+    ; the prior completed 68000 instruction in an isolated cycle-clock state
+    ; and returns zero only at the retained IRQ boundary below.
+    jsl VTIME_CONSUME
+    nop
     bne irq_chk
-    lda #$7000
-    sta $AC              ; reload frame countdown = 28672 interp-instr/frame (see reset note)
+    jsl IRQ_RELOAD
+    nop                  ; keep irq_chk and every packed bank-$00 address fixed
     lda #$0001
     sta $AA              ; raise vblank pending
     jsl VID_FRAME        ; game-frame boundary: rebuild CGRAM from shadow + DMA
@@ -238,9 +244,10 @@ ifetch_go:
     ; Diagnostic ring buffer: last 128 PCs (4 bytes each: low16,high16) at
     ; $0400; idx $48 wraps $200.
     ; ($0400 not $0800: on the SA-1, bank-$00 IRAM is 2KB and $0800 mirrors $0000=DP.)
-    ; build_interp_rom.py replaces this JSR with three NOPs in both production
-    ; ROM mirrors. PC_RING=1 retains it for flight-recorder/freeze/profile ROMs.
-    jsr dbg_fetch        ; diagnostic ring-log + optional debug-freeze
+    ; VTIME=1 routes this JSR through the isolated pre-instruction charge
+    ; gateway. PC_RING=1 diagnostic packing restores the original ring body.
+    jsr dbg_fetch
+ifetch_timer_continue:
     ; ---- LOOP FAST-PATH hook (boot accel) -----------------------------------
     ; Collapse known hot boot loops (delay/memset/memcpy/scan) to native. The opcode
     ; in $44 is ALREADY fetched, so when loop_hook rewrites $40 it returns C=1 and we
@@ -6895,7 +6902,10 @@ take_irq:
     xba
     sta $400000,x        ; bytes 15-8, 7-0 = PC low word
     inx                  ; preserve the old scratch-X residue (A7.low-1)
-    ; Keep jsr sr_build and every following bank-$00 address pinned.
+    ; Keep jsr sr_build and every following bank-$00 address pinned. VTIME
+    ; diagnostic packing replaces the first four NOPs with JSL $F2:85A0;
+    ; ordinary ROMs retain all nine bytes exactly.
+take_irq_vtime_entry_seam:
     nop
     nop
     nop
@@ -6905,6 +6915,7 @@ take_irq:
     nop
     nop
     nop
+take_irq_vtime_entry_seam_end:
     jsr sr_build         ; A = SR
     sta $50
     lda $3C
@@ -15886,9 +15897,11 @@ ba_neg:
 ; file mid-routine -- the $3A92 jsr-hook can't reach non-jsr PCs like the task loops.
 ; One-shot: clears $0710 on release. 16-bit A; preserves X (decode needs it).
 dbg_fetch:
-    phx
-    ldy $48
-    lda $40
+    ; Five-byte gateway. VTIME=1 prepares the current MC68000 instruction,
+    ; drops this JSR return, and jumps to ifetch_timer_continue. PC_RING=1
+    ; packing restores PHX / LDY $48 / LDA $40 exactly.
+    jml VTIME_PREPARE
+    nop
     sta $0400,y
     lda $42
     sta $0402,y
@@ -16398,8 +16411,10 @@ wrb40_l:    jsr wrb40
     rtl
 push32_l:   jsr push32
     rtl
-rdw_ea_l:   jsr rdw_ea
-    rtl
+; Four-byte size-neutral redirect to a guarded bank-$9F implementation.  The
+; dominant canonical $F0 work-RAM case reads its big-endian word directly;
+; every other address reproduces rdw_ea through readbyte_l.
+rdw_ea_l:   jml.l $9FEB00
 readbyte_l: jsr readbyte
     rtl
 writeword_l: jsr writeword
@@ -16851,8 +16866,12 @@ e3_n:
 ; Scratch: $80 d0 $82 d1 $84 d2 $86 d3 $88 d4 $8A d5 $8C d6 $8E d7 ; $90 a4off $92 a3off
 ;          $94 a2off $96 a1off $98 temp $9A a0.hi16 $9C a0.lo16
 entry_ce4:
-    rep #$30
-    inc $0724               ; hit counter (lockstep prints it)
+    ; The old leaf skipped the real JSR/LINK/MOVEM stack image.  Redirect
+    ; size-neutrally to bank $94, which materializes that exact residue and
+    ; the skipped JSR return before resuming this otherwise unchanged body.
+    jml.l $94CA00
+    nop
+entry_ce4_after_counter:
     ; arg8 -> the 3 stream write-offsets (a5.lo + arg8 + disp)
     ldx $3C
     jsr rdw40               ; arg8 = [a7+0]
@@ -18689,7 +18708,12 @@ loop_hook:
     ; tick 1354 with all 12 task stacks above their floors. That prototype evidence is
     ; a scheduler-safety prerequisite only; end-to-end speed remains unproven until the
     ; canonical cold-boot measurement runs on this integrated path.
-    jsl $99FB00          ; gate-off: exact clamp; gate-on: production two-vblank WAI
+    ; Size-neutral gateway: ordinary modes still call the established paced
+    ; helper, while explicit interpreter-only VTIME can decline before that
+    ; helper mutates pacing/legacy-clock state. The gateway returns here only
+    ; on the ordinary path; diagnostic fallback returns through lh_nofire.
+    jml $99FBB0
+lh_0818_after_gateway:
     bcc lh818_pass       ; no clamp and no paced boundary to count
     nop                  ; size-neutral: keep the real $0818 boundary hook at $00:F5A3
     nop
@@ -19191,11 +19215,11 @@ ct_bank0:
     jmp ct_ext           ; 42-byte block FULL -> the allowlist TAIL continues in the dead-25110
                          ; corpse (ct_ext: $0FD2 moved there + $3B48 prologue + future arms).
 ct_hit:
-    pla                  ; drop the jsr choke_tramp return (16-bit) -> dispatch at inext stack level
-    jml $94F900          ; xlat_dispatch (guaranteed HIT for an allowlisted PC; symbol in escbank2)
+    pla                  ; drop the jsr choke_tramp return -> dispatch at inext stack level
+    jml $94F900          ; xlat_dispatch (allowlisted entry; 13BE repairs its sentinel frame)
 ct_ret:
     rts
-    nop                  ; --- padding: keep choke_tramp == ilog's 42 bytes (no shift of lh_sched_pre) ---
+    nop
     nop
 
 ; lh_sched — native disabled-task-skip scan for the coroutine scheduler (STEP C). The $074C-$0772
@@ -19210,25 +19234,46 @@ lh_sched_pre:
     beq lh_sched
     jmp gm_memclr        ; not the scheduler -> the generic loop-idiom matcher
 lh_sched:
+    ; The scheduler scan has exact native semantics but no common-clock owner
+    ; or due-boundary unwind yet.  In the explicit interpreter-only VTIME mode,
+    ; decline before changing any architectural state so `$074C` and every
+    ; repeated scan block use the path-sensitive per-fetch clock.  Ordinary
+    ; VTIME and production mode retain the established native shortcut. Reuse
+    ; the scheduler-select gate: BOOT_ARM publishes its nonzero magic before
+    ; ordinary scheduler traffic, while interpreter-only VTIME clears it only
+    ; after the virtual clock owns state. A zero/corrupt-off gate is therefore
+    ; also a conservative semantic fallback.
+    lda $0736
+    bne lh_sched_vtime_go
+    clc
+    rts
+lh_sched_vtime_go:
     lda $34              ; a5 lo16
     inc a
     inc a                ; a5+2 = enable-mask address
     jsr lhs_rdbe
     tay                   ; keep the original enable mask live for lhs_sel
-    nop                   ; size-neutral replacement for the old `sta $9A`
-    lda $34
-    clc
-    adc #$0004           ; a5+4 = current-idx address = a4 (needed by the $075C exit)
+    ; lhs_rdbe leaves X=a5+2. Reuse it instead of reloading a5 and adding four;
+    ; this compaction pays for the diagnostic gate without moving `$FA00`.
+    txa
+    inc a
+    inc a                ; a5+4 = current-idx address = a4 (needed by the $075C exit)
     sta $30              ; a4 lo16
     jsr lhs_rdbe
     sta $9C              ; $9C = current task idx
     lda $36
     sta $32              ; a4 hi16 = a5 hi16 (a5 lo16 = 0 -> no carry from +4)
     lda $9C
+    ; $0752 ADDQ.W #1,D0 publishes X=C.  The admitted task-index domain
+    ; 0..15 always clears X, but retain the exact $FFFF carry case too so a
+    ; yielded task's X can never leak through the native scheduler scan.
+    stz $A2
     inc a                ; align count = current+1
+    bne lhs_addq_x_done
+    inc $A2
+lhs_addq_x_done:
     tax
     tya                   ; recover the original enable mask without another BW-RAM read
-    nop                   ; size-neutral replacement for the old `lda $9A`
 lhs_align:
     lsr a
     dex
@@ -19244,8 +19289,8 @@ lhs_scan:
     bra lhs_scan         ; disabled -> skip natively
 lhs_found:
     jml $92FD00          ; -> lhs_sel (escbank): native $075C-$0778 select (gate $0736==$5EEC), else
-    nop                  ;    replicate the $075C handoff. ZERO-SHIFT: 5B (jml+nop) == the old
-                         ;    `lda #$075C; bra lhs_exit`. lhs_done/lhs_exit below are UNCHANGED.
+                         ;    replicate the $075C handoff. The former padding byte is reclaimed
+                         ;    by the interpreter-only scan gate; the `$FA00` seam stays pinned.
 lhs_done:
     lda #$07EA
 lhs_exit:
@@ -19255,6 +19300,7 @@ lhs_exit:
     sta $00              ; d0 = found idx (or 16); $075C stores it to (a4)
     sec                  ; carry set -> caller (ifetch) re-fetches the new $40
     rts
+lh_sched_end:
 
 .org $FA00
 op_move_g:

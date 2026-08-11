@@ -134,10 +134,30 @@ def stable_ppu_state(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def packed_x_word(sy: int, x_color: int, code_word: int) -> int | None:
-    """Apply the production crop and its exact bottom credit-row translation."""
+def packed_x_word(
+    sy: int,
+    x_color: int,
+    code_word: int,
+    source_offset: int | None = None,
+) -> int | None:
+    """Apply the production crop and its exact HUD-only translations."""
     sx = x_color & 0x01FF
     code = code_word & 0x3FFF
+    if source_offset is not None:
+        if sy == 0x0A and (
+            source_offset == 0x0004
+            or 0x0048 <= source_offset < 0x0072
+        ):
+            return None
+        if sy == 0x1A and 0x006A <= source_offset < 0x0072:
+            return None
+    if sy in (0xE2, 0xF2) and code == 0x0020:
+        return None
+    if sy in (0xE2, 0xF2):
+        if sx < 0x0040:
+            return (x_color + 0x0030) & 0xFFFF
+        if 0x0120 <= sx < 0x0170:
+            return (x_color - 0x0018) & 0xFFFF
     credit_glyph = 0x007D <= code <= 0x0080 or code == 0x008B
     if sy == 0x0A and credit_glyph and 0x0120 <= sx < 0x0170:
         return (x_color - 0x0030) & 0xFFFF
@@ -277,8 +297,20 @@ def run_variant(
                 raw_y = m.read_memory("snesWorkRam", 0x3000, 0x0400)
                 raw_code = m.read_memory("snesWorkRam", 0x4000, 0x0400)
                 raw_x = m.read_memory("snesWorkRam", 0x4400, 0x0400)
+                title_overlay = bool(
+                    int.from_bytes(
+                        m.read_memory("snesMemory", 0x410150, 2), "little"
+                    )
+                )
                 for source_offset in range(0, 0x0400, 2):
-                    if not 0 < raw_y[source_offset + 1] < 0xF0:
+                    sy = raw_y[source_offset + 1]
+                    if not 0 < sy < 0xF3:
+                        continue
+                    if (
+                        title_overlay
+                        and 0x1A <= sy < 0x70
+                        and sy & 0x0F == 0x0A
+                    ):
                         continue
                     x_color = int.from_bytes(
                         raw_x[source_offset : source_offset + 2], "big"
@@ -287,7 +319,10 @@ def run_variant(
                         raw_code[source_offset : source_offset + 2], "big"
                     )
                     if packed_x_word(
-                        raw_y[source_offset + 1], x_color, raw_code_word
+                        raw_y[source_offset + 1],
+                        x_color,
+                        raw_code_word,
+                        source_offset=source_offset,
                     ) is None:
                         continue
                     code = raw_code_word & 0x3FFF
@@ -381,6 +416,11 @@ def run_variant(
                 if args.candidate_yx_manifest or args.candidate_packed_manifest
                 else None
             )
+            title_overlay = bool(
+                int.from_bytes(
+                    m.read_memory("snesMemory", 0x410150, 2), "little"
+                )
+            )
             offsets = list(packed8_offsets) if packed8_source is not None else []
             if packed8_source is None:
                 for offset in range(0, 0x0400, 2):
@@ -388,7 +428,15 @@ def run_variant(
                         code = int.from_bytes(raw_code[offset : offset + 2], "big")
                         if code == 0xFFFF or code & 0x3FFF == 0:
                             continue
-                    if not 0 < raw_y[offset + 1] < 0xF0:
+                    sy = raw_y[offset + 1]
+                    if not 0 < sy < 0xF3:
+                        continue
+                    if (
+                        args.candidate_packed_manifest
+                        and title_overlay
+                        and 0x1A <= sy < 0x70
+                        and sy & 0x0F == 0x0A
+                    ):
                         continue
                     if raw_x is not None:
                         x_color = int.from_bytes(raw_x[offset : offset + 2], "big")
@@ -399,7 +447,10 @@ def run_variant(
                                 raw_code[offset : offset + 2], "big"
                             )
                             x_visible = packed_x_word(
-                                raw_y[offset + 1], x_color, code_word
+                                raw_y[offset + 1],
+                                x_color,
+                                code_word,
+                                source_offset=offset,
                             ) is not None
                         if not x_visible:
                             continue
@@ -410,14 +461,28 @@ def run_variant(
                 if packed8_source is not None:
                     records = bytearray()
                     for cursor in range(0, len(packed8_source), 8):
+                        source_offset = int.from_bytes(
+                            packed8_source[cursor : cursor + 2], "little"
+                        )
                         sy = packed8_source[cursor + 3]
+                        if (
+                            title_overlay
+                            and 0x1A <= sy < 0x70
+                            and sy & 0x0F == 0x0A
+                        ):
+                            continue
                         x_color = int.from_bytes(
                             packed8_source[cursor + 6 : cursor + 8], "big"
                         )
                         code_word = int.from_bytes(
                             packed8_source[cursor + 4 : cursor + 6], "big"
                         )
-                        packed_x = packed_x_word(sy, x_color, code_word)
+                        packed_x = packed_x_word(
+                            sy,
+                            x_color,
+                            code_word,
+                            source_offset=source_offset,
+                        )
                         if packed_x is None:
                             continue
                         records.extend(packed8_source[cursor + 2 : cursor + 6])
@@ -434,7 +499,10 @@ def run_variant(
                             raw_code[offset : offset + 2], "big"
                         )
                         packed_x = packed_x_word(
-                            raw_y[offset + 1], x_color, code_word
+                            raw_y[offset + 1],
+                            x_color,
+                            code_word,
+                            source_offset=offset,
                         )
                         assert packed_x is not None
                         records.extend(raw_y[offset : offset + 2])

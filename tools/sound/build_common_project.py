@@ -26,8 +26,8 @@ INSTR = DRAFTS / "instruments"
 C4 = 261.6255653005986
 
 SFX_FILE = "superman_all.sfx.txt"
-# arcade $07 = punch, $62 = kick/jump (docs/SOUND_COMMAND_MAP.md); drum choice
-# is a first-pass guess — tune by ear.
+# Provisional punch and kick/thud SFX; command attribution and drum choice
+# remain first-pass guesses that require arcade A/B listening.
 SFX_TEXT = """\
 === punch ===
     set_instrument sm_drum_067800

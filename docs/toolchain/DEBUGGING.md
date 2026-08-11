@@ -26,7 +26,7 @@ All addresses are SA-1 IRAM (Mesen memtype `Sa1Memory`), little-endian unless no
 | `$60/$6E/$70/$72/$A2` | CCR cells Z/C/N/V/X — nonzero = set (NOT bit-packed) |
 | `$7C` | SR interrupt mask (mask ≥ 6 blocks level-6 delivery) |
 | `$AA` | IRQ pending |
-| `$AC` | vblank countdown, instruction-paced; reload `$7000` = 28672 instr/frame |
+| `$AC` | virtual-IRQ countdown. The current `f369…` candidate reloads `$7000` through the bank-$97 seam; `$2328` and `$2354` are rejected reversible Stage-3 probes, not production values. Neither is a hardware-cycle model. |
 
 ### Flight recorder (diagnostic build only)
 Last 128 interpreted 68K PCs in a ring at IRAM `$0400-$05FF`, 4 bytes/entry
@@ -138,6 +138,12 @@ any other `$400000,x` fast-path READ whose An can be ROM.
 - Use `socket_timeout=120` for sessions that run thousands of frames per call.
 - `write_hex(addr, hex, 'Sa1Memory')` works while the SA-1 runs — poke-driven labs
   (runtime-pokeable IRAM handlers) beat rebuild-per-variant sweeps.
+- A save made while an exact SA-1 execution stop is being delivered is a nested
+  debugger artifact, even if the save call completes and repeated bytes match. The
+  campaign labels it `sa1_exact_entry_nested_forensic`,
+  `nested_sa1_entry_nonresumable=true`. Do not reload it to infer ROM scheduling,
+  collision, or IRQ behavior. Use the campaign's S-CPU rendezvous and an authenticated
+  `post_entry_safe_snes_boundary` checkpoint instead.
 
 ### MAME 0.287 (the arcade oracle)
 - Lua: taps/subscriptions must be held in GLOBALS (else GC'd); `register_frame_done`;

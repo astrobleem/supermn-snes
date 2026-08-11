@@ -34,13 +34,25 @@ import validate_d96_hle as base
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def native_symbol(label: str) -> int:
+    """Resolve a generated bank-$95 entry without baking in layout churn."""
+    sym = ROOT / "src/escbank6.sym"
+    for line in sym.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[1] == label:
+            return 0x950000 | (int(fields[0].split(":")[-1], 16) & 0xFFFF)
+    raise RuntimeError(f"{sym}: missing symbol {label}")
+
+
 DEFAULT_ROM = ROOT / "build" / "interp.sfc"
 DEFAULT_STATE = (
     ROOT
     / "build/playability-20260720/111a-table-active-cold-boot-v1/final.mss"
 )
 ENTRY_PC = 0x0175A0
-ENTRY_NATIVE = 0x95C103
+ENTRY_NATIVE = native_symbol("entry_175a0")
 EXIT_LOOP_PC = 0x01759E
 EXIT_EMPTY_PC = 0x01757A
 CONT_STATIC_PC = 0x0175E8
@@ -280,9 +292,45 @@ def nexen_result(
     *,
     xlat_gate: int,
     choke_gate: int,
+    irq_countdown: int = 0x7000,
+    enable_debug_fetch: bool = False,
+    pre_state: Path | None = None,
+    max_frames: int = 24,
 ) -> base.Result:
     m.load_state(str(nat))
     m.pause()
+    if enable_debug_fetch:
+        # Production packs the source-level JSR dbg_fetch as BRA.B + NOP.
+        # Re-enable it only in this disposable validation process so a
+        # bounded oracle can freeze before executing its terminal 68000
+        # instruction.  Patch both bank-$00 ROM mirrors and reject any
+        # unrecognized bytes instead of silently altering candidate code.
+        for rom_offset in (0x0000EB, 0x0080EB):
+            actual = bytes(m.read_memory("snesPrgRom", rom_offset, 3))
+            if actual not in (bytes.fromhex("8001ea"), bytes.fromhex("2081e2")):
+                raise RuntimeError(
+                    f"unexpected dbg_fetch pack bytes at ROM ${rom_offset:06X}: "
+                    f"{actual.hex()}"
+                )
+            m.write_memory("snesPrgRom", rom_offset, "2081e2")
+
+        # VTIME packing reuses dbg_fetch's otherwise-dead 42-byte body for a
+        # relocated choke tail.  A bounded function oracle still needs the
+        # exact debug freeze at its terminal virtual PC, so restore the source
+        # PC_RING body in this disposable emulator process as well as its call.
+        # Ordinary ROMs already contain these bytes; writing the same payload
+        # keeps the established validator behavior unchanged.
+        interp = (ROOT / "src/interp.bin").read_bytes()
+        dbg_relative = 0xE281 - 0x8000
+        dbg_size = 42
+        dbg_body = (
+            bytes.fromhex("daa448a540")
+            + interp[dbg_relative + 5:dbg_relative + dbg_size]
+        )
+        if len(dbg_body) != dbg_size:
+            raise RuntimeError("could not reconstruct exact dbg_fetch body")
+        for rom_offset in (dbg_relative, dbg_relative + 0x8000):
+            m.write_memory("snesPrgRom", rom_offset, dbg_body.hex())
 
     reg_blob = b"".join(base.le32(case.regs[name]) for name in base.REG_NAMES)
     m.write_memory(base.DP_SPACE, 0x00, reg_blob.hex())
@@ -309,7 +357,7 @@ def nexen_result(
     write_u16(m, 0xA6, (case.regs["A7"] >> 16) & 0xFFFF)
     write_u16(m, 0xA8, 1)
     write_u16(m, 0xAA, 0)
-    write_u16(m, 0xAC, 0x7000)
+    write_u16(m, 0xAC, irq_countdown)
     write_u16(m, 0x0702, 0)
     write_u16(m, 0x0704, 1)
     write_u16(m, 0x0710, case.exit_pc & 0xFFFF)
@@ -326,17 +374,42 @@ def nexen_result(
     write_u16(m, 0x073A, choke_gate)
     write_u16(m, 0x073C, 0)
 
+    # The direct fixture is the deterministic pre-failure state.  Retain it
+    # only after every architectural register, mapped work-RAM byte, gate,
+    # virtual-PC word, and IRQ control field has been installed, but before
+    # the target native/interpreter route starts running.
+    if pre_state is not None:
+        pre_state.parent.mkdir(parents=True, exist_ok=True)
+        response = m.save_state(pre_state.resolve())
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            if pre_state.is_file() and pre_state.stat().st_size:
+                break
+            time.sleep(0.05)
+        else:
+            raise RuntimeError(f"save state was not flushed: {pre_state}; response={response!r}")
+        # Nexen's save operation itself can advance/perturb internal renderer
+        # bookkeeping.  The subsequent execution must start from the retained
+        # pre-failure state, not from that post-save live process state.
+        m.load_state(pre_state.resolve())
+        m.pause()
+
     seam_hook = m.add_exec_hook(DEBUG_SPIN, cpu_type="Sa1")
     m.drain_notifications(timeout=0.05)
     base.set_sa1_pc(m, ENTRY_NATIVE)
     start_cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
-    hit = m.run_until(max_frames=24, hook_handle=seam_hook)
+    hit = m.run_until(max_frames=max_frames, hook_handle=seam_hook)
     m.pause()
     m.remove_hook(seam_hook)
     if (hit or {}).get("reason") != "hookFired":
+        stalled_pc = read_u16(m, 0x40) | (
+            (read_u16(m, 0x42) & 0xFF) << 16
+        )
+        stalled_sa1 = m.get_cpu_state("Sa1")
         raise RuntimeError(
             f"Nexen did not freeze at terminal PC ${case.exit_pc:06X} "
-            f"for {case.name}, xlat={xlat_gate}, choke={choke_gate}: {hit!r}"
+            f"for {case.name}, xlat={xlat_gate}, choke={choke_gate}: {hit!r}; "
+            f"virtual_pc=${stalled_pc:06X}, sa1_pc=${int(stalled_sa1['pc']):06X}"
         )
     end_cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
     observed_pc = read_u16(m, 0x40) | ((read_u16(m, 0x42) & 0xFF) << 16)

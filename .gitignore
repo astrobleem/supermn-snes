@@ -81,6 +81,10 @@ tools/mame-trace/cfg*/
 # --- Local editor / agent state ---
 .claude/settings.local.json
 
+# MCP bridge readiness sentinels are per-process runtime state, not source.
+**/mame_bridge.ready
+.mame_mcp-crate/
+
 # --- Audio working assets (large, extracted/derived) ---
 audio/samples/
 audio/songs/*.vgm

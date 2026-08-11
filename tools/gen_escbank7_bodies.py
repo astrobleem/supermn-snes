@@ -212,7 +212,30 @@ def transpile_d8ac_task() -> str:
     )
     if body.count(continuation) != 1:
         raise SystemExit("unexpected generated $D8B4 continuation")
-    return body.replace(continuation, guarded, 1)
+    body = body.replace(continuation, guarded, 1)
+
+    # $D9A0's MOVE.B #0,$2AC3(A5) is the final flag producer before the
+    # generated body hands the following TRAP #3 back to the interpreter.
+    # The store is lowered inline, so publish its architectural N/Z/V/C
+    # before op_trap builds the retained exception frame.  MOVE preserves X.
+    terminal = (
+        "    rep #$20\n"
+        "    lda #$D9A6\n"
+        "    sta $40\n"
+    )
+    terminal_with_ccr = (
+        "    rep #$20\n"
+        "    stz $70\n"
+        "    lda #$0001\n"
+        "    sta $60\n"
+        "    stz $72\n"
+        "    stz $6E\n"
+        "    lda #$D9A6\n"
+        "    sta $40\n"
+    )
+    if body.count(terminal) != 1:
+        raise SystemExit("unexpected $D9A0 MOVE.B-zero/TRAP #3 terminal")
+    return body.replace(terminal, terminal_with_ccr, 1)
 
 
 def transpile_da9e_table() -> str:
@@ -412,13 +435,13 @@ entry_c0bc_end:""",
 
 
 def transpile_24aa8_init() -> str:
-    """Generate $024AA8 and materialize its final CLR.W condition codes.
+    """Generate $024AA8 with its fixed canonical-A5 final CLR.W store.
 
-    The generic body reproduces registers and memory but its final optimized
-    zero store does not update the emulated CCR.  Replace that last fixed-A5
-    address calculation with an equal-size specialized store plus the exact
-    CLR.W result: Z=1, N=V=C=0, X unchanged.  Equal size keeps the absolute
-    $028F92 entry at $9D:F298.
+    The generic body now materializes the terminal CLR's exact CCR itself.
+    Replace the fixed-A5 address calculation and that generated materializer
+    together with the established equal-size specialized store/materializer:
+    Z=1, N=V=C=0, X unchanged.  This keeps the absolute $028F92 entry at
+    $9D:F298 without duplicating the generic exit-CCR sequence.
     """
 
     body = transpile_entry_init(0x024AA8, "table", table_suffix=True)
@@ -435,7 +458,13 @@ def transpile_24aa8_init() -> str:
     pla
     xba
     sta $400000,x
-    xba"""
+    xba
+    lda #$0000
+    sta $70
+    stz $72
+    stz $6E
+    lda #$0001
+    sta $60"""
     new = """    ; Canonical A5 was guarded above: fixed final CLR.W $F0357C.
     ; The seven NOPs retain the generated body's byte layout exactly.
     ldx #$357C
@@ -454,7 +483,7 @@ def transpile_24aa8_init() -> str:
     nop
     nop"""
     if body.count(old) != 1:
-        raise SystemExit("unexpected $024AA8 final CLR.W lowering")
+        raise SystemExit("unexpected $024AA8 final CLR.W/CCR lowering")
     return body.replace(old, new, 1)
 
 

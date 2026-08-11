@@ -97,6 +97,8 @@ h466_hot:
     xba
     sta $1C
     lda $1C
+    inc a
+    dec a
     beq Lf466_1
     jmp L466_48a
 Lf466_1:
@@ -1190,6 +1192,10 @@ h1d53a_hot:
     adc #$0000
     sta $52
     jsl.l readbyte_l
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
     bmi Lf1d53a_1
     jmp Ltj1d53a_1d54c
 Lf1d53a_1:
@@ -1291,6 +1297,10 @@ entry_1d54c:
     sta $1C
     rep #$20
     lda $1C
+    and #$00FF
+    eor #$0080
+    sec
+    sbc #$0080
     beq Lf1d54c_1
     jmp L1d54c_1d574
 Lf1d54c_1:
@@ -1455,6 +1465,8 @@ Lf1d54c_8:
     plp
 L1d54c_1d5b0:
     lda $08
+    inc a
+    dec a
     beq Lf1d54c_9
     jmp L1d54c_1d5b6
 Lf1d54c_9:
@@ -1467,6 +1479,8 @@ L1d54c_1d5b8:
     sta $04
 L1d54c_1d5bc:
     lda $08
+    inc a
+    dec a
     beq Lf1d54c_10
     jmp L1d54c_1d5c8
 Lf1d54c_10:
@@ -2035,6 +2049,8 @@ L1f4b0_1f4c6:
     tax
     lda $400000,x
     xba
+    inc a
+    dec a
     bne Lf1f4b0_3
     jmp L1f4b0_1f4d4
 Lf1f4b0_3:
@@ -5241,6 +5257,7 @@ escbank8_end:
 ;   $41:014C cumulative producer BG-list status (0 empty, 1 exact, $FFFF unknown)
 ;   $41:014E cumulative producer BG-list byte length (0..$0400)
 ;   $41:0150 title-text overlay flag after BG-preparation scratch is finished
+;   $41:015A currently displayed prepared-source kind ($C0BC or zero)
 ;
 ; Private shared workspace (outside the arcade shadow at $41:2000+):
 ;   $41:0200/$0600  accepted BG code/color baseline
@@ -5343,6 +5360,8 @@ rmb_bg_next:
     bne rmb_bg_compare
     tya
     sta $41013A
+    beq rmb_obj_begin
+    stz $015A            ; a real source-map change supersedes retained $C0BC
     cmp #$0100
     bcc rmb_obj_begin
     jsr rmb_prepare_bg
@@ -5352,6 +5371,7 @@ rmb_bg_next:
     ; its tile/palette maps.  Still populate the candidate so the next boundary
     ; can promote it without touching the live shadow.
 rmb_bg_first:
+    stz $015A            ; the first raw/full image has no retained ROM source
     ldx #$0000
 rmb_bg_first_copy:
     lda $414800,x
@@ -5896,8 +5916,11 @@ rpb_prepare_dispatch:
     cmp #$C0BC
     beq rpb_c0bc_prepared
     stz $0146
+    stz $015A
     jmp rpb_prepare_dynamic
 rpb_c0bc_prepared:
+    lda #$C0BC
+    sta $015A
     ldx #$9000                  ; prepared 4 KiB SNES tilemap
     ldy #$8000
     lda #$1000
@@ -6156,7 +6179,11 @@ rbds_next:
 rbds_done:
     jml.l $9EDCDE
 rbds_clean:
-    jml.l $9EDCAA
+    ; This helper is assembled as bank $00 and packed into bank $9E, so the
+    ; bank byte cannot come from the local symbol.  Keep the packed target
+    ; explicit and let build_interp_rom.py prove it still equals
+    ; rmb_bg_clean after every manifest-layout change.
+    jml.l $9EDCB2
 rbds_default:
     jml.l $9EDC32
 render_bg_dirty_sparse_end:
@@ -6439,23 +6466,65 @@ rmb_obj_pack:
     ; precisely those six rows to the 5A22 BG2 overlay; retain the logo, HUD,
     ; globe, and every non-title frame in their original source order.
     lda $0150
-    beq rmb_obj_pack_x
+    beq rmb_obj_pack_bottom_status
     lda $3000,x
     xba
-    and #$00FF
     cmp #$001A
+    bcc rmb_obj_pack_bottom_status
+    cmp #$0070
+    bcs rmb_obj_pack_bottom_status
+    and #$000F
+    cmp #$000A
     beq rmb_obj_pack_reject
-    cmp #$002A
+
+rmb_obj_pack_bottom_status:
+    ; Source slot 2 and slot 36 are solid-black code-$0002 spacers behind
+    ; the bottom CREDIT digit.  They were invisible over the arcade's black
+    ; overscan, but the centered SNES crop places them over live artwork and
+    ; produces the two-tile hole reported at the credited-player prompt.
+    ; Reject those exact spacers only on the proven bottom row.
+    ;
+    ; Source slots 37-52 are the arcade's two bottom player-status fields.
+    ; During one-player gameplay they contain off-window strings such as
+    ; "INSERT COIN", "PUSH 2P BUTTON", and "GAME OVER".  Slots 53-56 are
+    ; the adjacent off-window ROUND field; its first record at raw X=$138
+    ; otherwise leaks the left half of an "R" through the centered crop.
+    ; The independent CREDIT counter is slots 31-36, so reject only these
+    ; fixed X1-001 HUD allocations on their proven bottom rows.
+    cpx #$0004
+    beq rmb_obj_pack_bottom_y
+    cpx #$0048
+    bcc rmb_obj_pack_x
+    cpx #$0072
+    bcs rmb_obj_pack_x
+rmb_obj_pack_bottom_y:
+    lda $3000,x
+    cmp #$0A00
     beq rmb_obj_pack_reject
-    cmp #$003A
+    cpx #$006A
+    bcc rmb_obj_pack_x
+    cmp #$1A00
     beq rmb_obj_pack_reject
-    cmp #$004A
-    beq rmb_obj_pack_reject
-    cmp #$005A
-    beq rmb_obj_pack_reject
-    cmp #$006A
-    beq rmb_obj_pack_reject
+
 rmb_obj_pack_x:
+    ; Logical code $0020 is an entirely transparent 16x16 record.  The arcade
+    ; top HUD nevertheless publishes several of them as spacing cells.  If
+    ; retained as SNES OBJs they consume enough 8x8 tiles to exceed the
+    ; hardware's 34-tile scanline limit and punch a horizontal hole through
+    ; the right side of the credited prompt.  Reject only that proven-empty
+    ; code on the two compacted top-HUD rows; ordinary records and every
+    ; non-HUD use preserve their source order.
+    lda $3000,x
+    xba
+    and #$00EF
+    cmp #$00E2
+    bne rmb_obj_pack_x_visible
+    lda $4000,x
+    xba
+    and #$3FFF
+    cmp #$0020
+    beq rmb_obj_pack_reject
+rmb_obj_pack_x_visible:
     ; The X1-001 treats bit 8 as a sign bit, then draws both 512px-wrapped
     ; copies.  For the centered arcade-X 64..319 crop that makes raw
     ; $031-$13F visible: a 16px sprite at raw X=49 first overlaps the left
@@ -6489,7 +6558,7 @@ rmb_obj_pack_end:
 ; gameplay row which happens to reuse an ASCII tile cannot enable BG2.  $0150
 ; was transient prepared-BG scratch earlier in this same boundary and becomes
 ; candidate metadata only after that work has returned.
-.org $E5B0
+.org $E5C0
 .a8
 .i16
 rmb_title_detect:

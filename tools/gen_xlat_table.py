@@ -62,6 +62,48 @@ TABLE_PCS = {0xCE4, 0x111A, 0x295A, 0x29B6, 0x13BE,
              # absolute-long JSR and is handled in the relocated JAH2 bank-0
              # scan, so it needs no dense table slot.
              0x024AA8, 0x028F92,
+             # Stage-3 record handlers selected by the original $02E42C
+             # state dispatcher.  They retain table/rts convention and use
+             # the already-admitted sparse bank-$02 path.
+             0x0278E8, 0x027912, 0x02F2E0,
+             0x027952, 0x0279D2, 0x02F3BA,
+             # Leaf record-output helpers called by those Stage-3 handlers.
+             # Their native callers use faithful call bridges, so the
+             # genuine return is already on the 68000 stack.
+             0x027AEA, 0x027B44, 0x027B7C, 0x02F56A, 0x02F5A2,
+             # Pure renderer table-pointer lookup.  Organic interpreted BSR
+             # reach has a dedicated bank-$02 arm; sparse xlat covers native
+             # callers that already pushed the genuine return.
+             0x02E49C,
+             # Residual Stage-3 counter leaf; exact CMP-X/ADDQ-CCR hand body.
+             0x0296C6,
+             # Stage-3 selector/address leaf with live LSL.W CCR/X at return.
+             0x02E40E,
+             # Stage-3 draw wrappers reached with a genuine table/rts caller
+             # return.  Their nested lookup and renderer callback preserve
+             # real return residue through guarded bank-$9D bridges.
+             0x02E4B8, 0x02E524,
+             # Full Stage-3 record selector.  Its BSR and dynamic callback
+             # resume through pinned bank-$9D-to-$9F trampolines.
+             0x02E42C,
+             # Five-per-tick object-status routine selected indirectly by the
+             # second Stage-3 record list.
+             0x02E676,
+             # Shared Stage-3 object bounds leaf, reached by both interpreted
+             # BSR callers and the native $02F3BA parent.
+             0x02F542,
+             # Guarded coordinate/projectile-record update leaf.
+             0x0135E0,
+             # Guarded player coordinate clamp.  It is a no-call table/rts
+             # leaf with exact D2 flag-bit and CCR/X preservation.
+             0x013314,
+             # Stage-3 player/render record update, including its exact
+             # sound-queue and sprite-helper call bridges.
+             0x013282,
+             # Dominant Stage-3 player-state loops.  Their direct A6/A7
+             # accesses are guarded, and every nested call resumes through a
+             # pinned bank-$9D-to-$9F trampoline.
+             0x01337E, 0x0133EA, 0x013468, 0x013538,
              # The $007734 fan-out caller pushes a genuine $007786 return and
              # enters this trap-bearing table body directly in bank $9E.
              # Keeping it in the table also covers any faithful indirect reach.
@@ -91,10 +133,15 @@ TABLE_PCS = {0xCE4, 0x111A, 0x295A, 0x29B6, 0x13BE,
 # ors_rte_x -> ojmp_hook -> xlat_dispatch). c172 = first coroutine escape (TASK #73 / STEP A).
 # 2026-07-03: BANK-$01 pages (object-processor A2): the table is now 512 pages, index =
 # ((PC>>8) & 0x1FF) so bank-$01 resume PCs dispatch through the SAME ors_rte_x->ojmp_hook route
-# with ZERO bank-$00 changes (xlat_dispatch accepts $42 in {0,1}). $01D5F0 = objproc physics visit,
-# $01E7C0 = objproc render visit
+# with ZERO bank-$00 changes (xlat_dispatch accepts $42 in {0,1}). $01E7C0 is
+# the retained objproc render visit.  The $01D5F0 physics visit remains
+# assembled as forensic material, but is deliberately absent from CORO_PCS:
+# its generated body did not export the final CCR/X before TRAP #5.  Organic
+# MAME/native-off/native-on replay first exposed this as $F002D5 $04/$10/$00.
+# Until the complete body can be regenerated flag-safely in a larger bank,
+# production must interpret that resume rather than dispatch the unsafe HLE.
 # (docs/history/designs/OBJECT_PROCESSOR_CAMPAIGN_20260703.md).
-CORO_PCS = {0xC172, 0x01D51A, 0x01D5F0, 0x01E7C0,
+CORO_PCS = {0xC172, 0x01D51A, 0x01E7C0,
             # $DA44 resumes at $DA72 and immediately RTSes to the genuine
             # $D8B4 continuation.  Both are no-push coroutine continuations.
             0x00DA72, 0x00D8B4,
@@ -109,6 +156,14 @@ CORO_PCS = {0xC172, 0x01D51A, 0x01D5F0, 0x01E7C0,
             0xC892,                   # post-$C890 yield continuation; bank-$98 entry_c892
             0x011752,                 # $011752 contiguous-tree spine, first half (escbank5)
             0x46DE,                   # $0046DE light-tick task resume (escbank5; first --fnfrag body)
+            # Stage-3 scroll task.  The body begins immediately after an RTE
+            # resume and ends by tail-entering the original TRAP #5, so it is
+            # a no-return-push coroutine target.
+            0x00BD1C,
+            # Round-1 Stage-3 background-index task. $007AC6 is the genuine
+            # post-TRAP scheduler resume; $0079FE also covers an exact IRQ
+            # resume at the first loop instruction.
+            0x0079FE, 0x007AC6,
             # One-shot gameplay-entry task.  Its otherwise-new $C0 page is
             # routed by the compact bank-$9D dispatcher.
             0x00C0BC,
@@ -149,12 +204,21 @@ CORO_PCS = {0xC172, 0x01D51A, 0x01D5F0, 0x01E7C0,
 # selection and missing-entry checks still cover them; omit only their dense
 # data pages below.
 DIRECT_PCS = {
+    # Free the otherwise-single-entry $002D page for the Stage-3 $00BD page.
+    # $2D8A is a table/rts leaf and already has an exact compact-bank target.
+    0x002D8A,
+    0x0079FE, 0x007AC6,
     0x00C0BC,
     0x00D7BE,
     0x00D8B4, 0x00D9CC,
     0x00DA44, 0x00DA72, 0x00DA9E, 0x00DAF4,
     0x00DC2E, 0x00DC44,
     0x024AA8, 0x028F92,
+    0x0278E8, 0x027912, 0x02F2E0,
+    0x027952, 0x0279D2, 0x02F3BA,
+    0x027AEA, 0x027B44, 0x027B7C, 0x02F56A, 0x02F5A2, 0x02E676, 0x02F542,
+    0x02E49C, 0x0296C6, 0x02E40E, 0x02E42C, 0x02E4B8, 0x02E524,
+    0x013282, 0x013314, 0x01337E, 0x0133EA, 0x013468, 0x013538, 0x0135E0,
     0x024D28, 0x024D64,
     # The $0076B6 one-shot task and genuine-return continuations occupy two
     # otherwise-empty bank-$00 pages.  $94:F900 routes those pages through
@@ -196,15 +260,21 @@ JMP_STATE_PCS |= {
     0x007748, 0x00776A, 0x00777A, 0x007782, 0x007786,
     0x01E772, 0x01E7B0,
     0x024BAA,
+    0x0242BE,
     0x024282, 0x024288, 0x02428E, 0x024294,
     0x008B72,
 }
 
 ALLOWED_PCS = JMP_STATE_PCS | TABLE_PCS | CORO_PCS
+assert 0x01D5F0 not in ALLOWED_PCS, (
+    "$01D5F0 native physics coroutine is parked until its trap CCR/X "
+    "contract is regenerated and organically revalidated"
+)
 BANK_OF_SYM = {"src/escbank.sym": 0x92, "src/escbank2.sym": 0x94,
                "src/escbank3.sym": 0x97, "src/escbank4.sym": 0x98,
                "src/escbank5.sym": 0x99, "src/escbank6.sym": 0x95,
-               "src/escbank7.sym": 0x9D, "src/escbank8.sym": 0x9E}
+               "src/escbank7.sym": 0x9D, "src/escbank8.sym": 0x9E,
+               "src/escbank9.sym": 0x9F}
 
 def load_native_addrs():
     """entry_X -> 24-bit native address (bank forced per source bank)."""
@@ -231,7 +301,8 @@ def load_entry_pcs():
     out = {}
     for f in ("src/escbank.pasm", "src/escbank2.pasm", "src/escbank3.pasm",
               "src/escbank4.pasm", "src/escbank5.pasm", "src/escbank6.pasm",
-              "src/escbank7.pasm", "src/escbank8.pasm"):
+              "src/escbank7.pasm", "src/escbank8.pasm",
+              "src/escbank9.pasm"):
         last = None
         for ln in Path(f).read_text().splitlines():
             m = re.search(r"transpiled from \$([0-9A-Fa-f]+)", ln)
@@ -269,6 +340,15 @@ def main():
     c262 = [addr for pc, addr, _name in pairs if pc == 0xC262]
     assert c262 == [0x99C900], (
         "$C262 xlat entry must target the guarded $99:C900 wrapper, got %r" % c262
+    )
+    ret_242be = [
+        (addr, name) for pc, addr, name in pairs if pc == 0x0242BE
+    ]
+    assert ret_242be == [
+        (native["entry_242be"], "entry_242be")
+    ], (
+        "$0242BE must return from interruptible $025110 through its exact "
+        "bank-$99 continuation, got %r" % ret_242be
     )
     if len(pairs) != len(ALLOWED_PCS):
         got = {p for p, _, _ in pairs}

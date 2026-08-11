@@ -26,6 +26,32 @@ ENTRY_PC = 0x000CE4
 ENTRY_NATIVE = 0x948F7C
 RETURN_PC = 0xF03E80
 NATIVE_RETURN = 0x00D15A
+FAST_2X2_CASES = {
+    "two-by-two-full-visible-hot",
+    "two-by-two-x-clip-hot",
+    "two-by-two-y-clip-hot",
+    "two-by-two-x-positive-hidden-edge",
+    "two-by-two-x-positive-visible-edge",
+    "two-by-two-x-negative-visible-edge",
+    "two-by-two-x-negative-hidden-edge",
+    "two-by-two-y-negative-hidden-edge",
+    "two-by-two-y-negative-visible-edge",
+    "two-by-two-y-positive-visible-edge",
+    "two-by-two-y-positive-hidden-edge",
+    "rom-shape-4072e-two-by-two-hot",
+}
+FAST_STAGE3_PANEL_CASES = {
+    "rom-shape-42aea-stage3-panel-hot",
+    "rom-shape-42b18-stage3-panel-hot",
+}
+FAST_STAGE3_PANEL_GUARD_MISS_CASES = {
+    "rom-shape-42b46-stage3-panel-source-miss",
+    "rom-shape-42aea-stage3-panel-cursor-miss",
+    "rom-shape-42aea-stage3-panel-attr-miss",
+    "rom-shape-42aea-stage3-panel-x-miss",
+    "rom-shape-42aea-stage3-panel-y-miss",
+    "rom-shape-42aea-stage3-panel-capacity-miss",
+}
 
 # Reuse the already-proven transport/register comparison machinery while
 # selecting CE4's original and native entry points.
@@ -85,6 +111,84 @@ def build_case(
     return base.Case(name, regs, sr, bytes(work))
 
 
+def s16(value: int) -> int:
+    value &= 0xFFFF
+    return value - 0x10000 if value & 0x8000 else value
+
+
+def fast_2x2_after_link_instructions(case: base.Case) -> int:
+    """Return $000CE4's exact post-LINK count for a nonzero 2x2/capacity-4 call."""
+
+    stack = case.regs["A7"] & 0xFFFF
+    x = int.from_bytes(case.work[stack + 8 : stack + 10], "big")
+    y = int.from_bytes(case.work[stack + 10 : stack + 12], "big")
+    d1_row0 = (0x00EA - x) & 0xFFFF
+    d1_row1 = (d1_row0 - 0x0010) & 0xFFFF
+    y_column0 = y
+    y_column1 = (y + 0x0010) & 0xFFFF
+
+    def x_path(value: int) -> int:
+        signed = s16(value)
+        if signed >= 250:
+            return 3
+        if signed <= -6:
+            return 5
+        return 6
+
+    def live_y_path(value: int) -> int:
+        signed = s16(value)
+        if signed <= -16:
+            return 14
+        if signed >= 384:
+            return 16
+        return 15
+
+    # 17 prologue, three row-setup instructions per row, two instructions
+    # after each nonterminal tile, two more after the first row, and four
+    # epilogue instructions.  The final tile exhausts D7 and branches directly
+    # to the epilogue.
+    return (
+        17
+        + x_path(d1_row0)
+        + 3
+        + live_y_path(y_column0)
+        + 2
+        + live_y_path(y_column1)
+        + 4
+        + x_path(d1_row1)
+        + 3
+        + live_y_path(y_column0)
+        + 2
+        + live_y_path(y_column1)
+        + 4
+    )
+
+
+def stage3_panel_after_link_instructions(case: base.Case) -> int:
+    """Return CE4's post-LINK count for the guarded 3x7 Stage-3 panel."""
+
+    stack = case.regs["A7"] & 0xFFFF
+    cursor = int.from_bytes(case.work[stack + 4 : stack + 6], "big")
+    attr = int.from_bytes(case.work[stack + 6 : stack + 8], "big")
+    x = int.from_bytes(case.work[stack + 8 : stack + 10], "big")
+    y = int.from_bytes(case.work[stack + 10 : stack + 12], "big")
+    source = int.from_bytes(case.work[stack + 12 : stack + 16], "big")
+    capacity = int.from_bytes(case.work[stack + 16 : stack + 18], "big")
+    expected = (0x01DE, 0x0800, 0x0060, 0x0010, 0x0012)
+    if (cursor, attr, x, y, capacity) != expected:
+        raise ValueError(f"{case.name}: not the guarded Stage-3 panel arguments")
+    if source not in (0x042AEA, 0x042B18):
+        raise ValueError(f"{case.name}: not a guarded Stage-3 panel source")
+
+    # Prologue through SUB.W: 17.  All three row-X and seven column-Y
+    # coordinates are visible.  Fourteen live cells each execute the
+    # 15-instruction live body plus the two-instruction inner tail; seven
+    # zero cells execute only the read/BEQ and inner tail.  Each row executes
+    # its two-instruction outer tail.  Five unused capacity slots then take
+    # the fill loop before the four-instruction epilogue.
+    return 17 + 3 * (6 + 3) + 14 * 17 + 7 * 4 + 3 * 2 + 3 + 5 * 2 + 4
+
+
 def make_cases() -> list[base.Case]:
     return [
         build_case(
@@ -117,6 +221,272 @@ def make_cases() -> list[base.Case]:
             tiles=[0x0100, 0x0101, 0x0102, 0x0103, 0x0104],
             capacity_minus_one=1,
             x_flag=0,
+        ),
+        build_case(
+            "two-by-two-full-visible-hot",
+            0xCE416,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x0123, 0x4567, 0x89AB, 0xD234],
+            capacity_minus_one=3,
+            x=0x0080,
+            y=0x0040,
+            x_flag=0,
+        ),
+        build_case(
+            "two-by-two-zero-tile-guard-miss",
+            0xCE417,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x0123, 0x0000, 0x89AB, 0xD234],
+            capacity_minus_one=3,
+            x=0x0080,
+            y=0x0040,
+            x_flag=1,
+        ),
+        build_case(
+            "two-by-two-x-clip-hot",
+            0xCE418,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x0123, 0x4567, 0x89AB, 0xD234],
+            capacity_minus_one=3,
+            x=0x00DB,
+            y=0x0040,
+            x_flag=0,
+        ),
+        build_case(
+            "two-by-two-y-clip-hot",
+            0xCE419,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x0123, 0x4567, 0x89AB, 0xD234],
+            capacity_minus_one=3,
+            x=0x0080,
+            y=0x0170,
+            x_flag=1,
+        ),
+        # Signed X clipping boundaries.  d1=$EA-X is visible only for
+        # -5..249; the second row independently repeats the test at d1-$10.
+        build_case(
+            "two-by-two-x-positive-hidden-edge",
+            0xCE41B,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0xFFF0,  # row-0 d1=250
+            y=0x0040,
+            x_flag=0,
+        ),
+        build_case(
+            "two-by-two-x-positive-visible-edge",
+            0xCE41C,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0xFFF1,  # row-0 d1=249
+            y=0x0040,
+            x_flag=1,
+        ),
+        build_case(
+            "two-by-two-x-negative-visible-edge",
+            0xCE41D,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0x00EF,  # row-0 d1=-5
+            y=0x0040,
+            x_flag=0,
+        ),
+        build_case(
+            "two-by-two-x-negative-hidden-edge",
+            0xCE41E,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0x00F0,  # row-0 d1=-6
+            y=0x0040,
+            x_flag=1,
+        ),
+        # Signed Y clipping boundaries.  A column is visible only for
+        # -15..383; column one independently adds $10 with word wrap.
+        build_case(
+            "two-by-two-y-negative-hidden-edge",
+            0xCE41F,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0x0080,
+            y=0xFFF0,  # -16
+            x_flag=0,
+        ),
+        build_case(
+            "two-by-two-y-negative-visible-edge",
+            0xCE420,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0x0080,
+            y=0xFFF1,  # -15
+            x_flag=1,
+        ),
+        build_case(
+            "two-by-two-y-positive-visible-edge",
+            0xCE421,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0x0080,
+            y=0x017F,  # 383
+            x_flag=0,
+        ),
+        build_case(
+            "two-by-two-y-positive-hidden-edge",
+            0xCE422,
+            outer_count=1,
+            inner_count=1,
+            tiles=[0x1111, 0x2222, 0x3333, 0x4444],
+            capacity_minus_one=3,
+            x=0x0080,
+            y=0x0180,  # 384
+            x_flag=1,
+        ),
+        build_case(
+            "rom-shape-4072e-two-by-two-hot",
+            0xCE41A,
+            outer_count=1,
+            inner_count=1,
+            tiles=[],
+            capacity_minus_one=3,
+            cursor=0x0234,
+            attr=0x6000,
+            x=0x0080,
+            y=0x004E,
+            frame_pointer=0x04072E,
+            x_flag=0,
+        ),
+        build_case(
+            "rom-shape-42aea-stage3-panel-hot",
+            0xCE423,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0012,
+            cursor=0x01DE,
+            attr=0x0800,
+            x=0x0060,
+            y=0x0010,
+            frame_pointer=0x042AEA,
+            x_flag=0,
+        ),
+        build_case(
+            "rom-shape-42b18-stage3-panel-hot",
+            0xCE424,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0012,
+            cursor=0x01DE,
+            attr=0x0800,
+            x=0x0060,
+            y=0x0010,
+            frame_pointer=0x042B18,
+            x_flag=1,
+        ),
+        # Guard-neighbor cases deliberately preserve a valid 3x7 ROM stream
+        # while changing exactly one fast-path admission field.  They must
+        # execute CE4's generic renderer and remain exact through the
+        # production native-off/native-on dispatcher.
+        build_case(
+            "rom-shape-42b46-stage3-panel-source-miss",
+            0xCE425,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0012,
+            cursor=0x01DE,
+            attr=0x0800,
+            x=0x0060,
+            y=0x0010,
+            frame_pointer=0x042B46,
+            x_flag=0,
+        ),
+        build_case(
+            "rom-shape-42aea-stage3-panel-cursor-miss",
+            0xCE426,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0012,
+            cursor=0x01E0,
+            attr=0x0800,
+            x=0x0060,
+            y=0x0010,
+            frame_pointer=0x042AEA,
+            x_flag=1,
+        ),
+        build_case(
+            "rom-shape-42aea-stage3-panel-attr-miss",
+            0xCE427,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0012,
+            cursor=0x01DE,
+            attr=0x0801,
+            x=0x0060,
+            y=0x0010,
+            frame_pointer=0x042AEA,
+            x_flag=0,
+        ),
+        build_case(
+            "rom-shape-42aea-stage3-panel-x-miss",
+            0xCE428,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0012,
+            cursor=0x01DE,
+            attr=0x0800,
+            x=0x0061,
+            y=0x0010,
+            frame_pointer=0x042AEA,
+            x_flag=1,
+        ),
+        build_case(
+            "rom-shape-42aea-stage3-panel-y-miss",
+            0xCE429,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0012,
+            cursor=0x01DE,
+            attr=0x0800,
+            x=0x0060,
+            y=0x0011,
+            frame_pointer=0x042AEA,
+            x_flag=0,
+        ),
+        build_case(
+            "rom-shape-42aea-stage3-panel-capacity-miss",
+            0xCE42A,
+            outer_count=2,
+            inner_count=6,
+            tiles=[],
+            capacity_minus_one=0x0013,
+            cursor=0x01DE,
+            attr=0x0800,
+            x=0x0060,
+            y=0x0010,
+            frame_pointer=0x042AEA,
+            x_flag=1,
         ),
         build_case(
             "negative-capacity-cold-fallback",
@@ -395,7 +765,11 @@ def main() -> int:
     events: list[dict] = []
     provenance = {
         "event": "provenance",
-        "scope": "function-local CE4 MAME/Nexen differential; not fps",
+        "scope": (
+            "function-local CE4 MAME/Nexen register/CCR/X/work-RAM "
+            "differential plus clipping-aware 2x2 and immutable Stage-3 "
+            "panel AC-charge checks; not fps"
+        ),
         "mame": "/snap/bin/mame 0.287",
         "nexen": str(args.nexen.resolve()),
         "nexen_sha256": base.sha256(args.nexen),
@@ -442,6 +816,24 @@ def main() -> int:
                 "event": "case",
                 **base.compare(case, arcade_results[case.name], console),
             }
+            if case.name in FAST_2X2_CASES:
+                instruction_count = fast_2x2_after_link_instructions(case)
+            elif case.name in FAST_STAGE3_PANEL_CASES:
+                instruction_count = stage3_panel_after_link_instructions(case)
+            else:
+                instruction_count = None
+            if instruction_count is not None:
+                expected_ac = (0x7000 - instruction_count) & 0xFFFF
+                event.update(
+                    {
+                        "post_link_instruction_count": instruction_count,
+                        "expected_ac": expected_ac,
+                        "nexen_ac": console.ac,
+                        "ac_charge_green": console.ac == expected_ac,
+                    }
+                )
+                if not event["ac_charge_green"]:
+                    event["result"] = "red"
             events.append(event)
             print(json.dumps(event, sort_keys=True), flush=True)
 

@@ -47,6 +47,9 @@ INEXT = 0x00D128
 TEST_IDLE = 0x00D15F
 IRAM_SIZE = 0x0800
 WORK_SIZE = 0x10000
+POPPED_STACK_WINDOW = 0x0200
+CAPTURE_CHUNK_FRAMES = 360
+CAPTURE_FRAME_BUDGET = 3600
 
 
 @dataclass(frozen=True)
@@ -57,9 +60,57 @@ class Spine:
     terminals: frozenset[int]
 
 
-SPINES = (
-    Spine("122a4", 0x0122A4, 0x9D8D00, frozenset((0x0122A2, 0x012392, 0x012344))),
-)
+def current_symbol(path: Path, bank: int, symbol: str) -> int:
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+        fields = raw.split()
+        if len(fields) == 2 and fields[1] == symbol:
+            return (bank << 16) | int(fields[0].split(":", 1)[1], 16)
+    raise RuntimeError(f"{path}: missing {symbol}")
+
+
+SPINES = {
+    "4542": Spine(
+        "4542",
+        0x00455E,
+        current_symbol(
+            ROOT / "src" / "escbank.sym",
+            0x92,
+            "entry_4542",
+        ),
+        frozenset((0x00455C, 0x004560)),
+    ),
+    "122a4": Spine(
+        "122a4",
+        0x0122A4,
+        0x9D8D00,
+        frozenset((0x0122A2, 0x012392, 0x012344)),
+    ),
+    # Second half of the player/object task spine.  $0118DE is the ordinary
+    # no-animation/down-input branch; $011750 is its normal task-yield tail.
+    "1177c": Spine(
+        "1177c",
+        0x01177C,
+        current_symbol(
+            ROOT / "src" / "escbank5.sym",
+            0x99,
+            "entry_1177c",
+        ),
+        frozenset((0x0118DE, 0x011750)),
+    ),
+    # Per-slot coroutine continuation.  The campaign task-frame audit exposed
+    # saved-SR differences at its $00C844 yield, so keep all four bounded exits
+    # available for exact same-ROM native-off/native-on comparisons.
+    "c846": Spine(
+        "c846",
+        0x00C846,
+        current_symbol(
+            ROOT / "src" / "escbank5.sym",
+            0x99,
+            "entry_c846",
+        ),
+        frozenset((0x00C844, 0x00C890, 0x00C8BA, 0x00C8DA)),
+    ),
+}
 
 
 @dataclass
@@ -112,10 +163,13 @@ def capture_fixtures(
     nexen: Path,
     port: int,
     cases_per_spine: int,
+    spines: list[Spine],
+    buttons: int,
+    capture_a6: int | None,
     output: Path,
 ) -> list[Fixture]:
     fixtures: list[Fixture] = []
-    for spine_index, spine in enumerate(SPINES):
+    for spine_index, spine in enumerate(spines):
         with base.McpSession(
             rom=str(rom),
             mesen=str(nexen),
@@ -128,24 +182,72 @@ def capture_fixtures(
             m.pause()
             m.load_state(str(state))
             m.pause()
-            m.tool("set_input", {"port": 0, "buttons": 0x82, "hold": True})
+            m.tool(
+                "set_input",
+                {"port": 0, "buttons": buttons & 0x0FFF, "hold": True},
+            )
             hook = m.add_exec_hook(spine.entry_native, cpu_type="Sa1")
             m.drain_notifications(timeout=0.05)
             previous_cycles = -1
             try:
                 for index in range(cases_per_spine):
-                    hit = m.run_until(max_frames=360, hook_handle=hook)
-                    if (hit or {}).get("reason") != "hookFired":
-                        raise RuntimeError(
-                            f"{spine.name} capture {index} did not reach "
-                            f"${spine.entry_native:06X}: {hit!r}"
+                    for attempt in range(64):
+                        start_frame = int(
+                            m.get_state().get("frameCount", 0)
                         )
-                    m.pause()
-                    cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
-                    if cycles <= previous_cycles:
-                        raise RuntimeError(f"{spine.name} capture did not advance")
-                    previous_cycles = cycles
-                    regs = common.captured_regs(m)
+                        hit = None
+                        while True:
+                            current_frame = int(
+                                m.get_state().get("frameCount", 0)
+                            )
+                            remaining_frames = (
+                                CAPTURE_FRAME_BUDGET
+                                - (current_frame - start_frame)
+                            )
+                            if remaining_frames <= 0:
+                                break
+                            hit = m.run_until(
+                                max_frames=min(
+                                    CAPTURE_CHUNK_FRAMES,
+                                    remaining_frames,
+                                ),
+                                hook_handle=hook,
+                            )
+                            m.pause()
+                            if (hit or {}).get("reason") == "hookFired":
+                                break
+                            if (
+                                (hit or {}).get("reason") != "maxFrames"
+                                or int(
+                                    (hit or {}).get("framesAdvanced", 0)
+                                )
+                                <= 0
+                            ):
+                                break
+                        if (hit or {}).get("reason") != "hookFired":
+                            raise RuntimeError(
+                                f"{spine.name} capture {index} did not reach "
+                                f"${spine.entry_native:06X} within "
+                                f"{CAPTURE_FRAME_BUDGET} emulated frames: "
+                                f"{hit!r}"
+                            )
+                        cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
+                        if cycles <= previous_cycles:
+                            raise RuntimeError(
+                                f"{spine.name} capture did not advance"
+                            )
+                        previous_cycles = cycles
+                        regs = common.captured_regs(m)
+                        if (
+                            capture_a6 is None
+                            or regs["A6"] == capture_a6
+                        ):
+                            break
+                    else:
+                        raise RuntimeError(
+                            f"{spine.name} did not capture requested "
+                            f"A6=${capture_a6:08X} after 64 entry hits"
+                        )
                     if (regs["A6"] >> 16) != 0xF0 or (regs["A7"] >> 16) != 0xF0:
                         raise RuntimeError(
                             f"{spine.name} captured non-work-RAM A6/A7: "
@@ -173,7 +275,77 @@ def capture_fixtures(
     return fixtures
 
 
-def prepare_fixture(m: base.McpSession, nat: Path, fixture: Fixture) -> None:
+def load_fixtures(
+    source: Path,
+    spines: list[Spine],
+    cases_per_spine: int,
+) -> list[Fixture]:
+    """Load retained byte-exact pre-failure fixtures without recapturing."""
+    requested = {spine.name: spine for spine in spines}
+    loaded: dict[str, list[Fixture]] = {name: [] for name in requested}
+    for metadata_path in sorted(source.glob("fixture-*.json")):
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        spine_name = metadata.get("spine")
+        if spine_name not in requested:
+            continue
+        stem = metadata_path.with_suffix("")
+        iram_path = stem.with_suffix(".iram.bin")
+        work_path = stem.with_suffix(".work.bin")
+        for path in (iram_path, work_path):
+            if not path.is_file():
+                raise RuntimeError(
+                    f"{metadata_path}: missing retained fixture component {path}"
+                )
+        iram = iram_path.read_bytes()
+        work = work_path.read_bytes()
+        if len(iram) != IRAM_SIZE or len(work) != WORK_SIZE:
+            raise RuntimeError(
+                f"{metadata_path}: invalid retained fixture sizes "
+                f"{len(iram)}/{len(work)}"
+            )
+        for payload, key, path in (
+            (iram, "iram_sha256", iram_path),
+            (work, "work_sha256", work_path),
+        ):
+            actual = hashlib.sha256(payload).hexdigest()
+            if actual != metadata.get(key):
+                raise RuntimeError(
+                    f"{metadata_path}: {path.name} hash mismatch: {actual}"
+                )
+        regs = metadata.get("regs")
+        if not isinstance(regs, dict):
+            raise RuntimeError(f"{metadata_path}: missing register snapshot")
+        loaded[spine_name].append(
+            Fixture(
+                name=str(metadata["name"]),
+                spine=requested[spine_name],
+                tick=int(metadata["tick"]),
+                regs={name: int(value) for name, value in regs.items()},
+                sr=int(metadata["sr"]),
+                iram=iram,
+                work=work,
+            )
+        )
+
+    fixtures: list[Fixture] = []
+    for spine in spines:
+        available = loaded[spine.name]
+        if len(available) < cases_per_spine:
+            raise RuntimeError(
+                f"{source}: requested {cases_per_spine} retained "
+                f"{spine.name} fixtures but found {len(available)}"
+            )
+        fixtures.extend(available[:cases_per_spine])
+    return fixtures
+
+
+def prepare_fixture(
+    m: base.McpSession,
+    nat: Path,
+    fixture: Fixture,
+    *,
+    isolate_budget: bool,
+) -> None:
     m.load_state(str(nat))
     m.pause()
     m.write_memory(base.DP_SPACE, 0, fixture.iram.hex())
@@ -185,12 +357,15 @@ def prepare_fixture(m: base.McpSession, nat: Path, fixture: Fixture) -> None:
         )
     common.park_snes_cpu(m)
 
-    # Isolate this bounded span from asynchronous delivery while preserving
-    # the virtual instruction-budget delta as an explicit compared result.
-    write_u16(m, 0x7C, 7)
-    write_u16(m, 0x7E, 1)
-    write_u16(m, 0xAA, 0)
-    write_u16(m, 0xAC, 0x6000)
+    # The historical semantic mode isolates asynchronous delivery and reports
+    # the virtual-instruction delta.  The production-cadence mode retains the
+    # organic mask/pending/countdown cells so unsafe native boundary movement
+    # is observable instead of normalized away.
+    if isolate_budget:
+        write_u16(m, 0x7C, 7)
+        write_u16(m, 0x7E, 1)
+        write_u16(m, 0xAA, 0)
+        write_u16(m, 0xAC, 0x6000)
     write_u16(m, 0x4A, 0)
     write_u16(m, 0x4C, 0)
     write_u16(m, 0x4E, 0)
@@ -204,8 +379,21 @@ def run_fixture(
     fixture: Fixture,
     *,
     candidate: bool,
+    force_reference_gates_off: bool,
+    isolate_budget: bool,
 ) -> Result:
-    prepare_fixture(m, nat, fixture)
+    prepare_fixture(
+        m,
+        nat,
+        fixture,
+        isolate_budget=isolate_budget,
+    )
+    if not candidate and force_reference_gates_off:
+        # A same-ROM interpreted reference must disable both gameplay-native
+        # gates together.  Disabling only one is not a supported continuation
+        # convention once execution has entered a native body.
+        write_u16(m, 0x071A, 0)
+        write_u16(m, 0x073A, 0)
     hook = m.add_exec_hook(TEST_IDLE, cpu_type="Sa1")
     m.drain_notifications(timeout=0.05)
     base.set_sa1_pc(m, fixture.spine.entry_native if candidate else ILOOP)
@@ -269,6 +457,8 @@ def run_rom(
     stderr_log: Path,
     *,
     candidate: bool,
+    force_reference_gates_off: bool,
+    isolate_budget: bool,
 ) -> dict[str, Result]:
     results: dict[str, Result] = {}
     with base.McpSession(
@@ -282,7 +472,12 @@ def run_rom(
     ) as m:
         for fixture in fixtures:
             results[fixture.name] = run_fixture(
-                m, nat, fixture, candidate=candidate
+                m,
+                nat,
+                fixture,
+                candidate=candidate,
+                force_reference_gates_off=force_reference_gates_off,
+                isolate_budget=isolate_budget,
             )
     return results
 
@@ -296,10 +491,22 @@ def compare(fixture: Fixture, reference: Result, candidate: Result) -> dict:
         for name in base.REG_NAMES
         if reference.regs[name] != candidate.regs[name]
     }
-    work_mismatches = [
+    all_work_mismatches = [
         offset
         for offset, values in enumerate(zip(reference.work, candidate.work))
         if values[0] != values[1]
+    ]
+    terminal_sp = reference.regs["A7"] & 0xFFFF
+    residue_start = max(0, terminal_sp - POPPED_STACK_WINDOW)
+    popped_stack_residue = [
+        offset
+        for offset in all_work_mismatches
+        if residue_start <= offset < terminal_sp
+    ]
+    live_work_mismatches = [
+        offset
+        for offset in all_work_mismatches
+        if offset not in set(popped_stack_residue)
     ]
     scalar_mismatches = {}
     for name in ("sr", "aa", "terminal_pc"):
@@ -310,7 +517,11 @@ def compare(fixture: Fixture, reference: Result, candidate: Result) -> dict:
                 "reference": reference_value,
                 "candidate": candidate_value,
             }
-    green = not reg_mismatches and not work_mismatches and not scalar_mismatches
+    green = (
+        not reg_mismatches
+        and not live_work_mismatches
+        and not scalar_mismatches
+    )
     return {
         "event": "case",
         "case": fixture.name,
@@ -319,15 +530,39 @@ def compare(fixture: Fixture, reference: Result, candidate: Result) -> dict:
         "result": "green" if green else "red",
         "reg_mismatches": reg_mismatches,
         "scalar_mismatches": scalar_mismatches,
-        "work_mismatch_count": len(work_mismatches),
-        "work_mismatch_first": [
-            f"F0{offset:04X}" for offset in work_mismatches[:32]
+        "work_mismatch_count": len(all_work_mismatches),
+        "live_work_mismatch_count": len(live_work_mismatches),
+        "live_work_mismatch_first": [
+            f"F0{offset:04X}" for offset in live_work_mismatches[:32]
         ],
+        "popped_native_stack_residue": {
+            "accepted": True,
+            "range": f"F0{residue_start:04X}-F0{terminal_sp - 1:04X}",
+            "terminal_a7": f"F0{terminal_sp:04X}",
+            "different_bytes": len(popped_stack_residue),
+            "first_offsets": [
+                f"F0{offset:04X}" for offset in popped_stack_residue[:32]
+            ],
+        },
         "reference_cycles": reference.cycles,
         "candidate_cycles": candidate.cycles,
         "local_cycle_delta": reference.cycles - candidate.cycles,
         "reference_inext_hits": reference.inext_hits,
         "candidate_inext_hits": candidate.inext_hits,
+        "reference_trace_tail": [
+            {
+                "pc": f"{pc:06X}",
+                "irq_countdown": countdown,
+            }
+            for pc, countdown in reference.trace[-64:]
+        ],
+        "candidate_trace_tail": [
+            {
+                "pc": f"{pc:06X}",
+                "irq_countdown": countdown,
+            }
+            for pc, countdown in candidate.trace[-64:]
+        ],
         "reference_ac": reference.ac,
         "candidate_ac": candidate.ac,
         "ac_delta_testflag_noncomparable": candidate.ac - reference.ac,
@@ -343,38 +578,107 @@ def main() -> int:
     parser.add_argument("--nat", type=Path, default=base.DEFAULT_NAT)
     parser.add_argument("--port", type=int, default=7810)
     parser.add_argument("--cases-per-spine", type=int, default=4)
+    parser.add_argument(
+        "--spine",
+        action="append",
+        choices=tuple(SPINES),
+        default=None,
+        help="spine to validate; repeat for more than one (default: 122a4)",
+    )
+    parser.add_argument(
+        "--buttons",
+        type=lambda value: int(value, 0),
+        default=0x82,
+    )
+    parser.add_argument(
+        "--capture-a6",
+        type=lambda value: int(value, 0),
+        help="accept only an organic entry whose complete A6 equals this value",
+    )
+    parser.add_argument(
+        "--force-reference-gates-off",
+        action="store_true",
+        help=(
+            "disable both gameplay-native gates only in the interpreted "
+            "reference run; required for same-ROM A/B checks"
+        ),
+    )
+    parser.add_argument(
+        "--preserve-budget",
+        action="store_true",
+        help=(
+            "retain the organic interrupt mask, pending flag, and $AC "
+            "countdown instead of using the isolated $6000 semantic budget"
+        ),
+    )
+    parser.add_argument(
+        "--fixture-dir",
+        type=Path,
+        help=(
+            "reuse retained fixture-*.json/.iram.bin/.work.bin snapshots "
+            "instead of recapturing them from --state"
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     for path in (
         args.reference_rom,
         args.candidate_rom,
-        args.state,
         args.nexen,
         args.nat,
     ):
         if not path.is_file():
             parser.error(f"missing required input: {path}")
+    if args.fixture_dir is None:
+        if not args.state.is_file():
+            parser.error(f"missing required input: {args.state}")
+    elif not args.fixture_dir.is_dir():
+        parser.error(f"missing fixture directory: {args.fixture_dir}")
     if args.cases_per_spine < 1:
         parser.error("--cases-per-spine must be positive")
+    if not 0 <= args.buttons <= 0x0FFF:
+        parser.error("--buttons must be in 0..0xfff")
     if args.output.exists():
         parser.error(f"output already exists: {args.output}")
     args.output.mkdir(parents=True)
+    selected_spines = [
+        SPINES[name] for name in (args.spine or ["122a4"])
+    ]
 
     provenance = {
         "event": "provenance",
         "scope": (
             "live-fixture bounded combat-spine Nexen reference/candidate "
             "differential; all D/A registers, CCR/mask, terminal PC, and full "
-            "64 KiB work RAM; TESTFLAG $AC is reported but non-comparable "
-            "because nested production-only escapes are interpreted; not fps"
+            "64 KiB work RAM, with only explicitly reported native continuation "
+            "bytes below restored A7 accepted as dead stack residue; TESTFLAG "
+            "$AC is reported but non-comparable because nested production-only "
+            "escapes are interpreted; not fps"
         ),
         "reference_rom": str(args.reference_rom.resolve()),
         "reference_rom_sha256": sha256(args.reference_rom),
         "candidate_rom": str(args.candidate_rom.resolve()),
         "candidate_rom_sha256": sha256(args.candidate_rom),
-        "state": str(args.state.resolve()),
-        "state_sha256": sha256(args.state),
+        "state": (
+            str(args.state.resolve()) if args.fixture_dir is None else None
+        ),
+        "state_sha256": (
+            sha256(args.state) if args.fixture_dir is None else None
+        ),
+        "fixture_source": (
+            str(args.fixture_dir.resolve())
+            if args.fixture_dir is not None
+            else None
+        ),
         "cases_per_spine": args.cases_per_spine,
+        "buttons": args.buttons,
+        "capture_a6": (
+            f"{args.capture_a6:08X}"
+            if args.capture_a6 is not None
+            else None
+        ),
+        "force_reference_gates_off": args.force_reference_gates_off,
+        "isolate_budget": not args.preserve_budget,
         "spines": [
             {
                 "name": spine.name,
@@ -382,20 +686,30 @@ def main() -> int:
                 "entry_native": f"{spine.entry_native:06X}",
                 "terminals": [f"{pc:06X}" for pc in sorted(spine.terminals)],
             }
-            for spine in SPINES
+            for spine in selected_spines
         ],
         "time": time.time(),
     }
     events: list[dict] = [provenance]
     print(json.dumps(provenance, sort_keys=True), flush=True)
-    fixtures = capture_fixtures(
-        args.candidate_rom,
-        args.state,
-        args.nexen,
-        args.port,
-        args.cases_per_spine,
-        args.output,
-    )
+    if args.fixture_dir is None:
+        fixtures = capture_fixtures(
+            args.candidate_rom,
+            args.state,
+            args.nexen,
+            args.port,
+            args.cases_per_spine,
+            selected_spines,
+            args.buttons,
+            args.capture_a6,
+            args.output,
+        )
+    else:
+        fixtures = load_fixtures(
+            args.fixture_dir,
+            selected_spines,
+            args.cases_per_spine,
+        )
     for index, fixture in enumerate(fixtures):
         fixture_event = {
             "event": "fixture",
@@ -406,12 +720,31 @@ def main() -> int:
             "regs": fixture.regs,
             "iram_sha256": hashlib.sha256(fixture.iram).hexdigest(),
             "work_sha256": hashlib.sha256(fixture.work).hexdigest(),
+            "interrupt_mask": int.from_bytes(
+                fixture.iram[0x7C:0x7E],
+                "little",
+            )
+            & 7,
+            "virtual_irq_pending": int.from_bytes(
+                fixture.iram[0xAA:0xAC],
+                "little",
+            ),
+            "virtual_irq_countdown": int.from_bytes(
+                fixture.iram[0xAC:0xAE],
+                "little",
+            ),
         }
         events.append(fixture_event)
         print(json.dumps(fixture_event, sort_keys=True), flush=True)
         (args.output / f"fixture-{index:02d}.json").write_text(
             json.dumps(fixture_event, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
+        )
+        (args.output / f"fixture-{index:02d}.iram.bin").write_bytes(
+            fixture.iram
+        )
+        (args.output / f"fixture-{index:02d}.work.bin").write_bytes(
+            fixture.work
         )
 
     reference = run_rom(
@@ -422,6 +755,8 @@ def main() -> int:
         args.port + 2,
         args.output / "reference.stderr.log",
         candidate=False,
+        force_reference_gates_off=args.force_reference_gates_off,
+        isolate_budget=not args.preserve_budget,
     )
     candidate = run_rom(
         args.candidate_rom,
@@ -431,6 +766,8 @@ def main() -> int:
         args.port + 3,
         args.output / "candidate.stderr.log",
         candidate=True,
+        force_reference_gates_off=args.force_reference_gates_off,
+        isolate_budget=not args.preserve_budget,
     )
     for fixture in fixtures:
         event = compare(

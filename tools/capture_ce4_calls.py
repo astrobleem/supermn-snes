@@ -5,7 +5,9 @@ The table-convention native body sees the real 68K return followed by CE4's
 seven argument words.  Pausing only after a natural execution hook exposes the
 source frame, coordinates, output cursor, and capacity without injecting a
 call or changing game memory.  This is checkpointed diagnostic evidence, not
-performance or fps evidence.
+performance or fps evidence.  Both the project Nexen and exact Mesen controller
+are supported; exact Mesen uses neutral input because its input command is
+frame-bounded rather than a persistent hold.
 """
 
 from __future__ import annotations
@@ -28,6 +30,8 @@ import mesen_mcp.session as _session
 _session.validate_mesen_build = lambda *_args, **_kwargs: None
 from mesen_mcp import McpSession
 
+import measure_stage3_checkpoint as stage3
+
 
 DEFAULT_NEXEN = Path(
     "/mnt/sdc1/Nexen-r5-20260712/"
@@ -38,13 +42,28 @@ DEFAULT_STATE = (
 )
 ENTRY = 0x94FA00
 BODY_END = 0x94FD56
+EXPECTED_GATES = {
+    "loop_072e": 1,
+    "xlat_071a": 1,
+    "pacing_0734": 1,
+    "select_0736": 0x5EEC,
+    "fetch_chokepoint_073a": 1,
+    "switch_in_073c": 0xA55A,
+    "production_latch_0768": 1,
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rom", type=Path, default=ROOT / "build/interp.sfc")
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
-    parser.add_argument("--nexen", type=Path, default=DEFAULT_NEXEN)
+    parser.add_argument(
+        "--emulator",
+        "--nexen",
+        dest="emulator",
+        type=Path,
+        default=DEFAULT_NEXEN,
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--calls", type=int, default=40)
     parser.add_argument("--port", type=int, default=7802)
@@ -54,6 +73,8 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Hold this Nexen port-0 mask while capturing (for example 0x82 for Right+B).",
     )
+    parser.add_argument("--refresh-video-mirror", action="store_true")
+    parser.add_argument("--normalize-production-gates", action="store_true")
     return parser.parse_args()
 
 
@@ -177,35 +198,68 @@ def main() -> int:
         raise SystemExit("--calls must be positive")
     rom = args.rom.resolve()
     state = args.state.resolve()
-    nexen = args.nexen.resolve()
+    emulator = args.emulator.resolve()
     output = args.output.resolve()
-    for label, path in (("ROM", rom), ("state", state), ("Nexen", nexen)):
+    for label, path in (("ROM", rom), ("state", state), ("emulator", emulator)):
         if not path.is_file() or path.stat().st_size == 0:
             raise SystemExit(f"{label} missing or empty: {path}")
     if output.exists():
         raise SystemExit(f"refusing existing output: {output}")
     output.mkdir(parents=True)
-    os.environ["DOTNET_ROOT"] = "/home/chad/.dotnet10"
-    os.environ["PATH"] = "/home/chad/.dotnet10:" + os.environ.get("PATH", "")
+    is_nexen = emulator.name == "Nexen"
+    dotnet_root = "/home/chad/.dotnet10" if is_nexen else "/home/chad/.dotnet8"
+    other_dotnet = "/home/chad/.dotnet8" if is_nexen else "/home/chad/.dotnet10"
+    os.environ["DOTNET_ROOT"] = dotnet_root
+    current_path = [
+        item
+        for item in os.environ.get("PATH", "").split(":")
+        if item and item not in (dotnet_root, other_dotnet)
+    ]
+    os.environ["PATH"] = ":".join(
+        [dotnet_root, other_dotnet, *current_path]
+    )
+    if not is_nexen and args.input_buttons:
+        raise SystemExit(
+            "exact Mesen capture currently supports neutral input only; "
+            "use Nexen for a persistent nonzero input hold"
+        )
 
     calls: list[dict[str, object]] = []
     misses: list[dict[str, object]] = []
+    interventions: list[dict[str, object]] = []
     with McpSession(
         rom=rom,
-        mesen=nexen,
+        mesen=emulator,
         cwd=ROOT,
         port=args.port,
         boot_wait=8.0,
         socket_timeout=120.0,
-        stderr_log=output / "nexen.stderr.log",
+        stderr_log=output / "emulator.stderr.log",
     ) as m:
         m.pause()
         m.load_state(state)
         m.pause()
-        m.tool(
-            "set_input",
-            {"port": 0, "buttons": args.input_buttons, "hold": True},
-        )
+        if args.refresh_video_mirror:
+            interventions.extend(stage3.migrate_checkpoint_video(m, rom.read_bytes()))
+        if args.normalize_production_gates:
+            before = stage3.gates(m)
+            for name, address in stage3.GATE_ADDRS.items():
+                stage3.write_u16(m, address, EXPECTED_GATES[name])
+            after = stage3.gates(m)
+            if after != EXPECTED_GATES:
+                raise RuntimeError(f"production gate normalization failed: {after}")
+            interventions.append(
+                {
+                    "kind": "checkpoint_production_gate_normalization",
+                    "before": before,
+                    "after": after,
+                }
+            )
+        if is_nexen:
+            m.tool(
+                "set_input",
+                {"port": 0, "buttons": args.input_buttons, "hold": True},
+            )
         attempt = 0
         while len(calls) < args.calls and attempt < args.calls * 20:
             call, miss = capture_call(m, len(calls), attempt)
@@ -239,10 +293,13 @@ def main() -> int:
         "rom_sha256": sha256(rom),
         "state": str(state),
         "state_sha256": sha256(state),
-        "nexen": str(nexen),
-        "nexen_sha256": sha256(nexen),
+        "emulator": str(emulator),
+        "emulator_sha256": sha256(emulator),
         "input_buttons": args.input_buttons,
-        "input_transport": "nexen_port0_manual_4016",
+        "input_transport": (
+            "nexen_port0_persistent_hold" if is_nexen else "exact_mesen_neutral"
+        ),
+        "interventions": interventions,
         "call_count": len(calls),
         "miss_count": len(misses),
         "signatures": [

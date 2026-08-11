@@ -17,6 +17,9 @@ IMPORTS = [
             "Lf25110_267",
             "L25110_25816",
             "h25110_final_tst_rebuild",
+            "entry_25110_resume_2582a",
+            "entry_25110_resume_2582e",
+            "entry_25110_resume_259b0",
             "entry_1d5f0",
             "Lcaf6_cb9c",
             "caf6_generated_loop_record",
@@ -105,6 +108,11 @@ IMPORTS = [
             "entry_11bdc",
             "entry_11c9a",
         ],
+    ),
+    (
+        Path("src/escbank9.sym"),
+        0x9F,
+        ["br1337e_1"],
     ),
 ]
 

@@ -11,7 +11,8 @@ a $00FD sentinel (resumes via ors_pre -> ors_94chk -> bank $94) instead of $92's
 import re, sys
 from pathlib import Path
 
-NEEDED = ["inext", ("entry_ce4","ce4_leaf"), "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
+NEEDED = ["inext", ("entry_ce4","ce4_leaf"), "entry_ce4_after_counter",
+          "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
           "rdw_ea_l", "readbyte_l", "writeword_l", "writebyte_l", "usmul_l",
           "op_rts_sentinel", "ojmp_hook", "ors_pre"]
 

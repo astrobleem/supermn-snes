@@ -128,7 +128,7 @@ end)
          "-nothrottle","-skip_gameinfo","-seconds_to_run",str(secs),
          "-autoboot_script",script,"-autoboot_delay","0",
          "-nvram_directory",NVRAM,"-cfg_directory",CFG]
-    env=os.environ.copy()
+    env=OT.mame_environment(os.environ)
     env.setdefault("SDL_VIDEODRIVER","dummy"); env.setdefault("SDL_AUDIODRIVER","dummy")
     try:
         subprocess.run(cmd, cwd=OT.REPO, capture_output=True, timeout=secs+40, env=env)
@@ -482,6 +482,7 @@ def generate():
 
 # ===========================================================================
 def main():
+    print(f"MAME oracle: {OT.mame_identity()}", flush=True)
     flt=os.environ.get("SWEEP_FILTER")
     cells=generate()
     if flt:

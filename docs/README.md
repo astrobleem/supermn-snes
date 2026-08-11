@@ -16,6 +16,9 @@ Use this path to build, test, play, or continue the present port.
 4. [Controls and playtesting](current/CONTROLS.md).
 5. [Validation matrix](current/VALIDATION.md) — commands and the scope of each result.
 6. [Current architecture](current/ARCHITECTURE.md).
+7. [August 11 engineering checkpoint](current/ENGINEERING_CHECKPOINT_20260811.md)
+   — exact ROM identities, campaign coverage, save-state workflow, screenshots,
+   and the current handoff.
 
 The [current-project index](current/README.md) links the deeper Superman-specific
 renderer, C-Chip, object-processing, sound-command, and ROM-input documents.

@@ -16,12 +16,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import validate_d96_hle as base
 import validate_175a0_native as common
+from mame_0287 import MAME, environment as mame_environment
+from mame_0287 import identity as mame_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,10 +34,11 @@ DEFAULT_STATE = (
 )
 DEFAULT_CANDIDATE_SYM = ROOT / "src/escbank4.sym"
 DEFAULT_CANDIDATE_HOT_SYM = ROOT / "src/escbank3.sym"
+DEFAULT_INTERP_SYM = ROOT / "src/interp.sym"
 ENTRY_PC = 0x01E7C0
 ENTRY_NATIVE = 0x98AE00
 EXIT_PC = 0x01E7BE
-DEBUG_SPIN = 0x00E2CF
+OP_ILLEGAL = 0x00CDED
 MAPPED_WORK_SIZE = 0x4000
 FULL_WORK_SIZE = 0x10000
 
@@ -56,6 +60,12 @@ return #MCP_1E7C0_SR_TAPS
 """
 
 
+def ensure_paused(m: base.McpSession) -> None:
+    """Pause only when running; a redundant Nexen pause can step the SA-1."""
+    if not bool(m.get_state().get("isPaused")):
+        m.pause()
+
+
 @dataclass
 class LiveCase:
     name: str
@@ -63,6 +73,55 @@ class LiveCase:
     sr: int
     work: bytes
     tick: int
+
+
+def load_fixture_cases(fixture_dir: Path, count: int) -> list[LiveCase]:
+    """Load retained organic fixtures without depending on their old ROM."""
+
+    metadata_paths = sorted(fixture_dir.glob("case-*.json"))
+    if len(metadata_paths) < count:
+        raise RuntimeError(
+            f"{fixture_dir} contains only {len(metadata_paths)} fixture metadata "
+            f"files, need {count}"
+        )
+    cases: list[LiveCase] = []
+    for metadata_path in metadata_paths[:count]:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        work_path = metadata_path.with_suffix(".work.bin")
+        if not work_path.is_file():
+            raise RuntimeError(f"missing fixture work image: {work_path}")
+        work = work_path.read_bytes()
+        if len(work) != FULL_WORK_SIZE:
+            raise RuntimeError(
+                f"{work_path} is {len(work)} bytes, expected {FULL_WORK_SIZE}"
+            )
+        expected_sha = payload.get("work_sha256")
+        observed_sha = hashlib.sha256(work).hexdigest()
+        if expected_sha != observed_sha:
+            raise RuntimeError(
+                f"{work_path} SHA-256 {observed_sha} does not match "
+                f"metadata {expected_sha}"
+            )
+        regs = payload.get("regs")
+        if not isinstance(regs, dict) or set(regs) != set(base.REG_NAMES):
+            raise RuntimeError(
+                f"{metadata_path} does not contain the exact D0-D7/A0-A7 set"
+            )
+        reasons = hot_guard_reasons(regs, work)
+        if reasons:
+            raise RuntimeError(
+                f"{metadata_path} fails the current native root guard: {reasons}"
+            )
+        cases.append(
+            LiveCase(
+                name=str(payload["name"]),
+                regs={name: int(regs[name]) for name in base.REG_NAMES},
+                sr=int(payload["sr"]),
+                work=work,
+                tick=int(payload["tick"]),
+            )
+        )
+    return cases
 
 
 def sha256(path: Path) -> str:
@@ -142,9 +201,9 @@ def capture_live_cases(
         socket_timeout=180.0,
         stderr_log=stderr_log,
     ) as m:
-        m.pause()
+        ensure_paused(m)
         m.load_state(str(state))
-        m.pause()
+        ensure_paused(m)
         if input_buttons is not None:
             m.tool(
                 "set_input",
@@ -163,7 +222,7 @@ def capture_live_cases(
                         f"production capture attempt {attempt} did not reach native entry: "
                         f"{hit!r}"
                     )
-                m.pause()
+                ensure_paused(m)
                 cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
                 if cycles <= previous_cycles:
                     raise RuntimeError("native-entry capture did not advance")
@@ -319,10 +378,19 @@ def nexen_result(
     *,
     xlat_gate: int,
     choke_gate: int,
+    test_idle: int,
+    inext: int,
+    debug_spin: int,
+    diagnostic_fetch_freeze: bool,
     work_size: int = MAPPED_WORK_SIZE,
-) -> base.Result:
+    root_native: bool = True,
+    max_handoffs: int = 1024,
+    pre_state: Path | None = None,
+    terminal_illegal: bool = False,
+    boundary_tool: str | None = None,
+) -> tuple[base.Result, dict]:
     m.load_state(str(nat))
-    m.pause()
+    ensure_paused(m)
     reg_blob = b"".join(base.le32(case.regs[name]) for name in base.REG_NAMES)
     m.write_memory(base.DP_SPACE, 0x00, reg_blob.hex())
     for offset in range(0, len(case.work), 0x4000):
@@ -349,6 +417,13 @@ def nexen_result(
     write_u16(m, 0xA8, 1)
     write_u16(m, 0xAA, 0)
     write_u16(m, 0xAC, 0x7000)
+    # The retained native harness state can leave the single-step go flag
+    # armed.  If it is still one when the root reaches inext, test_idle
+    # immediately consumes it, clears the done marker, and begins an
+    # unrelated opcode before the boundary hook is observed.  Start the
+    # injected root with the poll gate closed; the loop below explicitly
+    # arms it only when advancing an intermediate interpreted opcode.
+    write_u16(m, 0xA0, 0)
     write_u16(m, 0x0702, 0)
     write_u16(m, 0x0704, 1)
     write_u16(m, 0x0710, EXIT_PC & 0xFFFF)
@@ -364,15 +439,130 @@ def nexen_result(
     write_u16(m, 0x0738, 0)
     write_u16(m, 0x073A, choke_gate)
     write_u16(m, 0x073C, 0)
+    if diagnostic_fetch_freeze and terminal_illegal:
+        raise RuntimeError(
+            "diagnostic fetch freeze and terminal ILLEGAL are mutually exclusive"
+        )
+    if diagnostic_fetch_freeze:
+        # PC_RING=1 retains dbg_fetch and its exact emulated-PC freeze.  This
+        # lets intervening IRQ/task work run normally and stops before the
+        # terminal opcode is dispatched.
+        write_u16(m, 0x7E, 0)
+        seam_address = debug_spin
+    elif terminal_illegal:
+        # Production packs out dbg_fetch.  Replace only the terminal 68000
+        # TRAP word in Nexen's mutable ROM view with ILLEGAL, and make the
+        # interpreter's op_illegal entry a stable BRA -2.  The entry fixture
+        # is retained before either validation-only patch.  This avoids
+        # thousands of MCP single-step round trips for a true root-interpreted
+        # run while stopping before op_illegal mutates architectural state.
+        write_u16(m, 0x7E, 0)
+        seam_address = OP_ILLEGAL
+    else:
+        # Production packs out dbg_fetch.  Use the interpreter's supported
+        # single-step mode and advance any intermediate IRQ/task opcodes below.
+        write_u16(m, 0x7E, 1)
+        seam_address = test_idle
 
-    seam_hook = m.add_exec_hook(DEBUG_SPIN, cpu_type="Sa1")
-    m.drain_notifications(timeout=0.05)
-    base.set_sa1_pc(m, ENTRY_NATIVE)
+    base.set_sa1_pc(m, ENTRY_NATIVE if root_native else inext)
+    pre_state_info = None
+    if pre_state is not None:
+        pre_state.parent.mkdir(parents=True, exist_ok=True)
+        response = m.save_state(pre_state.resolve())
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            if pre_state.is_file() and pre_state.stat().st_size:
+                break
+            time.sleep(0.05)
+        else:
+            raise RuntimeError(f"save state was not flushed: {pre_state}")
+        pre_state_info = {
+            "path": str(pre_state.resolve()),
+            "sha256": sha256(pre_state),
+            "size": pre_state.stat().st_size,
+            "response": response,
+        }
+    terminal_offset = 0x10000 + EXIT_PC
+    illegal_offset = OP_ILLEGAL - 0x8000
+    terminal_original = b""
+    illegal_original = b""
+    if terminal_illegal:
+        terminal_original = bytes(
+            m.read_memory("snesPrgRom", terminal_offset, 2)
+        )
+        illegal_original = bytes(
+            m.read_memory("snesPrgRom", illegal_offset, 2)
+        )
+        if terminal_original != b"\x4E\x45":
+            raise RuntimeError(
+                f"terminal ${EXIT_PC:06X} is "
+                f"{terminal_original.hex().upper()}, expected TRAP #5 4E45"
+            )
+        m.write_memory("snesPrgRom", terminal_offset, "4afc")
+        m.write_memory("snesPrgRom", illegal_offset, "80fe")
+
+    seam_hook = (
+        None
+        if boundary_tool is not None
+        else m.add_exec_hook(seam_address, cpu_type="Sa1")
+    )
+    if seam_hook is not None:
+        m.drain_notifications(timeout=0.05)
     start_cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
-    hit = m.run_until(max_frames=60, hook_handle=seam_hook)
-    m.pause()
-    m.remove_hook(seam_hook)
-    if (hit or {}).get("reason") != "hookFired":
+    try:
+        if boundary_tool is None:
+            hit = m.run_until(
+                max_frames=240 if terminal_illegal else 60,
+                hook_handle=seam_hook,
+            )
+        else:
+            hit = m.tool(
+                boundary_tool,
+                {
+                    "address": seam_address,
+                    "cpuType": "Sa1",
+                    "maxFrames": 240 if terminal_illegal else 60,
+                    "occurrences": 1,
+                },
+            )
+        ensure_paused(m)
+    finally:
+        if seam_hook is not None:
+            m.remove_hook(seam_hook)
+        if terminal_illegal:
+            m.write_memory(
+                "snesPrgRom", terminal_offset, terminal_original.hex()
+            )
+            m.write_memory(
+                "snesPrgRom", illegal_offset, illegal_original.hex()
+            )
+    expected_reason = "hookFired" if boundary_tool is None else "breakpoint"
+    exact_stop_ok = True
+    if boundary_tool is not None:
+        exact_address = (
+            ((int((hit or {}).get("k", 0)) & 0xFF) << 16)
+            | (int((hit or {}).get("pc", 0)) & 0xFFFF)
+        )
+        exact_stop_ok = (
+            exact_address == seam_address
+            and int((hit or {}).get("observedOccurrences", -1)) == 1
+            and (hit or {}).get("isPaused") is True
+            and (hit or {}).get("scopedBreakpointRemoved") is True
+        )
+        if boundary_tool == "run_to_exact_exec_stop":
+            exact_stop_ok = (
+                exact_stop_ok
+                and (hit or {}).get("exactStopTriggered") is True
+                and (hit or {}).get("exactStopBreakDelivered") is True
+            )
+    if (
+        (hit or {}).get("reason") != expected_reason
+        or (
+            boundary_tool is not None
+            and (hit or {}).get("hit") is not True
+        )
+        or not exact_stop_ok
+    ):
         observed_pc = common.read_u16(m, 0x40) | (
             (common.read_u16(m, 0x42) & 0xFF) << 16
         )
@@ -386,20 +576,90 @@ def nexen_result(
             f"SA1 PC=${((int(cpu.get('k', 0)) << 16) | int(cpu.get('pc', 0))):06X}, "
             f"SA1 cycles={int(cpu.get('cycleCount', 0))}"
         )
-    end_cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
     observed_pc = common.read_u16(m, 0x40) | (
         (common.read_u16(m, 0x42) & 0xFF) << 16
     )
-    if not common.read_u16(m, 0x0712) or observed_pc != EXIT_PC:
-        raise RuntimeError(
-            f"Nexen froze at ${observed_pc:06X}, expected ${EXIT_PC:06X}"
-        )
+    handoff_pcs = [observed_pc]
+    if diagnostic_fetch_freeze:
+        if not common.read_u16(m, 0x0712) or observed_pc != EXIT_PC:
+            raise RuntimeError(
+                f"Nexen diagnostic freeze stopped at ${observed_pc:06X}, "
+                f"marker=${common.read_u16(m, 0x0712):04X}; "
+                f"expected ${EXIT_PC:06X}/$0001"
+            )
+        boundary_mode = "diagnostic_dbg_fetch"
+    elif terminal_illegal:
+        if observed_pc != EXIT_PC:
+            raise RuntimeError(
+                f"Nexen terminal-ILLEGAL freeze stopped at "
+                f"${observed_pc:06X}, expected ${EXIT_PC:06X}"
+            )
+        boundary_mode = "production_terminal_illegal"
+    else:
+        if common.read_u16(m, 0x4E) != 1:
+            raise RuntimeError(
+                f"Nexen first single-step handoff at ${observed_pc:06X} has "
+                f"marker ${common.read_u16(m, 0x4E):04X}, expected $0001"
+            )
+        # AC-charged native work can legitimately hand off to the interpreted
+        # level-6 IRQ handler before the terminal trap.  Execute each such 68K
+        # instruction through the interpreter's supported single-step
+        # handshake, alternating exact test_idle/inext hooks.
+        for _step in range(max_handoffs):
+            if observed_pc == EXIT_PC:
+                break
+            inext_hook = m.add_exec_hook(inext, cpu_type="Sa1")
+            write_u16(m, 0xA0, 1)
+            step_hit = m.run_until(max_frames=8, hook_handle=inext_hook)
+            ensure_paused(m)
+            m.remove_hook(inext_hook)
+            if (step_hit or {}).get("reason") != "hookFired":
+                raise RuntimeError(
+                    f"Nexen did not complete single-step opcode "
+                    f"${observed_pc:06X}: {step_hit!r}"
+                )
+            observed_pc = common.read_u16(m, 0x40) | (
+                (common.read_u16(m, 0x42) & 0xFF) << 16
+            )
+            handoff_pcs.append(observed_pc)
+            if observed_pc == EXIT_PC:
+                break
+            idle_hook = m.add_exec_hook(test_idle, cpu_type="Sa1")
+            idle_hit = m.run_until(max_frames=8, hook_handle=idle_hook)
+            ensure_paused(m)
+            m.remove_hook(idle_hook)
+            if (idle_hit or {}).get("reason") != "hookFired":
+                raise RuntimeError(
+                    f"Nexen did not return to test_idle after opcode "
+                    f"${handoff_pcs[-2]:06X}: {idle_hit!r}"
+                )
+        else:
+            raise RuntimeError(
+                f"Nexen exceeded {max_handoffs} interpreted handoffs; "
+                f"last PC=${observed_pc:06X}"
+            )
+        if observed_pc != EXIT_PC:
+            raise RuntimeError(
+                f"Nexen stopped at ${observed_pc:06X}, "
+                f"expected terminal ${EXIT_PC:06X}"
+            )
+        boundary_mode = "production_single_step"
+    end_cycles = int(m.get_cpu_state("Sa1")["cycleCount"])
     sr = 0x2000 | ((common.read_u16(m, 0x7C) & 7) << 8) | common.captured_ccr(m)
-    return base.Result(
-        common.captured_regs(m),
-        sr,
-        bytes(m.read_memory(base.SNES_SPACE, 0x400000, work_size)),
-        end_cycles - start_cycles,
+    return (
+        base.Result(
+            common.captured_regs(m),
+            sr,
+            bytes(m.read_memory(base.SNES_SPACE, 0x400000, work_size)),
+            end_cycles - start_cycles,
+        ),
+        {
+            "mode": boundary_mode,
+            "root_native": root_native,
+            "interpreted_instruction_count": len(handoff_pcs) - 1,
+            "handoff_pcs": [f"{pc:06X}" for pc in handoff_pcs],
+            "pre_state": pre_state_info,
+        },
     )
 
 
@@ -409,8 +669,7 @@ def compare(
     console: base.Result,
     xlat_gate: int,
     choke_gate: int,
-    candidate_br10: int,
-    candidate_hot_return: int,
+    boundary: dict,
 ) -> dict:
     reg_mismatches = {
         name: {"mame": arcade.regs[name], "nexen": console.regs[name]}
@@ -422,62 +681,30 @@ def compare(
         for offset, (left, right) in enumerate(zip(arcade.work, console.work))
         if left != right
     ]
-    # The original jsr(a4) at $01F096 pushes return address $0001F098.
-    # The native guarded bridge instead pushes $00FB:br1e7c0_10.  Both calls
-    # pop the value, leaving four dead bytes at entry-A7-$12; the leading zero
-    # agrees, so normally only the final three appear in the diff.  Permit
-    # precisely those value-checked bytes and no other stack residue.
+    # Native bridges use bank-$FB/$FC sentinels to resume, so the popped stack
+    # residue is observable and must match the original execution exactly.
+    # Early fixtures reached this root through the jsr(a4) at $01F096 and
+    # therefore left $0001F098 here.  Other organic callers legitimately
+    # reuse the same stack slot before the terminal seam; use MAME as the
+    # caller-specific oracle instead of hard-coding that one return address.
     residue = ((case.regs["A7"] & 0xFFFF) - 0x12) & 0xFFFF
-    mame_return = (0x00, 0x01, 0xF0, 0x98)
-    native_returns = {
-        "generated": (
-            0x00,
-            0xFB,
-            (candidate_br10 >> 8) & 0xFF,
-            candidate_br10 & 0xFF,
-        ),
-        "hot": (
-            0x00,
-            0xFC,
-            (candidate_hot_return >> 8) & 0xFF,
-            candidate_hot_return & 0xFF,
-        ),
-    }
-    observed_native_return = tuple(
+    observed_mame_return = bytes(
+        arcade.work[(residue + index) & 0xFFFF] for index in range(4)
+    )
+    observed_native_return = bytes(
         console.work[(residue + index) & 0xFFFF] for index in range(4)
     )
-    native_return_kind = next(
-        (
-            name
-            for name, value in native_returns.items()
-            if value == observed_native_return
-        ),
-        None,
-    )
-    native_return = (
-        native_returns[native_return_kind]
-        if native_return_kind is not None
-        else observed_native_return
-    )
-    expected_residue = {
-        (residue + index) & 0xFFFF: (mame_byte, native_byte)
-        for index, (mame_byte, native_byte) in enumerate(
-            zip(mame_return, native_return)
-        )
-    }
-    allowed_return_residue = [
-        offset
-        for offset in all_work_mismatches
-        if native_return_kind is not None
-        if offset in expected_residue
-        and (arcade.work[offset], console.work[offset]) == expected_residue[offset]
-    ]
-    work_mismatches = [
-        offset for offset in all_work_mismatches if offset not in allowed_return_residue
-    ]
+    return_residue_exact = observed_native_return == observed_mame_return
+    work_mismatches = all_work_mismatches
     ccr_mismatch = (arcade.sr & base.CCR_MASK) != (console.sr & base.CCR_MASK)
     mask_mismatch = ((arcade.sr >> 8) & 7) != ((console.sr >> 8) & 7)
-    green = not reg_mismatches and not work_mismatches and not ccr_mismatch and not mask_mismatch
+    green = (
+        not reg_mismatches
+        and not work_mismatches
+        and not ccr_mismatch
+        and not mask_mismatch
+        and return_residue_exact
+    )
     return {
         "event": "case",
         "case": case.name,
@@ -485,6 +712,7 @@ def compare(
         "terminal_pc": f"{EXIT_PC:06X}",
         "nested_xlat_gate": xlat_gate,
         "fetch_choke_gate": choke_gate,
+        "nexen_boundary": boundary,
         "result": "green" if green else "red",
         "reg_mismatches": reg_mismatches,
         "mame_ccr": arcade.sr & base.CCR_MASK,
@@ -501,21 +729,16 @@ def compare(
             }
             for offset in work_mismatches[:24]
         ],
-        "allowed_return_residue": {
+        "return_residue": {
             "reason": (
-                "popped original $0001F098 versus native "
-                "$00FB:br1e7c0_10 or $00FC:h1e7c0_hot_return "
-                "at entry A7-$12"
+                "popped native continuation residue at entry A7-$12 must "
+                "match the caller-specific MAME result"
             ),
-            "offsets": [f"F0{offset:04X}" for offset in allowed_return_residue],
-            "mame_return": "0001F098",
-            "nexen_return": "".join(f"{byte:02X}" for byte in native_return),
-            "nexen_return_kind": native_return_kind,
-            "accepted_native_returns": {
-                name: "".join(f"{byte:02X}" for byte in value)
-                for name, value in native_returns.items()
-            },
-            "exact": len(allowed_return_residue) == len(all_work_mismatches),
+            "address": f"F0{residue:04X}",
+            "expected": "MAME_ORACLE",
+            "mame": observed_mame_return.hex().upper(),
+            "nexen": observed_native_return.hex().upper(),
+            "exact": return_residue_exact,
         },
         "nexen_cycles": console.cycles,
     }
@@ -530,6 +753,22 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=7630)
     parser.add_argument("--cases", type=int, default=6)
     parser.add_argument(
+        "--fixture-dir",
+        type=Path,
+        help=(
+            "Replay retained case-*.json/case-*.work.bin organic fixtures "
+            "instead of capturing from --state."
+        ),
+    )
+    parser.add_argument(
+        "--fixtures-captured-at-hot-entry",
+        action="store_true",
+        help=(
+            "Record that replay fixtures were captured after the read-only "
+            "bank-$98 guard and therefore replay its idempotent prologue."
+        ),
+    )
+    parser.add_argument(
         "--input-buttons",
         type=lambda value: int(value, 0),
         help="Optional held 12-bit controller mask while capturing live fixtures.",
@@ -543,6 +782,15 @@ def main() -> int:
         "--candidate-hot-sym",
         type=Path,
         default=DEFAULT_CANDIDATE_HOT_SYM,
+    )
+    parser.add_argument("--interp-sym", type=Path, default=DEFAULT_INTERP_SYM)
+    parser.add_argument(
+        "--diagnostic-fetch-freeze",
+        action="store_true",
+        help=(
+            "Require a PC_RING=1 ROM and use dbg_fetch's exact $0710 terminal "
+            "freeze. The diagnostic call is size-neutral to production."
+        ),
     )
     parser.add_argument(
         "--capture-hot-entry",
@@ -569,18 +817,51 @@ def main() -> int:
         action="store_true",
         help="Validate nested xlat on, with fetch choke both off and on.",
     )
+    parser.add_argument(
+        "--root-interpreted-native-off",
+        action="store_true",
+        help=(
+            "run the all-gates-off variant from inext rather than the native "
+            "root; required for a whole-root interpreter comparison"
+        ),
+    )
+    parser.add_argument(
+        "--terminal-illegal",
+        action="store_true",
+        help=(
+            "use the reversible production terminal ILLEGAL trap instead of "
+            "the single-step handoff loop"
+        ),
+    )
+    parser.add_argument(
+        "--retain-prestates",
+        action="store_true",
+        help=(
+            "retain the fully configured native-off/on state before each "
+            "bounded execution"
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    mame_oracle = mame_identity()
+    os.environ.update(mame_environment(os.environ))
     for path in (
         args.rom,
-        args.state,
         args.nexen,
         args.nat,
         args.candidate_sym,
         args.candidate_hot_sym,
+        args.interp_sym,
     ):
         if not path.is_file():
             parser.error(f"missing required input: {path}")
+    if args.fixture_dir is None:
+        if not args.state.is_file():
+            parser.error(f"missing required input: {args.state}")
+    elif not args.fixture_dir.is_dir():
+        parser.error(f"missing fixture directory: {args.fixture_dir}")
+    if args.fixtures_captured_at_hot_entry and args.fixture_dir is None:
+        parser.error("--fixtures-captured-at-hot-entry requires --fixture-dir")
     if args.cases < 1:
         parser.error("--cases must be positive")
     if args.skip_fixtures < 0:
@@ -598,6 +879,9 @@ def main() -> int:
     candidate_hot_entry = 0x970000 | symbol_offset(
         args.candidate_hot_sym, "h1e7c0_hot_loop"
     )
+    test_idle = symbol_offset(args.interp_sym, "test_idle")
+    inext = symbol_offset(args.interp_sym, "inext")
+    debug_spin = symbol_offset(args.interp_sym, "df_spin")
     capture_native = candidate_hot_entry if args.capture_hot_entry else ENTRY_NATIVE
     variants = (
         ((1, 0), (1, 1))
@@ -610,6 +894,12 @@ def main() -> int:
     if fixture_dir.exists():
         parser.error(f"fixture directory already exists: {fixture_dir}")
     fixture_dir.mkdir()
+    artifact_dir: Path | None = None
+    if args.retain_prestates:
+        artifact_dir = args.output.parent / f"{args.output.stem}-artifacts"
+        if artifact_dir.exists():
+            parser.error(f"artifact directory already exists: {artifact_dir}")
+        artifact_dir.mkdir()
 
     events: list[dict] = []
     provenance = {
@@ -618,21 +908,47 @@ def main() -> int:
             "live-fixture function-local $01E7C0 MAME/Nexen differential; "
             "all D/A registers, CCR/mask, mapped 16 KiB work RAM; not fps"
         ),
-        "mame": "/snap/bin/mame 0.287",
+        "mame": mame_oracle,
         "nexen": str(args.nexen.resolve()),
         "nexen_sha256": sha256(args.nexen),
         "rom": str(args.rom.resolve()),
         "rom_sha256": sha256(args.rom),
-        "state": str(args.state.resolve()),
-        "state_sha256": sha256(args.state),
+        "state": str(args.state.resolve()) if args.fixture_dir is None else None,
+        "state_sha256": sha256(args.state) if args.fixture_dir is None else None,
+        "fixture_source": (
+            str(args.fixture_dir.resolve()) if args.fixture_dir is not None else None
+        ),
         "nat": str(args.nat.resolve()),
         "nat_sha256": sha256(args.nat),
         "entry_pc": f"{ENTRY_PC:06X}",
         "entry_native": f"{ENTRY_NATIVE:06X}",
         "capture_native": f"{capture_native:06X}",
-        "capture_after_read_only_root_guard": args.capture_hot_entry,
-        "capture_replayed_idempotent_prologue": args.capture_hot_entry,
+        "capture_after_read_only_root_guard": (
+            args.capture_hot_entry
+            if args.fixture_dir is None
+            else args.fixtures_captured_at_hot_entry
+        ),
+        "capture_replayed_idempotent_prologue": (
+            args.capture_hot_entry
+            if args.fixture_dir is None
+            else args.fixtures_captured_at_hot_entry
+        ),
         "terminal_pc": f"{EXIT_PC:06X}",
+        "nexen_boundary_method": (
+            (
+                f"PC_RING=1 dbg_fetch freeze at df_spin=${debug_spin:06X}; "
+                "intermediate IRQ/task work runs normally; terminal opcode "
+                "not executed"
+            )
+            if args.diagnostic_fetch_freeze
+            else (
+                f"production single-step first native-to-inext handoff; "
+                f"test_idle=${test_idle:06X}, inext=${inext:06X}; "
+                "intermediate IRQ/task opcodes single-stepped; terminal "
+                "opcode not executed"
+            )
+        ),
+        "pc_ring_diagnostic": args.diagnostic_fetch_freeze,
         "mame_irq_isolation": {
             "reason": "prevent unrelated held IRQ6 during local injection",
             "entry_mask": 7,
@@ -645,13 +961,14 @@ def main() -> int:
             "prefetch with entry SP"
         ),
         "synthetic_return_layout": {
-            "original_return": "0001F098",
-            "native_returns": {
+            "historical_01F096_caller_return": "0001F098",
+            "internal_native_continuations": {
                 "generated": f"00FB{candidate_br10:04X}",
                 "hot": f"00FC{candidate_hot_return:04X}",
             },
-            "allowed_residue": (
-                "only exact differing bytes in the popped return at entry A7-$12"
+            "required_post_pop_residue": (
+                "exact caller-specific MAME bytes at entry A7-$12; "
+                "full mapped-work equality remains mandatory"
             ),
         },
         "fixtures": args.cases,
@@ -660,6 +977,12 @@ def main() -> int:
             {"nested_xlat_gate": xlat, "fetch_choke_gate": choke}
             for xlat, choke in variants
         ],
+        "root_interpreted_native_off": args.root_interpreted_native_off,
+        "terminal_illegal": args.terminal_illegal,
+        "retain_prestates": args.retain_prestates,
+        "artifact_directory": (
+            str(artifact_dir.resolve()) if artifact_dir is not None else None
+        ),
         "capture_input_buttons": args.input_buttons,
         "capture_skipped_fixtures": args.skip_fixtures,
         "capture_max_frames": args.capture_max_frames,
@@ -672,18 +995,22 @@ def main() -> int:
     events.append(provenance)
     print(json.dumps(provenance, sort_keys=True), flush=True)
 
-    cases, rejected = capture_live_cases(
-        args.rom,
-        args.state,
-        args.nexen,
-        args.port,
-        args.cases,
-        fixture_dir / "capture.nexen.stderr.log",
-        args.input_buttons,
-        capture_native,
-        args.skip_fixtures,
-        args.capture_max_frames,
-    )
+    if args.fixture_dir is None:
+        cases, rejected = capture_live_cases(
+            args.rom,
+            args.state,
+            args.nexen,
+            args.port,
+            args.cases,
+            fixture_dir / "capture.nexen.stderr.log",
+            args.input_buttons,
+            capture_native,
+            args.skip_fixtures,
+            args.capture_max_frames,
+        )
+    else:
+        cases = load_fixture_cases(args.fixture_dir, args.cases)
+        rejected = []
     filter_event = {
         "event": "capture_filter",
         "accepted": len(cases),
@@ -712,7 +1039,7 @@ def main() -> int:
     arcade: dict[str, base.Result] = {}
     for case in cases:
         mame = base.MameSession(
-            mame="/snap/bin/mame",
+            mame=str(MAME),
             system="superman",
             rompath=str(base.MAME_TRACE / "roms"),
             workdir=str(base.MAME_TRACE),
@@ -744,12 +1071,36 @@ def main() -> int:
     ) as nexen:
         for case in cases:
             for xlat_gate, choke_gate in variants:
-                console = nexen_result(
+                root_native = not (
+                    args.root_interpreted_native_off
+                    and xlat_gate == 0
+                    and choke_gate == 0
+                )
+                configuration = (
+                    "root-interpreted-gates-0-0"
+                    if not root_native
+                    else f"native-root-xlat-{xlat_gate}-choke-{choke_gate}"
+                )
+                console, boundary = nexen_result(
                     nexen,
                     args.nat,
                     case,
                     xlat_gate=xlat_gate,
                     choke_gate=choke_gate,
+                    test_idle=test_idle,
+                    inext=inext,
+                    debug_spin=debug_spin,
+                    diagnostic_fetch_freeze=args.diagnostic_fetch_freeze,
+                    root_native=root_native,
+                    pre_state=(
+                        artifact_dir
+                        / "prestates"
+                        / configuration
+                        / f"{case.name}.mss"
+                        if artifact_dir is not None
+                        else None
+                    ),
+                    terminal_illegal=args.terminal_illegal,
                 )
                 event = compare(
                     case,
@@ -757,8 +1108,7 @@ def main() -> int:
                     console,
                     xlat_gate,
                     choke_gate,
-                    candidate_br10,
-                    candidate_hot_return,
+                    boundary,
                 )
                 events.append(event)
                 print(json.dumps(event, sort_keys=True), flush=True)

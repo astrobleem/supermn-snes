@@ -21,6 +21,8 @@ usmul_l=$00E5C2
 op_rts_sentinel=$00EA3A
 ojmp_hook=$00D1B3
 ors_pre=$00D16F
+lh_nofire=$00F5C0
+lh_0818_after_gateway=$00F59B
 entry_23342=$988000
 entry_235e0=$989200
 entry_23864=$989800
@@ -126,7 +128,12 @@ Lf24bc2_3:
     lda $400000,x
     xba
     bne Lf24bc2_4
-    jmp Ltj24bc2_24bc0
+    ; The original early exit is `tst.w $2938(a5)` followed by the
+    ; terminal TRAP #5.  The trap stacks this CCR, so host address/load
+    ; residue is architectural here.  Publish TST.W's N=0/Z=1/V=C=0 while
+    ; preserving X, then use the tail island below to keep every packed
+    ; escbank5 symbol pinned.
+    jmp h24bc2_tst_zero_yield
 Lf24bc2_4:
     lda $34
     clc
@@ -184,7 +191,8 @@ L24bc2_24c1e:
     sta $00
     lda $00
     bne Lf24bc2_9
-    jmp Ltj24bc2_24eb2
+    ; TST.W D0 is the live flag source on this BEQ -> $24EB2 edge.
+    jmp h24bc2_tst_word_zero_yield
 Lf24bc2_9:
 L24bc2_24c28:
     lda #$0000
@@ -535,7 +543,9 @@ br24bc2_5:
     lda $400000,x
     and #$00FF
     beq Lf24bc2_20
-    jmp Ltj24bc2_24eb2
+    ; TST.B $3701(A5) is the live flag source on this BNE edge.  Preserve
+    ; the byte in A so the helper can publish bit 7 as 68000 N.
+    jmp h24bc2_tst_byte_nonzero_yield
 Lf24bc2_20:
 ; Public no-push continuation used by the bank-$9E signed-record path after
 ; TRAP #1 returns.  It is the original generated loop seam, not a duplicate.
@@ -571,7 +581,11 @@ Lf24bc2_21:
     sep #$20
     sta $400000,x
     rep #$20
-    lda #$4EB2
+    ; MOVE.B #1,$3701(A5) sets NZVC=0 before the BRA -> $24EB2 edge.
+    ; Replace the first three bytes of the old PC handoff size-neutrally;
+    ; its remaining stores are unreachable after this helper rejoins the
+    ; shared tail.
+    jmp h24bc2_move_byte_one_yield
     sta $40
     lda #$0002
     sta $42
@@ -588,7 +602,11 @@ Lf24bc2_22:
     bmi Lf24bc2_23
     bra Lf24bc2_24
 Lf24bc2_23:
-    jmp Ltj24bc2_24eb2
+    ; Original $024CCC is CMP.W D0,D1 and this BGT edge runs straight
+    ; through $024EB2 to TRAP #5.  The shared tail has other flag sources,
+    ; so export this edge's live subtract flags before entering it.  CMP
+    ; updates NZVC but, unlike SUB, must preserve X.
+    jmp h24bc2_cmp_d1_d0_yield
 Lf24bc2_24:
     lda $00
     sta $08
@@ -654,18 +672,14 @@ Lf24bc2_28:
     sta $26
     ; Only $01-$7f reaches this path now, so the table offset is positive.
     ; The old generic sign extension was both unnecessary and part of the
-    ; bad-path accommodation.  Pad back to the old seam after the shift.
+    ; bad-path accommodation.  Seventeen padding bytes retain the old seam;
+    ; six bytes were consumed below to repair the stale generated OR.L while
+    ; keeping every exported escbank5 address pinned.
     lda $00
     asl a
     asl a
     sta $00
     stz $02
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
     nop
     nop
     nop
@@ -754,6 +768,12 @@ Lf24bc2_28:
     lda $04
     ora $08
     sta $04
+    ; OR.L D2,D1 must update both architectural halves.  This checked-in
+    ; body predates the corresponding tools/transpile.py fix and discarded
+    ; D2.hi, corrupting the 16.16 task argument copied by TRAP #1.
+    lda $06
+    ora $0A
+    sta $06
     lda $04
     sta $9A
     lda $06
@@ -886,12 +906,17 @@ L2429c_242b2:
     sta $42
     jml.l entry_235e0
 br2429c_3:
-    ; CALL-BRIDGE jsr $25110.l -> entry_25110 (NATIVE escape), resume br2429c_4
-    lda #br2429c_4
+    ; CALL-BRIDGE jsr $25110.l -> entry_25110 (NATIVE escape).
+    ; Publish the real 68000 return PC so an IRQ inside the interruptible
+    ; collision walker retains arcade-identical stack/return residue.
+    ; Its eventual RTS reaches the native continuation through xlat_dispatch.
+    lda #$42BE
     sta $40
-    lda #$00FA
+    lda #$0002
     sta $42
     jml.l entry_25110
+; --- xlat continuation transpiled from $0242BE ---
+entry_242be:
 br2429c_4:
     ; CALL-BRIDGE jsr $259ca.l -> entry_259ca (NATIVE escape), resume br2429c_5
     lda #br2429c_5
@@ -950,8 +975,13 @@ L2429c_242e2:
     adc #$0000
     sta $52
     jsl.l readbyte_l
-    bne Lf2429c_3
-    jmp L2429c_243da
+    ; `tst.b $19(a4)` is the final flag source when the remaining root
+    ; records are inactive.  The native byte reader preserves the host branch
+    ; condition but does not publish the MC68000 NZVC image.  Route both arms
+    ; through the fixed tail so a following DBRA cannot leak stale CCR/X.
+    jmp h2429c_tst_byte19_branch
+    nop
+    nop
 Lf2429c_3:
     lda $30
     clc
@@ -1403,9 +1433,15 @@ Lf2429c_20:
     sep #$20
     sta $04
     rep #$20
+    ; D1 is a 68000 data register: MOVE.B above replaces only its low byte,
+    ; so $04 can legitimately be $xx05.  CMPI.B #5,D1 must ignore that
+    ; preserved high byte.  The stale generated 16-bit SBC compared $xx05
+    ; with $0005 and skipped $243E8 collision cleanup.  REP preserves the
+    ; byte CMP flags consumed by BEQ.
     lda $04
-    sec
-    sbc #$0005
+    sep #$20
+    cmp #$05
+    rep #$20
     beq Lf2429c_21
     jmp L2429c_243b8
 Lf2429c_21:
@@ -1429,7 +1465,9 @@ L2429c_243b8:
     sec
     sbc #$0080
     sta $04
-    lda $04
+    ; A still holds the sign-extended D1 byte after STA.  Avoiding a
+    ; redundant reload pays exactly for the width-correct compare above,
+    ; keeping every following bank-$99 symbol and hand-linked seam fixed.
     sta $9A
     lda $9A
     asl a
@@ -3020,8 +3058,12 @@ L259ca_259d2:
     adc #$0000
     sta $52
     jsl.l readbyte_l
-    bne Lf259ca_1
-    jmp L259ca_25a16
+    ; The loop's `tst.b (a2)` can be the routine's last flag setter when its
+    ; remaining records are empty.  Preserve X, but materialize TST.B NZVC
+    ; before branching so the parent coroutine sees arcade CCR after DBRA.
+    jmp h259ca_tst_byte_branch
+    nop
+    nop
 Lf259ca_1:
     lda $34
     clc
@@ -3272,7 +3314,10 @@ entry_28ddc:
     and #$0001
     eor #$0001
     sta $6E
-    sta $A2
+    ; CMP sets NZVC but preserves 68000 X.  This body predates the
+    ; transpiler's signed_cmp distinction and incorrectly copied C into X.
+    nop
+    nop
     jmp L28ddc_28ed2
 Lf28ddc_1:
     lda $34
@@ -3302,7 +3347,9 @@ Lf28ddc_1:
     and #$0001
     eor #$0001
     sta $6E
-    sta $A2
+    ; Same CMP-preserves-X correction for the second early return.
+    nop
+    nop
     jmp L28ddc_28ed2
 Lf28ddc_2:
     lda $34
@@ -4875,25 +4922,29 @@ brc78e_2:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; MOVE.W #9,D2 is the last original flag setter before TRAP #5.
+    jml.l $99FC46
 Ltjc78e_c78c:
     lda #$C78C
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; DBRA preserves the preceding zero-result BTST/TST flags.
+    jml.l $99FC52
 Ltjc78e_c8ba:
     lda #$C8BA
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; Taken TST.W D7 edge: publish dynamic N/Z and clear V/C.
+    jml.l $99FC61
 Ltjc78e_c8da:
     lda #$C8DA
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; TST.W D7 fell through at zero; taken BTST then sets Z=0.
+    jml.l $99FC46
 
 ; --- entry_4a9e: the $004A9E link-frame body (CP1 "hard target" — transpiles clean with
 ; --bail; --xflag REQUIRED: 22 X-setter sites (lsl/lsr/neg/subq) and the caller's trap#5
@@ -4921,7 +4972,7 @@ entry_4a9e:
     adc #$FFFC
     sta $3C
     lda $3E
-    adc #$0000
+    adc #$FFFF
     sta $3E
     lda $34
     clc
@@ -6620,25 +6671,27 @@ brc846_2:
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    ; escbank5 is assembled as an isolated bank-zero blob, so an unqualified
+    ; long label would encode bank $00.  Keep the production bank explicit.
+    jml.l $99FC46
 Ltjc846_c844:
     lda #$C844
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l $99FC52
 Ltjc846_c8ba:
     lda #$C8BA
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l $99FC61
 Ltjc846_c8da:
     lda #$C8DA
     sta $40
     lda #$0000
     sta $42
-    jml.l inext
+    jml.l $99FC46
 
 ; --- CP1 2.2: the $011752 CONTIGUOUS TREE (the parked Phase-1.1 blob, unblocked by the
 ; pushed-sentinel static-bridge convention): the task-loop spine + its 12 bsr callees all
@@ -7407,7 +7460,7 @@ entry_46de:
     adc #$FFFA
     sta $3C
     lda $3E
-    adc #$0000
+    adc #$FFFF
     sta $3E
     lda $34
     clc
@@ -15360,11 +15413,34 @@ lhp_release_epoch_done:
     sta $410122          ; released; NMI must not touch the live video shadow
     plp
     rep #$30             ; loop_hook's documented 16-bit A/X contract
+lhp_vtime_release_seam:
     lda #$0001
     sta $AC              ; iloop raises the virtual 68K IRQ at the next boundary
     sec
     rtl
 lh_0818_paced_end:
+
+; Interpreter-only `$0818` fallback gateway. Bank $00 replaces its established
+; JSL with a size-neutral JML here. Ordinary/normal-VTIME modes call the exact
+; paced helper and return to the byte-pinned BCC. In packed VTIME images the
+; packer retargets the bit-1 source placeholder below to dedicated experimental
+; bit 2: ordinary interpreter-only mode therefore retains the complete
+; hardware rendezvous and VTIME-aware release, while an explicit bit-2 image
+; can still decline through lh_nofire before `$0734`, `$AC`, pacing ownership,
+; WAI, or frame counters change. This is a rejected bounded diagnostic seam,
+; not a production timing repair.
+.org $FBB0
+.a16
+.i16
+lh_0818_vtime_gateway:
+    lda.l $F28000
+    and #$0002             ; VTIME packer retargets this immediate to bit 2
+    beq lh_0818_vtime_native
+    jml.l lh_nofire
+lh_0818_vtime_native:
+    jsl.l $99FB00
+    jml.l lh_0818_after_gateway
+lh_0818_vtime_gateway_end:
 
 ; The old $011778 handoff interpreted exactly one BSR before bhp_bank_ext
 ; entered hle_12b6c.  The direct native link must retain that single $AC
@@ -15392,3 +15468,210 @@ h11752_charge_boundary:
     sta $42
     jml.l inext
 h11752_charge_12b6c_end:
+
+; Cold terminal-CCR island for entry_24bc2's common `$2938 == 0` yield.
+; It occupies the final otherwise-unused bytes below the audited $FC10 bank
+; bound; the source-site JMP remains size-neutral.
+h24bc2_tst_zero_yield:
+    stz $70              ; N=0
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    lda #$0001
+    sta $60              ; Z=1
+    jmp Ltj24bc2_24bc0
+h24bc2_tst_zero_yield_end:
+
+; The two $0013BE implementations capture MOVE.W D1,(A3)'s flags at the
+; store, before their MOVEM epilogues restore D1.  These terminal bridges
+; therefore preserve the already-published virtual CCR.
+h13be_exit_flags_inext:
+    jml.l inext
+h13be_exit_flags_inext_end:
+
+; Direct-entry body's closing write already uses writeword_l.  Replace that
+; JSL target size-neutrally so the source value is sampled before D1 restore.
+h13be_writeword_flags:
+    jsl.l writeword_l
+    stz $6E              ; C=0
+    stz $72              ; V=0
+    stz $70              ; N=0
+    stz $60              ; Z=0
+    lda $04
+    beq h13be_writeword_zero
+    bpl h13be_writeword_done
+    inc $70
+h13be_writeword_done:
+    rtl
+h13be_writeword_zero:
+    inc $60
+    rtl
+h13be_writeword_flags_end:
+
+    .org $FC2C
+h13be_exit_flags_ors:
+    jml.l ors_pre
+h13be_exit_flags_ors_end:
+
+    .org $FC46
+; The $00C78E/$00C7DC/$00C846 sibling loops exit at cold instruction
+; boundaries.  Publish the last original flag setter before handing that
+; instruction back to the interpreter.  All three preserve virtual X here.
+hc846_clear_nzvc:
+    stz $70              ; MOVE.W #9,D2 or taken BTST: N=0
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    stz $60              ; Z=0
+    jml.l inext
+hc846_clear_nzvc_end:
+
+hc846_z_preserve_x:
+    stz $70              ; TST.W D7 saw zero; BTST also saw zero
+    stz $72
+    stz $6E
+    lda #$0001
+    sta $60              ; Z=1
+    jml.l inext
+hc846_z_preserve_x_end:
+
+hc846_tst_d7:
+    stz $70
+    stz $72
+    stz $6E
+    stz $60
+    lda $1C              ; D7.w from the terminal TST.W
+    beq hc846_tst_zero
+    bpl hc846_tst_done
+    inc $70
+hc846_tst_done:
+    jml.l inext
+hc846_tst_zero:
+    inc $60
+    jml.l inext
+hc846_tst_d7_end:
+
+; The table/RTS body performs the closing big-endian store inline.  Its
+; source-site JSL replaces that four-byte store without moving the packed
+; body.  Preserve A so the following source-site XBA retains its old contract.
+h13be_store_flags_table:
+    sta $400000,x
+    pha
+    stz $6E
+    stz $72
+    stz $70
+    stz $60
+    lda $04
+    beq h13be_store_table_zero
+    bpl h13be_store_table_done
+    inc $70
+h13be_store_table_done:
+    pla
+    rtl
+h13be_store_table_zero:
+    inc $60
+    pla
+    rtl
+h13be_store_flags_table_end:
+
+    .org $FCA0
+; Per-edge terminal-CCR bridge for entry_24bc2's $024CCC CMP.W D0,D1
+; followed by BGT -> $024EB2 -> $024BC0 TRAP #5.  Capture the live 65816
+; subtraction flags before any host bookkeeping; 68000 CMP preserves X.
+h24bc2_cmp_d1_d0_yield:
+    php
+    sep #$20
+.a8
+    pla
+    rep #$30
+.a16
+.i16
+    and #$00FF
+    sta $50
+    and #$0002
+    sta $60              ; Z <- native Z
+    lda $50
+    and #$0080
+    sta $70              ; N <- native N
+    lda $50
+    and #$0040
+    sta $72              ; V <- native V
+    lda $50
+    and #$0001
+    eor #$0001
+    sta $6E              ; C <- !native C (68000 subtract borrow)
+    jmp Ltj24bc2_24eb2
+h24bc2_cmp_d1_d0_yield_end:
+
+    .org $FCD0
+; Source-specific bridges for the other three $024EB2 predecessors.  The
+; shared tail itself cannot publish CCR because its incoming flag sources
+; conflict (TST.W, TST.B, MOVE.B, and CMP.W).
+h24bc2_tst_word_zero_yield:
+    stz $70              ; N=0
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    lda #$0001
+    sta $60              ; Z=1
+    jmp Ltj24bc2_24eb2
+h24bc2_tst_word_zero_yield_end:
+
+h24bc2_tst_byte_nonzero_yield:
+    stz $70
+    stz $72              ; TST clears V/C and this taken edge has Z=0
+    stz $6E
+    stz $60
+    and #$0080
+    beq h24bc2_tst_byte_nonzero_done
+    inc $70              ; N=byte bit 7
+h24bc2_tst_byte_nonzero_done:
+    jmp Ltj24bc2_24eb2
+h24bc2_tst_byte_nonzero_yield_end:
+
+h24bc2_move_byte_one_yield:
+    stz $70              ; MOVE.B #1 has N=0,Z=0,V=0,C=0
+    stz $72
+    stz $6E
+    stz $60
+    jmp Ltj24bc2_24eb2
+h24bc2_move_byte_one_yield_end:
+
+; `$02429C` and `$0259CA` each branch directly on a byte read, but their
+; source TST.B also publishes the final MC68000 CCR.  The generated body used
+; the native branch condition only, which is enough for control flow but loses
+; the zero flag when a later DBRA exits.  These tails intentionally leave X at
+; `$A2` untouched and never return: each chooses the original source edge.
+.org $FD00
+.a16
+.i16
+h2429c_tst_byte19_branch:
+    stz $70                 ; TST clears N/V/C, then derives N/Z from byte
+    stz $72
+    stz $6E
+    stz $60
+    and #$00FF
+    beq h2429c_tst_byte19_zero
+    and #$0080
+    beq h2429c_tst_byte19_nonzero
+    inc $70
+h2429c_tst_byte19_nonzero:
+    jmp Lf2429c_3
+h2429c_tst_byte19_zero:
+    inc $60
+    jmp L2429c_243da
+h2429c_tst_byte19_branch_end:
+
+h259ca_tst_byte_branch:
+    stz $70                 ; same TST.B contract for the four-record scan
+    stz $72
+    stz $6E
+    stz $60
+    and #$00FF
+    beq h259ca_tst_byte_zero
+    and #$0080
+    beq h259ca_tst_byte_nonzero
+    inc $70
+h259ca_tst_byte_nonzero:
+    jmp Lf259ca_1
+h259ca_tst_byte_zero:
+    inc $60
+    jmp L259ca_25a16
+h259ca_tst_byte_branch_end:

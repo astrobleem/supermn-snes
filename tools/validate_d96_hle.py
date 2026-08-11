@@ -45,7 +45,20 @@ from mesen_mcp import McpSession  # noqa: E402
 
 
 ENTRY_PC = 0x000D96
-ENTRY_NATIVE = 0x98E348
+
+
+def current_escbank4_address(symbol: str) -> int:
+    path = ROOT / "src/escbank4.sym"
+    if not path.is_file():
+        raise SystemExit(f"current bank-$98 symbols are required: {path}")
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+        fields = raw.split()
+        if len(fields) == 2 and fields[1] == symbol:
+            return 0x980000 | int(fields[0].split(":", 1)[1], 16)
+    raise SystemExit(f"{path}: missing {symbol}")
+
+
+ENTRY_NATIVE = current_escbank4_address("entry_d96t")
 RETURN_PC = 0xF03E80
 NATIVE_RETURN = 0x00D15A
 WORK_FRAME = 0xF02B00
@@ -70,6 +83,7 @@ class Result:
     sr: int
     work: bytes
     cycles: int | None = None
+    ac: int | None = None
 
 
 def sha256(path: Path) -> str:
@@ -377,6 +391,7 @@ def nexen_result(m: McpSession, nat: Path, case: Case) -> Result:
         (case.sr & ~CCR_MASK) | ccr,
         bytes(m.read_memory(SNES_SPACE, 0x400000, 0x4000)),
         end_cycles - start_cycles,
+        m.read_u16(0xAC, DP_SPACE),
     )
 
 

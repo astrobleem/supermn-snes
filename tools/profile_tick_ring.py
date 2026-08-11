@@ -6,13 +6,14 @@ flight-recorder ring at SA-1 IRAM $0400-$05ff.  Nexen's non-pausing memory hooks
 SA-1 cycle count to each byte write.  Reassembling those writes gives a chronological
 68K fetch stream with exact cycle timestamps while the emulator runs uninterrupted.
 
-This is deliberately a checkpoint profiler, not an FPS harness.  It neither changes
-the ROM nor pokes the running game.  Its cycle deltas include the selected pacing
-path, virtual IRQ, native escapes, interpreted instructions, renderer contention,
-and the return to the real $0818/$00:F5A3 tick boundary.  Marked pacing-lab ROMs
-must be opted into explicitly.  Use recovery_baseline.py for an end-to-end
-production performance claim.  The normal production ROM NOPs both per-fetch calls,
-and this profiler rejects that ROM explicitly.
+This is deliberately a checkpoint profiler, not an FPS harness.  Its cycle deltas
+include the selected pacing path, virtual IRQ, native escapes, interpreted
+instructions, renderer contention, and the return to the real $0818/$00:F5A3 tick
+boundary.  Any checkpoint migration is explicit and retained as a runtime
+intervention.  Marked pacing-lab ROMs must be opted into explicitly.  Use
+recovery_baseline.py for an end-to-end production performance claim.  The normal
+production ROM NOPs both per-fetch calls, and this profiler rejects that ROM
+explicitly.
 """
 
 from __future__ import annotations
@@ -590,6 +591,7 @@ EXPECTED_PC_RING_CALL = bytes.fromhex("2081e2")
 EXPECTED_GATES = {
     "loop": 1,
     "escape": 1,
+    "pacing": 1,
     "choke": 1,
     "swin": 0xA55A,
     "select": 0x5EEC,
@@ -598,6 +600,7 @@ EXPECTED_GATES = {
 GATE_ADDRS = {
     "loop": 0x072E,
     "escape": 0x071A,
+    "pacing": 0x0734,
     "choke": 0x073A,
     "swin": 0x073C,
     "select": 0x0736,
@@ -643,6 +646,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Lab only: replace the checkpoint's $7F:8000-$AFFF video mirror "
             "with the selected ROM and initialize newly owned renderer metadata."
+        ),
+    )
+    parser.add_argument(
+        "--normalize-production-gates",
+        action="store_true",
+        help=(
+            "Checkpoint lab only: restore the seven documented production "
+            "IRAM gates after loading a state whose emulator/ROM transition "
+            "does not retain those diagnostic words.  Before/after values "
+            "are retained and verified; this is not fresh-boot or FPS proof."
         ),
     )
     parser.add_argument(
@@ -926,6 +939,30 @@ def refresh_current_layout_hooks() -> None:
         # helper.  Unlike h1e7c0_hot_reentry itself, this counts only actual
         # cold-record recoveries, not the helper's initial per-tick entry.
         "h1e7c0_generated_reentry": ("esc4", "h1e7c0_generated_reentry"),
+        # The generated collision-width body can move every continuation
+        # after a repaired byte opcode.  Resolve the full $01E7C0/D96 chain
+        # rather than retaining pre-repair numeric hooks.
+        "br1e7c0_1": ("esc4", "br1e7c0_1"),
+        "br1e7c0_2": ("esc4", "br1e7c0_2"),
+        "br1e7c0_3": ("esc4", "br1e7c0_3"),
+        "br1e7c0_4": ("esc4", "br1e7c0_4"),
+        "br1e7c0_5": ("esc4", "br1e7c0_5"),
+        "br1e7c0_6": ("esc4", "br1e7c0_6"),
+        "br1e7c0_7": ("esc4", "br1e7c0_7"),
+        "br1e7c0_8": ("esc4", "br1e7c0_8"),
+        "br1e7c0_10": ("esc4", "br1e7c0_10"),
+        "br1e7c0_11": ("esc4", "br1e7c0_11"),
+        "entry_d96t": ("esc4", "entry_d96t"),
+        # The current $000D96 renderer is a guarded hand-written hot path.
+        # Retain the stable profiler seam names, but bind them to the
+        # equivalent phases in that implementation rather than the removed
+        # generated-body labels.
+        "d96_main": ("esc4", "hd96_outer_loop"),
+        "d96_after_outer": ("esc4", "hd96_rows_done"),
+        "d96_restore": ("esc4", "hd96_hot_done"),
+        "d96_hot_done": ("esc4", "hd96_hot_done"),
+        "d96_cold": ("esc4", "d96_cold"),
+        "entry_1f1fe": ("esc4", "entry_1f1fe"),
         # Guarded compact collision pass and its X-aware alternate adapter.
         "25110_compact_entry": ("esc6", "h25110_stage1"),
         "25110_compact_pairs": ("esc6", "h25_pairs_begin"),
@@ -1901,7 +1938,25 @@ def main() -> int:
                 "pc_ring": f"{RING_START:06X}-{RING_END:06X}",
             },
             runtime_pokes=(
-                [
+                (
+                    [
+                        {
+                            "kind": "checkpoint_lab_production_gate_normalization",
+                            "writes": [
+                                {
+                                    "name": name,
+                                    "address": f"SA1 IRAM ${address:04X}",
+                                    "value": EXPECTED_GATES[name],
+                                }
+                                for name, address in GATE_ADDRS.items()
+                            ],
+                        }
+                    ]
+                    if args.normalize_production_gates
+                    else []
+                )
+                + (
+                    [
                     {
                         "kind": "checkpoint_lab_wram_video_mirror_refresh",
                         "address": "7F:8000-7F:AFFF",
@@ -1917,9 +1972,10 @@ def main() -> int:
                         "kind": "checkpoint_lab_exact_bg_metadata_migration",
                         "addresses": ["41:014C", "41:014E", "7E:1F1E"],
                     },
-                ]
-                if args.refresh_video_mirror
-                else []
+                    ]
+                    if args.refresh_video_mirror
+                    else []
+                )
             ),
             hooks_pause_cpu=False,
             evidence_scope=(
@@ -1944,6 +2000,31 @@ def main() -> int:
             m.pause()
             m.load_state(args.state)
             m.pause()
+            if args.normalize_production_gates:
+                gates_before = {
+                    name: le16(m.read_memory("Sa1Memory", address, 2))
+                    for name, address in GATE_ADDRS.items()
+                }
+                for name, address in GATE_ADDRS.items():
+                    m.write_memory(
+                        "Sa1Memory",
+                        address,
+                        EXPECTED_GATES[name].to_bytes(2, "little").hex(),
+                    )
+                gates_after = {
+                    name: le16(m.read_memory("Sa1Memory", address, 2))
+                    for name, address in GATE_ADDRS.items()
+                }
+                if gates_after != EXPECTED_GATES:
+                    raise RuntimeError(
+                        "production gate normalization did not verify: "
+                        f"{gates_after} != {EXPECTED_GATES}"
+                    )
+                log.emit(
+                    "production_gate_normalization",
+                    before=gates_before,
+                    after=gates_after,
+                )
             if args.refresh_video_mirror:
                 rom_mirror = rom[
                     VIDEO_FILE_BASE:VIDEO_FILE_BASE + VIDEO_WRAM_LENGTH

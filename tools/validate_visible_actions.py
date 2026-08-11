@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Validate visible punch/jump responses from a production gameplay checkpoint.
+"""Validate visible punch/kick responses from a production gameplay checkpoint.
 
 Each variant starts in a fresh Nexen process from the same checkpoint and is
 synchronized at the native player-input copier.  The active variants press B
-(arcade Button 1 / punch) or A (arcade Button 2 / jump) for a short, realistic
+(arcade Button 1 / punch) or A (arcade Button 2 / kick) for a short, realistic
 tap and then release it.  Per-video-frame player locals and selected screenshots
 are compared with an idle control.
 
@@ -43,7 +43,7 @@ CAPTURE_FRAMES = {0, 1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48}
 VARIANTS = {
     "idle": 0,
     "punch": McpSession.BTN_B,
-    "jump": McpSession.BTN_A,
+    "kick": McpSession.BTN_A,
 }
 
 
@@ -388,10 +388,10 @@ def main() -> int:
     common_frames = sorted(
         set(int(frame) for frame in variants["idle"]["screenshots"])
         & set(int(frame) for frame in variants["punch"]["screenshots"])
-        & set(int(frame) for frame in variants["jump"]["screenshots"])
+        & set(int(frame) for frame in variants["kick"]["screenshots"])
     )
     comparisons: dict[str, dict[str, Any]] = {}
-    for name in ("punch", "jump"):
+    for name in ("punch", "kick"):
         comparisons[name] = {}
         for frame in common_frames:
             idle_path = Path(
@@ -429,9 +429,9 @@ def main() -> int:
                 for frame, comparison in comparisons["punch"].items()
                 if int(frame) >= args.tap_frames
             ),
-            "jump_changes_visible_output": any(
+            "kick_changes_visible_output": any(
                 comparison["changed_pixels"] > 0
-                for frame, comparison in comparisons["jump"].items()
+                for frame, comparison in comparisons["kick"].items()
                 if int(frame) >= args.tap_frames
             ),
         },

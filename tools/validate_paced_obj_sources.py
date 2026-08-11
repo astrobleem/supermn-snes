@@ -127,10 +127,30 @@ def mismatch_summary(source: bytes, shadow: bytes) -> dict[str, object]:
     }
 
 
-def packed_x_word(sy: int, x_color: int, code_word: int) -> int | None:
-    """Apply the production crop and its exact bottom credit-row translation."""
+def packed_x_word(
+    sy: int,
+    x_color: int,
+    code_word: int,
+    source_offset: int | None = None,
+) -> int | None:
+    """Apply the production crop and its exact HUD-only translations."""
     sx = x_color & 0x01FF
     code = code_word & 0x3FFF
+    if source_offset is not None:
+        if sy == 0x0A and (
+            source_offset == 0x0004
+            or 0x0048 <= source_offset < 0x0072
+        ):
+            return None
+        if sy == 0x1A and 0x006A <= source_offset < 0x0072:
+            return None
+    if sy in (0xE2, 0xF2) and code == 0x0020:
+        return None
+    if sy in (0xE2, 0xF2):
+        if sx < 0x0040:
+            return (x_color + 0x0030) & 0xFFFF
+        if 0x0120 <= sx < 0x0170:
+            return (x_color - 0x0018) & 0xFFFF
     credit_glyph = 0x007D <= code <= 0x0080 or code == 0x008B
     if sy == 0x0A and credit_glyph and 0x0120 <= sx < 0x0170:
         return (x_color - 0x0030) & 0xFFFF
@@ -139,7 +159,13 @@ def packed_x_word(sy: int, x_color: int, code_word: int) -> int | None:
     return None
 
 
-def expected_obj_manifest(y_plane: bytes, code_plane: bytes, x_plane: bytes) -> bytes:
+def expected_obj_manifest(
+    y_plane: bytes,
+    code_plane: bytes,
+    x_plane: bytes,
+    *,
+    title_overlay: bool = False,
+) -> bytes:
     """Reproduce vid_obj_fast's exact source-order visibility selection."""
     offsets: list[int] = []
     for offset in range(0, 0x0400, 2):
@@ -147,10 +173,12 @@ def expected_obj_manifest(y_plane: bytes, code_plane: bytes, x_plane: bytes) -> 
         if code == 0xFFFF or code & 0x3FFF == 0:
             continue
         sy = y_plane[offset + 1]
-        if sy == 0 or sy >= 0xF0:
+        if sy == 0 or sy >= 0xF3:
+            continue
+        if title_overlay and 0x1A <= sy < 0x70 and sy & 0x0F == 0x0A:
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
-        if packed_x_word(sy, x_color, code) is None:
+        if packed_x_word(sy, x_color, code, source_offset=offset) is None:
             continue
         offsets.append(offset)
         if len(offsets) == 128:
@@ -162,7 +190,7 @@ def expected_y_manifest(y_plane: bytes) -> bytes:
     offsets = [
         offset
         for offset in range(0, 0x0400, 2)
-        if 0 < y_plane[offset + 1] < 0xF0
+        if 0 < y_plane[offset + 1] < 0xF3
     ]
     return b"".join(offset.to_bytes(2, "little") for offset in offsets)
 
@@ -172,26 +200,39 @@ def expected_yx_manifest(
 ) -> bytes:
     offsets: list[int] = []
     for offset in range(0, 0x0400, 2):
-        if not 0 < y_plane[offset + 1] < 0xF0:
+        if not 0 < y_plane[offset + 1] < 0xF3:
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
         code = int.from_bytes(code_plane[offset : offset + 2], "big")
-        if packed_x_word(y_plane[offset + 1], x_color, code) is None:
+        if packed_x_word(
+            y_plane[offset + 1], x_color, code, source_offset=offset
+        ) is None:
             continue
         offsets.append(offset)
     return b"".join(offset.to_bytes(2, "little") for offset in offsets)
 
 
 def expected_packed_manifest(
-    y_plane: bytes, code_plane: bytes, x_plane: bytes
+    y_plane: bytes,
+    code_plane: bytes,
+    x_plane: bytes,
+    *,
+    title_overlay: bool = False,
 ) -> bytes:
     records = bytearray()
-    visible = expected_obj_manifest(y_plane, code_plane, x_plane)
+    visible = expected_obj_manifest(
+        y_plane,
+        code_plane,
+        x_plane,
+        title_overlay=title_overlay,
+    )
     for cursor in range(0, len(visible), 2):
         offset = int.from_bytes(visible[cursor : cursor + 2], "little")
         code = int.from_bytes(code_plane[offset : offset + 2], "big")
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
-        packed_x = packed_x_word(y_plane[offset + 1], x_color, code)
+        packed_x = packed_x_word(
+            y_plane[offset + 1], x_color, code, source_offset=offset
+        )
         assert packed_x is not None
         records.extend(y_plane[offset : offset + 2])
         records.extend(code_plane[offset : offset + 2])
@@ -200,7 +241,12 @@ def expected_packed_manifest(
 
 
 def visible_from_packed_manifest(
-    manifest: bytes, y_plane: bytes, code_plane: bytes, x_plane: bytes
+    manifest: bytes,
+    y_plane: bytes,
+    code_plane: bytes,
+    x_plane: bytes,
+    *,
+    title_overlay: bool = False,
 ) -> bytes:
     """Recover the packed records' monotonically ordered source slots.
 
@@ -210,7 +256,12 @@ def visible_from_packed_manifest(
     authoritative completeness check; this reconstruction separately checks
     source ordering and the visibility predicate.
     """
-    expected_visible = expected_obj_manifest(y_plane, code_plane, x_plane)
+    expected_visible = expected_obj_manifest(
+        y_plane,
+        code_plane,
+        x_plane,
+        title_overlay=title_overlay,
+    )
     candidates = [
         int.from_bytes(expected_visible[cursor : cursor + 2], "little")
         for cursor in range(0, len(expected_visible), 2)
@@ -230,7 +281,9 @@ def visible_from_packed_manifest(
             )
             code = int.from_bytes(code_plane[offset : offset + 2], "big")
             x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
-            packed_x = packed_x_word(y_plane[offset + 1], x_color, code)
+            packed_x = packed_x_word(
+                y_plane[offset + 1], x_color, code, source_offset=offset
+            )
             assert packed_x is not None
             source_record += packed_x.to_bytes(2, "big")
             if source_record == record:
@@ -253,7 +306,9 @@ def visible_from_y_manifest(
         if code == 0xFFFF or code & 0x3FFF == 0:
             continue
         x_color = int.from_bytes(x_plane[offset : offset + 2], "big")
-        if packed_x_word(y_plane[offset + 1], x_color, code) is None:
+        if packed_x_word(
+            y_plane[offset + 1], x_color, code, source_offset=offset
+        ) is None:
             continue
         accepted.append(offset)
         if len(accepted) == 128:
@@ -334,10 +389,21 @@ def main() -> int:
             full_y = bytes(m.read_memory("snesMemory", 0x413000, 0x0400))
             full_code = bytes(m.read_memory("snesMemory", 0x414000, 0x0400))
             full_x = bytes(m.read_memory("snesMemory", 0x414400, 0x0400))
-            expected_visible = expected_obj_manifest(full_y, full_code, full_x)
+            title_overlay = bool(
+                le16(m.read_memory("snesMemory", 0x410150, 2))
+            )
+            expected_visible = expected_obj_manifest(
+                full_y,
+                full_code,
+                full_x,
+                title_overlay=title_overlay if args.packed_obj_manifest else False,
+            )
             if args.packed_obj_manifest:
                 expected_manifest = expected_packed_manifest(
-                    full_y, full_code, full_x
+                    full_y,
+                    full_code,
+                    full_x,
+                    title_overlay=title_overlay,
                 )
             elif args.yx_qualified_manifest:
                 expected_manifest = expected_yx_manifest(
@@ -389,7 +455,11 @@ def main() -> int:
             )
             if args.packed_obj_manifest:
                 delegated_visible = visible_from_packed_manifest(
-                    observed_manifest, full_y, full_code, full_x
+                    observed_manifest,
+                    full_y,
+                    full_code,
+                    full_x,
+                    title_overlay=title_overlay,
                 )
             elif args.yx_qualified_manifest:
                 delegated_visible = visible_from_yx_manifest(
@@ -417,6 +487,7 @@ def main() -> int:
                 "renderer_busy": le16(
                     m.read_memory("snesMemory", 0x7E899C, 2)
                 ),
+                "title_overlay": title_overlay,
                 "plane_prefix_words": {
                     "y": m.read_memory("snesMemory", 0x413000, 2).hex(),
                     "code": m.read_memory("snesMemory", 0x414000, 2).hex(),

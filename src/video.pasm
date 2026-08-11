@@ -35,6 +35,7 @@ CGADD=$2121
 CGDATA=$2122
 SLHV=$2137
 OPVCT=$213D
+STAT78=$213F
 TM=$212C
 TS=$212D
 NMITIMEN=$4200
@@ -97,7 +98,16 @@ RQ_PREP_CODES=$E8A0     ; prepared unique-code list, at most $0180 bytes
 RQ_PREP_PALMAP=$EA20    ; prepared 32-byte palette map; mutually exclusive, ends $EA40
 RENDER_QUEUE2_STATE=$89D6
 RENDER_QUEUE_CODE_MARK=$89D8 ; $C0DE only after the lazy private-$7E code install completes
-RENDER_QUEUE_CODE_BYTES=$022A ; build guard proves this matches the final promoter span
+BG_COLUMN_DUPLICATE=$89DA ; nonzero when the accepted exact map reuses a physical slot
+BG_COLUMN_KIND_MARK=$89DE ; last X1 layout-kind word used by the rendered BG map
+BG_COLUMN_MAP=$89E0      ; accepted source-column -> physical 32px slot bytes
+BG_COLUMN_MAP_APPLIED=$89F0 ; map currently represented by BG_OFFSET_TABLE
+BG_COLUMN_MAP_CAPTURE=$74E0 ; 16-byte producer scratch below BG_OFFSET_TABLE
+BG_COLUMN_MAP_SELECTOR=$74D0
+BG_C0BC_TOKEN=$7492       ; token paired with the accepted direct BG image
+RQ_C0BC_TOKEN=$7494       ; token paired with the primary queued image
+RQ2_C0BC_TOKEN=$7496      ; token paired with the secondary queued image
+RENDER_QUEUE_CODE_BYTES=$0252 ; build guard proves this matches the final promoter span
 OBJ_HASH_CODE=$5000    ; 1024 authoritative code words in retired snapshot WRAM
 OBJ_HASH_SLOT=$5800    ; parallel physical-slot words; complete table ends at $6000
 RQ2_SEQ=$B000           ; secondary compact-only slot occupies production-unused
@@ -230,7 +240,7 @@ viclr41:
     inx
     cpx #$8000
     bne viclr41
-    jsr bg_offset_table_init ; immutable 16x32-cell -> two-nametable address map
+    jsr bg_offset_table_init ; initial 16x32-cell -> two-nametable address map
     sta $410124          ; snapshot generation = 0 until snd_vframe publishes the first image
     sta $410126          ; completed OBJ buffer selector
     sta $410128          ; no hle_158e OBJ snapshot has completed yet
@@ -862,59 +872,11 @@ vb_c1:
     and #$001F
     sta $EE
     jsr bg_palslot       ; -> $F0 = bgpal
-    ; gx = col*2 + (offs&1) ; gy = offs>>1   (i = $E0>>1 ; col=i>>5 ; offs=i&31)
-    lda $E0
-    lsr a                ; i
-    sta $F2
-    and #$001F           ; offs
-    sta $F4
-    lsr a
-    sta $EC              ; gy = offs>>1
-    lda $F2
-    lsr a
-    lsr a
-    lsr a
-    lsr a
-    lsr a                ; col = i>>5
-    asl a                ; col*2
-    sta $F2
-    lda $F4
-    and #$0001
-    clc
-    adc $F2
-    sta $EA              ; gx = col*2 + (offs&1)   (reuse $EA now=gx)
-    ; 4 entries: (dx,dy,tk): (0,0,0)(1,0,1)(0,1,2)(1,1,3)
-    ; base tilenum = slot*4 (slot from bg_slot in $DA)
     lda $DA
     asl a
     asl a
     sta $F8              ; base tile = slot*4
-    ; tl
-    lda $EA
-    asl a
-    sta $D0              ; tx = gx*2
-    lda $EC
-    asl a
-    sta $D2              ; ty = gy*2
-    lda $F8
-    jsr bg_ent
-    ; tr
-    inc $D0
-    lda $F8
-    inc a
-    jsr bg_ent
-    ; br
-    inc $D2
-    lda $F8
-    clc
-    adc #$0003
-    jsr bg_ent
-    ; bl
-    dec $D0
-    lda $F8
-    clc
-    adc #$0002
-    jsr bg_ent
+    jsl.l $E9B700        ; dynamic X1 column placement, shared with incremental path
 vb_next:
     lda $E0
     clc
@@ -935,6 +897,7 @@ vb_done:
 ; the old O(n^2) linear scan). in $E4=code. out $DA=slot. On a new code (cap 192,
 ; the BG VRAM budget at char base word $1000) it allocates the next slot, decodes the
 ; tile, and DMAs it straight to VRAM word $1000+slot*64 (no big staging buffer).
+.org $854E
 bg_slot:
     jmp bg_slot_extended ; fixed-size entry; reclamation lives in the mirrored $A800 island
 
@@ -1409,15 +1372,13 @@ j5_l:
     rts
 
 ; bg_hscroll — set BG1HOFS from the live arcade scroll shadow and center crop.
-; The X1-001 "type0" playfield is a continuous H-scroll: tilemap column c sits at true
-; pixel T[c] = (T[0] + c*32) mod 512, and vid_bg already lays columns out sequentially
-; (col c at BG pixel c*32), so BG1HOFS = -T[0] reproduces arcade X=0.  SNES
-; screen X=0 must instead show arcade X=64, the centered 384->256 crop origin.
-;   T[0]  = (scrollx[0] - (upper.bit0 ? 256 : 0)) & $1FF   (per x1_001.cpp draw_background)
-;   hofs  = (-T[0] + 64) & $3FF
-;         == ((upper.bit0<<8) - scrollx[0] + 64) & $3FF
-; scrollx[0] = low byte of word @ $D00408 (shadow $41:3408 -> low byte $41:3409);
-; upper.bit0 = bit0 of spritectrl[2] @ $D00604 (shadow $41:3604 -> low byte $41:3605).
+; X1 supplies a separate upper-position bit for every 32-pixel column.  The
+; tilemap builder now places each source column at its complete 9-bit X1
+; position, relative to the common low-five-bit phase.  The remaining global
+; SNES offset is therefore only the centered crop origin minus that phase:
+;   hofs = (64 - (scrollx[0] & 31)) & $3FF
+; Keeping the upper bits in the map, rather than folding only column zero into
+; HOFS, is what preserves Stage 3's non-sequential column order.
 ; The arcade screen is 240 lines, not 256.  Centering its 240->224 crop begins at
 ; arcade Y=8.  obj_pyfix therefore computes 240-(sy+14)-8, modulo 256 for the
 ; X1-001/SNES top-edge wrap shared by partially visible 16px sprites.
@@ -1433,29 +1394,7 @@ oy_done:
     rts
 
 bg_hscroll:
-    php
-    rep #$30
-    sep #$20             ; 8-bit A
-    lda $7E8995          ; cached low byte of raw word $41:3408
-    rep #$20             ; 16-bit A
-    and #$00FF
-    sta $D0              ; scratch (free after vb_loop)
-    sep #$20
-    lda $7E8997          ; cached low byte of raw word $41:3604
-    and #$01             ; upper bit for column 0
-    rep #$20
-    and #$00FF
-    xba                  ; A = bit0<<8  ($0100 or $0000)
-    sec
-    sbc $D0              ; (upper.bit0<<8) - scrollx[0]
-    clc
-    adc #$0040           ; centered 384->256 crop begins at arcade X=64
-    and #$03FF
-    sep #$20
-    sta BG1HOFS          ; low byte
-    xba
-    sta BG1HOFS          ; high byte
-    plp
+    jsl.l $E9BB00
     rts
 
 ; dma0_blank_pulse — publish a channel-0 DMA for the next NMI/VBlank.
@@ -1472,6 +1411,7 @@ bg_hscroll:
 ; in the $8Axx helper island so the tightly packed $88CC-$8900 seam does not grow.
 .a8
 .i16
+.org $88BD
 dma0_blank_pulse:
     jmp dma0_blank_pulse_extended
 
@@ -1718,6 +1658,12 @@ bg_tile_run_dma_chunks_end:
 ; to retain that safe tail instead of making a 544-byte upload wait three frames.
 ; Larger transfers keep the conservative leading-edge cutoff.  If there is not
 ; enough VBlank left, retain the flag and let the foreground wait for the next NMI.
+;
+; Reading SLHV latches H/V but does not reset OPVCT's alternating low/high-byte
+; selector.  Another PPU-register consumer can therefore leave the selector high
+; first; two reads here then preserve that wrong phase forever and reject every
+; later NMI.  STAT78 explicitly resets both H/V selectors to low-first before this
+; helper takes its private latch.
 .a8
 .i16
 service_pending_dma0:
@@ -1725,6 +1671,7 @@ service_pending_dma0:
     beq spd_done
     lda HVBJOY
     bpl spd_done
+    lda STAT78           ; reset OPVCT to low-byte-first; SLHV alone does not
     lda SLHV             ; latch H/V counters
     lda OPVCT            ; vertical low byte
     tax
@@ -1743,9 +1690,14 @@ spd_line_ok:
     lda OPVCT            ; vertical bit 8 (reject lines 256-261)
     and #$01
     bne spd_done
+    ; Clear the publication before starting DMA.  MDMAEN halts this CPU, so
+    ; foreground code cannot observe the clear until the transfer and handler
+    ; finish.  A VBlank edge during a long DMA can, however, vector a nested
+    ; NMI immediately when DMA releases the CPU; clearing first prevents that
+    ; NMI from replaying the same descriptor recursively until stack overflow.
+    stz $1F11
     lda #$01
     sta MDMAEN
-    stz $1F11            ; release foreground only after DMA completes
 spd_done:
     rts
 service_pending_dma0_end:
@@ -1968,6 +1920,8 @@ boot_mode7_scale_tick_end:
 ;   $41:012C = cadence initialized marker ($A5)
 ;   $41:012D = 5A22 supervisor ready publication ($5A)
 ;   $41:0130 = bounded catch-up debt in video frames (0..10)
+;   $41:015C = VTIME-only real-pad staging generation (odd while replacing)
+;   $41:015E = VTIME-only completed real-pad sample
 ;   $7E:1F1E = FRAME_REQ sequence represented by the latest complete direct snapshot
 ;
 ; At the $0818 idle boundary the SA-1 publishes arm=1 and requests one S-CPU
@@ -2088,6 +2042,30 @@ psj_loop:
     rol $1F13
     dex
     bne psj_loop
+pacing_vtime_publish_tail:
+    jmp pacing_publish_vtime_joy
+
+; VTIME can deliver the next emulated gameplay IRQ before the coroutine
+; scheduler revisits `$0818`.  In that interval arm remains released, so the
+; renderer-owned `$410000` mailbox must stay untouched even though NMI has a
+; newer complete controller sample.  Publish that sample into a separate
+; seqlock: the diagnostic delayed-P1 bridge takes a stable copy for the next
+; virtual gameplay tick, while ordinary ROM packing restores the historical
+; RTS/zero gap and therefore pays no extra NMI or BW-RAM traffic. NMI is the
+; only writer, and the serial read is already complete before the generation
+; becomes odd.
+pacing_publish_vtime_joy:
+    rep #$20
+    lda $41015C
+    inc a
+    ora #$0001
+    sta $41015C          ; odd: replacement in progress
+    lda $1F12
+    sta $41015E
+    lda $41015C
+    inc a
+    sta $41015C          ; even: complete sample published
+    sep #$20             ; retain pacing_sample_joy's A8 return contract
     rts
 pacing_helpers_end:
 
@@ -2111,20 +2089,25 @@ nmi_pacing_wram:
     jsr pacing_try_wake
     jsr service_pending_dma0
     jsr pacing_sample_joy
-    jsr boot_mode7_tick
+    jsr nmi_video_keepalive
     lda $3302            ; leave Bus-A latched on IRAM, not a ROM fetch
     plb
-    ; Patch the hardware-saved return P while A/X/Y are still protected on our
-    ; stack.  The old order restored A first and then used LDA/AND/STA here,
-    ; corrupting the interrupted A low byte on every vblank.  In particular an
-    ; NMI between a renderer LDA and its following STA could poison loop/hash
-    ; state and strand the 5A22 inside one frame.  At this point the saved A,
-    ; X, and Y occupy six bytes above S, our PHP byte is +7, and the hardware
-    ; return P is +8.
-    sep #$20
-    lda $0008,s
-    and #$FB             ; keep coprocessor IRQs enabled after NMI
-    sta $0008,s
+    ; Preserve both saved status bytes exactly.  RTI already restores the
+    ; interrupted I state: ordinary code returns with IRQs enabled, while an
+    ; IRQ handler preempted by NMI must remain masked until its own RTI.  The
+    ; former stack patch either cleared I in our PHP (+8), opening an IRQ
+    ; window before this RTI, or cleared the hardware return P (+9), allowing
+    ; a nested IRQ inside an interrupted IRQ handler.  Both paths can grow the
+    ; stack until control returns into data.  Keep this eight-byte slot
+    ; size-neutral because the WRAM mirror has fixed downstream addresses.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     rep #$30
     ply
     plx
@@ -2147,7 +2130,17 @@ irq_pacing_wram:
     lda #$80
     sta $2202            ; acknowledge SA-1 -> S-CPU coprocessor IRQ
     jsr pacing_try_wake
-    jsr pacing_sample_joy
+    ; NMI is the sole controller sampler.  A coprocessor IRQ can begin here
+    ; shortly before vblank; the non-maskable NMI then preempts this handler.
+    ; Calling the same serial reader from both paths lets NMI reset $1F12/13
+    ; and relatch $4016 halfway through the IRQ's 16-bit loop.  The interrupted
+    ; IRQ subsequently resumes against the wrong shift position, while NMI can
+    ; publish the IRQ's half-cleared sample as a one-tick neutral input.  Keep
+    ; this slot size-neutral because save states can resume at downstream WRAM
+    ; mirror instruction boundaries.
+    nop
+    nop
+    nop
     lda $3302            ; leave Bus-A latched on IRAM
     plb
     rep #$30
@@ -2156,6 +2149,37 @@ irq_pacing_wram:
     pla
     plp
     rti
+
+; A save state can restore a complete cached Stage-3 tilemap while leaving the
+; serialized PPU BG1 horizontal register at a stale pre-map value.  At normal
+; gameplay pace that bad register then remains visible until the next slow
+; game-frame render, producing the reported vertical blue strip.  The accepted
+; cache already owns the matching packed scroll word at $7E:8994, so reapply
+; its register-only tail on every NMI once at least one frame was acknowledged.
+; This neither consumes a renderer image nor changes the SA-1 wake/order path;
+; it only keeps persistent PPU registers coherent with the persistent map.
+; The wrapper preserves the existing three-byte NMI call site and lives in the
+; otherwise unclaimed $8F80 island copied verbatim into the $7F NMI mirror.
+.org $8F80
+.a8
+.i16
+nmi_video_keepalive:
+    jsr boot_mode7_tick
+    lda $3302            ; no completed game frame: boot/Mode-7 owns the PPU
+    beq nvk_done
+    ; bg_hscroll_full uses $D0 as arithmetic scratch.  This wrapper runs
+    ; asynchronously and can interrupt vid_frame while $D0 owns a renderer
+    ; loop/hash value, so preserve the word explicitly around the register-only
+    ; scroll tail.  The NMI prologue already protects A/X/Y but not DP memory.
+    rep #$20
+    lda $D0
+    pha
+    jsr bg_scroll        ; current accepted cache: HOFS + guarded VOFS only
+    pla
+    sta $D0
+    sep #$20
+nvk_done:
+    rts
 
 ; ============================================================================
 ; sound_tick — P2 STEP 2: drain the 68K sound-command ring and drive TAD.
@@ -2436,8 +2460,8 @@ snd_tbl:
 .a16
 .i16
 bg_dispatch:
-    php
-    rep #$30
+    jmp bg_dispatch_dynamic ; preserve the fixed $9Bxx renderer/cache layout
+bg_dispatch_continue:
     lda $7E8990          ; snapshot_acquire found a new coherent BG code/color image
     beq bg_dispatch_fast
     lda $7E89BC          ; producer's unique changed-cell list
@@ -2776,8 +2800,11 @@ sa_bg_unchanged:
     jsr snapshot_obj_cache
     lda $417400          ; packed VOFS/scrollx word from capture_bg_vscroll
     sta $7E8994
-    lda $417402          ; raw $41:3604 word (spritectrl[2] low byte is the second byte)
-    sta $7E8996
+    jsl.l $E9BC00        ; accept coherent layout kind + 16 physical-column slots
+    nop
+    nop
+    nop
+    nop                  ; preserve all established snapshot helper addresses
     lda $410124
     cmp $7E898E
     bne sa_read_generation
@@ -2908,8 +2935,9 @@ spp_no_new_obj:
     jsr capture_bg_vscroll
     sta $417400
     nop
-    lda $413604
+    jsr capture_bg_upper_snapshot
     sta $417402
+    nop
     lda $410124
     inc a
     bne spp_generation_done
@@ -3095,7 +3123,7 @@ rqi_copy:
     inx
     inx
     ; Do not use a forward label subtraction here.  Poppy encoded that as the
-    ; absolute end address ($ED2A), causing an unbounded/destructive copy through
+    ; absolute end address, causing an unbounded/destructive copy through
     ; bank $7F.  The ROM pack proves this pinned size against the final symbols.
     cpx #RENDER_QUEUE_CODE_BYTES
     bne rqi_copy
@@ -3177,8 +3205,11 @@ sal_bg_clean:
     sta $7E89AC          ; consumed OBJ-change count (measurement only)
     lda $7E3408          ; direct cache: packed VOFS/scrollx word
     sta $7E8994
-    lda $7E3604          ; direct D0 cache: raw $41:3604 control word
-    sta $7E8996
+    jsl.l $E9BC40        ; accept coherent layout kind + 16 physical-column slots
+    nop
+    nop
+    nop
+    nop                  ; preserve the fixed paced-acquisition layout
     rts
 sal_generation_retry:
     lda #$0000
@@ -3468,8 +3499,9 @@ psd_obj_planes_done:
     jsr capture_bg_vscroll
     sta $7E3408
     nop
-    lda $413604
+    jsr capture_bg_upper_direct
     sta $7E3604
+    nop
     sep #$20
     lda #$41
     sta $4374
@@ -4042,66 +4074,7 @@ bic_empty:
     stz $F8
 
 bic_coordinates:
-    ; Build the common tile attributes once.  bg_ent formerly repeated this
-    ; palette/flip work and the full map-index calculation for all four quads.
-    lda $F0
-    and #$00FF
-    asl a
-    asl a
-    xba
-    and #$1C00
-    sta $FA
-    lda $F6
-    and #$8000           ; arcade X flip becomes SNES tilemap bit 14
-    beq bic_no_xflip
-    lda $FA
-    ora #$4000
-    sta $FA
-bic_no_xflip:
-    lda $F6
-    and #$4000           ; arcade Y flip becomes SNES tilemap bit 15
-    beq bic_no_yflip
-    lda $FA
-    ora #$8000
-    sta $FA
-bic_no_yflip:
-    lda $F8
-    and #$03FF
-    ora $FA
-    sta $FA              ; complete top-left entry; other quads are +1/+2/+3
-
-    ; The mapping is immutable, so vid_init computes it once.  Indexing by the
-    ; source byte offset preserves exact parity with vid_bg_heavy while removing
-    ; dozens of shifts/branches from every changed cell.
-    ldx $E0
-    lda $7E7500,x
-    sta $D0
-    clc
-    adc #$0002           ; top-right is adjacent; TL is always an even tile x
-    sta $D2
-
-    ldx $D0
-    lda $FA
-    sta $7E9000,x        ; top-left
-    inc a
-    ldx $D2
-    sta $7E9000,x        ; top-right
-    lda $D0
-    clc
-    adc #$0040
-    tax
-    lda $FA
-    clc
-    adc #$0002
-    sta $7E9000,x        ; bottom-left
-    lda $D2
-    clc
-    adc #$0040
-    tax
-    lda $FA
-    clc
-    adc #$0003
-    sta $7E9000,x        ; bottom-right
+    jsl.l $E9B700
     clc
     rts
 bic_overflow:
@@ -4136,6 +4109,39 @@ capture_bg_vscroll:
     plp
     rts
 capture_bg_vscroll_end:
+
+; Four fixed-size wrappers select the metadata destination while retaining the
+; existing three-byte JSR call sites.  The ROM helper returns the layout kind
+; in A and copies the coherent 16-byte physical-column map beside that caller's
+; control word.
+capture_bg_upper_snapshot:
+    lda #$0000
+    jsl.l $E9B900
+    rts
+capture_bg_upper_direct:
+    lda #$0001
+    jsl.l $E9B900
+    rts
+capture_bg_upper_primary:
+    lda #$0002
+    jsl.l $E9B900
+    rts
+capture_bg_upper_secondary:
+    lda #$0003
+    jsl.l $E9B900
+    rts
+capture_bg_upper_end:
+
+; The renderer runs from its $7F WRAM mirror, while the larger dynamic column
+; helpers live in ROM.  Keep this tiny same-bank trampoline inside the copied
+; $8000-$AFFF image so bg_dispatch's fixed three-byte entry can preserve all
+; downstream addresses.
+bg_dispatch_dynamic:
+    php
+    rep #$30
+    jsl.l $E9B780
+    jmp bg_dispatch_continue
+bg_dispatch_dynamic_end:
 vid_bg_incremental_end:
 
 ; =============================================================================
@@ -4477,66 +4483,15 @@ bcr_rehash_done:
     rts
 bg_cache_reclaim_end:
 
-; Build the immutable lookup once during vid_init.  Table index is the source
-; cell byte offset (2*(column*32+offset)); value is the top-left byte offset in
-; the SNES 64x32 BG map split across two 32x32 nametables.
+; Build the initial lookup during vid_init.  The implementation lives with the
+; dynamic Stage-3 column mapper and retains this established call address.
 .org $AA00
 .a16
 .i16
 bg_offset_table_init:
-    rep #$30
-    stz $D0              ; source column 0..15
-    ldx #$0000           ; table byte offset
-boti_column:
-    stz $D2              ; source offset 0..31
-boti_offset:
-    lda $D2
-    and #$001E
-    asl a
-    asl a
-    asl a
-    asl a
-    asl a
-    asl a
-    sta $D4              ; vertical byte offset = (offset & ~1) * 64
-    lda $D0
-    asl a
-    asl a
-    asl a
-    sta $D6              ; raw x byte offset = column * 8
-    lda $D2
-    and #$0001
-    asl a
-    asl a
-    clc
-    adc $D6              ; odd source cell adds two SNES tiles = four bytes
-    sta $D6
-    and #$0040
-    beq boti_left_nt
-    lda $D6
-    and #$003F
-    clc
-    adc #$0800           ; columns 8-15 select nametable 1
-    sta $D6
-boti_left_nt:
-    lda $D6
-    clc
-    adc $D4
-    sta $7E7500,x
-    inx
-    inx
-    lda $D2
-    inc a
-    sta $D2
-    cmp #$0020
-    bne boti_offset
-    lda $D0
-    inc a
-    sta $D0
-    cmp #$0010
-    bne boti_column
-    lda #$0000           ; restore vid_init's zero-fill accumulator contract
-    rts
+    lda #$FFFE           ; cold boot starts with the historical identity map
+    sta $7E8996
+    jmp bg_offset_table_build
 
 ; Direct immutable-tile upload.  $E4 is the 14-bit arcade code and $DA the
 ; destination BG slot.  Native tile records are packed at $C9:0000+code*128;
@@ -5426,8 +5381,9 @@ rqc_bg_done:
     jsr capture_bg_vscroll
     sta $7ED18C
     nop
-    lda $413604
+    jsr capture_bg_upper_primary
     sta $7ED18E
+    nop
 
     ; Acceptance has the same producer contract as the direct snapshot: only a
     ; complete private image advances ACK and clears cumulative dirty flags.
@@ -5561,8 +5517,9 @@ rqc2_bg_done:
     jsr capture_bg_vscroll
     sta $7EB00C
     nop
-    lda $413604
+    jsr capture_bg_upper_secondary
     sta $7EB00E
+    nop
     lda $7EB000
     sta $410134
     lda #$0000
@@ -5845,6 +5802,888 @@ title_text_row24:
     .word $3C10,$3C26,$3C27,$0000,$3C1C,$3C24,$3C23,$3C22
 title_bg_overlay_end:
 
+; =============================================================================
+; Dynamic X1 background-column placement.
+;
+; X1-001 type-0 backgrounds have sixteen independently positioned 32-pixel
+; columns.  The low bytes advance in 32-pixel steps, while two control bytes
+; supply one ninth X bit per column.  Stage 1/2 happen to look sequential;
+; Stage 3 changes those bits in groups and therefore permutes the source
+; columns.  One global BG1HOFS cannot express that permutation.
+;
+; BG_OFFSET_TABLE maps each source cell to the physical 64x32 SNES tilemap
+; address selected by all sixteen high bits.  A control change rebuilds this
+; 1 KiB lookup and forces one complete map reconstruction even when no source
+; code/color word changed.  Ordinary animation continues through the same
+; incremental list afterward.
+; =============================================================================
+.org $B700
+.a16
+.i16
+bg_write_cell:
+    rep #$30
+    lda $F0
+    and #$00FF
+    asl a
+    asl a
+    xba
+    and #$1C00
+    sta $FA
+    lda $F6
+    and #$8000           ; arcade X flip becomes SNES tilemap bit 14
+    beq bwc_no_xflip
+    lda $FA
+    ora #$4000
+    sta $FA
+bwc_no_xflip:
+    lda $F6
+    and #$4000           ; arcade Y flip becomes SNES tilemap bit 15
+    beq bwc_no_yflip
+    lda $FA
+    ora #$8000
+    sta $FA
+bwc_no_yflip:
+    lda $F8
+    and #$03FF
+    ora $FA
+    sta $FA              ; complete top-left entry; other quads are +1/+2/+3
+
+    ldx $E0
+    lda $7E7500,x
+    sta $D0
+    clc
+    adc #$0002
+    sta $D2
+
+    ldx $D0
+    lda $FA
+    sta $7E9000,x
+    inc a
+    ldx $D2
+    sta $7E9000,x
+    lda $D0
+    clc
+    adc #$0040
+    tax
+    lda $FA
+    clc
+    adc #$0002
+    sta $7E9000,x
+    lda $D2
+    clc
+    adc #$0040
+    tax
+    lda $FA
+    clc
+    adc #$0003
+    sta $7E9000,x
+    rtl
+bg_write_cell_end:
+
+.org $B780
+bg_column_map_update:
+    rep #$30
+    ; The 16 captured physical slots are the complete placement contract.
+    ; Stage 3 can change its upper-position mask while retaining the exact
+    ; same slot map (for example $C03F -> $C07E).  Treating that kind-only
+    ; change as geometry forced a needless 392-cell rebuild and cost several
+    ; video frames.  The live kind still feeds bg_hscroll_full; rebuild the
+    ; tilemap only when the physical slots themselves change.
+    ldx #$0000
+bcmu_map_compare:
+    lda $7E89E0,x
+    cmp $7E89F0,x
+    bne bcmu_layout_changed
+    inx
+    inx
+    cpx #$0010
+    bne bcmu_map_compare
+    lda $7E8996
+    cmp #$FFFE
+    bcs bcmu_same        ; legacy table is identity; live scroll stays register-only
+
+    ; A newly copied prepared image is back in logical source-column order even
+    ; when the physical layout itself did not change.  Rearrange it only after
+    ; this generation has been claimed in foreground context; IRQ/NMI capture
+    ; is too short and re-entrant for the complete 4 KiB operation.
+    lda $7E89BC
+    cmp #$FFFE
+    bne bcmu_sparse_duplicate_test
+    lda #$0000
+    jsl.l $E9BD00
+    bra bcmu_same
+
+    ; X1 draws reused physical columns in source order.  A sparse update can
+bcmu_sparse_duplicate_test:
+    ; otherwise leave stale nontransparent cells where a later source owns the
+    ; same physical slot.  Rebuild the complete map whenever source data changes
+    ; under such an exact layout; stable frames remain scroll-only.
+    lda $7E89DA
+    beq bcmu_same
+    lda $7E8990
+    beq bcmu_same
+    lda $7E89BC
+    beq bcmu_same
+    cmp #$FFFF
+    beq bcmu_same
+    bra bcmu_force_full
+
+bcmu_layout_changed:
+    jsr bg_offset_table_build
+    lda $7E8996
+    cmp #$FFFE
+    bcs bcmu_same        ; title/transition source can be deliberately empty:
+                         ; retain the already displayed BG while returning the
+                         ; lookup to its historical identity arrangement
+    lda $7E7492
+    cmp #$C0BC
+    beq bcmu_remap_prepared
+    lda $7E89BC
+    cmp #$FFFE
+    beq bcmu_remap_prepared
+    ldx #$0000
+bcmu_nonempty_scan:
+    lda $7E2000,x
+    bne bcmu_force_full
+    inx
+    inx
+    cpx #$0400
+    bne bcmu_nonempty_scan
+    bra bcmu_same        ; a transient regular-looking control image with no
+                         ; source cells must not erase the resident title art
+bcmu_remap_prepared:
+    ; The immutable $C0BC composition can move for many display frames after
+    ; its one prepared image was published.  The helper reloads that canonical
+    ; source from ROM; other prepared images use the just-claimed direct copy.
+    lda #$0000
+    jsl.l $E9BD00
+    bra bcmu_same
+bcmu_force_full:
+    lda #$0001
+    sta $7E8990
+    lda #$FFFF
+    sta $7E89BC
+bcmu_same:
+    rtl
+bg_column_map_update_end:
+
+; Table index is the source byte offset (2*(column*32+offset)); value is the
+; top-left byte offset in the split two-nametable SNES map.
+bg_offset_table_build:
+    rep #$30
+    lda $7E8996
+    sta $7E89DE
+    ldx #$0000
+botb_copy_map:
+    lda $7E89E0,x
+    sta $7E89F0,x
+    inx
+    inx
+    cpx #$0010
+    bne botb_copy_map
+
+    ; Cache whether two source columns share one physical slot.  Testing only
+    ; when the layout changes keeps ordinary dirty-frame dispatch constant
+    ; time while allowing bg_column_map_update to preserve X1 source order.
+    stz $7E89DA
+    lda $7E8996
+    cmp #$FFFE
+    bcs botb_duplicate_done
+    stz $D2              ; outer source-column byte index
+botb_duplicate_outer:
+    ldx $D2
+    sep #$20
+.a8
+    lda $7E89E0,x
+    sta $D0
+    rep #$20
+.a16
+    ldx #$0000
+botb_duplicate_inner:
+    cpx $D2
+    beq botb_duplicate_next
+    sep #$20
+.a8
+    lda $7E89E0,x
+    cmp $D0
+    beq botb_duplicate_found8
+    rep #$20
+.a16
+    inx
+    bra botb_duplicate_inner
+botb_duplicate_found8:
+    rep #$20
+.a16
+    lda #$0001
+    sta $7E89DA
+    bra botb_duplicate_done
+botb_duplicate_next:
+    inc $D2
+    lda $D2
+    cmp #$0010
+    bne botb_duplicate_outer
+botb_duplicate_done:
+
+    ldy #$0000           ; source column 0..15
+    ldx #$0000           ; table byte offset
+botb_column:
+    lda $7E8996
+    cmp #$FFFE
+    bcs botb_legacy_column
+    stx $D8
+    tyx
+    sep #$20
+.a8
+    lda $7E89E0,x        ; coherent floor(true X / 32), including the ninth bit
+    rep #$20
+.a16
+    and #$00FF
+    ldx $D8
+    bra botb_column_slot_ready
+botb_legacy_column:
+    tya                  ; irregular title/transition compositions keep identity
+botb_column_slot_ready:
+    sta $DA
+    stz $D2              ; source offset 0..31
+botb_offset:
+    lda $D2
+    and #$001E
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    sta $D4              ; vertical byte offset = (offset & ~1) * 64
+
+    lda $DA
+    and #$000F
+    asl a
+    asl a
+    asl a
+    sta $D6              ; physical 32px slot * 8 map bytes
+
+    lda $D2
+    and #$0001
+    asl a
+    asl a
+    clc
+    adc $D6              ; odd source cell adds two SNES tiles = four bytes
+    sta $D6
+    and #$0040
+    beq botb_left_nt
+    lda $D6
+    and #$003F
+    clc
+    adc #$0800           ; physical slots 8-15 select nametable 1
+    sta $D6
+botb_left_nt:
+    lda $D6
+    clc
+    adc $D4
+    sta $7E7500,x
+    inx
+    inx
+    lda $D2
+    inc a
+    sta $D2
+    cmp #$0020
+    bne botb_offset
+
+    iny
+    cpy #$0010
+    beq botb_done
+    jmp botb_column
+botb_done:
+    lda #$0000           ; preserve vid_init's zero-fill accumulator contract
+    rts
+bg_offset_table_build_end:
+
+; Capture the complete X1 horizontal arrangement at the same coherent boundary
+; as its BG image.  Each map byte is floor(true_x/32): low scroll bits select
+; slots 0..7 and the corresponding ninth-position bit selects slots 8..15.
+; Stage 3 deliberately overlaps columns 14/15 outside the centered viewport;
+; retaining all sixteen bytes reproduces that hardware layout without creating
+; a visible blank strip.
+;
+; General sequential layouts, Stage 3's $Cxxx control family, and aligned
+; full-column permutations are represented exactly.  The last family matters
+; at the credited-player prompt: its source columns are deliberately
+; non-sequential, but every true X shares one 32-pixel phase and the captured
+; map therefore expresses the X1-001 placement without approximation.
+; Genuinely phase-irregular title/transition compositions retain the
+; established identity-map approximation and use $FFFE/$FFFF as their kind
+; word (bit 0 still carries the real column-zero upper bit).
+.org $B900
+.a16
+.i16
+capture_bg_upper_full:
+    rep #$30
+    sta $7E74D0          ; wrapper-selected metadata destination, 0..3
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D8
+    pha
+
+    lda $413604
+    xba
+    and #$00FF
+    sta $D2
+    lda $413606
+    and #$FF00
+    ora $D2
+    sta $D2
+    sta $D8              ; one ninth-position bit consumed per source column
+
+    ldx #$0000           ; byte offset into the 16 X1 column records
+cbuf_map_loop:
+    sep #$20
+.a8
+    lda $413409,x        ; raw X low byte
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    sta $D0              ; physical slot 0..7
+    rep #$20
+.a16
+    lda $D8
+    and #$0001
+    beq cbuf_map_upper_ready
+    sep #$20
+.a8
+    lda $D0
+    ora #$08             ; subtracting 256 modulo 512 selects slots 8..15
+    sta $D0
+    rep #$20
+.a16
+cbuf_map_upper_ready:
+    txa
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    tax                  ; source byte offset / $20 = destination column
+    sep #$20
+.a8
+    lda $D0
+    sta $7E74E0,x
+    rep #$20
+.a16
+    pla
+    tax
+    lsr $D8
+    txa
+    clc
+    adc #$0020
+    tax
+    cmp #$0200
+    bne cbuf_map_loop
+
+    sep #$20
+.a8
+    lda $413601          ; ctrl byte 0: bits 0/1 select a rotated start column
+    and #$03
+    beq cbuf_startcol_ok
+    jmp cbuf_irregular8
+cbuf_startcol_ok:
+    lda $413603          ; ctrl byte 1: low nibble 1 means all sixteen columns
+    and #$0F
+    cmp #$01
+    beq cbuf_numcol_ok
+    jmp cbuf_irregular8
+cbuf_numcol_ok:
+    rep #$20
+.a16
+
+    lda $D2
+    and #$C000
+    cmp #$C000           ; verified Stage-3 rotating/overlapping column family
+    bne cbuf_not_stage3
+    jmp cbuf_regular
+cbuf_not_stage3:
+
+    lda $D2
+    and #$00FF
+    eor #$00FF
+    xba
+    and #$FF00
+    sta $D0
+    lda $D2
+    and #$FF00
+    cmp $D0
+    bne cbuf_aligned_permutation
+
+    sep #$20
+.a8
+    lda $413409
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0
+    ldx #$0020
+cbuf_scroll_loop:
+    lda $D0
+    clc
+    adc #$0020
+    and #$00FF
+    sta $D0
+    sep #$20
+.a8
+    lda $413409,x
+    rep #$20
+.a16
+    and #$00FF
+    cmp $D0
+    bne cbuf_aligned_permutation
+    txa
+    clc
+    adc #$0020
+    tax
+    cmp #$0200
+    bne cbuf_scroll_loop
+    bra cbuf_regular
+
+cbuf_aligned_permutation:
+    ; A single SNES BG1HOFS can reproduce any ordering (including overlaps)
+    ; when all sixteen X1 columns have the same sub-32-pixel phase.  The
+    ; offset table applies each captured physical slot in source order, so
+    ; later overlapping columns retain the X1-001 draw order.  Reject a real
+    ; phase mismatch instead of rounding it into the wrong tilemap column.
+    sep #$20
+.a8
+    lda $413409
+    and #$1F
+    sta $D0
+    ldx #$0020
+cbuf_phase_loop:
+    sep #$20
+.a8
+    lda $413409,x
+    and #$1F
+    cmp $D0
+    bne cbuf_irregular8
+    rep #$20
+.a16
+    txa
+    clc
+    adc #$0020
+    tax
+    cmp #$0200
+    bne cbuf_phase_loop
+    bra cbuf_regular
+
+cbuf_irregular8:
+    rep #$20
+.a16
+cbuf_irregular:
+    lda $D2
+    and #$0001
+    ora #$FFFE
+    sta $D2
+    bra cbuf_copy_map
+
+cbuf_regular:
+    ; Keep the real 16-bit upper-position mask as the dynamic layout kind.
+cbuf_copy_map:
+    ldx #$0000
+cbuf_copy_map_loop:
+    lda $7E74E0,x
+    sta $D0
+    lda $7E74D0
+    beq cbuf_copy_snapshot
+    cmp #$0001
+    beq cbuf_copy_direct
+    cmp #$0002
+    beq cbuf_copy_primary
+    lda $D0
+    sta $7EB010,x
+    bra cbuf_copy_next
+cbuf_copy_snapshot:
+    lda $D0
+    sta $417404,x
+    bra cbuf_copy_next
+cbuf_copy_direct:
+    lda $D0
+    sta $7E3606,x
+    bra cbuf_copy_next
+cbuf_copy_primary:
+    lda $D0
+    sta $7ED190,x
+cbuf_copy_next:
+    inx
+    inx
+    cpx #$0010
+    bne cbuf_copy_map_loop
+
+    ; Keep the immutable-$C0BC provenance paired with the same selected image
+    ; as its position metadata.  A later control-only frame can then rebuild
+    ; the moving prompt from the canonical ROM map instead of trying to invert
+    ; an already permuted direct tilemap.
+    lda $41015A
+    sta $D0
+    lda $7E74D0
+    beq cbuf_token_snapshot
+    cmp #$0001
+    beq cbuf_token_direct
+    cmp #$0002
+    beq cbuf_token_primary
+    lda $D0
+    sta $7E7496
+    bra cbuf_token_done
+cbuf_token_snapshot:
+    lda $D0
+    sta $417414
+    bra cbuf_token_done
+cbuf_token_direct:
+    lda $D0
+    sta $7E7492
+    bra cbuf_token_done
+cbuf_token_primary:
+    lda $D0
+    sta $7E7494
+cbuf_token_done:
+    lda $D2
+    tay                  ; return kind while restoring caller scratch
+    pla
+    sta $D8
+    pla
+    sta $D2
+    pla
+    sta $D0
+    tya
+    ply
+    plx
+    cmp #$FFFE
+    bcs cbuf_return_clear
+    sec
+    rtl
+cbuf_return_clear:
+    clc
+    rtl
+capture_bg_upper_full_end:
+
+; ROM-side implementation for the fixed WRAM-mirror bg_hscroll entry.
+.org $BB00
+.a16
+.i16
+bg_hscroll_full:
+    php
+    rep #$30
+    sep #$20
+.a8
+    lda $7E8995
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0
+    lda $7E8996
+    cmp #$FFFE
+    bcs bghf_legacy
+    lda $D0
+    and #$001F
+    sta $D0              ; exact regular layout: common sub-column phase
+    lda #$0040
+    bra bghf_legacy_subtract
+bghf_legacy:
+    lda $7E8996
+    and #$0001
+    xba
+    clc
+    adc #$0040
+bghf_legacy_subtract:
+    sec
+    sbc $D0
+    and #$03FF
+    sep #$20
+.a8
+    sta BG1HOFS
+    xba
+    sta BG1HOFS
+    plp
+    rtl
+bg_hscroll_full_end:
+
+; Accept the layout metadata that was captured with the selected immutable BG
+; image.  These replace fixed-size load/store pairs in the WRAM-mirrored
+; acquisition paths, so no established mirror address moves.
+.org $BC00
+.a16
+.i16
+accept_bg_columns_snapshot:
+    rep #$30
+    lda $417402
+    sta $7E8996
+    phx
+    ldx #$0000
+abcs_copy:
+    lda $417404,x
+    sta $7E89E0,x
+    inx
+    inx
+    cpx #$0010
+    bne abcs_copy
+    lda $417414
+    sta $7E7492
+    plx
+    rtl
+accept_bg_columns_snapshot_end:
+
+.org $BC40
+accept_bg_columns_direct:
+    rep #$30
+    lda $7E3604
+    sta $7E8996
+    phx
+    ldx #$0000
+abcd_copy:
+    lda $7E3606,x
+    sta $7E89E0,x
+    inx
+    inx
+    cpx #$0010
+    bne abcd_copy
+    plx
+    rtl
+accept_bg_columns_direct_end:
+
+; C0BC's prepared 64x32 SNES map is built in identity source-column order.
+; Exact X1 layouts must rearrange that private map itself: falling back to the
+; raw producer planes exposes cells which the prepared composition deliberately
+; suppresses.  A=0 remaps the claimed direct $9000 map using $3604/$3606.
+; When the accepted image still carries the exact $C0BC provenance token, the
+; logical source is reloaded from its immutable 5A22 ROM mapping at $EF:9000;
+; other prepared images use their just-claimed direct copy as the source.
+;
+; Each row is first copied to the otherwise unclaimed $7400-$747F scratch, then
+; cleared and rebuilt in source order.  Zero tilemap words are transparent, so
+; a later empty source never erases a nonempty earlier source in an overlapping
+; physical 32-pixel slot.
+.org $BD00
+.a16
+.i16
+prepared_bg_map_remap:
+    php
+    phb
+    rep #$30
+    sta $7E748E
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+    lda $D8
+    pha
+    lda $DA
+    pha
+    phx
+    phy
+    ; LDX/LDY/INC/STZ have no absolute-long form.  Poppy accepts a $7E-prefixed
+    ; operand for them but encodes only its low 16 bits, so this helper must
+    ; make WRAM the data bank before using the $748x loop scratch.  Without
+    ; this, the row counter is read from bank $00 and the copy loop never ends.
+    sep #$20
+.a8
+    lda #$7E
+    pha
+    plb
+    rep #$20
+.a16
+
+    lda $7E748E
+    beq pbmr_direct
+    jmp pbmr_done
+pbmr_direct:
+    lda $7E3604
+    cmp #$FFFE
+    bcc pbmr_direct_exact
+    jmp pbmr_done
+pbmr_direct_exact:
+    lda #$9000
+    sta $D0
+    lda #$3606
+    sta $D4
+    lda #$9000
+    sta $D8
+    sep #$20
+.a8
+    lda #$7E
+    sta $D2
+    sta $D6
+    sta $DA              ; ordinary prepared source is the direct WRAM copy
+    rep #$20
+.a16
+    lda $7E7492
+    cmp #$C0BC
+    bne pbmr_source_ready
+    sep #$20
+.a8
+    lda #$EF             ; immutable $C0BC prepared map at file $2F9000
+    sta $DA
+pbmr_source_ready8:
+    rep #$20
+.a16
+pbmr_source_ready:
+
+    ; Identity maps need no copy and, importantly, remain byte-identical to
+    ; the established prepared fast path.
+    ldy #$0000
+pbmr_identity_loop8:
+    tya
+    cmp [$D4],y
+    bne pbmr_nonidentity8
+    iny
+    cpy #$0010
+    bne pbmr_identity_loop8
+    rep #$20
+.a16
+    jmp pbmr_done
+pbmr_nonidentity8:
+    rep #$20
+.a16
+
+    stz $7E7488          ; row byte offset within one 32x32 nametable
+pbmr_row_loop:
+    stz $7E748A          ; word byte offset within the 128-byte joined row
+pbmr_row_copy:
+    lda $7E7488
+    clc
+    adc $7E748A
+    tay
+    lda [$D8],y
+    ldx $7E748A
+    sta $7E7400,x
+    lda #$0000
+    sta [$D0],y
+
+    lda $7E7488
+    clc
+    adc $7E748A
+    clc
+    adc #$0800
+    tay
+    lda [$D8],y
+    ldx $7E748A
+    sta $7E7440,x
+    lda #$0000
+    sta [$D0],y
+
+    inc $7E748A
+    inc $7E748A
+    lda $7E748A
+    cmp #$0040
+    bne pbmr_row_copy
+
+    stz $7E748C          ; source column 0..15
+pbmr_column_loop:
+    lda $7E748C
+    asl a
+    asl a
+    asl a
+    tax
+    lda $7E7400,x
+    sta $7E7480
+    lda $7E7402,x
+    sta $7E7482
+    lda $7E7404,x
+    sta $7E7484
+    lda $7E7406,x
+    sta $7E7486
+
+    ldy $7E748C
+    sep #$20
+.a8
+    lda [$D4],y
+    rep #$20
+.a16
+    and #$00FF
+    cmp #$0008
+    bcc pbmr_left_slot
+    sec
+    sbc #$0008
+    asl a
+    asl a
+    asl a
+    clc
+    adc $7E7488
+    clc
+    adc #$0800
+    bra pbmr_slot_ready
+pbmr_left_slot:
+    asl a
+    asl a
+    asl a
+    clc
+    adc $7E7488
+pbmr_slot_ready:
+    tay
+    lda $7E7480
+    beq pbmr_quad1
+    sta [$D0],y
+pbmr_quad1:
+    iny
+    iny
+    lda $7E7482
+    beq pbmr_quad2
+    sta [$D0],y
+pbmr_quad2:
+    iny
+    iny
+    lda $7E7484
+    beq pbmr_quad3
+    sta [$D0],y
+pbmr_quad3:
+    iny
+    iny
+    lda $7E7486
+    beq pbmr_column_next
+    sta [$D0],y
+
+pbmr_column_next:
+    inc $7E748C
+    lda $7E748C
+    cmp #$0010
+    beq pbmr_columns_done
+    jmp pbmr_column_loop
+pbmr_columns_done:
+    lda $7E7488
+    clc
+    adc #$0040
+    sta $7E7488
+    cmp #$0800
+    beq pbmr_done
+    jmp pbmr_row_loop
+
+pbmr_done:
+    ply
+    plx
+    pla
+    sta $DA
+    pla
+    sta $D8
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    plb
+    plp
+    rtl
+prepared_bg_map_remap_end:
+
 ; The first primary capture lazily copies this island to the identical private
 ; $7E:ED00 offset after production pacing has armed and while the SA-1 sleeps.
 ; Bank $7F is deliberately never used: it is the game's entire emulated 68000
@@ -6000,6 +6839,12 @@ rqp_bg_done:
     sta $7E3408
     lda $7ED18E
     sta $7E3604
+    lda #$000F
+    ldx #$D190
+    ldy #$3606
+    jsr rqp_copy
+    lda $7E7494
+    sta $7E7492
     jmp rqp_publish
 
 rqp_secondary_copy:
@@ -6067,6 +6912,12 @@ rqp2_bg_done:
     sta $7E3408
     lda $7EB00E
     sta $7E3604
+    lda #$000F
+    ldx #$B010
+    ldy #$3606
+    jsr rqp_copy
+    lda $7E7496
+    sta $7E7492
 
 rqp_publish:
 

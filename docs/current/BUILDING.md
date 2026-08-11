@@ -26,6 +26,13 @@ stat -c '%s' build/interp.sfc
 sha256sum build/interp.sfc
 ```
 
+At the August 11 engineering checkpoint, an ordinary build of current source is
+exact SHA-256
+`2dadd12cba0f2a90b0bfeef9e6ef4f8722a6ba46650677c59b85eb9087e430dd`.
+This is a reproducibility identity, not promotion or acceptance; the preserved
+`a976…` ordinary playtest candidate and VTIME diagnostics have separate evidence
+scopes in [STATUS.md](STATUS.md).
+
 The normal ROM must be 4,194,304 bytes. Its hash depends on the exact source revision
 and private audio inputs; compare a release candidate only with the hash in
 [the authoritative status](STATUS.md). If the private FM authoring WAVs are absent,

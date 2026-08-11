@@ -36,9 +36,27 @@ DEFAULT_STATE = (
     ROOT
     / "build/playability-20260720/111a-table-active-cold-boot-v1/final.mss"
 )
+def current_symbol(path: Path, bank: int, symbol: str) -> int:
+    if not path.is_file():
+        raise SystemExit(f"current layout symbols are required: {path}")
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+        fields = raw.split()
+        if len(fields) == 2 and fields[1] == symbol:
+            return bank | int(fields[0].split(":", 1)[1], 16)
+    raise SystemExit(f"{path}: missing {symbol}")
+
+
 ENTRIES = (
-    ("d96", 0x98E348, 0x000D96),
-    ("111a", 0x95A700, 0x00111A),
+    (
+        "d96",
+        current_symbol(ROOT / "src/escbank4.sym", 0x980000, "entry_d96t"),
+        0x000D96,
+    ),
+    (
+        "111a",
+        current_symbol(ROOT / "src/escbank6.sym", 0x950000, "entry_111at"),
+        0x00111A,
+    ),
 )
 
 
