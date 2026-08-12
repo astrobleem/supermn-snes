@@ -83,9 +83,9 @@ pre-counter `$07FEF8A5`; terminal counter `$08000000`, halt `$CAFE`, SA-1
 `$0D42` is `BEQ`, confirming a cap stop rather than corruption or an unsupported
 opcode. No exact MAME tick-21,203 state was needed for this arithmetic. ROM-only
 v8 migration crossed the old cap and reached counter `$0809A799` at tick 21,300.
-The subsequent same-ROM continuation remains divergence-free through MAME tick 25,000
-(SNES tick 24,994): the reports have first divergence NONE and no mismatch
-ranges, with halt 0, minimum stack 124, and renderer drops 0 at the endpoint.
+The subsequent same-ROM continuation remains divergence-free through MAME tick 27,000
+(SNES tick 26,994): the reports have first divergence NONE and no mismatch
+ranges, with halt 0, minimum stack 118, and renderer drops 0 at the endpoint.
 Reports are
 `build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume21301-to21500-v1/watcher-report.json`
@@ -96,11 +96,12 @@ The later segments are
 and
 `build/playback-watcher-20260812/v8-stepcap-resume22501-to23000-v1/watcher-report.json`,
 followed by
-`build/playback-watcher-20260812/v8-stepcap-resume23001-to25000-v1/watcher-report.json`.
-The 25,000 endpoint safe state is
-`c2c86448b7ac7aa557d2b804ea8297262a5a466f9d7f01b2a4bb8fcfe478ce8e`, IRAM
-`159666daff79ed67a677743dee6e33d2eb497ca35940108b5fad6a846934ddcf`, resume
-25,001. This remains checkpoint evidence only: no fresh boot, full playthrough,
+`build/playback-watcher-20260812/v8-stepcap-resume23001-to25000-v1/watcher-report.json`
+and
+`build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`.
+The endpoint safe state is `d2dd13649cd970d0566158488ad2312c767a4a1522ba3ebf4b2050e4d142ca3e`,
+IRAM `aeb586c5efb0b5b3350c019001017383da48569c02a7979450c2262dd62739c7`, resume
+27,001. This remains checkpoint evidence only: no fresh boot, full playthrough,
 or production acceptance.
 
 Superseded candidate `2f590fb1…` has an authorized fresh-power-on Luna campaign
