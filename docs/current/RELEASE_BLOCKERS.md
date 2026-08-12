@@ -36,8 +36,12 @@ report is
 The latest
 focused VTIME image is v7 `45c9096d…`; its ROM-only migrated tick-14,745-to-
 14,750 seam and all exact-v7 player/input/death rows through tick 16,000 are
-green after the delayed input-publication repair. Boss timing first turns red
-at 15,906 despite correct focused health stores; v7 has no fresh-boot, boss,
+green after the delayed input-publication repair. The first two boss fixtures
+are also green in the corrected checkpoint replay at 15,908/15,990. The
+superseded frame-minus-75 comparisons sampled before the write-containing
+update; authenticated frame-minus-74 write ticks require observation one tick
+later. This is a harness defect, not a demonstrated ROM scheduler defect. V7
+has no fresh-boot, full-boss,
 performance, or production authority. The concise identity/evidence handoff is
 [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md).
 
@@ -753,24 +757,32 @@ performance, hardware, production, and playthrough acceptance; no fresh
 campaign was started.
 
 The exact-v7 continuation remains player/input/death-oracle green through
-15,905 and first diverges only at the Stage-1 boss fixture at 15,906, with a
-second boss row at 15,988. At 16,000 it has 2,889/2,889 cumulative player rows,
-12/12 death rows, 1,445 input transitions, 0/2 boss rows, halt zero, zero
+16,000. Its original report marks Stage-1 boss rows at 15,906 and 15,988 red,
+but those rows are invalid comparisons. The runner subtracted 75 from fixture
+write frames while all 139,925 authenticated timeline tick rows use an exact
+frame-minus-74 write boundary; since campaign stops are pre-body, committed
+health is observed at the following tick start. The final 100-tick replay is
+green at 15,908/15,990. At 16,000 it has 2,889/2,889 cumulative player rows,
+12/12 death rows, 1,445 input transitions, 2/2 boss rows, halt zero, zero
 renderer queue drops, and 15 valid initialized task stacks at minimum margin
 138. See
 `build/playback-watcher-20260811/v7-input-delayed-resume{15001-to15500-v1,15501-to16000-v1}/watcher-report.json`.
-The boss sample relation is stable at MAME/SNES `15906/15900` and
-`15988/15982`, but focused exact-state write hooks show correct semantics one
-comparison later: init stores big-endian `$0028` at SNES 15,901, and hit 1
-stores `$0024` at 15,983; both words commit exactly. The compact reduction is
+The boss writes occur during MAME/SNES `15907/15901` and `15989/15983` and are
+observed at the next pre-body stops, `15908/15902` and `15990/15984`. Focused
+exact-state hooks show init storing big-endian `$0028` and hit 1 storing
+`$0024`; both words commit exactly. The compact reduction is
 `build/playback-watcher-20260811/v7-boss-health-write-window-v2/raw-classification.json`,
-produced by `tools/trace_v7_boss_health_window.py`. This excludes an independent
-initializer/subtractor defect for those writes. The remaining red result is an
-organic one-update scheduler/oracle-alignment problem compounded by the stable
-six-tick counter offset; later boss hits are not yet v7-proven. The
+produced by `tools/trace_v7_boss_health_window.py`. The focused regression
+`tools/test_boss_fixture_frame_tick_boundary.py` pins the runner constant, both
+write/observation pairs, health transitions, and every retained timeline tick
+row. The final green compact report is
+`build/playback-watcher-20260812/v7-boss-observation-resume15901-to16000-v1/watcher-report.json`.
+This excludes an independent initializer/subtractor defect for those writes
+and removes the supposed organic one-update scheduler root; later boss hits
+are not yet v7-proven. The
 repeat-identical tick-16,000 state is `06da361f…`, IRAM `3a672763…`, resume
-16,001. No ROM rebuild or fresh boot occurred, and neither is justified before
-the upstream ordering owner is localized.
+16,001. No ROM rebuild or fresh boot occurred; this harness correction does
+not justify either one.
 
 The older `14e920eb…` unchanged-hash continuation reaches tick 17,000 with halt zero,
 15 valid initialized stacks at minimum margin 138, and live rendering. Its 38
@@ -778,8 +790,9 @@ segment divergences comprise 13 input, 14 input-response, and 11 Stage-1 boss
 rows. The boss fixtures span sparse MAME ticks 15,906--16,919 and every SNES
 row is exactly six game ticks behind. Initialization reads 0 instead of 40;
 each later observed health is the prior fixture's expected health. This is
-moderately confident downstream timing drift, not an independently proven
-boss-health semantic root, and yields zero green boss fixtures. Repeat-
+the signature of the now-rejected frame-minus-75 comparison, not downstream
+ROM timing evidence or an independently proven boss-health semantic root.
+Those rows are neither red nor green boss acceptance. Repeat-
 validated checkpoints exist at 16,000/16,500/17,000; tick 17,000 is state
 `a9826e63…`, sidecar `cdf1a8c7…`, resume 17,001. The compact reports are under
 `build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume15501-to17000-v1/`.
@@ -787,16 +800,17 @@ validated checkpoints exist at 16,000/16,500/17,000; tick 17,000 is state
 The next same-hash Luna continuation reaches tick 18,500. Its three new boss
 rows retain the same one-fixture lag: expected/observed health is `6/9` at
 17,018, `2/6` at 17,560, and `$FFFF/2` at 17,654. Cumulative divergence
-classes are 13 input, 14 input-response, and 14 boss, with zero green boss
-rows and no newly localized causal root. Halt is zero, rendering remains live,
+classes in that historical report are 13 input, 14 input-response, and 14
+invalidly sampled boss rows. They need corrected post-write observation before
+being classified green or red. Halt is zero, rendering remains live,
 and all initialized stacks remain valid at minimum margin 138. Repeat-
 validated checkpoints at 17,500/18,000/18,500 cap replay cost; tick 18,500 is
 state `718d3dd3…`, sidecar `a14d74b7…`, resume 18,501. This remains forensic
 post-divergence coverage only.
 
 The same-hash continuation then reaches tick 20,000 with no new mismatch or
-boss-fixture row. Cumulative divergence counts remain 13 input, 14
-input-response, and 14 boss. Halt stays zero, rendering is live, and all
+boss-fixture row. Historical counts remain 13 input, 14 input-response, and 14
+invalid boss classifications. Halt stays zero, rendering is live, and all
 initialized stacks remain valid at minimum margin 136. Repeat-validated
 checkpoints at 19,000/19,500/20,000 cap replay cost; tick 20,000 is state
 `caf9df72…`, sidecar `f06ec2ad…`, resume 20,001. This expands forensic

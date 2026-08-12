@@ -1,6 +1,6 @@
 # Authoritative Superman project status
 
-Last evidence review: August 11, 2026.
+Last evidence review: August 12, 2026.
 
 This is the only authoritative project-status summary. Dated reports under
 `docs/history/` retain the evidence and failed experiments behind it, but their
@@ -43,7 +43,7 @@ remain open:
   Mesen fresh cold-boot prompt gate at
   `build/validate-fresh-one-credit-prompt-isolated-a976-mesen211-v1/summary.json`.
 
-## August 11 engineering checkpoint
+## August 11–12 engineering checkpoint
 
 Three ROM identities must not be conflated:
 
@@ -61,13 +61,17 @@ Three ROM identities must not be conflated:
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is
   green through tick 14,750 after repairing the one-game-tick input-publication
   order. Exact-v7 suffixes keep every player/input/death row green through
-  tick 16,000, but boss timing first turns red at 15,906. This is bounded
-  checkpoint evidence, not fresh-boot or production acceptance.
+  tick 16,000, and a corrected checkpoint replay makes the first two boss rows
+  green at 15,908/15,990. The formerly red 15,906/15,988 rows sampled before
+  the write-containing update because of a harness observation-boundary error,
+  not a ROM scheduler defect. This is bounded checkpoint evidence, not
+  fresh-boot or production acceptance.
 
 The checkpointed `14e920eb…` interpreter-only VTIME lineage is oracle-green
 through tick 14,000 and has safe post-divergence coverage through tick 20,000.
 Its retained first mismatch at 14,748 led to the input-publication diagnosis;
-v7 corrects that input seam but retains a later one-update boss-ordering split.
+v7 corrects that input seam. The later apparent one-update boss split was an
+invalid frame-to-tick fixture comparison and is not ROM evidence.
 Save-state reuse, cross-ROM
 diagnostic migration, NMI/DMA/renderer liveness repairs, common-clock coverage,
 rejected experiments, exact hashes, and the next decisions are summarized in
@@ -1074,29 +1078,39 @@ performance, full-playthrough, production, or release acceptance.
   boss, or playthrough acceptance, and no fresh campaign was started.
 
   The exact-v7 lineage then stays fully player/input/death-oracle green through
-  tick 15,905. The tick-15,001--15,500 suffix has no divergence, and the next
-  suffix first turns red only at the Stage-1 boss fixture at MAME tick 15,906;
-  a second boss row is red at 15,988. At tick 16,000 the cumulative player rows
-  are 2,889/2,889, death references 12/12, input transitions 1,445, boss rows
-  0/2, halt zero, renderer queue drops zero, and all 15 initialized task stacks
-  valid at minimum margin 138. The compact reports are
+  tick 16,000. The original runner reported red Stage-1 boss rows at MAME ticks
+  15,906 and 15,988. Those are invalid comparisons rather than a ROM
+  divergence: every one of the authenticated timeline's 139,925 tick rows has
+  `frame - tick == 74`, while the old loader subtracted 75. More importantly,
+  both MAME timeline rows and SNES campaign stops are pre-body `$003A92`
+  boundaries, so a write during tick T becomes observable at T+1. A focused
+  frame-minus-74 retry remained stale at 15,907/15,989 and confirmed that
+  pre-body contract. The final harness keeps 15,907/15,989 as write ticks and
+  compares at post-write boundaries 15,908/15,990. That 100-tick Luna replay
+  is partial-green through 16,000: player rows 2,889/2,889, death references
+  12/12, input transitions 1,445, boss rows 2/2, oracle divergences zero, halt
+  zero, renderer queue drops zero, and all 15 initialized task stacks valid at
+  minimum margin 138. The original compact reports are
   `build/playback-watcher-20260811/v7-input-delayed-resume15001-to15500-v1/watcher-report.json`
   and
   `build/playback-watcher-20260811/v7-input-delayed-resume15501-to16000-v1/watcher-report.json`.
-  The stable counter relation is MAME tick minus six (`15,906/15,900` and
-  `15,988/15,982`), where the campaign samples stale health 0 then 40 instead
-  of 40 then 36. Two exact-state write traces resolve this as organic ordering,
-  not bad boss semantics: the init stores big-endian `$0028` at SNES tick
-  15,901 and the first hit stores `$0024` at 15,983, and both values commit
-  exactly. Thus each correct health change is visible at the following campaign
-  comparison boundary. The compact byte reduction is
+  The stable counter relation remains MAME tick minus six. Focused exact-state
+  traces show the init committing big-endian `$0028` during SNES tick 15,901
+  and the first hit committing `$0024` during 15,983; they are observable at
+  the next campaign stops, `15,908/15,902` and `15,990/15,984`. The compact
+  byte reduction is
   `build/playback-watcher-20260811/v7-boss-health-write-window-v2/raw-classification.json`;
   `tools/trace_v7_boss_health_window.py` authenticates the exact ROM, Nexen,
   state, IRAM, controller mask, and two-byte physical write. The hook-reported
-  logical PC is notification context, not routine-ownership proof. This closes
-  an independent boss initializer/subtractor defect for these two writes, but
-  boss timing/oracle acceptance remains red and later hits remain unproven on
-  v7. Repeat-identical safe tick-16,000 state SHA is `06da361f…`, IRAM
+  logical PC is notification context, not routine-ownership proof.
+  `tools/test_boss_fixture_frame_tick_boundary.py` pins the corrected runner
+  write-frame constant, one-tick observation delay, both event pairs, health
+  transitions, and the full retained timeline. The final compact report is
+  `build/playback-watcher-20260812/v7-boss-observation-resume15901-to16000-v1/watcher-report.json`.
+  This excludes an initializer/subtractor defect for these two writes and
+  removes the alleged organic boss-ordering root; later hits remain unproven
+  on v7. Repeat-identical
+  safe tick-16,000 state SHA is `06da361f…`, IRAM
   `3a672763…`, and resumes at 16,001 without replay.
 
   Luna previously continued the older unchanged `14e920eb…` hash from tick
@@ -1109,19 +1123,21 @@ performance, full-playthrough, production, or release acceptance.
   is `40->0` at initialization, then `36->40`, `34->36`, `31->34`,
   `29->31`, `25->29`, `21->25`, `18->21`, `14->18`, `11->14`, and
   `9->11`: each observed value after initialization is the preceding expected
-  value. This is moderately confident downstream timing drift, not proof of
-  an independent boss-health writer defect. All 11 boss rows are red, so it
-  provides boss-region coverage but no green boss evidence. Repeat-identical
+  value because the superseded harness sampled two observation boundaries
+  early. All 11
+  rows use the invalid frame-minus-75 conversion; they provide boss-region
+  coverage but neither red nor green boss-oracle evidence. Repeat-identical
   checkpoints exist at 16,000/16,500/17,000; the last is state SHA
   `a9826e63…`, IRAM `cdf1a8c7…`, resume tick 17,001. The compact reports are
   under `build/playback-watcher-20260810/vtime-interpreter-only-paced0818-dbcc-resume15501-to17000-v1/`.
 
   The next unchanged-hash Luna segment reaches tick 18,500. Three further
-  Stage-1 boss rows preserve the one-fixture lag: tick 17,018 expected 6 and
+  Stage-1 boss rows preserve the apparent one-fixture lag: tick 17,018 expected 6 and
   observed 9; tick 17,560 expected 2 and observed 6; tick 17,654 expected
   `$FFFF` and observed 2. Cumulative divergence classes are now 13 input, 14
-  input-response, and 14 boss rows; all boss fixtures remain red. No new
-  causal root is localized. Halt stays zero, all initialized stacks remain
+  input-response, and 14 boss rows. All of those boss comparisons used the
+  now-rejected frame-minus-75 boundary and are invalidated rather than accepted
+  as red or green boss evidence. Halt stays zero, all initialized stacks remain
   valid at minimum margin 138, and rendering remains live. Repeat-identical
   checkpoints exist at 17,500/18,000/18,500; the last is state SHA
   `718d3dd3…`, IRAM `a14d74b7…`, resume tick 18,501. This is forensic coverage,
@@ -2336,9 +2352,9 @@ verdict for v124 or v135.
 The concise prioritized list is in [RELEASE_BLOCKERS.md](RELEASE_BLOCKERS.md). The
 highest-risk items are:
 
-1. localize and repair v7's one-update organic boss/scheduler alignment, then
-   obtain fresh-boot and farther boss validation before any diagnostic or
-   ordinary promotion decision;
+1. validate the corrected boss-fixture boundary across later hits, then obtain
+   fresh-boot and farther boss validation before any diagnostic or ordinary
+   promotion decision;
 2. integration of the remaining common-clock/native-owner work and a qualifying
    30 Hz / 358K-cycle result on the eventual ordinary candidate;
 3. renderer conservation, wrong attack-animation tiles, and organic Stage 2

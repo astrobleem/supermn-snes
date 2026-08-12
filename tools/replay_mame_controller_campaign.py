@@ -89,6 +89,14 @@ MAME_MOVIE = ROOT / "inp" / "superman_play.inp"
 # `b1e0...` produced the v7 migrated tick-14,750 checkpoint.  Its successor
 # adds authenticated dependency-path handling for migrations and fresh-only
 # boot screenshot retention; neither path executes during a same-ROM resume.
+# `20a6...` produced the retained v7 checkpoints through tick 16,000.  Its
+# successor corrects only the independently authenticated boss-fixture
+# frame-to-tick mapping; it does not change serialized emulator state or the
+# player-input schedule.
+# `6903...` produced the green corrected v7 boss-observation checkpoint at
+# tick 16,000 by expressing the post-write boundary directly as frame - 73.
+# Its successor expresses the identical boundary as write tick frame - 74 plus
+# one, preserving the write/comparison distinction without changing execution.
 RESUME_COMPATIBLE_CAMPAIGN_SCRIPT_SHA256S = frozenset(
     {
         "64d43359d189bf6f34e69bdc7d9deb6fc5eab8f56a73642a43549f4dc77d5a1b",
@@ -101,6 +109,8 @@ RESUME_COMPATIBLE_CAMPAIGN_SCRIPT_SHA256S = frozenset(
         "2030c2135c724b172670f4322630bbaa9112ef3e941e64dc478d8d1043e179a6",
         "efdb1da62e85e8f20e7f55d95014faed324ac8f47618981f4f93f4c4dd43e426",
         "b1e0c365af00852b79c0153fec5bae4b45bd59955943dde91c5226e41067be91",
+        "20a6d8bce98b9d77a73e8588d010fc6c19706ef600850845c62e7fa294e570c2",
+        "6903fb0307a3c60a1c24d3a10528204ce987dd90d0e977c55242e64a3ada431b",
     }
 )
 
@@ -142,7 +152,12 @@ TICK_RELEASE_EQUIVALENT = 0x00F5C0
 TICK_RELEASE_ROM_OFFSET = 0x0075C0
 HALT_IRAM = 0x004E
 PLAYER_HEALTH_LOW = 0x4012B5
-MAME_FRAME_TO_TICK = 75
+# Boss-tap frames are the frame containing the write.  The authenticated MAME
+# timeline maps that frame to its pre-body tick start with frame - tick == 74.
+# The campaign also samples at pre-body tick starts, so it observes health at
+# BossEvent.tick + 1, after the write-containing update has completed.
+MAME_FRAME_TO_BOSS_WRITE_TICK = 74
+BOSS_OBSERVATION_DELAY_TICKS = 1
 # Exact-stop occurrence batches stay deliberately small.  The MCP debugger's
 # per-occurrence bookkeeping grows on this ROM; batches near 240 can exceed
 # the transport timeout even though the underlying game remains live.
@@ -1196,8 +1211,8 @@ def load_boss_events(path: Path, end_tick: int) -> list[BossEvent]:
         stage = int(row["stage"])
         if stage not in (1, 2, 3):
             continue
-        tick = int(row["frame"]) - MAME_FRAME_TO_TICK
-        if tick > end_tick:
+        tick = int(row["frame"]) - MAME_FRAME_TO_BOSS_WRITE_TICK
+        if boss_observation_tick(tick) > end_tick:
             continue
         answer.append(
             BossEvent(
@@ -1211,6 +1226,12 @@ def load_boss_events(path: Path, end_tick: int) -> list[BossEvent]:
             )
         )
     return sorted(answer, key=lambda item: (item.tick, item.name))
+
+
+def boss_observation_tick(write_tick: int) -> int:
+    """Return the first pre-body boundary that observes a boss write."""
+
+    return write_tick + BOSS_OBSERVATION_DELAY_TICKS
 
 
 def wait_for_file(path: Path, timeout: float = 20.0) -> None:
@@ -4737,8 +4758,13 @@ def main() -> int:
                 for event in boss_events:
                     if event.tick - 1 > mapped_origin_tick:
                         events_by_tick[event.tick - 1].append(("boss_pre", event))
-                    if event.tick > mapped_origin_tick:
-                        events_by_tick[event.tick].append(("boss", event))
+                    # The fixture tap writes during this MAME update, while
+                    # exact campaign stops are at its pre-body boundary.
+                    # Compare at the following boundary, when the two-byte
+                    # health word is committed and observable.
+                    observation_tick = boss_observation_tick(event.tick)
+                    if observation_tick > mapped_origin_tick:
+                        events_by_tick[observation_tick].append(("boss", event))
                 for boundary_tick in sorted(
                     set(args.retain_boundary_state)
                 ):
