@@ -807,6 +807,17 @@ This validates the retained first 11 Stage-1 fixtures only, not complete
 Stage-1 boss behavior, full-boss, fresh boot, production, performance, or
 playthrough acceptance.
 
+The corrected v7 suffix reaches tick 17,500 with 12 cumulative Stage-1 boss
+observations green. The new row is MAME tick 17,020 with expected and observed
+health 6. Player, input, and death references remain green with no oracle
+divergence, halt zero, zero renderer queue drops, and minimum initialized-stack
+margin 138. The repeat-identical tick-17,500 state is `9f785e78…`, IRAM
+`b1a53fde…`, and resumes at 17,501. Report:
+`build/playback-watcher-20260812/v7-boss-observation-resume17001-to17500-v1/watcher-report.json`.
+The last two Stage-1 fixtures remain pending; this is not complete Stage-1 boss
+behavior, fresh boot, full-boss, production, performance, or playthrough
+acceptance.
+
 The older `14e920eb…` unchanged-hash continuation reaches tick 17,000 with halt zero,
 15 valid initialized stacks at minimum margin 138, and live rendering. Its 38
 segment divergences comprise 13 input, 14 input-response, and 11 Stage-1 boss
