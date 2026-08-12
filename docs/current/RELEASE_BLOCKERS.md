@@ -23,9 +23,17 @@ red-brick combat because the accepted token changed without a consumer upload.
 `4eb9a408…` restores the complete immutable prepared caches and publishes the
 existing prepared PPU-upload path on token-only acceptance. Its three-case 5A22
 fixture is green, and a migrated tick-1,280-to-1,300 suffix restores storefront
-geometry without oracle/liveness failure. It does not inherit predecessor visual
-acceptance and has no fresh-power-on evidence; combat art remains open on this
-exact hash. The latest
+geometry without oracle/liveness failure. Its authorized exact-hash fresh prefix
+then repeat-hashed a safe tick-1,280 checkpoint; the same-lineage suffix resumed
+at 1,281 and completed tick 3,300 with no observed oracle/liveness divergence.
+Retained frames show clean SA-1 boot, the restored tick-1,278 storefront, no
+bogus crate-area tile chunk at tick 3,214, and the full centered P2 HUD. This
+closes those four bounded showcase regressions on `4eb9a408…`, but does not
+transfer `a976…` acceptance or prove aligned pixels, renderer conservation,
+performance, full playthrough, production, or release acceptance. The compact
+report is
+`build/playback-watcher-20260811/visual-eightfix-4eb-fresh-to3300-v1/watcher-report.json`.
+The latest
 focused VTIME image is v7 `45c9096d…`; its ROM-only migrated tick-14,745-to-
 14,750 seam is green after the delayed input-publication repair, but it has no
 fresh-boot or long-suffix authority. The concise identity/evidence handoff is

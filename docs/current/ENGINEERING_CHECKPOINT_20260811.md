@@ -9,7 +9,7 @@ project status and acceptance claims.
 | Role | SHA-256 | Scope |
 |---|---|---|
 | Best evidence-backed ordinary candidate | `a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60` | Preserved 66-byte terminal-CCR repair with fresh ordinary coverage through tick 10,000. |
-| Current-source ordinary build | `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963` | Reproducible `build/interp.sfc`; unpromoted complete C0BC consumer/visual-repair candidate, not acceptance-equivalent to `a976…` or predecessor hashes. |
+| Current-source ordinary build | `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963` | Reproducible `build/interp.sfc`; unpromoted complete C0BC consumer/visual-repair candidate, fresh partial-green through tick 3,300 but not acceptance-equivalent to `a976…`. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Migrated five-tick seam is green through 14,750; no fresh boot yet. |
@@ -99,21 +99,28 @@ so the 5A22 never uploaded the canonical prepared map. Current `4eb9a408…`
 caches the applied token, restores the immutable map, sorted-code list, and
 palette map, and publishes one prepared dirty event. Its three-case 5A22 fixture
 is green, and a migrated tick-1,280-to-1,300 continuation restores the storefront
-after the first render without oracle/liveness failure. It has not been
-fresh-booted.
+after the first render without oracle/liveness failure. Its authorized exact-hash
+fresh prefix then repeat-hashed a safe tick-1,280 checkpoint; the same-lineage
+suffix resumed at 1,281 and completed tick 3,300 with no observed oracle/liveness
+divergence across 118 input transitions and one death. Retained frames show clean
+SA-1 boot, the restored storefront at Button-1 tick 1,278, no bogus crate-area
+tile chunk at carry tick 3,214, and the full centered P2 HUD. The compact report
+is
+`build/playback-watcher-20260811/visual-eightfix-4eb-fresh-to3300-v1/watcher-report.json`.
 
 ## What remains open
 
-1. Decide whether to authorize a focused fresh-boot `4eb9a408…` visual campaign.
-   Until then, its combat-background repair is unaccepted. The predecessor's
-   green boot/HUD/crate evidence does not transfer across the ROM hash.
-2. If authorized, use Luna and the retained checkpoints; do not replay accepted
-   prefixes or stream transcripts into the main thread.
+1. Treat the exact-hash tick-3,300 result as bounded partial-green evidence only;
+   it does not close renderer conservation, aligned MAME pixels, performance, or
+   full-playthrough acceptance.
+2. If extending this campaign, use Luna and resume the retained exact-hash
+   tick-1,280 checkpoint; do not replay the accepted prefix or stream transcripts
+   into the main thread.
 3. Close remaining common-clock/native-owner coverage and obtain a qualifying
    power-on 30 Hz / 358K-cycles-per-tick result on the eventual ordinary image.
 4. Complete renderer conservation, attack-tile, organic Stage-2, aligned-pixel,
    audio-listening, full-playthrough, and real-hardware acceptance.
 
-The ordinary build now reproduces exact SHA `4eb9a408…`. The latest fresh visual
-campaign in this repair phase used superseded `6f7b1084…`; `4eb9a408…` has not
-been fresh-booted.
+The ordinary build now reproduces exact SHA `4eb9a408…`. Its fresh prefix plus
+same-lineage suffix is partial-green through tick 3,300; broader acceptance and
+release blockers remain open.

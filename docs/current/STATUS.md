@@ -54,7 +54,8 @@ Three ROM identities must not be conflated:
   `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963`
   at `build/interp.sfc`, preserved as
   `build/interp-visual-eightfix-4eb9a408.sfc`. It is an unpromoted visual-repair
-  candidate and does not inherit `a976…` or predecessor-hash visual acceptance.
+  candidate with bounded fresh visual/gameplay evidence through tick 3,300; it
+  does not inherit `a976…` acceptance or prove the remaining release gates.
 - The latest focused VTIME diagnostic is v7 SHA-256
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is
@@ -115,8 +116,16 @@ is oracle/liveness green through 1,300; resume-origin correctly retains the old
 serialized PPU image, while the post-render capture restores the known-good
 storefront geometry at
 `build/playback-watcher-20260811/visual-eightfix-4eb-migrated1280-to1300-v1/watcher-report.json`.
-This is focused migrated evidence, not fresh-power-on acceptance. No fresh
-`4eb9a408…` campaign starts without explicit user approval.
+That focused result is now backed by an authorized exact-hash fresh campaign at
+`build/playback-watcher-20260811/visual-eightfix-4eb-fresh-to3300-v1/watcher-report.json`.
+Its successful fresh prefix repeat-hashed a safe tick-1,280 checkpoint, and its
+same-lineage suffix resumed at 1,281 and completed tick 3,300 without replaying
+the prefix. There is no observed oracle/liveness divergence across 118 input
+transitions and one death. Retained frames show a clean black SA-1 boot, the
+known-good storefront at Button-1 tick 1,278 instead of red brick, no bogus
+crate-area tile chunk at carry tick 3,214, and a fully visible centered P2 HUD.
+This is partial-green bounded visual/gameplay evidence, not aligned-pixel,
+performance, full-playthrough, production, or release acceptance.
 
 ## Detailed evidence
 
