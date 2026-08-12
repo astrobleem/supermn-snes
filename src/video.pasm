@@ -1088,8 +1088,10 @@ bps_have:
 ; bg_upload: DMA BG tilemap ($7E:9000, 4KB) -> VRAM word $0000, set BG mode/regs/
 ; scroll. (BG tiles were already DMA'd per-tile to word $1000+ in bg_slot.)
 bg_upload:
-    sep #$20
-    lda #$01
+    jmp bg_upload_conserve_sparse
+    nop
+bg_upload_commit:
+.a8
     sta BGMODE           ; mode 1
     lda #$01
     sta BG1SC            ; BG1 map @ word $0000, 64x32
@@ -1911,6 +1913,47 @@ bmst_settled:
     sta $1F1B
     rts
 boot_mode7_scale_tick_end:
+
+; A control-only transition can produce a mostly empty full-rebuild map while
+; the currently displayed gameplay map is still useful. When a complete newer
+; candidate waits in either queue, publishing that sparse map exposes physical
+; BG cache slot zero across nearly the whole screen. Retain the displayed map
+; until its successor is promoted. Queue-free images retain the old behavior.
+.org $8C20
+.a16
+.i16
+bg_upload_conserve_sparse:
+    rep #$30
+    phx
+    phy
+    lda $7E89D2
+    ora $7E89D6
+    beq bucs_upload
+    ldx #$0000
+    ldy #$0000
+bucs_scan:
+    lda $7E9000,x
+    beq bucs_next
+    iny
+    cpy #$0100          ; bad maps have 64/110 nonzero words; good maps >=1524
+    bcs bucs_upload
+bucs_next:
+    inx
+    inx
+    cpx #$1000
+    bne bucs_scan
+    jsr bg_scroll       ; keep live camera registers without replacing map VRAM
+    ply
+    plx
+    rts
+bucs_upload:
+    ply
+    plx
+    sep #$20
+.a8
+    lda #$01
+    jmp bg_upload_commit
+bg_upload_conserve_sparse_end:
 
 ; =============================================================================
 ; Production 30 Hz pacing supervisor — copied by rc_copy and executed from WRAM.

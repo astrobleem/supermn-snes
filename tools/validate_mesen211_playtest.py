@@ -296,7 +296,6 @@ def hook_events(
 def main() -> int:
     args = parse_args()
     positive = (
-        args.coin_count,
         args.coin_frames,
         args.coin_gap_frames,
         args.start_frames,
@@ -308,7 +307,7 @@ def main() -> int:
         args.post_release_frames,
         args.stall_frames,
     )
-    if min(positive) <= 0 or args.settle_frames < 0:
+    if args.coin_count < 0 or min(positive) <= 0 or args.settle_frames < 0:
         raise SystemExit("frame counts must be positive (settle may be zero)")
     for label, path in (
         ("ROM", args.rom),

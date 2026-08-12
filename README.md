@@ -10,10 +10,23 @@
 </p>
 
 <p align="center">
-  <strong>Current status: interactive technical preview.</strong><br>
-  Visually convincing and controllable in bounded tests, but not yet a qualified
-  playable demo or release.
+  <strong>Current status: focused renderer repair under validation.</strong><br>
+  The project is controllable in bounded tests, but the current ordinary build is
+  not a qualified playable demo or release.
 </p>
+
+> **Validation warning (August 12):** preserved parent `11aefd2c…` is not a demo
+> build. A live user-run Mesen playtest found a repeated,
+> corrupt gameplay background immediately after coin/start and flashing while
+> scrolling. Lossless consecutive-frame capture now reproduces two corrupt
+> intervals (frames 165–174 and 225–232): the playfield changes by 98.93% and
+> 60.34% at their first frames while the HUD/foreground remain intact. Focused
+> tracing proves that the renderer uploads near-empty tilemaps whose zero words
+> select live BG tile 0, producing the repeated pattern until a fuller map
+> arrives. Current `build/interp.sfc` is unpromoted repair candidate `5f5dc9d7…`.
+> Its retained-checkpoint framebuffer rerun suppresses the sparse publication and
+> has no repeated-tile mismatch in 231 lossless frames, but it has not received
+> fresh-boot, aligned-MAME, performance, or human acceptance.
 
 ## An arcade port, not a remake
 
@@ -33,7 +46,8 @@ the Terrific Audio Driver.
   <img src="docs/assets/readme/showcase-20260812.png" alt="Corrected Superman SNES emulator showcase" width="864">
 </p>
 
-The showcase contains real emulator captures. The first four panes are fresh-boot
+The showcase contains real emulator captures, but it is historical evidence rather
+than a promise about the current ordinary build. The first four panes are fresh-boot
 visual evidence from the preserved `4eb9a408…` line: clean SA-1 boot, centered
 HUD/start prompt, restored storefront combat background, and clean crate carry.
 The final two panes are clearly labeled v7 checkpoint evidence. The montage is a
@@ -46,7 +60,9 @@ Concept cover contributed by Chad.
 - Cold boot, coin/start input, and real controller-driven gameplay in bounded runs.
 - Button 1 punch/fire/charge, Button 2 kick, flight, damage, death, and respawn.
 - Crate pickup, carry, contact, and throw paths.
-- Corrected combat background, crate tiles, SA-1 boot presentation, and centered HUD.
+- Preserved `4eb9a408…` captures show the corrected combat background, crate tiles,
+  SA-1 boot presentation, and centered HUD. Parent `11aefd2c…` is renderer-red;
+  current candidate `5f5dc9d7…` closes its focused flash interval only.
 - Exact MC68000 semantic gates: optest 160/160 and opsweep 782/782.
 - Focused Stage 1–3 boss-health differentials and all 14 retained Stage 1 boss
   observations.

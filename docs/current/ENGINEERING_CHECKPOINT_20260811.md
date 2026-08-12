@@ -9,7 +9,8 @@ project status and acceptance claims.
 | Role | SHA-256 | Scope |
 |---|---|---|
 | Best evidence-backed ordinary candidate | `a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60` | Preserved 66-byte terminal-CCR repair with fresh ordinary coverage through tick 10,000. |
-| Current-source ordinary build | `11aefd2c…` | Unpromoted source line with global interpreter lifetime guard extended; it does not inherit preserved predecessor `4eb9a408…` evidence. |
+| Red renderer parent | `11aefd2c…` | Preserved step-cap source line; deterministic repeated-tile flashes under live Mesen scrolling. |
+| Current-source ordinary build | `5f5dc9d7…` | Unpromoted sparse-map conservation candidate; focused migrated-checkpoint framebuffer gate is green for 231 frames. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Player/input/death oracle is green through 16,000; corrected first boss observations are green at 15,908/15,990. No fresh boot. |
@@ -74,6 +75,39 @@ human screenshot review. These are checkpoint-only diagnostics, not fresh boot,
 full-playthrough, or production acceptance.
 
 ## Human visual checkpoint
+
+Update, August 12: the still-image review did not survive live gameplay. Chad ran
+then-current ordinary `build/interp.sfc` (`11aefd2c…`) in Mesen and observed a repeated,
+corrupt gameplay background immediately after coin/start plus flashing while
+scrolling. The supplied capture is retained at
+`docs/assets/evidence/current-11ae-user-mesen-background-red-20260812.png`. This is
+parent-hash negative evidence and invalidates the earlier run recommendation. The
+montage below remains scoped to its preserved `4eb9a408…` and v7 source images;
+it does not establish live current-ROM renderer correctness. The `11ae…` hash is
+preserved for exact Mesen reproduction and consecutive framebuffer analysis. Its
+analysis is deterministically
+red at extracted frames 165–174 and 225–232. The first bad frames change 98.93%
+and 60.34% of the playfield. Focused no-write hooks identify heavy-path uploads at
+emulator frames 6,915 and 6,988 whose staged maps are 96.88% and 94.63% zero words;
+the fuller uploads at 6,927 and 6,997 restore the storefront. Physical BG tile
+slot zero contains live art, so zero staging entries display as the repeated
+pattern. Raw frames/hooks stay in the parent-hash playback-watcher directories;
+the compact causal report is
+`build/playback-watcher-20260812/current-11ae-mesen211-right-bg-map-values-from6891-v5/watcher-report.json`.
+
+The first queue-wide repair `10dc1a0b…` was rejected because repeated-tile ranges
+persisted. The narrower map-content repair delays a map below 256 nonzero words
+only when a complete successor is queued and continues publishing live scroll.
+The first green form `9ab9a1db…` was superseded on static audit because its scan
+changed X/Y. Final candidate `5f5dc9d7…` restores those registers. From retained
+state `02ba3ab7…`, it advances Mesen frames 6,891→7,168 / ticks 881→1,020,
+suppresses the 35-cell sparse attempt, commits the fuller 1,524-nonzero-word
+successor, and remains halt-zero with no first divergence or mismatch ranges in
+231 lossless frames. Candidate frame 34 retains the clean-parent background
+pixel-for-pixel outside local sprite/HUD box `[127,16,177,98]`. The report is
+`build/playback-watcher-20260812/renderer-sparse-conservation-5f5dc9d7-migrated6891-v1/watcher-report.json`.
+This is checkpoint migration, not fresh boot, MAME alignment, performance, or
+human acceptance.
 
 The committed README montage at `docs/assets/readme/showcase-20260812.png`
 (SHA-256 `afa28ba5…`) supersedes the stale August 11 montage. Its first four

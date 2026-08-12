@@ -516,6 +516,8 @@ obj_cache_protect_displayed = vid_off("obj_cache_protect_displayed")
 obj_cache_protect_displayed_end = vid_off("obj_cache_protect_displayed_end")
 boot_mode7_scale_tick = vid_off("boot_mode7_scale_tick")
 boot_mode7_scale_tick_end = vid_off("boot_mode7_scale_tick_end")
+bg_upload_conserve_sparse = vid_off("bg_upload_conserve_sparse")
+bg_upload_conserve_sparse_end = vid_off("bg_upload_conserve_sparse_end")
 assert bg_tile_run_dma_chunks == 0x8A00
 assert (
     0x8A00
@@ -559,9 +561,14 @@ assert VID[
     "displayed-OBJ quarantine helper grew into the boot-scale island"
 )
 assert VID[
-    boot_mode7_scale_tick_end - 0x8000:0x0DD0
-] == bytes(0x8DD0 - boot_mode7_scale_tick_end), (
-    "boot-scale helper grew into the $8DD0 pacing island"
+    boot_mode7_scale_tick_end - 0x8000:0x0C20
+] == bytes(0x8C20 - boot_mode7_scale_tick_end), (
+    "boot-scale helper grew into the sparse-map conservation island"
+)
+assert VID[
+    bg_upload_conserve_sparse_end - 0x8000:0x0DD0
+] == bytes(0x8DD0 - bg_upload_conserve_sparse_end), (
+    "sparse-map conservation helper grew into the $8DD0 pacing island"
 )
 assert VID[0x099C:0x09AB] == bytes.fromhex(
     "bf0080e99f00807fe8e8e00030d0f1"
@@ -679,6 +686,8 @@ snapshot_acquire_paced = vid_off("snapshot_acquire_paced")
 render_queue_finish = vid_off("render_queue_finish")
 render_queue_install = vid_off("render_queue_install")
 render_queue_helpers_end = vid_off("render_queue_helpers_end")
+bg_upload = vid_off("bg_upload")
+bg_upload_commit = vid_off("bg_upload_commit")
 obj_upload_title_dispatch = vid_off("obj_upload_title_dispatch")
 obj_upload_title_dispatch_end = vid_off("obj_upload_title_dispatch_end")
 obj_palette_cache_init = vid_off("vof_pal_cache_init")
@@ -865,6 +874,23 @@ assert bytes.fromhex("9f00007f") not in VID, (
 assert VID[vf_tick - 0x8000 + 12:vf_tick - 0x8000 + 16] == bytes.fromhex(
     "5c90a07f"
 ), "vf_tick no longer tail-jumps to the queue-aware WRAM finish helper"
+assert VID[vf_tick - 0x8000 + 9:vf_tick - 0x8000 + 12] == bytes.fromhex(
+    "20ff80"
+), "vf_tick no longer calls the complete-frame renderer"
+assert bg_upload == 0x86D0 and bg_upload_commit == 0x86D4
+assert VID[bg_upload - 0x8000:bg_upload_commit - 0x8000] == bytes.fromhex(
+    "4c208cea"
+), "BG upload entry no longer routes through the sparse-map conservation gate"
+assert bg_upload_conserve_sparse == 0x8C20
+assert bg_upload_conserve_sparse < bg_upload_conserve_sparse_end <= 0x8DD0, (
+    "sparse-map conservation gate crossed the ordered-input helper island"
+)
+assert VID[
+    bg_upload_conserve_sparse - 0x8000:bg_upload_conserve_sparse_end - 0x8000
+] == bytes.fromhex(
+    "c230da5aafd2897e0fd6897ef01fa20000a00000bf00907ef006c8c00001b00d"
+    "e8e8e00010d0ed20b0a17afa607afae220a9014cd486"
+), "sparse-map conservation gate or its X/Y preservation changed"
 assert bytes.fromhex("5c00ed7e") in VID[
     render_queue_finish - 0x8000:render_queue_install - 0x8000
 ], "queue-finish helper no longer jumps to private $7E:ED00 promoter code"
@@ -981,9 +1007,9 @@ for helper in (
     assert VID.count(bytes((0x20, helper & 0xFF, helper >> 8))) == 1, (
         "each direct/queued/legacy snapshot must select one coherent X1 column-map destination"
     )
-assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 3, (
-    "full, unchanged, and NMI cache-keepalive paths must each reapply the "
-    "same accepted BG scroll helper"
+assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 4, (
+    "full, unchanged, NMI cache-keepalive, and sparse-map conservation paths "
+    "must each reapply the same accepted BG scroll helper"
 )
 assert VID.count(bytes((0x4C, bg_scroll & 0xFF, bg_scroll >> 8))) == 1, (
     "full, incremental, and unchanged BG paths must all publish vertical scroll"

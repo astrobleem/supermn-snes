@@ -139,6 +139,68 @@ A synthetic or checkpointed test proves only its named invariant. Rendering acce
 also needs an unmodified fresh boot, screenshots/PPU state, continued ticks/renders,
 and eventually an aligned MAME frame comparison.
 
+State-oracle lockstep is not framebuffer validation. For every promoted gameplay
+candidate, capture the same canonical boundary in Nexen and exact Mesen 2.1.1 and
+run the aligned active-display gate:
+
+```sh
+python3 tools/compare_snes_framebuffers.py \
+  --reference build/path/to/nexen-frame.png \
+  --candidate build/path/to/mesen-frame.png \
+  --output build/path/to/framebuffer-comparison.json
+python3 tools/test_compare_snes_framebuffers.py
+python3 tools/compare_snes_framebuffer_sequence.py \
+  --manifest build/path/to/aligned-frame-manifest.json \
+  --output build/path/to/framebuffer-sequence.json
+python3 tools/test_compare_snes_framebuffer_sequence.py
+python3 tools/compare_mame_snes_framebuffers.py \
+  --mame build/path/to/exact-mame-frame.png \
+  --snes build/path/to/aligned-snes-frame.png \
+  --output build/path/to/mame-snes-framebuffer.json
+python3 tools/test_compare_mame_snes_framebuffers.py
+```
+
+Nexen's 256x239 capture is normalized to the top 256x224 active display used by
+Mesen. The accepted one-credit cross-emulator fixture is pixel-exact under this
+contract. The gate records full-frame and playfield changed-pixel counts, a red
+difference mask, and repeated-tile concentration. Coin/start transitions and
+scrolling additionally require consecutive video-frame captures: retain only
+mismatches, but compare every captured frame. The sequence manifest names each
+aligned pair; its compact result reports the first divergence and mismatch ranges
+while detailed per-frame hashes and metrics stay on disk. A green player/input/health oracle
+must never be reported as visually green without this separate framebuffer gate.
+For a reported input-triggered visual failure, continue from the nearest retained
+same-emulator checkpoint with `tools/capture_snes_input_framebuffers.py`; it uses
+only real controller input and saves each framebuffer plus periodic states.
+When legacy Mesen cannot advance a one-frame controller request, use
+`tools/record_snes_input_framebuffers.py`: its emulator-core lossless GIF capture
+retains every rendered framebuffer during one uninterrupted controller span.
+Use `tools/trace_snes_bg_dma_input.py` for the focused follow-up: it couples that
+lossless capture to raw BG chunk, pending-DMA, DMA-size/enable, and tilemap-upload
+hooks so a visual mismatch range can be tied to the responsible renderer path.
+Its compact result distinguishes upload attempts from the actual
+`bg_upload_commit`, reconstructs the complete staged map at every commit, and
+reports zero-word, unique-word, and dominant-tile ratios. This catches the current
+failure mode in which a mostly zero map selects a live physical tile-zero pattern.
+`tools/analyze_snes_framebuffer_flashes.py` scans the extracted sequence for a
+dominant repeated-tile collapse and reports the first divergence plus contiguous
+mismatch ranges; retain the full per-frame metrics in its JSON output.
+
+The focused `5f5dc9d7…` repair result is retained at
+`build/playback-watcher-20260812/renderer-sparse-conservation-5f5dc9d7-migrated6891-v1`.
+Its acceptance scope is exactly migrated state `02ba3ab7…`, ticks 881→1,020:
+two attempts, one suppressed 35-cell sparse map, one committed fuller map, halt
+zero, and 231 consecutive frames with no repeated-tile mismatch range. Exact
+frame comparisons show that the candidate background remains identical to the
+parent's last clean frame outside the moving sprite/HUD-local difference box.
+Do not treat this as fresh boot, aligned MAME pixels, performance, broad renderer
+conservation, or human playtest evidence.
+
+The MAME/SNES comparator applies the established arcade viewport registration
+(`x=64..319`, `y=1..224`) and reports the intentionally repositioned top HUD
+separately from the playfield. It requires an exact same-state/canonical-boundary
+pair; comparing merely similar scenes is not acceptance evidence.
+
 For C0BC prepared-background provenance, `validate_bg_producer_list.py` must
 cover both the publication-time exact snapshot and a forced later mutation. The
 first must retain token `C0BC`, manifest `FFFE`, and prepared length `005A`; the

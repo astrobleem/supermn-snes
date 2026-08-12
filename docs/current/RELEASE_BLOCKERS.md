@@ -9,17 +9,38 @@ retains the exact predecessor.
 
 ## Playable-demo gate
 
-The corrected README showcase passed Chad's August 12 still-image review with no
-visible defect, but that does not yet justify a playable-demo label. Promotion
+The corrected README showcase initially passed Chad's August 12 still-image review,
+but a subsequent live user-run Mesen playtest of preserved parent `11aefd2c…`
+showed a repeated/corrupt gameplay background immediately after coin/start and
+flashing while scrolling. That parent is therefore explicitly red,
+and the montage is only preserved-line still evidence. Promotion
 requires one current ROM identity to pass fresh-power-on stage/boss continuity,
 organic Stage 2 and later renderer coverage, a live human combat/audio playtest,
 the 30 game-ticks/s and 358K SA-1 cycles/tick gates, aligned-pixel and renderer
-conservation checks, and real-hardware acceptance. Until then the public label is
-**interactive technical preview**.
+conservation checks, and real-hardware acceptance. Coin/start and scrolling must
+also pass consecutive-frame Mesen/Nexen comparison so a one-video-frame DMA flash
+cannot hide between logical game-tick samples.
 
-Current source builds ordinary SHA `11aefd2c…` at `build/interp.sfc` after the
-global interpreter step-cap extension. It is unpromoted and has no inherited
-evidence from predecessor `4eb9a408…`, preserved as
+The preserved-parent Mesen framebuffer gate is deterministically red. Lossless
+capture reports mismatch ranges 165–174 and 225–232. Clean-to-first-bad comparison
+changes 98.93% and 60.34% of playfield pixels, respectively. A no-write 5A22 trace
+proves that the bad frames follow heavy-path map uploads with 1,984/2,048 and
+1,938/2,048 zero tilemap words; the recovering maps contain only 524 and 517.
+Zero is simultaneously the staging sentinel and a live physical BG-cache slot,
+so the near-empty obsolete maps become repeated tile fields while the separately
+rendered HUD/foreground survive. Current candidate `5f5dc9d7…` delays a below-
+256-nonzero-word map only when a complete successor is queued, preserves X/Y,
+and keeps live scroll. Its focused retained-checkpoint rerun advances ticks
+881→1,020 with halt zero, suppresses the 35-cell sparse attempt, commits the
+1,524-nonzero-word successor, and has no first divergence or mismatch ranges
+across 231 lossless frames. It therefore closes the exact reproduced flash
+interval only. Promotion still requires fresh coin/start and broader scrolling
+capture, exact MAME-aligned pixels, performance, and human acceptance.
+
+Current source builds unpromoted ordinary SHA `5f5dc9d7…` at `build/interp.sfc`.
+Its red parent `11aefd2c…` and rejected queue-wide guard `10dc1a0b…` remain
+preserved; superseded checkpoint-green `9ab9a1db…` omitted X/Y preservation.
+None inherits evidence from predecessor `4eb9a408…`, preserved as
 `build/interp-visual-eightfix-4eb9a408.sfc`. Superseded `2f590fb1…`
 is fresh-power-on green through tick 3,300 for gameplay/liveness, clean SA-1
 boot, centered P2 HUD, and the repaired crate area, but its tick-1,278 combat
