@@ -5,6 +5,10 @@ Everything here was learned the hard way on Superman and applies as-is to the ne
 all carry over. If you are a fresh agent bringing up or debugging the 68K interpreter,
 READ THIS FIRST — each item below cost hours-to-days to discover.
 
+For hardware questions, the host's local Nintendo/SA-1/fullsnes reference library is
+routed in [SNES_REFERENCE_LIBRARY.md](SNES_REFERENCE_LIBRARY.md). Read only the focused
+section implicated by the failure; emulator differentials remain the behavioral oracle.
+
 ## 1. The interpreter's built-in debug interface (SA-1 IRAM)
 
 The source contains a flight recorder and a poke-driven freeze/trace facility. The production ROM

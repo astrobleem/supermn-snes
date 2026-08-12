@@ -2473,7 +2473,7 @@ verdict for v124 or v135.
 | Stability | Active `a976…` passes the fresh one-credit renderer/HUD regression and the bounded fresh campaign through tick 10,000 with five matched deaths, no MAME/SNES oracle divergence, and no halt. Its same fresh native-on root reaches tick 14,746, where the exact MAME/native-off/native-on task frame is red on the shared virtual-IRQ timing boundary; bosses, complete stages, and full-playthrough stability remain unproven. |
 | Rendering | Active `a976…` fresh one-credit artwork/HUD checks are green. Its organically generated fresh campaign endpoint at the Stage-3 timing boundary has the retained `campaign-end.png` city artwork with no visible vertical blue bar; `tools/test_stage3_irq_order_current_a976_evidence.py` pins that Nexen baseline. It is not an aligned MAME-pixel or renderer-conservation proof; the supplied old `stage3.mss` blue strip remains stale-save-state evidence and exact pixel conservation remains open. |
 | Stage 2/3 scrolling | The active fresh lineage reaches the Stage-3 timing boundary and its retained Nexen endpoint has no visible blue bar, but the exact task-frame gate diverges at tick 14,746 and its checkpoint-local rate is far over budget. Current organic Stage-2/3 fidelity, usable rate, completion, and renderer conservation remain unproven. |
-| Audio | Organic command transport and TAD loading work. The VGM-derived five-octave-anchor pass was genuinely regenerated, compiled, and packed, but the human verdict was “no noticeable improvement.” Music/SFX remain musically incomplete. |
+| Audio | Organic command transport and TAD loading work, but the sound remains extremely poor. The VGM-derived five-octave-anchor pass was genuinely regenerated, compiled, and packed; the human verdict was “no noticeable improvement.” A fresh 21-track profile confirms zero YM2610 SSG writes, so the proposed one-voice SPC700 software PSG cannot improve the music; it remains conditional on a future SFX SSG census. FM reconstruction/arrangement and real SFX remain open. |
 | Private-input preparation | `tools/prepare_roms.py` authenticates the World ROM set and exactly derives the 68K image, graphics image, C-Chip response, and 12 drums. The 45 FM authoring WAVs still require the external VGM/ymfm pipeline or the preserved private set. |
 | Hardware | Emulator evidence exists for Nexen and exact Mesen 2.1.1. No real-cartridge/FXPak SA-1 acceptance result is recorded. |
 
@@ -2497,6 +2497,7 @@ highest-risk items are:
 
 - [Current gameplay campaign (2026-08-01)](GAMEPLAY_CAMPAIGN_20260801.md)
 - [Engineering checkpoint (2026-08-11)](ENGINEERING_CHECKPOINT_20260811.md)
+- [SPC700 software-PSG proposal evaluation](../toolchain/SOUND_SPC_PSG_EVALUATION.md)
 - [R15 freeze/HUD/audio handoff](../history/handoffs/V135_IRAM_FREEZE_HUD_AUDIO_20260724.md)
 - [Recovery ledger R0-R15](../history/recovery/RECOVERY.md)
 - [Confession/correction ledger](../history/recovery/CONFESSION.md)

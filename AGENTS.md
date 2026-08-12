@@ -102,6 +102,10 @@ overwrite them casually.
 - TAD compiler:
   `/home/chad/terrific-audio-driver/target/release/tad-compiler`.
 - Python 3 with Capstone MC68000 support.
+- Local SNES/SA-1 hardware-reference library: `/home/chad/snesmanual/`. Route
+  targeted excerpts through [`docs/toolchain/SNES_REFERENCE_LIBRARY.md`](docs/toolchain/SNES_REFERENCE_LIBRARY.md);
+  do not load whole OCR manuals into playback-agent context or copy the source books into
+  the repository.
 
 The expected global MCP registrations are `mame` and `nexen-inproc`. Nexen uses
 `tools/nexen_mcp_bridge.py`; the transport retains historical `MESEN_*` variable

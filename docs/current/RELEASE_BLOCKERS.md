@@ -1947,9 +1947,14 @@ steady-state rate claim, but the Stage-3 performance gate remains unmet.
    states and quantify pixels, viewport, sprites, palette, and scroll.
 3. **Music transcription and timbre.** Keep VGM as the source oracle, but compare all
    21 tracks by ear. Preserve pitch bends, LFO, portamento, dynamics, sample tails, and
-   octave/timbre choices instead of accepting byte transport as musical proof.
+   octave/timbre choices instead of accepting byte transport as musical proof. Fresh
+   profiling confirms zero SSG writes in all 21 VGMs, so the reviewed one-voice SPC700
+   software PSG is not a music solution; see
+   [the evaluation](../toolchain/SOUND_SPC_PSG_EVALUATION.md).
 4. **Real sound effects.** Enemy IDs remain ignored and most effects are placeholders.
-   Validate priority and interaction with music, not only isolated playback.
+   Validate priority and interaction with music, not only isolated playback. Retain a
+   time-stamped YM2610 `$00-$0D` SSG census during the next MAME SFX sweep before deciding
+   whether a real-time PSG is justified.
 5. **Boot latency and presentation.** The Mode 7 zoom/heartbeat makes the long original
    initialization visible, but startup remains long and the indicator is liveness rather
    than progress.

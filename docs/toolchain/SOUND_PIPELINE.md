@@ -17,6 +17,12 @@ VGM does not produce a finished SNES arrangement. TAD is sample-based, so FM/SSG
 timbres must be rendered or redesigned as samples, pitches and loops must be authored,
 and effects unsupported by the converter need explicit MML work.
 
+The 2026-08-12 review of a proposed one-voice SPC700 software PSG is recorded in
+[SOUND_SPC_PSG_EVALUATION.md](SOUND_SPC_PSG_EVALUATION.md). It is not a music fix:
+fresh profiling confirms zero SSG writes across all 21 Superman VGMs. It remains only a
+conditional SFX technique pending a time-stamped MAME SSG-register census. The current
+music priority is audible FM reconstruction/arrangement against the arcade reference.
+
 ## Private/source inputs
 
 - legally obtained source VGMs or VGZ files;
