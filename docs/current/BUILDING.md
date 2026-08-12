@@ -26,12 +26,11 @@ stat -c '%s' build/interp.sfc
 sha256sum build/interp.sfc
 ```
 
-At the latest August 11 engineering checkpoint, an ordinary build of current
-source is exact SHA-256
-`4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963`.
-This is a reproducibility identity, not promotion or acceptance; the preserved
-`a976…` ordinary playtest candidate and VTIME diagnostics have separate evidence
-scopes in [STATUS.md](STATUS.md).
+At the latest August 12 engineering checkpoint, an ordinary build of current
+source is the unpromoted step-cap-extension line `11aefd2c…`; exact-v7 successor
+is `162b757c…`. Preserved predecessor `4eb9a408…`, the `a976…` ordinary
+playtest candidate, and VTIME diagnostics retain separate evidence scopes in
+[STATUS.md](STATUS.md).
 
 The normal ROM must be 4,194,304 bytes. Its hash depends on the exact source revision
 and private audio inputs; compare a release candidate only with the hash in

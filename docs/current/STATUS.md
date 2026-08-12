@@ -50,12 +50,10 @@ Three ROM identities must not be conflated:
 - `a9765fbf…` is the preserved ordinary candidate with the strongest accepted
   ordinary evidence: fresh controller coverage through tick 10,000 plus its
   focused semantic, combat, crate, HUD, and Stage-3 blocker results.
-- A normal build of current source now reproduces exact ordinary SHA-256
-  `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963`
-  at `build/interp.sfc`, preserved as
-  `build/interp-visual-eightfix-4eb9a408.sfc`. It is an unpromoted visual-repair
-  candidate with bounded fresh visual/gameplay evidence through tick 3,300; it
-  does not inherit `a976…` acceptance or prove the remaining release gates.
+- The current source ordinary build is the unpromoted step-cap extension
+  `11aefd2c…`; it supersedes preserved predecessor `4eb9a408…`, whose artifact
+  and evidence remain historical and are not inherited. Exact-v7 successor
+  `162b757c…` differs only in the four threshold bytes and is also unpromoted.
 - The latest focused VTIME diagnostic is v7 SHA-256
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is
@@ -76,6 +74,20 @@ Save-state reuse, cross-ROM
 diagnostic migration, NMI/DMA/renderer liveness repairs, common-clock coverage,
 rejected experiments, exact hashes, and the next decisions are summarized in
 [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md).
+
+Exact-v7 evidence is green with no oracle divergence through completed tick
+21,200, then intentionally exhausts the global interpreter lifetime guard at
+terminal tick 21,203. Safe state is `6c3eaab1…` (IRAM `0d4f91e8…`), with
+pre-counter `$07FEF8A5`; terminal counter `$08000000`, halt `$CAFE`, SA-1
+`$00D15A`, virtual PC `$000D42`. `$0D40` is valid `MOVE.W (A1)+,D4` and
+`$0D42` is `BEQ`, confirming a cap stop rather than corruption or an unsupported
+opcode. No exact MAME tick-21,203 state was needed for this arithmetic. ROM-only
+v8 migration to tick 21,300 reaches counter `$0809A799`, halt 0, min stack 136,
+renderer drops 0, and no mismatch; checkpoint state `a55500b9…`, IRAM
+`8708e422…`, resume 21,301, report
+`build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`.
+This remains checkpoint evidence only: no fresh boot, full playthrough, or
+production acceptance.
 
 Superseded candidate `2f590fb1…` has an authorized fresh-power-on Luna campaign
 through tick 3,300 with 118 controller transitions, no gameplay-oracle

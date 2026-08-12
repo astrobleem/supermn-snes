@@ -9,10 +9,12 @@ project status and acceptance claims.
 | Role | SHA-256 | Scope |
 |---|---|---|
 | Best evidence-backed ordinary candidate | `a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60` | Preserved 66-byte terminal-CCR repair with fresh ordinary coverage through tick 10,000. |
-| Current-source ordinary build | `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963` | Reproducible `build/interp.sfc`; unpromoted complete C0BC consumer/visual-repair candidate, fresh partial-green through tick 3,300 but not acceptance-equivalent to `a976…`. |
+| Current-source ordinary build | `11aefd2c…` | Unpromoted source line with global interpreter lifetime guard extended; it does not inherit preserved predecessor `4eb9a408…` evidence. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Player/input/death oracle is green through 16,000; corrected first boss observations are green at 15,908/15,990. No fresh boot. |
+| Exact-v7 cap checkpoint | `45c9096d…` | No oracle divergence through completed tick 21,200; terminal tick 21,203 intentionally reaches the interpreter lifetime guard (`$CAFE`, SA-1 `$00D15A`, virtual PC `$000D42`). |
+| Unpromoted v8 successor | `162b757c…` | Four threshold-byte successor; ROM-only migration 21,200→21,300 crosses the cap counter with halt 0, min stack 136, drops 0, no mismatch. |
 
 Never report one identity's evidence as proof for another. Diagnostic checkpoint
 migration is explicitly unable to prove boot, renderer continuity, performance,
@@ -44,6 +46,18 @@ The retained `14e920eb…` campaign is exact through tick 14,000. It continues
 safely through tick 20,000 for coverage, but the first inherited comparison
 divergence is tick 14,748. Later boss rows used the rejected frame-minus-75
 mapping and are neither timing evidence nor green boss acceptance.
+
+Exact-v7 continuation is oracle-green through completed tick 21,200. Safe state
+is `6c3eaab1…` (IRAM `0d4f91e8…`), pre-counter `$07FEF8A5`; terminal tick
+21,203 reaches `$08000000`, writes `$CAFE`, and spins at SA-1 `$00D15A` /
+virtual PC `$000D42`. ROM disassembly identifies valid `MOVE.W (A1)+,D4` at
+`$0D40` followed by `BEQ` at `$0D42`; no exact MAME state is needed for this
+cap arithmetic. The v8 ROM-only migration report
+(`build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`)
+reaches `$0809A799` at tick 21,300 with halt 0, minimum stack 136, zero
+renderer drops, and no mismatch; checkpoint state `a55500b9…`, IRAM
+`8708e422…`, resume 21,301. These are checkpoint-only diagnostics, not fresh
+boot, full-playthrough, or production acceptance.
 
 ## The tick-14,748 repair
 

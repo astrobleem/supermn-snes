@@ -7,8 +7,10 @@ native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
 common virtual-IRQ clock. `build/interp-current-5c7e-before-vtime-esc9.sfc`
 retains the exact predecessor.
 
-Current source builds exact ordinary SHA `4eb9a408…` at `build/interp.sfc`,
-preserved as `build/interp-visual-eightfix-4eb9a408.sfc`. Superseded `2f590fb1…`
+Current source builds ordinary SHA `11aefd2c…` at `build/interp.sfc` after the
+global interpreter step-cap extension. It is unpromoted and has no inherited
+evidence from predecessor `4eb9a408…`, preserved as
+`build/interp-visual-eightfix-4eb9a408.sfc`. Superseded `2f590fb1…`
 is fresh-power-on green through tick 3,300 for gameplay/liveness, clean SA-1
 boot, centered P2 HUD, and the repaired crate area, but its tick-1,278 combat
 background is still the red-brick failure. Read-only state inspection proved
@@ -44,6 +46,19 @@ later. This is a harness defect, not a demonstrated ROM scheduler defect. V7
 has no fresh-boot, full-boss,
 performance, or production authority. The concise identity/evidence handoff is
 [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md).
+
+Exact-v7 evidence remains oracle-green through completed tick 21,200. The
+retained safe state `6c3eaab1…` has pre-counter `$07FEF8A5`; terminal tick
+21,203 reaches `$08000000`, writes `$CAFE`, and spins at SA-1 `$00D15A` with
+virtual PC `$000D42`. The surrounding valid instructions are `$0D40`
+`MOVE.W (A1)+,D4` and `$0D42` `BEQ`, so this is the confirmed lifetime guard,
+not an illegal opcode or corruption. The unpromoted v8 successor `162b757c…`
+differs from exact v7 only in the four mirrored threshold bytes; ROM-only
+migration to tick 21,300 reaches `$0809A799`, halt 0, minimum
+stack 136, and zero renderer drops at state `a55500b9…`/IRAM `8708e422…`:
+`build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`.
+No fresh campaign was started; fresh boot, full playthrough, and production
+acceptance remain open.
 
 The active hash is green for its direct exact MAME/native-off/native-on 9/9
 CCR differential (`build/validate-2429c-distinct-arm-isolated-a976-pinned-v1.jsonl`),

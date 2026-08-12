@@ -11119,7 +11119,7 @@ instep_norm:
     inc $4C              ; high word of 32-bit step counter
 nocarry:
     lda $4C
-    cmp #$0800           ; safety cap raised (~134M) — main loop runs many frames
+    cmp #$FFFF           ; lifetime guard (~4.29B): beyond the full retained movie
     bcs docap
     jmp iloop
 docap:
