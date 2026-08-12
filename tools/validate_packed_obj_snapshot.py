@@ -213,7 +213,7 @@ def packed_x_word(
         if sx < 0x0040:
             return (x_color + 0x0030) & 0xFFFF
         if 0x0120 <= sx < 0x0170:
-            return (x_color - 0x0018) & 0xFFFF
+            return (x_color - 0x0030) & 0xFFFF
     credit_glyph = 0x007D <= code <= 0x0080 or code == 0x008B
     if sy == 0x0A and credit_glyph and 0x0120 <= sx < 0x0170:
         return (x_color - 0x0030) & 0xFFFF
@@ -297,10 +297,14 @@ def expected_packed_scroll(m: McpSession) -> bytes:
     return bytes(((representative_vscroll + 7) & 0xFF, scroll_x_low))
 
 
-def derive_bg_column_capture(raw: bytes) -> tuple[int, bytes]:
+def derive_bg_column_capture(
+    raw: bytes, bg_code: bytes | None = None
+) -> tuple[int, bytes]:
     """Rebuild capture_bg_upper_full's layout kind and 16-byte column map."""
     if len(raw) != 0x0208:
         raise ValueError(f"expected $0208 X1 control bytes, got {len(raw):#x}")
+    if bg_code is not None and len(bg_code) != 0x0400:
+        raise ValueError(f"expected $0400 BG code bytes, got {len(bg_code):#x}")
 
     upper_mask = raw[0x0205] | (raw[0x0207] << 8)
     shifted_mask = upper_mask
@@ -331,12 +335,26 @@ def derive_bg_column_capture(raw: bytes) -> tuple[int, bytes]:
     # the captured physical-slot ordering (and source-order overlaps) while a
     # single BG1HOFS supplies the common fine phase.  Only genuinely
     # phase-irregular compositions require the legacy identity approximation.
-    aligned_permutation = full_columns and len(
-        {
-            raw[0x0009 + column * 0x20] & 0x1F
-            for column in range(16)
-        }
-    ) == 1
+    occupied = list(range(16))
+    if bg_code is not None:
+        occupied = []
+        for column in range(16):
+            start = column * 0x40
+            words = (
+                int.from_bytes(bg_code[offset : offset + 2], "big")
+                for offset in range(start, start + 0x40, 2)
+            )
+            if any(word & 0x3FFF for word in words):
+                occupied.append(column)
+    aligned_permutation = full_columns and (
+        not occupied
+        or len(
+            {
+                raw[0x0009 + column * 0x20] & 0x1F
+                for column in occupied
+            }
+        ) == 1
+    )
     exact = regular or aligned_permutation
     kind = upper_mask if exact else 0xFFFE | (upper_mask & 1)
     return kind, bytes(column_map)
@@ -777,7 +795,10 @@ def validate_sample(
         m.read_memory("snesMemory", int(capture_layout["scroll"]), 2)
     )
     raw_x1 = bytes(m.read_memory("snesMemory", 0x413400, 0x0208))
-    expected_column_kind, expected_column_map = derive_bg_column_capture(raw_x1)
+    bg_code = bytes(m.read_memory("snesMemory", 0x414800, 0x0400))
+    expected_column_kind, expected_column_map = derive_bg_column_capture(
+        raw_x1, bg_code
+    )
     observed_column_kind = le16(
         m.read_memory(
             "snesMemory",

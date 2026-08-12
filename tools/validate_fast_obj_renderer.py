@@ -157,7 +157,7 @@ def packed_x_word(
         if sx < 0x0040:
             return (x_color + 0x0030) & 0xFFFF
         if 0x0120 <= sx < 0x0170:
-            return (x_color - 0x0018) & 0xFFFF
+            return (x_color - 0x0030) & 0xFFFF
     credit_glyph = 0x007D <= code <= 0x0080 or code == 0x008B
     if sy == 0x0A and credit_glyph and 0x0120 <= sx < 0x0170:
         return (x_color - 0x0030) & 0xFFFF

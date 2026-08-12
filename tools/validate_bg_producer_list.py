@@ -8,6 +8,8 @@ exercises the exact production helpers with controlled shared-memory images:
 * duplicate producer offsets collapse to one final manifest entry;
 * candidate code/color planes match the live values for every published cell;
 * clean, first-image, empty, and unknown-list states retain the old paths.
+* the first C0BC image preserves its raw baseline while selecting the immutable
+  prepared payload; other first images remain raw/full and clear stale tokens.
 """
 
 from __future__ import annotations
@@ -113,11 +115,12 @@ def run_to_hook(
     a: int = 0,
     x: int = 0,
     dbr: int = 0x41,
+    max_frames: int = 1,
 ) -> dict[str, object]:
     hook = m.add_exec_hook(target, cpu_type="Sa1")
     m.drain_notifications(timeout=0.02)
     set_sa1(m, entry, a=a, x=x, dbr=dbr)
-    hit = m.run_until(max_frames=1, hook_handle=hook)
+    hit = m.run_until(max_frames=max_frames, hook_handle=hook)
     m.pause()
     m.remove_hook(hook)
     if (hit or {}).get("reason") != "hookFired":
@@ -321,6 +324,148 @@ def route_cases(
     return results
 
 
+def first_image_cases(
+    m: McpSession,
+    state: Path,
+    entry: int,
+    done: int,
+    rom: bytes,
+) -> list[dict[str, object]]:
+    live_code = pattern(7, 3)
+    live_color = pattern(11, 5)
+    prepared_map = rom[0x2F9000:0x2FA000]
+    prepared_codes = rom[0x2FA000:0x2FA05A]
+    prepared_palettes = rom[0x2FA05A:0x2FA07A]
+    if not (
+        len(prepared_map) == 0x1000
+        and len(prepared_codes) == 0x005A
+        and len(prepared_palettes) == 0x0020
+    ):
+        raise AssertionError("C0BC prepared ROM payload is truncated")
+
+    results: list[dict[str, object]] = []
+    for name, token in (("c0bc", 0xC0BC), ("ordinary", 0x1234)):
+        m.load_state(state)
+        m.pause()
+        write(m, 0x414800, live_code)
+        write(m, 0x414C00, live_color)
+        write(m, 0x410A00, bytes(0x0400))
+        write(m, 0x410E00, bytes(0x0400))
+        write(m, 0x418000, bytes([0xA5]) * 0x1000)
+        write_u16(m, 0x41013A, 0)
+        write_u16(m, 0x410146, 0)
+        write_u16(m, 0x41014A, token)
+        write_u16(m, 0x41015A, 0xC0BC)
+        run_to_hook(m, entry, done)
+
+        copied = (
+            read(m, 0x410A00, 0x0400) == live_code
+            and read(m, 0x410E00, 0x0400) == live_color
+        )
+        if name == "c0bc":
+            route_green = (
+                u16(m, 0x41013A) == 0xFFFE
+                and u16(m, 0x410146) == 0x005A
+                and u16(m, 0x41014A) == 0xC0BC
+                and u16(m, 0x41015A) == 0xC0BC
+                and read(m, 0x418000, 0x1000) == prepared_map
+                and read(m, 0x419000, 0x005A) == prepared_codes
+                and read(m, 0x419200, 0x0020) == prepared_palettes
+            )
+        else:
+            route_green = (
+                u16(m, 0x41013A) == 0xFFFF
+                and u16(m, 0x410146) == 0
+                and u16(m, 0x41014A) == 0
+                and u16(m, 0x41015A) == 0
+                and read(m, 0x418000, 0x1000) == bytes([0xA5]) * 0x1000
+            )
+        results.append(
+            {
+                "name": f"first-image-{name}",
+                "manifest_length": u16(m, 0x41013A),
+                "prepared_code_length": u16(m, 0x410146),
+                "producer_token": f"{u16(m, 0x41014A):04X}",
+                "displayed_source": f"{u16(m, 0x41015A):04X}",
+                "candidate_copied": copied,
+                "green": copied and route_green,
+            }
+        )
+    return results
+
+
+def c0bc_transition_cases(
+    m: McpSession,
+    state: Path,
+    entry: int,
+    done: int,
+    rom: bytes,
+) -> list[dict[str, object]]:
+    """Distinguish a baseline delta from mutation after C0BC publication."""
+    live_code = bytes((0x00, 0x01)) * 0x0200
+    live_color = bytes(0x0400)
+    prepared_map = rom[0x2F9000:0x2FA000]
+    results: list[dict[str, object]] = []
+    for name, mutate_snapshot in (
+        ("published-exact", False),
+        ("post-publish-mutation", True),
+    ):
+        m.load_state(state)
+        m.pause()
+        write(m, 0x410200, bytes(0x0400))
+        write(m, 0x410600, bytes(0x0400))
+        write(m, 0x410A00, bytes(0x0400))
+        write(m, 0x410E00, bytes(0x0400))
+        write(m, 0x414800, live_code)
+        write(m, 0x414C00, live_color)
+        snapshot_code = bytearray(live_code)
+        if mutate_snapshot:
+            snapshot_code[0] ^= 0x80
+        write(m, 0x41A000, bytes(snapshot_code))
+        write(m, 0x41A400, live_color)
+        write_u16(m, 0x410136, 1)
+        write_u16(m, 0x41013A, 0)
+        write_u16(m, 0x410146, 0)
+        write_u16(m, 0x41014A, 0xC0BC)
+        write_u16(m, 0x41015A, 0)
+        # A full 512-cell scan followed by exact snapshot validation and
+        # prepared-map construction can legitimately cross one video frame.
+        run_to_hook(m, entry, done, max_frames=8)
+
+        token = u16(m, 0x41014A)
+        displayed = u16(m, 0x41015A)
+        manifest_length = u16(m, 0x41013A)
+        prepared_length = u16(m, 0x410146)
+        copied = read(m, 0x410A00, 0x0400) == live_code
+        if mutate_snapshot:
+            route_green = (
+                token == 0
+                and displayed == 0
+                and manifest_length == 0xFFFE
+                and prepared_length == 0x0002
+            )
+        else:
+            route_green = (
+                token == 0xC0BC
+                and displayed == 0xC0BC
+                and manifest_length == 0xFFFE
+                and prepared_length == 0x005A
+                and read(m, 0x418000, 0x1000) == prepared_map
+            )
+        results.append(
+            {
+                "name": f"c0bc-transition-{name}",
+                "manifest_length": manifest_length,
+                "prepared_code_length": prepared_length,
+                "producer_token": f"{token:04X}",
+                "displayed_source": f"{displayed:04X}",
+                "candidate_copied": copied,
+                "green": copied and route_green,
+            }
+        )
+    return results
+
+
 def main() -> int:
     args = parse_args()
     for path in (
@@ -347,6 +492,7 @@ def main() -> int:
         "full_scan": symbol_address(args.esc8_symbols, 0x9E, "rmb_bg_full_scan"),
         "first": symbol_address(args.esc8_symbols, 0x9E, "rmb_bg_first"),
         "clean": symbol_address(args.esc8_symbols, 0x9E, "rmb_bg_clean"),
+        "obj_begin": symbol_address(args.esc8_symbols, 0x9E, "rmb_obj_begin"),
     }
     cases: list[dict[str, object]] = []
     with McpSession(
@@ -376,6 +522,24 @@ def main() -> int:
                 entries["full_scan"],
                 entries["first"],
                 entries["clean"],
+            )
+        )
+        cases.extend(
+            first_image_cases(
+                m,
+                args.state.resolve(),
+                entries["first"],
+                entries["obj_begin"],
+                args.rom.read_bytes(),
+            )
+        )
+        cases.extend(
+            c0bc_transition_cases(
+                m,
+                args.state.resolve(),
+                entries["full_scan"],
+                entries["obj_begin"],
+                args.rom.read_bytes(),
             )
         )
 

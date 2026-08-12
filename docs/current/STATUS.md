@@ -51,9 +51,10 @@ Three ROM identities must not be conflated:
   ordinary evidence: fresh controller coverage through tick 10,000 plus its
   focused semantic, combat, crate, HUD, and Stage-3 blocker results.
 - A normal build of current source now reproduces exact ordinary SHA-256
-  `2dadd12cba0f2a90b0bfeef9e6ef4f8722a6ba46650677c59b85eb9087e430dd`
-  at `build/interp.sfc`. It is an unpromoted engineering output and does not
-  inherit `a976…` fresh-boot or playtest acceptance.
+  `6f7b10848984bcab4020892b8d7951a49e1f1cb2bfac5a2204aede27b3b37cb8`
+  at `build/interp.sfc`, preserved as
+  `build/interp-visual-sixfix-6f7b1084.sfc`. It is an unpromoted visual-repair
+  candidate and does not inherit `a976…` or predecessor-hash visual acceptance.
 - The latest focused VTIME diagnostic is v7 SHA-256
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is
@@ -68,6 +69,33 @@ v7 corrects only the nearest migrated seam so far. Save-state reuse, cross-ROM
 diagnostic migration, NMI/DMA/renderer liveness repairs, common-clock coverage,
 rejected experiments, exact hashes, and the next decisions are summarized in
 [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md).
+
+Superseded candidate `2f590fb1…` has an authorized fresh-power-on Luna campaign
+through tick 3,300 with 118 controller transitions, no gameplay-oracle
+divergence, and no liveness failure. Its retained boot samples show a clean
+black SA-1 logo with no orange/lower-half corruption, its P2 HUD is fully visible
+and centered, and its tick-3,214 crate capture has no bogus left-edge tile chunk.
+Combat remains red: the tick-1,278 foreground is present over the wrong red-brick
+field instead of the known-good storefront. The compact report and images are at
+`build/playback-watcher-20260811/visual-fivefix-2f5-fresh-to3300-v1/watcher-report.json`.
+
+Read-only inspection proved the tick-1,278 column classifier exact (kind `$003F`,
+map `00..0D,00,00`) and found that C0BC gameplay initialization was not the
+renderer's first image: title had already established the baseline. C0BC
+published the right token, but the expected 784-byte title-to-gameplay delta was
+then misclassified as a post-publication mutation and cleared `$41:014A/$015A`
+before prepared-map selection. Current candidate `6f7b1084…` snapshots the exact
+2 KiB C0BC code/color planes at token publication. A later nonzero manifest
+retains C0BC only while the live planes still equal that snapshot; a genuine
+later writer clears both tokens. The exact transition gate is green for retained
+publication and forced post-publication mutation at
+`build/playback-watcher-20260811/visual-sixfix-6f7-bg-producer-transition-v2/watcher-report.json`.
+The separate PC-ring whole-function MAME/Nexen differential is green 6/6 with
+zero work/video mismatch at
+`build/playback-watcher-20260811/visual-sixfix-pcring-cc9-c0bc-v1/watcher-report.json`.
+The ordinary hash reproduced exactly after diagnostic teardown. `6f7b1084…` has
+not been fresh-booted, so the combat-background repair remains unaccepted; no
+new fresh campaign starts without explicit user approval.
 
 ## Detailed evidence
 
@@ -697,7 +725,8 @@ rejected experiments, exact hashes, and the next decisions are summarized in
   first reaches VTIME choke/consume/prepare. The packed gateway encoded
   direct-page `LDA $2E`, which reads emulated A3.H, instead of the intended
   persistent absolute `$072E` loop-arm gate. The diagnostic-only pack repair
-  uses `LDA $072E`; ordinary ROM SHA `2dadd12c…` remains byte-identical. The
+  uses `LDA $072E`; the then-ordinary ROM SHA `2dadd12c…` remained
+  byte-identical. The
   rebuilt interpreter-only candidate is
   `build/interp-vtime-interpreter-only-e00f-gate-restore-scheduler-0818-mvc-fallback-choke-gate-v1.sfc`
   (SHA `d91e28e9…`). Its same bounded task-13 probe is 2,971/2,971 for fetch,
@@ -761,7 +790,8 @@ rejected experiments, exact hashes, and the next decisions are summarized in
   wrapper now enables the corrected `4*n` stride; dormant production bytes are
   unchanged. The new interpreter-only diagnostic is
   `build/interp-vtime-interpreter-only-e00f-gate-restore-scheduler-0818-mvc-fallback-choke-gate-dbcc-stride-v1.sfc`
-  (SHA `7583d110…`), while the ordinary ROM remains exact SHA `2dadd12c…`.
+  (SHA `7583d110…`), while the then-ordinary ROM remained exact SHA
+  `2dadd12c…`.
   A disk-only counterfactual on the aligned old ledger replaces 493 DBcc
   outcomes at 22 PCs with retained MAME outcomes. It removes 246 units/492
   cycles and leaves +332 units/+664 cycles. After deferred native/RTS
@@ -794,8 +824,8 @@ rejected experiments, exact hashes, and the next decisions are summarized in
 
   That rejected pure-interpreter `$0818` fallback is now explicit opt-in bit 2;
   default interpreter-only VTIME retains the paced helper and its already-
-  installed VTIME release callback. Ordinary ROM SHA `2dadd12c…` remains
-  byte-identical. The corrected diagnostic is
+  installed VTIME release callback. The then-ordinary ROM SHA `2dadd12c…`
+  remained byte-identical. The corrected diagnostic is
   `build/interp-vtime-interpreter-only-e00f-gate-restore-scheduler-0818-paced-mvc-fallback-choke-gate-dbcc-stride-v1.sfc`,
   SHA `14e920eb…`. Its first fresh run accepted 8/8 credits but proved that the
   old prompt delay no longer selected MAME's gameplay-origin RNG. A same-ROM,

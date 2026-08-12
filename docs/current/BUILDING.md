@@ -26,9 +26,9 @@ stat -c '%s' build/interp.sfc
 sha256sum build/interp.sfc
 ```
 
-At the August 11 engineering checkpoint, an ordinary build of current source is
-exact SHA-256
-`2dadd12cba0f2a90b0bfeef9e6ef4f8722a6ba46650677c59b85eb9087e430dd`.
+At the latest August 11 engineering checkpoint, an ordinary build of current
+source is exact SHA-256
+`6f7b10848984bcab4020892b8d7951a49e1f1cb2bfac5a2204aede27b3b37cb8`.
 This is a reproducibility identity, not promotion or acceptance; the preserved
 `a976…` ordinary playtest candidate and VTIME diagnostics have separate evidence
 scopes in [STATUS.md](STATUS.md).

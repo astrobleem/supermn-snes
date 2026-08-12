@@ -38,7 +38,7 @@ from the arcade input map.
 The old v135 playtest copy remains at
 `build/playtest/superman-snes-v135-5aac64b6.sfc`. The evidence-backed ordinary
 candidate is the preserved `a976…` file named above. A normal current-source build
-writes a different, unpromoted `build/interp.sfc` at exact SHA `2dadd12c…`; do
+writes a different, unpromoted `build/interp.sfc` at exact SHA `6f7b1084…`; do
 not silently substitute it or any VTIME diagnostic for the preserved candidate.
 See [STATUS.md](STATUS.md) and the
 [August 11 checkpoint](ENGINEERING_CHECKPOINT_20260811.md) for their distinct

@@ -81,6 +81,36 @@ def main() -> None:
         "campaign_script_sha256", "current-runner", "arbitrary-runner"
     ):
         raise AssertionError("arbitrary runner drift was accepted")
+    retained_emulator = {
+        "executable": "/retained/Nexen",
+        "apphost_sha256": "apphost",
+        "managed_assembly_sha256": "managed",
+        "source_dependencies_zip": "/retained/UI/Dependencies.zip",
+        "source_dependencies_zip_sha256": "source",
+        "embedded_native_core_sha256": "native",
+    }
+    relocated_emulator = {
+        **retained_emulator,
+        "source_dependencies_zip": "/archive/Dependencies.zip",
+    }
+    if not campaign.allowed_resume_identity_mismatch(
+        "emulator_identity",
+        relocated_emulator,
+        retained_emulator,
+        allow_rom_migration=True,
+    ):
+        raise AssertionError("authenticated dependency archive relocation rejected")
+    changed_source = {
+        **relocated_emulator,
+        "source_dependencies_zip_sha256": "different-source",
+    }
+    if campaign.allowed_resume_identity_mismatch(
+        "emulator_identity",
+        changed_source,
+        retained_emulator,
+        allow_rom_migration=True,
+    ):
+        raise AssertionError("dependency archive hash drift was accepted")
 
     expected = {
         "identity": "campaign-tail-append-regression",

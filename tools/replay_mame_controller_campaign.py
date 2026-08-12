@@ -265,6 +265,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--mesen", type=Path, default=DEFAULT_NEXEN)
+    parser.add_argument(
+        "--resume-source-dependencies",
+        type=Path,
+        help=(
+            "authenticated historical Nexen Dependencies.zip used only for "
+            "cross-ROM checkpoint resume identity; the executable and managed "
+            "assembly still come from --mesen"
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--resume-state",
@@ -355,6 +364,17 @@ def parse_args() -> argparse.Namespace:
         help=(
             "video frame at which to insert the first credit; 5248 matches "
             "the retained MAME movie's deterministic gameplay-origin RNG"
+        ),
+    )
+    parser.add_argument(
+        "--retain-boot-screen-frame",
+        type=int,
+        action="append",
+        default=[],
+        metavar="VIDEO_FRAME",
+        help=(
+            "during a fresh power-on prefix, retain a screenshot at this "
+            "pre-credit video frame; may be repeated"
         ),
     )
     parser.add_argument(
@@ -576,8 +596,28 @@ def parse_args() -> argparse.Namespace:
             parser.error(
                 "--resume-mame-tick must be within the requested movie range"
             )
+        if args.retain_boot_screen_frame:
+            parser.error(
+                "--retain-boot-screen-frame is valid only for fresh power-on"
+            )
     elif args.allow_resume_rom_migration:
         parser.error("--allow-resume-rom-migration requires --resume-state")
+    if (
+        args.resume_source_dependencies is not None
+        and not args.allow_resume_rom_migration
+    ):
+        parser.error(
+            "--resume-source-dependencies requires "
+            "--allow-resume-rom-migration"
+        )
+    if (
+        args.resume_source_dependencies is not None
+        and not args.resume_source_dependencies.is_file()
+    ):
+        parser.error(
+            "missing resume source dependencies: "
+            f"{args.resume_source_dependencies}"
+        )
     if (
         args.migrate_vtime_irq_clock
         and not args.allow_resume_rom_migration
@@ -619,6 +659,16 @@ def parse_args() -> argparse.Namespace:
             parser.error("frame/tick intervals must be positive")
     if args.coin_gap_frames < 0 or args.credited_wait_frames < 0:
         parser.error("coin gap and credited wait frames cannot be negative")
+    invalid_boot_screens = [
+        frame
+        for frame in args.retain_boot_screen_frame
+        if not 0 < frame < args.cold_boot_frame
+    ]
+    if invalid_boot_screens:
+        parser.error(
+            "--retain-boot-screen-frame values must be positive and precede "
+            f"--cold-boot-frame: {invalid_boot_screens}"
+        )
     return args
 
 
@@ -655,7 +705,10 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def nexen_identity(executable: Path) -> dict[str, Any]:
+def nexen_identity(
+    executable: Path,
+    source_dependencies_override: Path | None = None,
+) -> dict[str, Any]:
     """Identify managed MCP code and its embedded native core."""
     executable = executable.resolve()
     identity: dict[str, Any] = {
@@ -679,13 +732,17 @@ def nexen_identity(executable: Path) -> dict[str, Any]:
                 "deps_manifest_sha256": sha256(deps),
             }
         )
-    source_dependencies = next(
-        (
-            parent / "UI" / "Dependencies.zip"
-            for parent in executable.parents
-            if (parent / "UI" / "Dependencies.zip").is_file()
-        ),
-        None,
+    source_dependencies = (
+        source_dependencies_override.resolve()
+        if source_dependencies_override is not None
+        else next(
+            (
+                parent / "UI" / "Dependencies.zip"
+                for parent in executable.parents
+                if (parent / "UI" / "Dependencies.zip").is_file()
+            ),
+            None,
+        )
     )
     if source_dependencies is not None:
         with zipfile.ZipFile(source_dependencies) as archive:
@@ -2992,7 +3049,28 @@ def allowed_resume_identity_mismatch(
         and isinstance(observed, str)
         and expected != observed
     )
-    return predecessor_runner or candidate_symbol_table
+    relocated_source_dependencies = (
+        allow_rom_migration
+        and key == "emulator_identity"
+        and isinstance(expected, dict)
+        and isinstance(observed, dict)
+        and expected != observed
+        and {
+            name: value
+            for name, value in expected.items()
+            if name != "source_dependencies_zip"
+        }
+        == {
+            name: value
+            for name, value in observed.items()
+            if name != "source_dependencies_zip"
+        }
+    )
+    return (
+        predecessor_runner
+        or candidate_symbol_table
+        or relocated_source_dependencies
+    )
 
 
 def buttons_at_tick(
@@ -3474,7 +3552,10 @@ def main() -> int:
         resumed=args.resume_state is not None,
     )
     rom_hash = sha256(rom)
-    emulator_identity = nexen_identity(args.mesen)
+    emulator_identity = nexen_identity(
+        args.mesen,
+        args.resume_source_dependencies,
+    )
     resume_identity = {
         "emulator_sha256": sha256(args.mesen),
         "emulator_identity": emulator_identity,
@@ -3694,6 +3775,9 @@ def main() -> int:
         "input_transport": "real port-0 controller override",
         "campaign_configuration": {
             "cold_boot_frame": args.cold_boot_frame,
+            "retained_boot_screen_frames": sorted(
+                set(args.retain_boot_screen_frame)
+            ),
             "expected_origin_rng": args.expected_origin_rng,
             "coin_pulses": args.coin_pulses,
             "coin_frames": args.coin_frames,
@@ -3899,14 +3983,48 @@ def main() -> int:
                 mapped_origin_tick = segment_origin_tick
                 if args.resume_state is None:
                     # Continuous cold-boot lineage: never load a state.
-                    boot_runs = run_exact_frames(
-                        m,
-                        0,
-                        max(
+                    boot_runs: list[dict[str, Any]] = []
+                    boot_screens: list[dict[str, Any]] = []
+                    for requested_frame in sorted(
+                        set(args.retain_boot_screen_frame)
+                    ):
+                        boot_runs.extend(
+                            run_exact_frames(
+                                m,
+                                0,
+                                max(
+                                    0,
+                                    requested_frame
+                                    - int(m.get_state()["frameCount"]),
+                                ),
+                            )
+                        )
+                        observed_frame = int(
+                            m.get_state().get("frameCount", 0)
+                        )
+                        retained = {
+                            "requested_frame": requested_frame,
+                            "observed_frame": observed_frame,
+                            "screenshot": screenshot(
+                                m,
+                                shots_dir
+                                / f"boot-screen-frame-{observed_frame:05d}.png",
+                            ),
+                        }
+                        boot_screens.append(retained)
+                        summary["screenshots"].append(
+                            retained["screenshot"]
+                        )
+                    boot_runs.extend(
+                        run_exact_frames(
+                            m,
                             0,
-                            args.cold_boot_frame
-                            - int(m.get_state()["frameCount"]),
-                        ),
+                            max(
+                                0,
+                                args.cold_boot_frame
+                                - int(m.get_state()["frameCount"]),
+                            ),
+                        )
                     )
                     cold_title = {
                         "snapshot": detailed_snapshot(
@@ -4005,6 +4123,7 @@ def main() -> int:
 
                     summary["cold_boot"] = {
                         "boot_runs": boot_runs,
+                        "boot_screens": boot_screens,
                         "coin_runs": coin_runs,
                         "credited_runs": credited_runs,
                         "start_runs": start_runs,

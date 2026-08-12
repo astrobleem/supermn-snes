@@ -495,8 +495,12 @@ assert VID[0x197D:0x1984] == bytes.fromhex("fa68ee0033286b"), (
 # FRAME_ACK is a pre-render coalescing token, not a completion count.  Preserve
 # the non-invasive telemetry written only after the real PPU flush returns.
 assert VID[0x1D12:0x1D29] == bytes.fromhex(
-    "202980c230afa2897e1a8fa2897eafa0897e8fa4897e60"
+    "202980c230afa2897e1a8fa2897eafa0897e4c809deaea"
 ), "true completed-render counter/generation telemetry moved or changed"
+assert vid_off("ppu_dma_flush_ack_finish") == 0x9D80
+assert VID[0x1D80:0x1D91] == bytes.fromhex(
+    "8fa4897ee220ad1b1f10039c1b1fc22060"
+), "completed-render tail no longer publishes generation and retires boot ownership"
 # Production pacing is split across fixed WRAM-mirrored islands immediately
 # before the TAD code at $9000. Guard both the flowing rc_copy tail and every
 # handler seam because Poppy silently accepts overlapping .org sections.
@@ -563,7 +567,7 @@ assert VID[0x099C:0x09AB] == bytes.fromhex(
     "bf0080e99f00807fe8e8e00030d0f1"
 ), "rc_copy no longer mirrors the full $8000-$AFFF production supervisor"
 assert VID[0x0DD0:0x0DE4] == bytes.fromhex(
-    "08e2209c1b1faf2c0141c9a5f004284c56882860"
+    "08e220eaeaeaaf2c0141c9a5f004284c56882860"
 ), "ordered-input wrapper moved or changed"
 assert VID[0x0DE4:0x0E00] == bytes(0x1C), (
     "ordered-input wrapper grew into pacing_try_wake"
@@ -4158,6 +4162,8 @@ if _osp.exists("src/escbank8.bin"):
     rmb_bg_select_8 = esc8_off("rmb_bg_select")
     rmb_bg_dirty_default_8 = esc8_off("rmb_bg_dirty_default")
     rmb_bg_full_scan_8 = esc8_off("rmb_bg_full_scan")
+    rmb_bg_first_8 = esc8_off("rmb_bg_first")
+    rmb_bg_first_copy_8 = esc8_off("rmb_bg_first_copy")
     rmb_bg_clean_8 = esc8_off("rmb_bg_clean")
     rmb_bg_clean_jump_8 = esc8_off("rmb_bg_clean_jump")
     rmb_bg_reconcile_8 = esc8_off("rmb_bg_reconcile")
@@ -4183,8 +4189,21 @@ if _osp.exists("src/escbank8.bin"):
     render_bg_dirty_sparse_8_end = esc8_off("render_bg_dirty_sparse_end")
     shadow_dirty_publish_8 = esc8_off("shadow_dirty_publish")
     shadow_dirty_publish_8_end = esc8_off("shadow_dirty_publish_end")
+    rmb_bg_invalidate_tokens_8 = esc8_off("rmb_bg_invalidate_tokens")
+    rmb_bg_changed_publish_8 = esc8_off("rmb_bg_changed_publish")
+    rmb_bg_changed_publish_done_8 = esc8_off("rmb_bg_changed_publish_done")
     mark_bg_dirty_8 = esc8_off("mark_bg_dirty")
     mark_bg_dirty_8_end = esc8_off("mark_bg_dirty_end")
+    rmb_bg_first_finish_8 = esc8_off("rmb_bg_first_finish")
+    rmb_bg_first_prepare_c0bc_8 = esc8_off(
+        "rmb_bg_first_prepare_c0bc"
+    )
+    rmb_bg_first_finish_8_end = esc8_off("rmb_bg_first_finish_end")
+    rmb_bg_validate_tokens_8 = esc8_off("rmb_bg_validate_tokens")
+    rmb_bg_validate_invalid_8 = esc8_off("rmb_bg_validate_invalid")
+    rmb_bg_validate_tokens_8_end = esc8_off(
+        "rmb_bg_validate_tokens_end"
+    )
     rmb_prepare_bg_8 = esc8_off("rmb_prepare_bg")
     rmb_prepare_bg_8_end = esc8_off("rmb_prepare_bg_end")
     rpb_sort_outer_8 = esc8_off("rpb_sort_outer")
@@ -4213,6 +4232,8 @@ if _osp.exists("src/escbank8.bin"):
     hc0bc_hle_after_29b6_8 = esc8_off("hc0bc_hle_after_29b6")
     hc0bc_hle_done_8 = esc8_off("hc0bc_hle_done")
     hc0bc_hle_after_end_8 = esc8_off("hc0bc_hle_after_end")
+    hc0bc_token_snapshot_8 = esc8_off("hc0bc_token_snapshot")
+    hc0bc_token_snapshot_8_end = esc8_off("hc0bc_token_snapshot_end")
     hc0bc_hle_dma56_8 = esc8_off("hc0bc_hle_dma56")
     rpb_c0bc_rom_dma_8 = esc8_off("rpb_c0bc_rom_dma")
     rpb_c0bc_rom_dma_8_end = esc8_off("rpb_c0bc_rom_dma_end")
@@ -4366,6 +4387,12 @@ if _osp.exists("src/escbank8.bin"):
         "BG selector lost its size-neutral exact producer-list redirect"
     )
     assert rmb_bg_dirty_default_8 == 0xDC32 < rmb_bg_full_scan_8
+    assert rmb_bg_first_8 == 0xDC8C < rmb_bg_first_copy_8 == 0xDC92
+    assert ESC8[
+        rmb_bg_first_8 - 0x8000:rmb_bg_first_copy_8 - 0x8000
+    ] == bytes.fromhex("eaeaeaa20000"), (
+        "first-BG manifest path lost its size-neutral C0BC handoff"
+    )
     assert shadow_dirty_publish_8 == 0xDE20
     assert ESC8[
         render_manifest_build_8_end - 0x8000:shadow_dirty_publish_8 - 0x8000
@@ -4377,19 +4404,65 @@ if _osp.exists("src/escbank8.bin"):
     ] == bytes.fromhex("c230a301c915b6f0"), (
         "map_snes publisher lost the pinned rb_zero read-only caller guard"
     )
-    assert shadow_dirty_publish_8 < shadow_dirty_publish_8_end <= 0xDE80
+    assert shadow_dirty_publish_8 < shadow_dirty_publish_8_end == 0xDE6D
+    assert (
+        rmb_bg_invalidate_tokens_8
+        == shadow_dirty_publish_8_end
+        < rmb_bg_changed_publish_8
+        < rmb_bg_changed_publish_done_8
+        < 0xDE80
+    )
     assert mark_bg_dirty_8 == 0xDE80
     assert ESC8[
         shadow_dirty_publish_8_end - 0x8000:mark_bg_dirty_8 - 0x8000
-    ] == bytes(mark_bg_dirty_8 - shadow_dirty_publish_8_end), (
-        "map_snes dirty publisher overlapped the fixed native-write marker"
+    ] == bytes.fromhex("9c4a019c5a0160488f3a0141f00320c0de6860"), (
+        "content-based BG invalidation helper moved or overlapped the native marker"
     )
-    assert mark_bg_dirty_8 < mark_bg_dirty_8_end <= rmb_prepare_bg_8
+    assert (
+        mark_bg_dirty_8
+        < mark_bg_dirty_8_end
+        <= rmb_bg_first_finish_8
+        < rmb_bg_first_prepare_c0bc_8
+        < rmb_bg_first_finish_8_end
+        <= rmb_bg_validate_tokens_8
+        < rmb_bg_validate_invalid_8
+        < rmb_bg_validate_tokens_8_end
+        <= rmb_prepare_bg_8
+    )
     assert rmb_prepare_bg_8 == 0xDF00
     assert ESC8[
-        mark_bg_dirty_8_end - 0x8000:rmb_prepare_bg_8 - 0x8000
-    ] == bytes(rmb_prepare_bg_8 - mark_bg_dirty_8_end), (
-        "native BG dirty marker overlapped the prepared-map island"
+        mark_bg_dirty_8_end - 0x8000:rmb_bg_first_finish_8 - 0x8000
+    ] == bytes(rmb_bg_first_finish_8 - mark_bg_dirty_8_end), (
+        "native BG dirty marker overlapped the first-image dispatcher"
+    )
+    assert rmb_bg_first_finish_8 == 0xDEA0
+    assert ESC8[
+        rmb_bg_first_finish_8 - 0x8000:
+        rmb_bg_first_finish_8_end - 0x8000
+    ] == bytes.fromhex(
+        "ad4a01c9bcc0f00d206ddea9ffff8f3a01414cdedc2000df4cdedc"
+    ), (
+        "first-image C0BC dispatcher moved or changed semantics"
+    )
+    assert ESC8[
+        rmb_bg_first_finish_8_end - 0x8000:rmb_bg_validate_tokens_8 - 0x8000
+    ] == bytes(rmb_bg_validate_tokens_8 - rmb_bg_first_finish_8_end), (
+        "first-image C0BC dispatcher overlapped the token validator"
+    )
+    assert rmb_bg_validate_tokens_8 == 0xDEC0
+    assert ESC8[
+        rmb_bg_validate_tokens_8 - 0x8000:
+        rmb_bg_validate_tokens_8_end - 0x8000
+    ] == bytes.fromhex(
+        "ad4a01c9bcc0d01da20000bf004841dd00a0d011bf004c41dd00a4d008"
+        "e8e8e00004d0e7604c6dde"
+    ), (
+        "C0BC token validator moved or changed exact-plane semantics"
+    )
+    assert ESC8[
+        rmb_bg_validate_tokens_8_end - 0x8000:rmb_prepare_bg_8 - 0x8000
+    ] == bytes(rmb_prepare_bg_8 - rmb_bg_validate_tokens_8_end), (
+        "C0BC token validator overlapped the prepared-map island"
     )
     assert rmb_prepare_bg_8 < rmb_prepare_bg_8_end <= rpb_prepare_dispatch_8, (
         "prepared-map helper overflowed its bank-$9E tail"
@@ -4563,8 +4636,34 @@ if _osp.exists("src/escbank8.bin"):
     )
     assert hle_c0bc_8 < hc0bc_hle_reject_8 < hc0bc_hle_main_end_8
     assert hc0bc_hle_after_29b6_8 == 0xEE00
-    assert hc0bc_hle_after_29b6_8 < hc0bc_hle_done_8 < hc0bc_hle_after_end_8 <= 0xEF00, (
+    assert (
+        hc0bc_hle_after_29b6_8
+        < hc0bc_hle_done_8
+        < hc0bc_hle_after_end_8
+        <= hc0bc_token_snapshot_8
+        < hc0bc_token_snapshot_8_end
+        <= 0xEF00
+    ), (
         "$C0BC post-callback path crossed its fixed $9E:EF00 DMA helper"
+    )
+    assert hc0bc_token_snapshot_8 == 0xEEA0
+    assert ESC8[
+        hc0bc_token_snapshot_8 - 0x8000:
+        hc0bc_token_snapshot_8_end - 0x8000
+    ] == bytes.fromhex(
+        "8bda5aa9ff03a20048a000a0544141a9ff03a2004ca000a45441417afaab60"
+    ), (
+        "$C0BC token snapshot moved or changed exact-plane semantics"
+    )
+    assert ESC8[
+        hc0bc_hle_after_end_8 - 0x8000:hc0bc_token_snapshot_8 - 0x8000
+    ] == bytes(hc0bc_token_snapshot_8 - hc0bc_hle_after_end_8), (
+        "$C0BC post-callback path overlapped its token snapshot helper"
+    )
+    assert ESC8[
+        hc0bc_token_snapshot_8_end - 0x8000:0xEF00 - 0x8000
+    ] == bytes(0xEF00 - hc0bc_token_snapshot_8_end), (
+        "$C0BC token snapshot helper overlapped fixed $9E:EF00"
     )
     assert hc0bc_hle_dma56_8 == 0xEF00
     assert hc0bc_hle_dma56_8 < rpb_c0bc_rom_dma_8 == 0xEF40

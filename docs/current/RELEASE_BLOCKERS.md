@@ -7,8 +7,19 @@ native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
 common virtual-IRQ clock. `build/interp-current-5c7e-before-vtime-esc9.sfc`
 retains the exact predecessor.
 
-Current source builds exact ordinary SHA `2dadd12c…` at `build/interp.sfc`.
-That file is unpromoted and does not inherit `a976…` acceptance. The latest
+Current source builds exact ordinary SHA `6f7b1084…` at `build/interp.sfc`,
+preserved as `build/interp-visual-sixfix-6f7b1084.sfc`. Superseded `2f590fb1…`
+is fresh-power-on green through tick 3,300 for gameplay/liveness, clean SA-1
+boot, centered P2 HUD, and the repaired crate area, but its tick-1,278 combat
+background is still the red-brick failure. Read-only state inspection proved
+the column classifier correct and confirmed the root: title already owned the
+baseline, so the expected 784-byte title-to-gameplay delta cleared the valid
+C0BC token as though it were a later mutation. `6f7b1084…` compares the live
+2 KiB code/color planes with their publication-time snapshot before retaining
+or invalidating C0BC. Its exact transition gate is green in both directions and
+its PC-ring whole-function MAME/Nexen differential is green 6/6 with zero
+work/video mismatch. It does not inherit predecessor visual acceptance and has
+no fresh-power-on evidence; combat art remains open on this exact hash. The latest
 focused VTIME image is v7 `45c9096d…`; its ROM-only migrated tick-14,745-to-
 14,750 seam is green after the delayed input-publication repair, but it has no
 fresh-boot or long-suffix authority. The concise identity/evidence handoff is
@@ -487,7 +498,8 @@ guards are `tools/test_vtime_interpreter_only_root_task_selection.py`,
 The fetch-control probe then sees 2,971 `choke_tramp` entries but only one
 VTIME choke/consume/prepare. The packed pre-arm check was direct-page
 `LDA $2E`—emulated A3.H—not absolute `$072E`. The diagnostic-only repair uses
-the exact absolute gate; ordinary ROM SHA `2dadd12c…` remains unchanged and
+the exact absolute gate; the then-ordinary ROM SHA `2dadd12c…` remained
+unchanged and
 the fixed candidate SHA is `d91e28e9…`. Its task-13 fetch/choke/consume/prepare
 counts are all 2,971 with unchanged scheduler frame, gates, halt, and exact
 next-scan stop. Boundary-to-root prepares rise from 7,230 to 11,010 against
@@ -529,7 +541,7 @@ MAME charge is 60,699, an endpoint overrun of +578 units/+1,156 cycles. Its
 largest equal-PC discrepancies exposed a real diagnostic defect: both DBcc
 timing helpers used a two-byte rather than four-byte D-register stride. The
 conditional VTIME fix produces interpreter-only SHA `7583d110…` while leaving
-ordinary SHA `2dadd12c…` byte-identical.
+the then-ordinary SHA `2dadd12c…` byte-identical.
 
 A disk-only aligned counterfactual covers 493 DBcc pairs at 22 PCs. Correcting
 their outcomes removes 246 units/492 cycles. The remaining +332 units are not
@@ -558,7 +570,7 @@ render, and release rendezvous; later MVC, choke, and DBcc stages are excluded.
 
 The pure-interpreter `$0818` fallback is now explicit opt-in bit 2. Default
 interpreter-only VTIME uses the paced helper and produces diagnostic SHA
-`14e920eb…`; ordinary SHA `2dadd12c…` remains byte-identical. Same-ROM neutral
+`14e920eb…`; the then-ordinary SHA `2dadd12c…` remained byte-identical. Same-ROM neutral
 calibration found the changed gameplay-origin phase at a 3,224-frame credited
 wait. Its single calibrated fresh run is partial-green through MAME tick 250:
 8/8 credits, exact interpreted tick-221/RNG-200 origin, 29 neutral gameplay

@@ -9,7 +9,7 @@ project status and acceptance claims.
 | Role | SHA-256 | Scope |
 |---|---|---|
 | Best evidence-backed ordinary candidate | `a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60` | Preserved 66-byte terminal-CCR repair with fresh ordinary coverage through tick 10,000. |
-| Current-source ordinary build | `2dadd12cba0f2a90b0bfeef9e6ef4f8722a6ba46650677c59b85eb9087e430dd` | Reproducible `build/interp.sfc`; unpromoted and not acceptance-equivalent to `a976…`. |
+| Current-source ordinary build | `6f7b10848984bcab4020892b8d7951a49e1f1cb2bfac5a2204aede27b3b37cb8` | Reproducible `build/interp.sfc`; unpromoted C0BC transition/visual-repair candidate, not acceptance-equivalent to `a976…` or predecessor hashes. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Migrated five-tick seam is green through 14,750; no fresh boot yet. |
@@ -84,10 +84,22 @@ contact sheet is `build/showcase-20260811.png`. Its six source captures show:
 Additional retained action captures cover Button 2 kick, hurt, death/respawn,
 crate pickup phases, carry, and throw under the checkpointed campaign directories.
 
+The contact sheet is now negative evidence, not a showcase acceptance artifact:
+manual review found corrupt/orange cold boot, wrong combat background, a bogus
+crate-area tile chunk, and clipped P2 HUD placement. Superseded `2f590fb1…` now
+has a fresh run through tick 3,300: boot, centered P2 HUD, and crate-area pixels
+are repaired, but combat remains the red-brick failure. Forensics proved that
+C0BC followed an existing title baseline; its expected 784-byte transition was
+mistaken for a later mutation and cleared the valid token. Current `6f7b1084…`
+retains the token only when the live 2 KiB planes equal their publication-time
+snapshot. Its exact transition gate and six-case whole-function differential
+are green; it has not been fresh-booted.
+
 ## What remains open
 
-1. Decide whether to authorize a fresh-boot v7 campaign. Until then, v7 is a
-   focused checkpoint repair only.
+1. Decide whether to authorize a focused fresh-boot `6f7b1084…` visual campaign.
+   Until then, its combat-background repair is unaccepted. The predecessor's
+   green boot/HUD/crate evidence does not transfer across the ROM hash.
 2. If authorized, use Luna and the retained checkpoints; do not replay accepted
    prefixes or stream transcripts into the main thread.
 3. Close remaining common-clock/native-owner coverage and obtain a qualifying
@@ -95,5 +107,6 @@ crate pickup phases, carry, and throw under the checkpointed campaign directorie
 4. Complete renderer conservation, attack-tile, organic Stage-2, aligned-pixel,
    audio-listening, full-playthrough, and real-hardware acceptance.
 
-The ordinary build was restored after v7 validation and reproduces exact SHA
-`2dadd12c…`. No fresh-boot campaign was started as part of this checkpoint.
+The ordinary build now reproduces exact SHA `6f7b1084…`. The latest fresh visual
+campaign in this repair phase used superseded `2f590fb1…`; `6f7b1084…` has not
+been fresh-booted.

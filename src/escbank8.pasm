@@ -5359,9 +5359,12 @@ rmb_bg_next:
     cpx #$0400
     bne rmb_bg_compare
     tya
-    sta $41013A
+    jsr rmb_bg_changed_publish
     beq rmb_obj_begin
-    stz $015A            ; a real source-map change supersedes retained $C0BC
+    nop                         ; preserve the pinned clean-route target
+    nop
+    nop
+    nop
     cmp #$0100
     bcc rmb_obj_begin
     jsr rmb_prepare_bg
@@ -5371,7 +5374,12 @@ rmb_bg_next:
     ; its tile/palette maps.  Still populate the candidate so the next boundary
     ; can promote it without touching the live shadow.
 rmb_bg_first:
-    stz $015A            ; the first raw/full image has no retained ROM source
+    ; Preserve a guarded C0BC token through the first raw-plane copy.  The
+    ; out-of-line finish selects its immutable prepared composition only after
+    ; candidate==$live has been established for later baseline promotion.
+    nop
+    nop
+    nop
     ldx #$0000
 rmb_bg_first_copy:
     lda $414800,x
@@ -5382,9 +5390,13 @@ rmb_bg_first_copy:
     inx
     cpx #$0400
     bne rmb_bg_first_copy
-    lda #$FFFF
-    sta $41013A
-    bra rmb_obj_begin
+    jmp rmb_bg_first_finish
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
 
 rmb_bg_clean:
     lda #$0000
@@ -5559,8 +5571,15 @@ sdp_bg_test:
     sta $41014C          ; generic mapped stores have no bounded producer list
     lda #$FFFF
     sta $410144          ; another BG writer invalidates $20E8 payload provenance
-    lda #$0000
-    sta $41014A          ; and the exact $C0BC prepared-image provenance
+    ; Keep producer notification content-neutral.  Exact comparison owns
+    ; invalidation once a real changed cell is proven.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     lda #$0001
     sta $410140
 sdp_mode:
@@ -5569,18 +5588,94 @@ sdp_mode:
     jml.l $00F846       ; retained ms_shadow_return RTS in packed bank $00
 shadow_dirty_publish_end:
 
+; Content-based BG invalidation helpers. Producer notifications only mark the
+; domain dirty; these run after exact full/sparse comparison.
+.org $DE6D
+.a16
+.i16
+rmb_bg_invalidate_tokens:
+    stz $014A
+    stz $015A
+    rts
+
+; A=exact changed-list byte length. Preserve A for zero/size branches while
+; retaining provenance when the live C0BC planes still match the exact image
+; captured at token publication.  A title->gameplay baseline difference is
+; not itself a post-publication mutation.
+rmb_bg_changed_publish:
+    pha
+    sta $41013A
+    beq rmb_bg_changed_publish_done
+    jsr rmb_bg_validate_tokens
+rmb_bg_changed_publish_done:
+    pla
+    rts
+
 .org $DE80
 .a16
 .i16
 mark_bg_dirty:
-    lda #$0000
-    sta $41014A
+    ; Keep producer notification content-neutral; comparison owns invalidation.
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     lda #$FFFF
     sta $41014C          ; caller did not publish an exact bounded cell range
     lda #$0001
     sta $410140
     rtl
 mark_bg_dirty_end:
+
+; Finish the pinned first-image path out of line.  C0BC is the only producer
+; with a build-hashed immutable prepared payload.  Every other first image
+; keeps the established token invalidation and raw/full manifest semantics.
+.org $DEA0
+.a16
+.i16
+rmb_bg_first_finish:
+    lda $014A
+    cmp #$C0BC
+    beq rmb_bg_first_prepare_c0bc
+    jsr rmb_bg_invalidate_tokens
+    lda #$FFFF
+    sta $41013A
+    jmp rmb_obj_begin
+rmb_bg_first_prepare_c0bc:
+    jsr rmb_prepare_bg
+    jmp rmb_obj_begin
+rmb_bg_first_finish_end:
+
+; Validate the live C0BC candidate against the exact code/color planes saved
+; when its producer token was published.  The preparation workspace at
+; $41:A000-$A7FF is private until rmb_prepare_bg; the C0BC fast dispatcher does
+; not consume it.  Any real later mutation clears both producer/display tokens.
+.org $DEC0
+.a16
+.i16
+rmb_bg_validate_tokens:
+    lda $014A
+    cmp #$C0BC
+    bne rmb_bg_validate_invalid
+    ldx #$0000
+rmb_bg_validate_loop:
+    lda $414800,x
+    cmp $A000,x
+    bne rmb_bg_validate_invalid
+    lda $414C00,x
+    cmp $A400,x
+    bne rmb_bg_validate_invalid
+    inx
+    inx
+    cpx #$0400
+    bne rmb_bg_validate_loop
+    rts
+rmb_bg_validate_invalid:
+    jmp rmb_bg_invalidate_tokens
+rmb_bg_validate_tokens_end:
 
 ; Large-transition renderer preparation.  render_manifest_build already owns
 ; DBR=$41 and has copied the complete candidate to $0A00/$0E00.  Build the same
@@ -5964,7 +6059,7 @@ h8_zero_mask_gate_end:
 ; raw X $031-$13F. Two HUD-only exceptions preserve text that a centered
 ; 384-to-256 crop would otherwise discard:
 ; - top rows Y=$E2/$F2 compact raw left X<$40 by +48 and raw right
-;   X=$120-$16F by -24, retaining 1UP/2UP, both scores, and HIGH SCORE;
+;   X=$120-$16F by -48, retaining 1UP/2UP, both scores, and HIGH SCORE;
 ; - the arcade credit counter's five bottom-row glyph records sit at
 ;   Y=$0A, X=$120-$160 with codes $007D-$0080/$008B, so translate them
 ;   left by 48 pixels instead of dropping "DIT 0" beyond the SNES edge.
@@ -6140,7 +6235,7 @@ render_bg_dirty_sparse:
     bne rbds_default
 rbds_fast:
     sta $0158                  ; cumulative source-list byte length
-    stz $015A                  ; unique changed-cell output byte length
+    stz $0160                  ; unique changed-cell output byte length
     ldy #$0000
     lda #$0001
     sta $410142
@@ -6160,19 +6255,19 @@ rbds_code_changed:
     lda $4C00,x
     sta $0E00,x
 rbds_append:
-    ldx $015A
+    ldx $0160
     lda $015C
     sta $1A00,x
     inx
     inx
-    stx $015A
+    stx $0160
 rbds_next:
     iny
     iny
     cpy $0158
     bne rbds_cell
-    lda $015A
-    sta $41013A
+    lda $0160
+    jsr rmb_bg_changed_publish
     cmp #$0100
     bcc rbds_done
     jsr rmb_prepare_bg
@@ -6218,7 +6313,7 @@ rox_top_right:
     bcs rox_top_reject
     lda $014E
     sec
-    sbc #$0018
+    sbc #$0030
     xba
     sec
     rts
@@ -7213,6 +7308,7 @@ hc0bc_hle_probe_tail:
     inx
     cpx #$0400
     bne hc0bc_hle_probe_tail
+    jsr hc0bc_token_snapshot
     lda #$C0BC
     sta $41014A
 hc0bc_hle_done:
@@ -7221,6 +7317,31 @@ hc0bc_hle_done:
     stz $42
     jml.l inext
 hc0bc_hle_after_end:
+
+; Snapshot the exact live code/color planes paired with the C0BC token.  The
+; manifest later distinguishes the expected title->gameplay baseline delta
+; from a genuine writer that ran after publication.  Preserve DBR/X/Y; A is
+; immediately overwritten by the caller's token load.
+.org $EEA0
+.a16
+.i16
+hc0bc_token_snapshot:
+    phb
+    phx
+    phy
+    lda #$03FF
+    ldx #$4800
+    ldy #$A000
+    mvn $41,$41
+    lda #$03FF
+    ldx #$4C00
+    ldy #$A400
+    mvn $41,$41
+    ply
+    plx
+    plb
+    rts
+hc0bc_token_snapshot_end:
 
 ; One precomputed 56-byte row from bank-$9F PRG ROM to physical BW-RAM bank 1.
 ; $80/$82=source, $84=destination.

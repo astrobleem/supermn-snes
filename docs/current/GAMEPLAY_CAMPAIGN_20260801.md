@@ -1323,7 +1323,7 @@ The physical control capture explains the gap: 2,971 task-13 fetches reach
 `choke_tramp`, but only the first enters VTIME choke/consume/prepare. The
 packed gateway's `LDA $2E` reads emulated A3.H rather than the intended
 absolute `$072E` loop-arm gate. Changing only this diagnostic packing to
-`LDA $072E` leaves ordinary ROM SHA `2dadd12c…` unchanged and produces fixed
+`LDA $072E` left the then-ordinary ROM SHA `2dadd12c…` unchanged and produced fixed
 candidate `d91e28e9…`. The repeated bounded probe is 2,971/2,971 across fetch,
 choke, consume, and prepare with the same task frame/gates/halt/next scan.
 Boundary-to-root prepares recover from 7,230 to 11,010 versus 11,006 MAME
@@ -1364,7 +1364,7 @@ native-parent charges are present. The leading equal-PC discrepancies are
 DBRAs, which exposed a source defect in both VTIME DBcc timing helpers: they
 indexed four-byte emulated D registers with a `2*n` stride. The opt-in wrapper
 fixes the lookup to `4*n` only for VTIME, producing SHA `7583d110…`; the
-ordinary ROM remains exact SHA `2dadd12c…`.
+then-ordinary ROM remained exact SHA `2dadd12c…`.
 
 The disk-only aligned counterfactual at
 `build/playback-watcher-20260809/vtime-interpreter-only-e00f-gate-restore-scheduler-0818-mvc-fallback-choke-gate-task15-14746-boundary-root-vtwrite-v1/dbcc-stride-counterfactual.json`
@@ -1396,7 +1396,7 @@ later MVC, choke, and DBcc changes are not implicated.
 
 The rejected pure-interpreter `$0818` path is now opt-in bit 2. Default
 interpreter-only VTIME retains the paced helper and produces SHA `14e920eb…`,
-while ordinary SHA `2dadd12c…` remains exact. After a bounded same-ROM neutral
+while the then-ordinary SHA `2dadd12c…` remained exact. After a bounded same-ROM neutral
 calibration selected a 3,224-frame credited wait, one fresh replay reached the
 interpreted tick-221/RNG-200 gameplay origin and continued partial-green to
 MAME tick 250 with 29 neutral gameplay ticks, zero oracle divergence, and halt

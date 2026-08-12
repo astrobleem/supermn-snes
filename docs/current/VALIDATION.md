@@ -139,6 +139,16 @@ A synthetic or checkpointed test proves only its named invariant. Rendering acce
 also needs an unmodified fresh boot, screenshots/PPU state, continued ticks/renders,
 and eventually an aligned MAME frame comparison.
 
+For C0BC prepared-background provenance, `validate_bg_producer_list.py` must
+cover both the publication-time exact snapshot and a forced later mutation. The
+first must retain token `C0BC`, manifest `FFFE`, and prepared length `005A`; the
+second must clear both tokens and take the dynamic prepared path. Because the
+C0BC publisher is native/HLE, also rebuild with `PC_RING=1` and run the six-case
+`validate_c0bc_initializer.py` whole-function MAME/Nexen differential. Preserve
+that diagnostic ROM separately, rebuild normally afterward, and require the
+ordinary SHA to reproduce exactly. Neither focused test replaces a fresh visual
+capture on the exact ordinary hash.
+
 For the supplied legacy-Mesen Stage-3 checkpoint's stale PPU-scroll boundary,
 the focused probe must preserve the serialized initial image, advance one neutral
 vblank, require no game-tick advance, and then test for the blue strip. It must
@@ -217,6 +227,13 @@ This is a diagnostic shortcut only. The runner authenticates the entire original
 fresh-boot lineage and atomic checkpoint before any write, retains the fresh-root,
 checkpoint-ROM, and selected-ROM hashes, and permits a changed native symbol table
 only as a recorded compatibility exception.
+
+If the checkpoint's recorded Nexen source `Dependencies.zip` has since moved,
+pass the exact retained archive with `--resume-source-dependencies`. This is
+allowed only during explicit ROM migration. The archive, apphost, managed
+assembly, deps manifest, and embedded native-core hashes must remain exact; only
+the archive path may differ, and that relocation is retained as an identity
+compatibility exception. A changed archive hash remains fatal.
 
 The sole architectural mutation is the reset-equivalent refresh of executable
 video-supervisor/renderer WRAM `$7F:8000-$7F:AFFF` from selected-ROM file offset

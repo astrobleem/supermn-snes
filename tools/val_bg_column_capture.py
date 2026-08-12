@@ -34,6 +34,14 @@ def make_raw(
     return raw
 
 
+def make_bg_code(occupied: tuple[int, ...], value: int = 1) -> bytes:
+    code = bytearray(0x0400)
+    for column in occupied:
+        for offset in range(column * 0x40, (column + 1) * 0x40, 2):
+            code[offset : offset + 2] = value.to_bytes(2, "big")
+    return bytes(code)
+
+
 def main() -> int:
     regular = make_raw(upper_mask=0x00FF, start=0x20)
     kind, column_map = derive_bg_column_capture(bytes(regular))
@@ -71,6 +79,38 @@ def main() -> int:
     phase_irregular[0x0009 + 7 * 0x20] ^= 0x01
     kind, _ = derive_bg_column_capture(bytes(phase_irregular))
     assert kind == 0xFFFE
+
+    # Empty columns have no phase: populated 0..13 at phase 15 remains exact
+    # even when the producer reports X=0 for empty columns 14/15.
+    sparse = make_raw(upper_mask=0x0000, start=0x0F)
+    for column in (14, 15):
+        sparse[0x0009 + column * 0x20] = 0
+    kind, _ = derive_bg_column_capture(
+        bytes(sparse), make_bg_code(tuple(range(14)))
+    )
+    assert kind == 0x0000
+
+    # A populated phase mismatch still rejects the exact permutation.
+    sparse[0x0009 + 7 * 0x20] ^= 1
+    kind, _ = derive_bg_column_capture(
+        bytes(sparse), make_bg_code(tuple(range(14)))
+    )
+    assert kind == 0xFFFE
+
+    # Phase zero is valid when it belongs to a populated source column; empty
+    # remainder columns must not turn it into an irregular layout.
+    phase_zero = make_raw(upper_mask=0xFF00, start=0)
+    kind, _ = derive_bg_column_capture(
+        bytes(phase_zero), make_bg_code((0, 1, 2))
+    )
+    assert kind == 0xFF00
+
+    # All-empty retains the historical regular/identity result.
+    kind, identity_map = derive_bg_column_capture(
+        bytes(phase_zero), make_bg_code(())
+    )
+    assert kind == 0xFF00
+    assert identity_map == bytes(range(16))
 
     # Byte-exact retained one-credit prompt controls.  This is deliberately
     # non-sequential yet phase-aligned: occupied source columns 0/1/2/4 must

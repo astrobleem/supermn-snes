@@ -1774,7 +1774,8 @@ dma0_blank_pulse_extended_end:
 ; 64-frame zoom from an intentionally huge close-up to the established fitted
 ; size. Bit 6 of $1F1B latches that the zoom is complete; the low six bits
 ; then remain a palette-pulse heartbeat. The animation never repeats.
-; joy5a22_ordered clears bit7 before the first game renderer owns the PPU.
+; ppu_dma_flush_acked clears bit7 only after the first coherent game image owns
+; the PPU; producer/acquisition never retires the boot owner prematurely.
 .org $8B00
 .a8
 .i16
@@ -1941,7 +1942,9 @@ boot_mode7_scale_tick_end:
 joy5a22_ordered:
     php
     sep #$20
-    stz $1F1B            ; first renderer claim retires the Mode 7 boot animation
+    nop                    ; retired early boot-owner clear (three-byte seam)
+    nop
+    nop
     lda $41012C
     cmp #$A5
     beq j5o_nmi_owner
@@ -2726,8 +2729,11 @@ ppu_dma_flush_acked:
     inc a
     sta $7E89A2          ; private 5A22 completed-render counter
     lda $7E89A0
-    sta $7E89A4          ; last direct-cache generation fully rendered
-    rts
+    ; Keep vid_obj_telemetry at its save-state-compatible $9D29 seam.  This
+    ; same-bank tail jump replaces the old long store + RTS byte-for-byte.
+    jmp ppu_dma_flush_ack_finish
+    nop
+    nop
 
 vid_obj_telemetry:
     jsr vid_obj_fast
@@ -2738,6 +2744,25 @@ vid_obj_telemetry:
     sta $7E89B4          ; arcade palette banks used by that OBJ build
     lda $DE
     sta $7E89B6          ; persistent decoded OBJ tile-slot count
+    rts
+
+; Publish the generation and retire temporary Mode 7 ownership only after the
+; coherent game image has completed its PPU flush.  This island is mirrored
+; with the rest of $8000-$AFFF, so the same-bank tail jump is valid in ROM and
+; in the production $7F WRAM copy.
+.org $9D80
+.a16
+.i16
+ppu_dma_flush_ack_finish:
+    sta $7E89A4          ; last direct-cache generation fully rendered
+    sep #$20
+.a8
+    lda $1F1B
+    bpl pdfa_boot_done
+    stz $1F1B
+pdfa_boot_done:
+    rep #$20
+.a16
     rts
 
 ; =============================================================================
@@ -6128,6 +6153,10 @@ capture_bg_upper_full:
     pha
     lda $D8
     pha
+    lda $D4
+    pha
+    lda $D6
+    pha
 
     lda $413604
     xba
@@ -6257,26 +6286,49 @@ cbuf_aligned_permutation:
     ; offset table applies each captured physical slot in source order, so
     ; later overlapping columns retain the X1-001 draw order.  Reject a real
     ; phase mismatch instead of rounding it into the wrong tilemap column.
-    sep #$20
-.a8
-    lda $413409
-    and #$1F
-    sta $D0
-    ldx #$0020
+    ; Empty source columns have no phase.  Scan each coherent 16x32-word
+    ; code column at $41:4800 and compare only populated columns.
+    rep #$30
+    stz $D4              ; phase_seen
+    ldx #$0000
 cbuf_phase_loop:
-    sep #$20
-.a8
+    txa
+    sta $D6              ; BG-code byte offset: 0,$40,...,$3C0
+    tax
+    ldy #$0000
+cbuf_column_scan:
+    lda $414800,x
+    and #$FF3F
+    bne cbuf_column_occupied
+    inx
+    inx
+    iny
+    cpy #$0020
+    bne cbuf_column_scan
+    bra cbuf_phase_next
+cbuf_column_occupied:
+    lda $D6
+    lsr a
+    tax
+    lda $D4
+    bne cbuf_phase_compare
     lda $413409,x
-    and #$1F
+    and #$001F
+    sta $D0
+    lda #$0001
+    sta $D4
+    bra cbuf_phase_next
+cbuf_phase_compare:
+    lda $413409,x
+    and #$001F
     cmp $D0
     bne cbuf_irregular8
-    rep #$20
-.a16
-    txa
+cbuf_phase_next:
+    lda $D6
     clc
-    adc #$0020
+    adc #$0040
     tax
-    cmp #$0200
+    cmp #$0400
     bne cbuf_phase_loop
     bra cbuf_regular
 
@@ -6352,6 +6404,10 @@ cbuf_token_primary:
 cbuf_token_done:
     lda $D2
     tay                  ; return kind while restoring caller scratch
+    pla
+    sta $D6
+    pla
+    sta $D4
     pla
     sta $D8
     pla

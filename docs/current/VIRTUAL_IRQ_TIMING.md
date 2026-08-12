@@ -352,8 +352,8 @@ physical fetch-control owner remains open. The compact guards are
 The exact physical control chain then reports 2,971 task-13 fetch/choke paths
 but only one VTIME choke/consume/prepare. The packed pre-arm condition was
 direct-page `LDA $2E`, which aliases emulated A3.H, rather than absolute
-`$072E`. The diagnostic-only repair emits `LDA $072E`; ordinary ROM SHA
-`2dadd12c…` is unchanged and fixed candidate SHA is `d91e28e9…`. On that
+`$072E`. The diagnostic-only repair emits `LDA $072E`; the then-ordinary ROM
+SHA `2dadd12c…` was unchanged and fixed candidate SHA is `d91e28e9…`. On that
 candidate all 2,971 fetch/choke paths reach consume and prepare, without a
 reload/IRQ, frame, gate, halt, or next-scan regression. Boundary-to-root
 prepare count becomes 11,010 versus 11,006 MAME rows. The known three-row
@@ -386,8 +386,8 @@ charges 61,277 two-cycle units against MAME's 60,699, an aligned +578-unit /
 +1,156-cycle overrun. Both native-parent charge seams are present. The largest
 equal-PC charge deltas exposed a four-byte-register indexing defect: both DBcc
 dynamic timing helpers used `2*n` to read Dn. The conditional diagnostic fix
-uses `4*n`, produces interpreter-only SHA `7583d110…`, and leaves ordinary ROM
-SHA `2dadd12c…` byte-identical.
+uses `4*n`, produces interpreter-only SHA `7583d110…`, and left the
+then-ordinary ROM SHA `2dadd12c…` byte-identical.
 
 A disk-only counterfactual on the aligned ledger changes 493 DBcc pairs at 22
 PCs. It removes 246 units/492 cycles, leaving +332 units/+664 cycles. Deferred
@@ -417,8 +417,8 @@ rendezvous. MVC, choke, and DBcc changes postdate the bracket.
 
 Default interpreter-only VTIME therefore keeps `$0818` on the paced helper;
 the rejected pure-interpreter path is explicit opt-in bit 2. The VTIME packer
-retargets the diagnostic gateway mask without changing ordinary ROM SHA
-`2dadd12c…`. The resulting paced/DBcc diagnostic is SHA `14e920eb…`. Its
+retargets the diagnostic gateway mask without changing the then-ordinary ROM
+SHA `2dadd12c…`. The resulting paced/DBcc diagnostic is SHA `14e920eb…`. Its
 changed phase was calibrated without writes from a same-ROM credited state:
 MAME's origin target occurs after a 3,224-frame credited wait at frame 9,432,
 tick `$0760` 168, RNG 2,716. This is a controller-bootstrap calibration, not a
