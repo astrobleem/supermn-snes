@@ -1158,6 +1158,22 @@ performance, full-playthrough, production, or release acceptance.
   full organic boss behavior, full playthrough, production, or acceptance.
   Stage-2/3 boss fixtures remain pending.
 
+  The corrected v7 lineage then continues from ticks 18,001 through 20,000 with
+  no new divergence and the 14/14 retained Stage-1 boss fixtures cumulatively
+  green. Successful compact reports are
+  `build/playback-watcher-20260812/v7-boss-observation-resume18001-to18500-v1/`,
+  `.../resume18601-to19000-v3/` (after recovery),
+  `.../resume19001-to19500-v1/`, and
+  `.../resume19501-to20000-v1/`. The 18,501–18,649 transport attempt stalled
+  after a repeat-safe 18,600 state; stale exact processes were terminated, a
+  first retry timed out before session establishment because of a stale port,
+  and the secondary unbound-`m` capture bug was fixed in `d309c67` before the
+  fresh-port recovery completed green. Endpoint tick 20,000 is state
+  `25b60a…`, IRAM `128013bd…`, resumes at 20,001, with halt zero, minimum stack
+  margin 136, and renderer drops zero. This remains checkpointed-v7 evidence;
+  the next boss fixture is Stage 2 at MAME tick 36,227, and fresh boot, full
+  playthrough, and production acceptance remain unproven.
+
   Luna previously continued the older unchanged `14e920eb…` hash from tick
   15,501 through 17,000.
   The run remained live with halt zero, all 15 initialized stacks valid at
