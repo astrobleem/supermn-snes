@@ -142,7 +142,10 @@ def main() -> int:
         try:
             while frames_advanced < args.max_video_frames:
                 before_frame = int(m.get_state().get("frameCount", 0))
-                result = m.run_until(max_frames=1, hook_handle=hook)
+                result = m.run_until(
+                    max_frames=min(120, args.max_video_frames - frames_advanced),
+                    hook_handle=hook,
+                )
                 m.pause(); after_frame = int(m.get_state().get("frameCount", 0))
                 frames_advanced += max(0, after_frame - before_frame)
                 for row in hook_events(m.drain_notifications(timeout=0.05)):
