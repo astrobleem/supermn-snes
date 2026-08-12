@@ -83,9 +83,9 @@ pre-counter `$07FEF8A5`; terminal counter `$08000000`, halt `$CAFE`, SA-1
 `$0D42` is `BEQ`, confirming a cap stop rather than corruption or an unsupported
 opcode. No exact MAME tick-21,203 state was needed for this arithmetic. ROM-only
 v8 migration crossed the old cap and reached counter `$0809A799` at tick 21,300.
-The subsequent same-ROM continuation remains divergence-free through MAME tick 30,000
-(SNES tick 29,994): the reports have first divergence NONE and no mismatch
-ranges, with halt 0, minimum stack 138, and renderer drops 0 at the endpoint.
+The subsequent same-ROM continuation remains divergence-free through MAME tick 31,000
+(SNES tick 30,994): first divergence NONE and no mismatch ranges; halt 0. Minimum
+stack and renderer drops were not sampled at this intentional stop.
 Reports are
 `build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume21301-to21500-v1/watcher-report.json`
@@ -100,11 +100,18 @@ followed by
 and
 `build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`
 and
-`build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`.
-The endpoint safe state is `a6d33070b710574762a399e1099ddd4bbc8a845031c195bbe4d543cbac454b44`,
-IRAM `b7fe3d1e211606d2c0b633cd8d0c29045ad4b189ba3d071769427757d27da671`, resume
-30,001. This remains checkpoint evidence only: no fresh boot, full playthrough,
-or production acceptance.
+`build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`
+and
+`build/playback-watcher-20260812/v8-stepcap-resume30001-to33000-v1/watcher-report.json`.
+The endpoint safe state is
+`613c6566788e4b81408b87efbd278d35fa9f75c6ca762eb14a17b65f1ff4f32c`, IRAM
+`7ab15b2dad152aa2d3b37401c6534e0ae4c4a42dc3a44beef6c21c5c9988ef4c`, resume
+31,001. The retained movie ends at game tick 139,925 / frame 140,000, leaving
+108,925 game ticks (22.15% covered); the campaign is intentionally paused for
+human screenshot review. `build/showcase-20260812-fixed.png` replaces the stale
+montage with four fresh-`4eb…` visual panes and two clearly labeled v7 checkpoint
+panes. This remains checkpoint evidence only: no fresh boot, full playthrough,
+or production acceptance for v8.
 
 Superseded candidate `2f590fb1…` has an authorized fresh-power-on Luna campaign
 through tick 3,300 with 118 controller transitions, no gameplay-oracle

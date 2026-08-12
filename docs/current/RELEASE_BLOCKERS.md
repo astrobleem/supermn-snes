@@ -57,8 +57,9 @@ differs from exact v7 only in the four mirrored threshold bytes. Its ROM-only
 migration crosses the old cap and reaches counter `$0809A799` at tick 21,300:
 `build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`.
 Same-ROM v8
-continuations through MAME 30,000 / SNES 29,994 have first divergence NONE, no
-mismatch ranges, halt 0, minimum stack 138, and zero renderer drops. Reports:
+continuations through MAME 31,000 / SNES 30,994 have first divergence NONE, no
+mismatch ranges, halt 0. Minimum stack and renderer drops were not sampled at
+the intentional stop. Reports:
 `build/playback-watcher-20260812/v8-stepcap-resume21301-to21500-v1/watcher-report.json`
 and `build/playback-watcher-20260812/v8-stepcap-resume21501-to22000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume22001-to22500-v1/watcher-report.json`,
@@ -66,12 +67,15 @@ and
 `build/playback-watcher-20260812/v8-stepcap-resume22501-to23000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume23001-to25000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`,
+`build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`,
 and the endpoint report
-`build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`;
-safe state `a6d33070b710574762a399e1099ddd4bbc8a845031c195bbe4d543cbac454b44`,
-IRAM `b7fe3d1e211606d2c0b633cd8d0c29045ad4b189ba3d071769427757d27da671`, resume
-30,001. No fresh campaign was started; fresh boot, full playthrough,
-and production acceptance remain open.
+`build/playback-watcher-20260812/v8-stepcap-resume30001-to33000-v1/watcher-report.json`;
+state `613c6566788e4b81408b87efbd278d35fa9f75c6ca762eb14a17b65f1ff4f32c`, IRAM
+`7ab15b2dad152aa2d3b37401c6534e0ae4c4a42dc3a44beef6c21c5c9988ef4c`, resume
+31,001. The retained movie ends at game tick 139,925 / frame 140,000, leaving
+108,925 game ticks (22.15% covered); the campaign is intentionally paused for
+human screenshot review. No fresh campaign was started; fresh boot, full
+playthrough, and production acceptance remain open.
 
 The active hash is green for its direct exact MAME/native-off/native-on 9/9
 CCR differential (`build/validate-2429c-distinct-arm-isolated-a976-pinned-v1.jsonl`),

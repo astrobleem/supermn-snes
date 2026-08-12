@@ -14,7 +14,7 @@ project status and acceptance claims.
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Player/input/death oracle is green through 16,000; corrected first boss observations are green at 15,908/15,990. No fresh boot. |
 | Exact-v7 cap checkpoint | `45c9096d…` | No oracle divergence through completed tick 21,200; terminal tick 21,203 intentionally reaches the interpreter lifetime guard (`$CAFE`, SA-1 `$00D15A`, virtual PC `$000D42`). |
-| Unpromoted v8 successor | `162b757c…` | Four threshold-byte successor; same-ROM continuation reaches MAME 30,000 / SNES 29,994 with no divergence or mismatch, halt 0, min stack 138, drops 0. |
+| Unpromoted v8 successor | `162b757c…` | Four threshold-byte successor; repeat-validated same-ROM continuation reaches MAME 31,000 / SNES 30,994 with no divergence or mismatch and halt 0; liveness metrics were not sampled at the intentional stop. |
 
 Never report one identity's evidence as proof for another. Diagnostic checkpoint
 migration is explicitly unable to prove boot, renderer continuity, performance,
@@ -61,13 +61,27 @@ which crosses the old cap to counter `$0809A799`,
 `build/playback-watcher-20260812/v8-stepcap-resume22501-to23000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume23001-to25000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`,
-and `build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`)
-have first divergence NONE and no mismatch ranges through MAME 30,000 / SNES
-29,994; endpoint halt is 0, minimum stack 138, and renderer drops 0. The
-endpoint is state `a6d33070b710574762a399e1099ddd4bbc8a845031c195bbe4d543cbac454b44`, IRAM
-`b7fe3d1e211606d2c0b633cd8d0c29045ad4b189ba3d071769427757d27da671`, resume
-30,001. These are checkpoint-only diagnostics, not fresh boot, full-playthrough,
-or production acceptance.
+`build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`,
+and `build/playback-watcher-20260812/v8-stepcap-resume30001-to33000-v1/watcher-report.json`)
+have first divergence NONE and no mismatch ranges through MAME 31,000 / SNES
+30,994; endpoint halt is 0. Minimum stack and renderer drops were not sampled
+at the intentional stop. The endpoint is state
+`613c6566788e4b81408b87efbd278d35fa9f75c6ca762eb14a17b65f1ff4f32c`, IRAM
+`7ab15b2dad152aa2d3b37401c6534e0ae4c4a42dc3a44beef6c21c5c9988ef4c`, resume
+31,001. The retained movie ends at game tick 139,925 / frame 140,000, leaving
+108,925 game ticks (22.15% covered). The campaign is intentionally paused for
+human screenshot review. These are checkpoint-only diagnostics, not fresh boot,
+full-playthrough, or production acceptance.
+
+## Human visual checkpoint
+
+`build/showcase-20260812-fixed.png` (SHA-256 `afa28ba5…`) supersedes the stale
+August 11 montage. Its first four panes come from the preserved fresh `4eb9a408…`
+visual line and show the clean SA-1 boot, centered HUD/prompt, restored storefront
+combat background, and crate carry without the bogus tile chunk. Its last two
+panes come from the checkpointed v7 Stage-1 boss continuation and are labeled as
+checkpoint evidence. The montage intentionally combines two evidence scopes; it
+does not establish fresh-boot or full-playthrough acceptance for v7/v8.
 
 ## The tick-14,748 repair
 
