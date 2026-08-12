@@ -1124,6 +1124,18 @@ performance, full-playthrough, production, or release acceptance.
   This validates only the first six Stage-1 fixtures; it is not full-boss,
   fresh-boot, production, performance, or playthrough acceptance.
 
+  The next corrected v7 suffix reaches tick 17,000 with 11 cumulative Stage-1
+  boss observations green. New rows are MAME ticks 16,519/16,624/16,750/
+  16,837/16,921 with expected and observed health 21/18/14/11/9. Player,
+  input, and death references remain green with no oracle divergence, halt zero,
+  renderer queue drops zero, and minimum initialized-stack margin 138. The
+  repeat-identical tick-17,000 checkpoint is state `1bab53c8…`, IRAM
+  `bf80c888…`, and resumes at 17,001. The compact report is
+  `build/playback-watcher-20260812/v7-boss-observation-resume16501-to17000-v1/watcher-report.json`.
+  This validates the retained first 11 Stage-1 fixtures only; it is not complete
+  Stage-1 boss behavior, full-boss, fresh-boot, production, performance, or
+  playthrough acceptance.
+
   Luna previously continued the older unchanged `14e920eb…` hash from tick
   15,501 through 17,000.
   The run remained live with halt zero, all 15 initialized stacks valid at
