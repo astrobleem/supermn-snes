@@ -107,6 +107,7 @@ BG_COLUMN_MAP_SELECTOR=$74D0
 BG_C0BC_TOKEN=$7492       ; token paired with the accepted direct BG image
 RQ_C0BC_TOKEN=$7494       ; token paired with the primary queued image
 RQ2_C0BC_TOKEN=$7496      ; token paired with the secondary queued image
+BG_C0BC_APPLIED=$7498     ; C0BC token represented by the resident direct tilemap
 RENDER_QUEUE_CODE_BYTES=$0252 ; build guard proves this matches the final promoter span
 OBJ_HASH_CODE=$5000    ; 1024 authoritative code words in retired snapshot WRAM
 OBJ_HASH_SLOT=$5800    ; parallel physical-slot words; complete table ends at $6000
@@ -5926,33 +5927,13 @@ bcmu_map_compare:
     lda $7E8996
     cmp #$FFFE
     bcs bcmu_same        ; legacy table is identity; live scroll stays register-only
+    ; Equal geometry still needs a consumer update when the accepted image
+    ; changes from dynamic provenance to the immutable C0BC composition.
+    ; Keep the pinned layout-changed island fixed and handle token/generation
+    ; transitions in the free acceptor/remapper seam.
+    jmp bcmu_same_layout
 
-    ; A newly copied prepared image is back in logical source-column order even
-    ; when the physical layout itself did not change.  Rearrange it only after
-    ; this generation has been claimed in foreground context; IRQ/NMI capture
-    ; is too short and re-entrant for the complete 4 KiB operation.
-    lda $7E89BC
-    cmp #$FFFE
-    bne bcmu_sparse_duplicate_test
-    lda #$0000
-    jsl.l $E9BD00
-    bra bcmu_same
-
-    ; X1 draws reused physical columns in source order.  A sparse update can
-bcmu_sparse_duplicate_test:
-    ; otherwise leave stale nontransparent cells where a later source owns the
-    ; same physical slot.  Rebuild the complete map whenever source data changes
-    ; under such an exact layout; stable frames remain scroll-only.
-    lda $7E89DA
-    beq bcmu_same
-    lda $7E8990
-    beq bcmu_same
-    lda $7E89BC
-    beq bcmu_same
-    cmp #$FFFF
-    beq bcmu_same
-    bra bcmu_force_full
-
+.org $B7CA
 bcmu_layout_changed:
     jsr bg_offset_table_build
     lda $7E8996
@@ -5962,7 +5943,7 @@ bcmu_layout_changed:
                          ; lookup to its historical identity arrangement
     lda $7E7492
     cmp #$C0BC
-    beq bcmu_remap_prepared
+    beq bcmu_remap_c0bc
     lda $7E89BC
     cmp #$FFFE
     beq bcmu_remap_prepared
@@ -5976,13 +5957,10 @@ bcmu_nonempty_scan:
     bne bcmu_nonempty_scan
     bra bcmu_same        ; a transient regular-looking control image with no
                          ; source cells must not erase the resident title art
+bcmu_remap_c0bc:
+    jmp bcmu_c0bc_prepare
 bcmu_remap_prepared:
-    ; The immutable $C0BC composition can move for many display frames after
-    ; its one prepared image was published.  The helper reloads that canonical
-    ; source from ROM; other prepared images use the just-claimed direct copy.
-    lda #$0000
-    jsl.l $E9BD00
-    bra bcmu_same
+    jmp bcmu_prepared_only
 bcmu_force_full:
     lda #$0001
     sta $7E8990
@@ -6510,6 +6488,76 @@ abcd_copy:
     rtl
 accept_bg_columns_direct_end:
 
+; Equal-geometry consumer invalidation.  BG_C0BC_TOKEN is paired with the
+; accepted direct image; BG_C0BC_APPLIED records which provenance the resident
+; tilemap actually represents.  A control-only acceptance can change the token
+; without changing the physical map or BG generation, so it must still reload
+; and remap the canonical C0BC composition exactly once.
+.org $BC80
+.a16
+.i16
+bcmu_same_layout:
+    lda $7E7492
+    cmp $7E7498
+    beq bcmu_same_generation
+    cmp #$C0BC
+    bne bcmu_same_clear_token
+    jmp bcmu_c0bc_prepare
+bcmu_same_clear_token:
+    stz $7E7498
+bcmu_same_generation:
+    ; A newly copied prepared image is back in logical source-column order even
+    ; when the physical layout itself did not change.  Rearrange it only after
+    ; this generation has been claimed in foreground context; IRQ/NMI capture
+    ; is too short and re-entrant for the complete 4 KiB operation.
+    lda $7E89BC
+    cmp #$FFFE
+    bne bcmu_same_sparse_duplicate
+    lda #$0000
+    jsl.l $E9BD00
+    rtl
+
+bcmu_same_sparse_duplicate:
+    ; X1 draws reused physical columns in source order.  A sparse update can
+    ; otherwise leave stale nontransparent cells where a later source owns the
+    ; same physical slot.  Rebuild the complete map whenever source data changes
+    ; under such an exact layout; stable frames remain scroll-only.
+    lda $7E89DA
+    beq bcmu_same_layout_done
+    lda $7E8990
+    beq bcmu_same_layout_done
+    lda $7E89BC
+    beq bcmu_same_layout_done
+    cmp #$FFFF
+    beq bcmu_same_layout_done
+    lda #$0001
+    sta $7E8990
+    lda #$FFFF
+    sta $7E89BC
+bcmu_same_layout_done:
+    rtl
+
+; The immutable C0BC composition can move or be reacquired after an otherwise
+; clean control image. Reload every prepared cache and publish one dirty event
+; so the current bg_dispatch call reaches the established PPU upload path.
+bcmu_c0bc_prepare:
+    lda #$0000
+    jsl.l $E9BD00
+    jsr bcmu_c0bc_cache_load
+    lda #$0001
+    sta $7E8990
+    lda #$FFFE
+    sta $7E89BC
+    rtl
+
+; Non-C0BC prepared images already brought their list/palette payload and
+; $FFFE manifest along with the direct map; only physical remapping is needed.
+bcmu_prepared_only:
+    lda #$0000
+    jsl.l $E9BD00
+    rtl
+bcmu_same_layout_end:
+
 ; C0BC's prepared 64x32 SNES map is built in identity source-column order.
 ; Exact X1 layouts must rearrange that private map itself: falling back to the
 ; raw producer planes exposes cells which the prepared composition deliberately
@@ -6565,6 +6613,8 @@ pbmr_direct:
     bcc pbmr_direct_exact
     jmp pbmr_done
 pbmr_direct_exact:
+    lda $7E7492
+    sta $7E7498          ; resident tilemap now represents this accepted token
     lda #$9000
     sta $D0
     lda #$3606
@@ -6739,6 +6789,33 @@ pbmr_done:
     plp
     rtl
 prepared_bg_map_remap_end:
+
+; Restore the remaining immutable C0BC prepared payload beside the canonical
+; map.  A token-only acceptance can arrive after a control image whose manifest
+; length is zero, so the sorted codes and palette-bank map are not guaranteed
+; to remain in the direct caches even though $9000 still holds the map.
+.org $BF00
+.a16
+.i16
+bcmu_c0bc_cache_load:
+    phb
+    phx
+    phy
+    lda #$0059
+    ldx #$A000
+    ldy #$7900
+    mvn $7E,$EF
+    lda #$001F
+    ldx #$A05A
+    ldy #$8940
+    mvn $7E,$EF
+    lda #$005A
+    sta $7E89C4
+    ply
+    plx
+    plb
+    rts
+bcmu_c0bc_cache_load_end:
 
 ; The first primary capture lazily copies this island to the identical private
 ; $7E:ED00 offset after production pacing has armed and while the SA-1 sleeps.

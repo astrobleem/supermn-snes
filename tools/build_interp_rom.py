@@ -731,6 +731,7 @@ bg_write_cell = vid_off("bg_write_cell")
 bg_write_cell_end = vid_off("bg_write_cell_end")
 bg_column_map_update = vid_off("bg_column_map_update")
 bg_column_map_update_end = vid_off("bg_column_map_update_end")
+bcmu_layout_changed = vid_off("bcmu_layout_changed")
 bg_offset_table_build = vid_off("bg_offset_table_build")
 bg_offset_table_build_end = vid_off("bg_offset_table_build_end")
 capture_bg_upper_full = vid_off("capture_bg_upper_full")
@@ -741,8 +742,13 @@ accept_bg_columns_snapshot = vid_off("accept_bg_columns_snapshot")
 accept_bg_columns_snapshot_end = vid_off("accept_bg_columns_snapshot_end")
 accept_bg_columns_direct = vid_off("accept_bg_columns_direct")
 accept_bg_columns_direct_end = vid_off("accept_bg_columns_direct_end")
+bcmu_same_layout = vid_off("bcmu_same_layout")
+bcmu_same_layout_end = vid_off("bcmu_same_layout_end")
 prepared_bg_map_remap = vid_off("prepared_bg_map_remap")
+pbmr_direct_exact = vid_off("pbmr_direct_exact")
 prepared_bg_map_remap_end = vid_off("prepared_bg_map_remap_end")
+bcmu_c0bc_cache_load = vid_off("bcmu_c0bc_cache_load")
+bcmu_c0bc_cache_load_end = vid_off("bcmu_c0bc_cache_load_end")
 queue_promote = vid_off("render_queue_promote")
 queue_promote_end = vid_off("render_queue_promote_end")
 boot_screen_init = vid_off("boot_screen_init")
@@ -1043,8 +1049,12 @@ assert (
     < accept_bg_columns_snapshot_end
     <= accept_bg_columns_direct
     < accept_bg_columns_direct_end
+    <= bcmu_same_layout
+    < bcmu_same_layout_end
     <= prepared_bg_map_remap
     < prepared_bg_map_remap_end
+    <= bcmu_c0bc_cache_load
+    < bcmu_c0bc_cache_load_end
     <= queue_promote
 )
 bg_map_update_code = VID[
@@ -1059,6 +1069,20 @@ assert (
     and bg_map_update_code[20] == 0xD0
     and bg_map_update_code[22:26] == bytes.fromhex("af96897e")
 ), "BG layout dispatch regained a kind-only full-rebuild path"
+assert bcmu_layout_changed == 0xB7CA
+assert bg_map_update_code[31:34] == bytes.fromhex("4c80bc"), (
+    "equal-layout BG path lost its provenance-transition redirect"
+)
+assert bg_map_update_code[34:bcmu_layout_changed - bg_column_map_update] == bytes(
+    bcmu_layout_changed - bg_column_map_update - 34
+), "equal-layout redirect overlapped the pinned layout-change path"
+assert VID[
+    bcmu_layout_changed - 0x8000:bg_column_map_update_end - 0x8000
+] == bytes.fromhex(
+    "200fb8af96897ec9feffb038af92747ec9bcc0f01bafbc897ec9fefff015"
+    "a20000bf00207ed00fe8e8e00004d0f380144cccbc4ce5bca901008f9089"
+    "7ea9ffff8fbc897e6b"
+), "layout-change BG path lost its split C0BC/prepared consumer dispatch"
 assert VID[
     bg_offset_table_build_end - 0x8000:capture_bg_upper_full - 0x8000
 ] == bytes(capture_bg_upper_full - bg_offset_table_build_end), (
@@ -1080,14 +1104,40 @@ assert VID[
     "snapshot column-acceptor crossed the direct-cache acceptor"
 )
 assert VID[
-    accept_bg_columns_direct_end - 0x8000:prepared_bg_map_remap - 0x8000
-] == bytes(prepared_bg_map_remap - accept_bg_columns_direct_end), (
-    "column acceptor crossed the prepared-map remap island"
+    accept_bg_columns_direct_end - 0x8000:bcmu_same_layout - 0x8000
+] == bytes(bcmu_same_layout - accept_bg_columns_direct_end), (
+    "column acceptor crossed the equal-layout token helper"
+)
+assert bcmu_same_layout == 0xBC80
+assert VID[
+    bcmu_same_layout - 0x8000:bcmu_same_layout_end - 0x8000
+] == bytes.fromhex(
+    "af92747ecf98747ef00bc9bcc0d0034cccbc9c9874afbc897ec9feffd008"
+    "a900002200bde96bafda897ef01faf90897ef019afbc897ef013c9fffff00e"
+    "a901008f90897ea9ffff8fbc897e6ba900002200bde92000bfa901008f90"
+    "897ea9feff8fbc897e6ba900002200bde96b"
+), "equal-layout C0BC consumer changed token/generation semantics"
+assert VID[
+    bcmu_same_layout_end - 0x8000:prepared_bg_map_remap - 0x8000
+] == bytes(prepared_bg_map_remap - bcmu_same_layout_end), (
+    "equal-layout token helper crossed the prepared-map remap island"
 )
 assert VID[
-    prepared_bg_map_remap_end - 0x8000:queue_promote - 0x8000
-] == bytes(queue_promote - prepared_bg_map_remap_end), (
-    "prepared-map remap crossed the private-WRAM queue-promoter island"
+    prepared_bg_map_remap_end - 0x8000:bcmu_c0bc_cache_load - 0x8000
+] == bytes(bcmu_c0bc_cache_load - prepared_bg_map_remap_end), (
+    "prepared-map remap crossed the C0BC cache-loader island"
+)
+assert bcmu_c0bc_cache_load == 0xBF00
+assert VID[
+    bcmu_c0bc_cache_load - 0x8000:bcmu_c0bc_cache_load_end - 0x8000
+] == bytes.fromhex(
+    "8bda5aa95900a200a0a00079547eefa91f00a25aa0a04089547eefa95a00"
+    "8fc4897e7afaab60"
+), "C0BC cache loader changed immutable code/palette semantics"
+assert VID[
+    bcmu_c0bc_cache_load_end - 0x8000:queue_promote - 0x8000
+] == bytes(queue_promote - bcmu_c0bc_cache_load_end), (
+    "C0BC cache-loader crossed the private-WRAM queue-promoter island"
 )
 assert VID[
     prepared_bg_map_remap - 0x8000:prepared_bg_map_remap - 0x8000 + 36
@@ -1095,6 +1145,11 @@ assert VID[
     "088bc2308f8e747ea5d048a5d248a5d448a5d648a5d848a5da48da5ae220"
     "a97e48abc220"
 ), "prepared-map remap lost its saved WRAM DBR before 16-bit-only scratch opcodes"
+assert VID[
+    pbmr_direct_exact - 0x8000:pbmr_direct_exact - 0x8000 + 8
+] == bytes.fromhex("af92747e8f98747e"), (
+    "prepared-map remap no longer records the resident C0BC token"
+)
 assert VID[
     prepared_bg_map_remap_end - 0x8000 - 3:
     prepared_bg_map_remap_end - 0x8000

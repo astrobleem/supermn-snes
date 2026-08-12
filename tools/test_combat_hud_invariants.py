@@ -10,6 +10,7 @@ import validate_packed_obj_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src" / "escbank8.pasm"
+VIDEO = ROOT / "src" / "video.pasm"
 
 
 def block(text: str, start: str, end: str) -> str:
@@ -85,6 +86,38 @@ def main() -> int:
     assert snapshot.count("mvn $41,$41") == 2
     for literal in ("#$4800", "#$4C00", "#$A000", "#$A400"):
         assert literal in snapshot
+
+    video = VIDEO.read_text(encoding="utf-8")
+    map_update = block(
+        video, "bg_column_map_update:", "bg_column_map_update_end:"
+    )
+    assert "jmp bcmu_same_layout" in map_update
+    token_consumer = block(
+        video, "bcmu_same_layout:", "bcmu_same_layout_end:"
+    )
+    assert "lda $7E7492" in token_consumer
+    assert "cmp $7E7498" in token_consumer
+    assert "cmp #$C0BC" in token_consumer
+    assert "jsl.l $E9BD00" in token_consumer
+    assert "jsr bcmu_c0bc_cache_load" in token_consumer
+    assert "sta $7E8990" in token_consumer
+    assert "sta $7E89BC" in token_consumer
+    assert token_consumer.index("jsl.l $E9BD00") < token_consumer.index(
+        "sta $7E8990"
+    )
+    assert "stz $7E7498" in token_consumer
+    remapper = block(
+        video, "prepared_bg_map_remap:", "prepared_bg_map_remap_end:"
+    )
+    assert "lda $7E7492" in remapper
+    assert "sta $7E7498" in remapper
+    cache_load = block(
+        video, "bcmu_c0bc_cache_load:", "bcmu_c0bc_cache_load_end:"
+    )
+    assert "mvn $7E,$EF" in cache_load
+    assert "#$A000" in cache_load and "#$7900" in cache_load
+    assert "#$A05A" in cache_load and "#$8940" in cache_load
+    assert "sta $7E89C4" in cache_load
 
     # All three Python mirrors must agree with the producer at P2's raw
     # top-row origins, including the complete 24-pixel leftward shift.

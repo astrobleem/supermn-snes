@@ -51,9 +51,9 @@ Three ROM identities must not be conflated:
   ordinary evidence: fresh controller coverage through tick 10,000 plus its
   focused semantic, combat, crate, HUD, and Stage-3 blocker results.
 - A normal build of current source now reproduces exact ordinary SHA-256
-  `6f7b10848984bcab4020892b8d7951a49e1f1cb2bfac5a2204aede27b3b37cb8`
+  `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963`
   at `build/interp.sfc`, preserved as
-  `build/interp-visual-sixfix-6f7b1084.sfc`. It is an unpromoted visual-repair
+  `build/interp-visual-eightfix-4eb9a408.sfc`. It is an unpromoted visual-repair
   candidate and does not inherit `a976…` or predecessor-hash visual acceptance.
 - The latest focused VTIME diagnostic is v7 SHA-256
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
@@ -84,7 +84,7 @@ map `00..0D,00,00`) and found that C0BC gameplay initialization was not the
 renderer's first image: title had already established the baseline. C0BC
 published the right token, but the expected 784-byte title-to-gameplay delta was
 then misclassified as a post-publication mutation and cleared `$41:014A/$015A`
-before prepared-map selection. Current candidate `6f7b1084…` snapshots the exact
+before prepared-map selection. Superseded candidate `6f7b1084…` snapshots the exact
 2 KiB C0BC code/color planes at token publication. A later nonzero manifest
 retains C0BC only while the live planes still equal that snapshot; a genuine
 later writer clears both tokens. The exact transition gate is green for retained
@@ -93,9 +93,30 @@ publication and forced post-publication mutation at
 The separate PC-ring whole-function MAME/Nexen differential is green 6/6 with
 zero work/video mismatch at
 `build/playback-watcher-20260811/visual-sixfix-pcring-cc9-c0bc-v1/watcher-report.json`.
-The ordinary hash reproduced exactly after diagnostic teardown. `6f7b1084…` has
-not been fresh-booted, so the combat-background repair remains unaccepted; no
-new fresh campaign starts without explicit user approval.
+Its authorized fresh campaign safely checkpointed at tick 1,280 and resumed the
+same lineage through tick 3,300 without replaying the prefix. Gameplay/liveness,
+centered P2 HUD, and crate remain green, but combat was still red brick; early
+boot was not sampled. The compact report is
+`build/playback-watcher-20260811/visual-sixfix-6f7-fresh-to3300-v1/watcher-report.json`.
+
+Fresh-state forensics found a second consumer defect: by tick 1,000 all direct
+and queued C0BC tokens were accepted, but unchanged physical geometry let
+`bg_column_map_update` return without applying the token-only provenance change.
+Rejected intermediate `32decddf…` cached the token and remapped WRAM, but did not
+publish a prepared dirty event or restore the 90-byte code list and 32-byte
+palette map, so PPU VRAM remained red brick. Current `4eb9a408…` reloads the
+complete immutable C0BC prepared payload, records the applied token, and routes
+the same foreground dispatch through the established prepared upload. Its
+three-case real-5A22 synthetic fixture is green for exact cache/map reload,
+`005A`/`FFFE` publication, idempotence, and non-C0BC control at
+`build/playback-watcher-20260811/visual-eightfix-4eb-token-transition-v2/watcher-report.json`.
+A ROM-migrated continuation from the authenticated `6f7…` tick-1,280 checkpoint
+is oracle/liveness green through 1,300; resume-origin correctly retains the old
+serialized PPU image, while the post-render capture restores the known-good
+storefront geometry at
+`build/playback-watcher-20260811/visual-eightfix-4eb-migrated1280-to1300-v1/watcher-report.json`.
+This is focused migrated evidence, not fresh-power-on acceptance. No fresh
+`4eb9a408…` campaign starts without explicit user approval.
 
 ## Detailed evidence
 

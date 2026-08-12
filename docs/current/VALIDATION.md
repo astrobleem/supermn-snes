@@ -149,6 +149,16 @@ that diagnostic ROM separately, rebuild normally afterward, and require the
 ordinary SHA to reproduce exactly. Neither focused test replaces a fresh visual
 capture on the exact ordinary hash.
 
+The 5A22 consumer has a separate token-only transition gate:
+`validate_bg_token_transition.py`. From a paused retained state it must prove
+that unchanged physical geometry plus applied token `0` and accepted token
+`C0BC` reloads the immutable map, 90-byte sorted-code list, and 32-byte palette
+map, records the applied token, and publishes BG dirty `1` with manifest
+`FFFE`. Its second call must be idempotent, and a non-C0BC control must leave the
+resident tilemap and dirty state unchanged. This is synthetic checkpoint
+evidence; follow it with a nearest-checkpoint migrated render and then an
+explicitly authorized fresh visual capture on the exact production hash.
+
 For the supplied legacy-Mesen Stage-3 checkpoint's stale PPU-scroll boundary,
 the focused probe must preserve the serialized initial image, advance one neutral
 vblank, require no game-tick advance, and then test for the blue strip. It must

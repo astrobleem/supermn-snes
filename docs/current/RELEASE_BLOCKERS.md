@@ -7,19 +7,25 @@ native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
 common virtual-IRQ clock. `build/interp-current-5c7e-before-vtime-esc9.sfc`
 retains the exact predecessor.
 
-Current source builds exact ordinary SHA `6f7b1084…` at `build/interp.sfc`,
-preserved as `build/interp-visual-sixfix-6f7b1084.sfc`. Superseded `2f590fb1…`
+Current source builds exact ordinary SHA `4eb9a408…` at `build/interp.sfc`,
+preserved as `build/interp-visual-eightfix-4eb9a408.sfc`. Superseded `2f590fb1…`
 is fresh-power-on green through tick 3,300 for gameplay/liveness, clean SA-1
 boot, centered P2 HUD, and the repaired crate area, but its tick-1,278 combat
 background is still the red-brick failure. Read-only state inspection proved
 the column classifier correct and confirmed the root: title already owned the
 baseline, so the expected 784-byte title-to-gameplay delta cleared the valid
-C0BC token as though it were a later mutation. `6f7b1084…` compares the live
+C0BC token as though it were a later mutation. Superseded `6f7b1084…` compares the live
 2 KiB code/color planes with their publication-time snapshot before retaining
 or invalidating C0BC. Its exact transition gate is green in both directions and
 its PC-ring whole-function MAME/Nexen differential is green 6/6 with zero
-work/video mismatch. It does not inherit predecessor visual acceptance and has
-no fresh-power-on evidence; combat art remains open on this exact hash. The latest
+work/video mismatch, but its fresh/same-lineage tick-3,300 campaign still shows
+red-brick combat because the accepted token changed without a consumer upload.
+`4eb9a408…` restores the complete immutable prepared caches and publishes the
+existing prepared PPU-upload path on token-only acceptance. Its three-case 5A22
+fixture is green, and a migrated tick-1,280-to-1,300 suffix restores storefront
+geometry without oracle/liveness failure. It does not inherit predecessor visual
+acceptance and has no fresh-power-on evidence; combat art remains open on this
+exact hash. The latest
 focused VTIME image is v7 `45c9096d…`; its ROM-only migrated tick-14,745-to-
 14,750 seam is green after the delayed input-publication repair, but it has no
 fresh-boot or long-suffix authority. The concise identity/evidence handoff is
