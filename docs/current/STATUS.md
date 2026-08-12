@@ -82,12 +82,20 @@ pre-counter `$07FEF8A5`; terminal counter `$08000000`, halt `$CAFE`, SA-1
 `$00D15A`, virtual PC `$000D42`. `$0D40` is valid `MOVE.W (A1)+,D4` and
 `$0D42` is `BEQ`, confirming a cap stop rather than corruption or an unsupported
 opcode. No exact MAME tick-21,203 state was needed for this arithmetic. ROM-only
-v8 migration to tick 21,300 reaches counter `$0809A799`, halt 0, min stack 136,
-renderer drops 0, and no mismatch; checkpoint state `a55500b9…`, IRAM
-`8708e422…`, resume 21,301, report
-`build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`.
-This remains checkpoint evidence only: no fresh boot, full playthrough, or
-production acceptance.
+v8 migration crossed the old cap and reached counter `$0809A799` at tick 21,300.
+The subsequent same-ROM continuation remains divergence-free through MAME tick 22,000
+(SNES tick 21,994): these reports have first divergence NONE and no mismatch
+ranges, with halt 0, minimum stack 138, and renderer drops 0 at the endpoint.
+Reports are
+`build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`,
+`build/playback-watcher-20260812/v8-stepcap-resume21301-to21500-v1/watcher-report.json`
+and
+`build/playback-watcher-20260812/v8-stepcap-resume21501-to22000-v1/watcher-report.json`.
+The safe endpoint state is
+`f6f0247cef1dca14af9035d73c294fec23d77d347d829d8eca36097bef912170`, with IRAM
+`b445362e46d350f91a2c5ccd63635aa35e47d8fd3887442b5ee361fe92ab54de`, resume
+22,001. This remains checkpoint evidence only: no fresh boot, full playthrough,
+or production acceptance.
 
 Superseded candidate `2f590fb1…` has an authorized fresh-power-on Luna campaign
 through tick 3,300 with 118 controller transitions, no gameplay-oracle

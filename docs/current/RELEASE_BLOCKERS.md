@@ -53,12 +53,18 @@ retained safe state `6c3eaab1…` has pre-counter `$07FEF8A5`; terminal tick
 virtual PC `$000D42`. The surrounding valid instructions are `$0D40`
 `MOVE.W (A1)+,D4` and `$0D42` `BEQ`, so this is the confirmed lifetime guard,
 not an illegal opcode or corruption. The unpromoted v8 successor `162b757c…`
-differs from exact v7 only in the four mirrored threshold bytes; ROM-only
-migration to tick 21,300 reaches `$0809A799`, halt 0, minimum
-stack 136, and zero renderer drops at state `a55500b9…`/IRAM `8708e422…`:
+differs from exact v7 only in the four mirrored threshold bytes. Its ROM-only
+migration crosses the old cap and reaches counter `$0809A799` at tick 21,300:
 `build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`.
-No fresh campaign was started; fresh boot, full playthrough, and production
-acceptance remain open.
+Same-ROM v8
+continuations through MAME 22,000 / SNES 21,994 have first divergence NONE, no
+mismatch ranges, halt 0, minimum stack 138, and zero renderer drops. Reports:
+`build/playback-watcher-20260812/v8-stepcap-resume21301-to21500-v1/watcher-report.json`
+and `build/playback-watcher-20260812/v8-stepcap-resume21501-to22000-v1/watcher-report.json`.
+The endpoint safe state is `f6f0247cef1dca14af9035d73c294fec23d77d347d829d8eca36097bef912170`,
+IRAM `b445362e46d350f91a2c5ccd63635aa35e47d8fd3887442b5ee361fe92ab54de`,
+resume 22,001. No fresh campaign was started; fresh boot, full playthrough,
+and production acceptance remain open.
 
 The active hash is green for its direct exact MAME/native-off/native-on 9/9
 CCR differential (`build/validate-2429c-distinct-arm-isolated-a976-pinned-v1.jsonl`),
