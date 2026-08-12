@@ -57,19 +57,20 @@ differs from exact v7 only in the four mirrored threshold bytes. Its ROM-only
 migration crosses the old cap and reaches counter `$0809A799` at tick 21,300:
 `build/playback-watcher-20260812/v8-stepcap-migrated21200-to21300-v1/watcher-report.json`.
 Same-ROM v8
-continuations through MAME 27,000 / SNES 26,994 have first divergence NONE, no
-mismatch ranges, halt 0, minimum stack 118, and zero renderer drops. Reports:
+continuations through MAME 30,000 / SNES 29,994 have first divergence NONE, no
+mismatch ranges, halt 0, minimum stack 138, and zero renderer drops. Reports:
 `build/playback-watcher-20260812/v8-stepcap-resume21301-to21500-v1/watcher-report.json`
 and `build/playback-watcher-20260812/v8-stepcap-resume21501-to22000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume22001-to22500-v1/watcher-report.json`,
 and
 `build/playback-watcher-20260812/v8-stepcap-resume22501-to23000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume23001-to25000-v1/watcher-report.json`,
+`build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`,
 and the endpoint report
-`build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`;
-safe state `d2dd13649cd970d0566158488ad2312c767a4a1522ba3ebf4b2050e4d142ca3e`,
-IRAM `aeb586c5efb0b5b3350c019001017383da48569c02a7979450c2262dd62739c7`, resume
-27,001. No fresh campaign was started; fresh boot, full playthrough,
+`build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`;
+safe state `a6d33070b710574762a399e1099ddd4bbc8a845031c195bbe4d543cbac454b44`,
+IRAM `b7fe3d1e211606d2c0b633cd8d0c29045ad4b189ba3d071769427757d27da671`, resume
+30,001. No fresh campaign was started; fresh boot, full playthrough,
 and production acceptance remain open.
 
 The active hash is green for its direct exact MAME/native-off/native-on 9/9

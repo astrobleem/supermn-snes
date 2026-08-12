@@ -14,7 +14,7 @@ project status and acceptance claims.
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Player/input/death oracle is green through 16,000; corrected first boss observations are green at 15,908/15,990. No fresh boot. |
 | Exact-v7 cap checkpoint | `45c9096d…` | No oracle divergence through completed tick 21,200; terminal tick 21,203 intentionally reaches the interpreter lifetime guard (`$CAFE`, SA-1 `$00D15A`, virtual PC `$000D42`). |
-| Unpromoted v8 successor | `162b757c…` | Four threshold-byte successor; same-ROM continuation reaches MAME 27,000 / SNES 26,994 with no divergence or mismatch, halt 0, min stack 118, drops 0. |
+| Unpromoted v8 successor | `162b757c…` | Four threshold-byte successor; same-ROM continuation reaches MAME 30,000 / SNES 29,994 with no divergence or mismatch, halt 0, min stack 138, drops 0. |
 
 Never report one identity's evidence as proof for another. Diagnostic checkpoint
 migration is explicitly unable to prove boot, renderer continuity, performance,
@@ -60,12 +60,13 @@ which crosses the old cap to counter `$0809A799`,
 `build/playback-watcher-20260812/v8-stepcap-resume22001-to22500-v1/watcher-report.json`, and
 `build/playback-watcher-20260812/v8-stepcap-resume22501-to23000-v1/watcher-report.json`,
 `build/playback-watcher-20260812/v8-stepcap-resume23001-to25000-v1/watcher-report.json`,
-and `build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`)
-have first divergence NONE and no mismatch ranges through MAME 27,000 / SNES
-26,994; endpoint halt is 0, minimum stack 118, and renderer drops 0. The
-endpoint is state `d2dd13649cd970d0566158488ad2312c767a4a1522ba3ebf4b2050e4d142ca3e`, IRAM
-`aeb586c5efb0b5b3350c019001017383da48569c02a7979450c2262dd62739c7`, resume
-27,001. These are checkpoint-only diagnostics, not fresh boot, full-playthrough,
+`build/playback-watcher-20260812/v8-stepcap-resume25001-to27000-v1/watcher-report.json`,
+and `build/playback-watcher-20260812/v8-stepcap-resume27001-to30000-v1/watcher-report.json`)
+have first divergence NONE and no mismatch ranges through MAME 30,000 / SNES
+29,994; endpoint halt is 0, minimum stack 138, and renderer drops 0. The
+endpoint is state `a6d33070b710574762a399e1099ddd4bbc8a845031c195bbe4d543cbac454b44`, IRAM
+`b7fe3d1e211606d2c0b633cd8d0c29045ad4b189ba3d071769427757d27da671`, resume
+30,001. These are checkpoint-only diagnostics, not fresh boot, full-playthrough,
 or production acceptance.
 
 ## The tick-14,748 repair
