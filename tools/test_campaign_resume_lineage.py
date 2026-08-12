@@ -71,6 +71,7 @@ def main() -> None:
         "b1e0c365af00852b79c0153fec5bae4b45bd59955943dde91c5226e41067be91",
         "20a6d8bce98b9d77a73e8588d010fc6c19706ef600850845c62e7fa294e570c2",
         "6903fb0307a3c60a1c24d3a10528204ce987dd90d0e977c55242e64a3ada431b",
+        "e62439e9cc59b07414c85dccfc548c9720ced7e64514b2966e1385dbdac9f2fd",
     )
     for predecessor in predecessors:
         if not campaign.allowed_resume_identity_mismatch(

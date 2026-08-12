@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -146,6 +147,20 @@ def require_runtime_halt(session: HaltedEntrySession) -> dict:
 
 
 def main() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        temporary_path = Path(temporary)
+        unavailable = campaign.capture_unclassified_failure_boundary(
+            None,
+            temporary_path / "states",
+            temporary_path / "shots",
+        )
+    if unavailable != {
+        "capture_error": "MCP session unavailable before context entry completed"
+    }:
+        raise AssertionError(
+            f"pre-session timeout capture was not stable: {unavailable!r}"
+        )
+
     by_marker = require_runtime_halt(
         HaltedEntrySession(halt=0xDEAD, pc=0x001234)
     )

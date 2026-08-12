@@ -97,6 +97,9 @@ MAME_MOVIE = ROOT / "inp" / "superman_play.inp"
 # tick 16,000 by expressing the post-write boundary directly as frame - 73.
 # Its successor expresses the identical boundary as write tick frame - 74 plus
 # one, preserving the write/comparison distinction without changing execution.
+# `e624...` produced the corrected v7 checkpoint chain through tick 18,600.
+# Its successor only makes pre-session failure capture tolerate an MCP startup
+# timeout; it cannot affect a successfully entered emulator session.
 RESUME_COMPATIBLE_CAMPAIGN_SCRIPT_SHA256S = frozenset(
     {
         "64d43359d189bf6f34e69bdc7d9deb6fc5eab8f56a73642a43549f4dc77d5a1b",
@@ -111,6 +114,7 @@ RESUME_COMPATIBLE_CAMPAIGN_SCRIPT_SHA256S = frozenset(
         "b1e0c365af00852b79c0153fec5bae4b45bd59955943dde91c5226e41067be91",
         "20a6d8bce98b9d77a73e8588d010fc6c19706ef600850845c62e7fa294e570c2",
         "6903fb0307a3c60a1c24d3a10528204ce987dd90d0e977c55242e64a3ada431b",
+        "e62439e9cc59b07414c85dccfc548c9720ced7e64514b2966e1385dbdac9f2fd",
     }
 )
 
@@ -1232,6 +1236,26 @@ def boss_observation_tick(write_tick: int) -> int:
     """Return the first pre-body boundary that observes a boss write."""
 
     return write_tick + BOSS_OBSERVATION_DELAY_TICKS
+
+
+def capture_unclassified_failure_boundary(
+    session: McpSession | None,
+    states_dir: Path,
+    shots_dir: Path,
+) -> dict[str, Any]:
+    """Retain a live failure boundary when MCP context entry succeeded."""
+
+    if session is None:
+        return {
+            "capture_error": "MCP session unavailable before context entry completed"
+        }
+    try:
+        return {
+            "state": save_state(session, states_dir / "failure.mss"),
+            "screenshot": screenshot(session, shots_dir / "failure.png"),
+        }
+    except Exception as capture_error:
+        return {"capture_error": repr(capture_error)}
 
 
 def wait_for_file(path: Path, timeout: float = 20.0) -> None:
@@ -3991,6 +4015,7 @@ def main() -> int:
 
     with event_path.open("x", encoding="utf-8") as log:
         emit(log, "provenance", **provenance)
+        m: McpSession | None = None
         try:
             with AuditedMcpSession(
                 rom=rom,
@@ -5598,15 +5623,14 @@ def main() -> int:
                 "classification": "harness_or_unclassified",
                 "reason": repr(failure),
             }
-            try:
-                failure_state = save_state(m, states_dir / "failure.mss")
-                failure_shot = screenshot(m, shots_dir / "failure.png")
-                summary["states"].append(failure_state)
-                summary["screenshots"].append(failure_shot)
-                summary["failure"]["state"] = failure_state
-                summary["failure"]["screenshot"] = failure_shot
-            except Exception as capture_error:
-                summary["failure"]["capture_error"] = repr(capture_error)
+            captured = capture_unclassified_failure_boundary(
+                m, states_dir, shots_dir
+            )
+            summary["failure"].update(captured)
+            if "state" in captured:
+                summary["states"].append(captured["state"])
+            if "screenshot" in captured:
+                summary["screenshots"].append(captured["screenshot"])
             emit(log, "failure", failure=summary["failure"])
         finally:
             _ACTIVE_SESSION = None
