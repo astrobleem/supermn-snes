@@ -139,36 +139,85 @@ A synthetic or checkpointed test proves only its named invariant. Rendering acce
 also needs an unmodified fresh boot, screenshots/PPU state, continued ticks/renders,
 and eventually an aligned MAME frame comparison.
 
-State-oracle lockstep is not framebuffer validation. For every promoted gameplay
-candidate, capture the same canonical boundary in Nexen and exact Mesen 2.1.1 and
-run the aligned active-display gate:
+State-oracle lockstep is not framebuffer validation. A bounded gameplay-green
+claim now requires three machine-readable gates for the same ROM SHA-256 and the
+same complete inclusive game-tick range:
+
+1. `state_oracle`: the MAME-controller campaign completes the range without an
+   oracle mismatch;
+2. `aligned_pixel_oracle`: every integer game tick is compared pixel-for-pixel
+   with its exact MAME 0.287 image; and
+3. `temporal_conservation`: every intervening SNES video frame exactly equals
+   either the preceding or succeeding accepted MAME image.
+
+Generate the state report with `tools/replay_mame_controller_campaign.py`. Its
+summary now contains an `acceptance_gate`; an interrupted or incomplete run is
+`unknown`, while a concrete state-oracle mismatch is `red`.
+
+The aligned-pixel manifest authenticates the ROM, MAME executable, canonical
+timeline, and SNES emulator. Its `frames` array must contain exactly one MAME/SNES
+pair for every tick from `coverage.game_tick_start` through
+`coverage.game_tick_end`, in order:
 
 ```sh
-python3 tools/compare_snes_framebuffers.py \
-  --reference build/path/to/nexen-frame.png \
-  --candidate build/path/to/mesen-frame.png \
-  --output build/path/to/framebuffer-comparison.json
-python3 tools/test_compare_snes_framebuffers.py
-python3 tools/compare_snes_framebuffer_sequence.py \
-  --manifest build/path/to/aligned-frame-manifest.json \
-  --output build/path/to/framebuffer-sequence.json
-python3 tools/test_compare_snes_framebuffer_sequence.py
-python3 tools/compare_mame_snes_framebuffers.py \
-  --mame build/path/to/exact-mame-frame.png \
-  --snes build/path/to/aligned-snes-frame.png \
-  --output build/path/to/mame-snes-framebuffer.json
-python3 tools/test_compare_mame_snes_framebuffers.py
+python3 tools/compare_mame_snes_framebuffer_sequence.py \
+  --manifest build/path/to/exact-mame-pixel-manifest.json \
+  --output build/path/to/exact-mame-pixel-report.json
 ```
 
+The report records each registered image hash, changed-pixel count, difference
+box, first divergence, mismatch ranges, and red masks on disk. Missing ticks,
+files, provenance, or complete coverage produce `unknown`, not green.
+
+The temporal manifest names the aligned-pixel report and every consecutive SNES
+video frame. Each row identifies its preceding and succeeding accepted game
+ticks. The validator reads the authenticated MAME images from the aligned report;
+callers cannot substitute a hand-picked clean reference:
+
+```sh
+python3 tools/validate_snes_framebuffer_conservation.py \
+  --manifest build/path/to/temporal-conservation-manifest.json \
+  --output build/path/to/temporal-conservation-report.json
+```
+
+A partial DMA, stale map, flash, tear, repeated background, or other third image
+is red even if it exists for only one SNES video frame between logical game
+ticks. Missing video-frame indices or a non-green aligned report produce
+`unknown`.
+
+Finally, aggregate the three reports:
+
+```sh
+python3 tools/validate_gameplay_acceptance.py \
+  --manifest build/path/to/gameplay-acceptance-manifest.json \
+  --output build/path/to/gameplay-acceptance-report.json
+```
+
+The aggregate manifest declares `rom_sha256`, complete tick `coverage`, and a
+`gates` object containing paths for `state_oracle`, `aligned_pixel_oracle`, and
+`temporal_conservation`. This is the only tool authorized to emit
+`claim_authority: bounded_gameplay_acceptance`. It emits green only when all
+three reports have matching schema, ROM, range, complete coverage, and green
+status. A valid red gate makes the aggregate red; absent or malformed evidence
+makes it unknown. Never report unqualified “no divergence,” “fixed,” “playable,”
+or “visual green” outside the exact aggregate scope.
+
+The older framebuffer tools remain useful diagnostics but cannot satisfy the
+aggregate contract:
+
+- `tools/compare_snes_framebuffers.py` and
+  `tools/compare_snes_framebuffer_sequence.py` compare Nexen/Mesen captures;
+- `tools/compare_mame_snes_framebuffers.py` is an isolated aligned frame and has
+  bounded pixel-oracle authority only when its exact ROM/tick identity is given;
+- capture and DMA-trace tools prove acquisition or causality, not correctness;
+- `tools/analyze_snes_framebuffer_flashes.py` is a repetition heuristic. A clear
+  result is always acceptance-`unknown`; an anomaly is diagnostic negative
+  evidence, not a substitute for the exact-MAME gate.
+
 Nexen's 256x239 capture is normalized to the top 256x224 active display used by
-Mesen. The accepted one-credit cross-emulator fixture is pixel-exact under this
-contract. The gate records full-frame and playfield changed-pixel counts, a red
-difference mask, and repeated-tile concentration. Coin/start transitions and
-scrolling additionally require consecutive video-frame captures: retain only
-mismatches, but compare every captured frame. The sequence manifest names each
-aligned pair; its compact result reports the first divergence and mismatch ranges
-while detailed per-frame hashes and metrics stay on disk. A green player/input/health oracle
-must never be reported as visually green without this separate framebuffer gate.
+Mesen. A green player/input/health oracle must never be reported as visually
+green without the separate aligned-pixel and temporal gates.
+
 For a reported input-triggered visual failure, continue from the nearest retained
 same-emulator checkpoint with `tools/capture_snes_input_framebuffers.py`; it uses
 only real controller input and saves each framebuffer plus periodic states.
@@ -183,18 +232,20 @@ Its compact result distinguishes upload attempts from the actual
 reports zero-word, unique-word, and dominant-tile ratios. This catches the current
 failure mode in which a mostly zero map selects a live physical tile-zero pattern.
 `tools/analyze_snes_framebuffer_flashes.py` scans the extracted sequence for a
-dominant repeated-tile collapse and reports the first divergence plus contiguous
-mismatch ranges; retain the full per-frame metrics in its JSON output.
+dominant repeated-tile collapse and reports the first detected anomaly plus
+contiguous anomaly ranges; retain the full per-frame metrics in its JSON output.
 
-The focused `5f5dc9d7…` repair result is retained at
+The focused `5f5dc9d7…` diagnostic result is retained at
 `build/playback-watcher-20260812/renderer-sparse-conservation-5f5dc9d7-migrated6891-v1`.
-Its acceptance scope is exactly migrated state `02ba3ab7…`, ticks 881→1,020:
+Its scope is migrated state `02ba3ab7…`, ticks 881→1,020:
 two attempts, one suppressed 35-cell sparse map, one committed fuller map, halt
-zero, and 231 consecutive frames with no repeated-tile mismatch range. Exact
-frame comparisons show that the candidate background remains identical to the
-parent's last clean frame outside the moving sprite/HUD-local difference box.
-Do not treat this as fresh boot, aligned MAME pixels, performance, broad renderer
-conservation, or human playtest evidence.
+zero, and 231 consecutive frames with no detected repeated-tile anomaly. It is
+not green acceptance. Chad's exact Mesen 2.1.1 `interp_1.mss` state proves the
+same ROM is renderer-red at tick 2,465; all 228 retained frames under
+`build/playback-watcher-20260812/user-interp1-5f5d-right-v1` trigger the
+diagnostic. Do not treat the earlier clear interval as fresh boot, aligned MAME
+pixels, temporal conservation, performance, broad renderer conservation, or
+human playtest evidence.
 
 The MAME/SNES comparator applies the established arcade viewport registration
 (`x=64..319`, `y=1..224`) and reports the intentionally repositioned top HUD

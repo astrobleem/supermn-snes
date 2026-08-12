@@ -50,20 +50,41 @@ Reduction contract:
   ranges. Describe only concrete symptoms such as differing PCs, task/state
   fields, inputs, positions, health, rendering, timing, audio, exits, or hangs.
 - Do not speculate about root cause or propose fixes.
+- Treat gameplay state, aligned exact-MAME pixels, and temporal framebuffer
+  conservation as three separate gates. State equality never implies pixel
+  equality. A repeated-tile/anomaly heuristic is diagnostic-only and its
+  `clear` result has acceptance status UNKNOWN.
+- The aligned-pixel gate must compare every integer game tick in the declared
+  inclusive range against the registered exact MAME 0.287 frame. The temporal
+  gate must cover every integer SNES video frame and require it to equal either
+  the preceding or succeeding accepted MAME image. Missing frames, identities,
+  reports, or coverage are UNKNOWN, never green.
+- Before using `green`, `no divergence`, `fixed`, or an equivalent visual claim,
+  run `tools/validate_gameplay_acceptance.py` over the three reports. Only its
+  `acceptance_status=green` authorizes a bounded overall green claim. A concrete
+  red gate remains red even if later coverage is missing.
+- Never write unqualified `NONE`. Qualify it with oracle and exact inclusive
+  bounds, for example `STATE NONE, ticks 100-200; PIXEL UNKNOWN; TEMPORAL RED,
+  SNES frames 500-510`.
 - Write `watcher-report.json` in the artifact directory. It must index the run
   command, ROM hashes, comparison bounds, exit states, first divergence,
   complete merged mismatch ranges, specific observed symptoms, and every
   artifact filename. Reference raw files; never embed raw logs or frame data.
+- `watcher-report.json` must include `acceptance_status`, exact ROM SHA-256,
+  exact tick/video-frame coverage, and separate `state_oracle`,
+  `aligned_pixel_oracle`, and `temporal_conservation` statuses. If no aggregate
+  report exists, `acceptance_status` must be UNKNOWN.
 - When helpful, write small bounded first-divergence excerpts as separate
   files and list them in the report. The parent will inspect those files
   directly.
 
 Final handoff contract:
-- Return only the following four fields, in at most 12 lines total. Use paths
+- Return only the following five fields, in at most 12 lines total. Use paths
   relative to the repository. Put complete ranges and manifests in
   `watcher-report.json` when they do not fit.
 
-FIRST_DIVERGENCE: <tick/frame/time and concise MAME-versus-SNES values, NONE, or NOT_REACHED>
+ACCEPTANCE_STATUS: <overall plus state/pixel/temporal statuses and exact bounds>
+FIRST_DIVERGENCE: <oracle-qualified tick/frame/time and values, bounded NONE, UNKNOWN, or NOT_REACHED>
 MISMATCH_RANGES: <merged ranges, NONE, or count plus watcher-report.json>
 SPECIFIC_SYMPTOMS: <evidence-only symptoms, NONE, or the concrete run failure>
 ARTIFACT_FILENAMES: <watcher-report.json first, then only the most relevant files>

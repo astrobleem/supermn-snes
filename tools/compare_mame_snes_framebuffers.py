@@ -23,6 +23,7 @@ from compare_snes_framebuffers import (
     image_sha256,
     repetition_metrics,
 )
+from gameplay_acceptance_contract import gate, valid_sha256
 
 
 MAME_SIZE = (384, 240)
@@ -37,6 +38,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-changed-pixels", type=int, default=0)
     parser.add_argument("--max-playfield-changed-pixels", type=int, default=0)
+    parser.add_argument("--rom-sha256")
+    parser.add_argument("--game-tick", type=int)
     return parser.parse_args()
 
 
@@ -65,6 +68,12 @@ def main() -> int:
     green = (
         changed <= args.max_changed_pixels
         and playfield_changed <= args.max_playfield_changed_pixels
+    )
+    gate_ready = (
+        valid_sha256(args.rom_sha256)
+        and args.game_tick is not None
+        and args.max_changed_pixels == 0
+        and args.max_playfield_changed_pixels == 0
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -120,6 +129,29 @@ def main() -> int:
             "registered_mame": str(registered_path),
             "difference_mask": str(diff_path),
         },
+        "acceptance_gate": gate(
+            "aligned_pixel_oracle",
+            ("green" if green else "red") if gate_ready else "unknown",
+            args.rom_sha256 if valid_sha256(args.rom_sha256) else None,
+            (
+                {
+                    "game_tick_start": args.game_tick,
+                    "game_tick_end": args.game_tick,
+                    "complete": True,
+                }
+                if gate_ready
+                else None
+            ),
+            authority="exact_mame_pixels" if gate_ready else "none",
+            reason=(
+                None
+                if gate_ready
+                else (
+                    "Acceptance requires --rom-sha256, --game-tick, and exact "
+                    "zero-pixel thresholds."
+                )
+            ),
+        ),
     }
     args.output.write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"

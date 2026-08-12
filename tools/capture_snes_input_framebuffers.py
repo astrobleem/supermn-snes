@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, "/home/chad/Mesen2/python")
 
 import capture_mesen211_transitions as capture  # noqa: E402
+from gameplay_acceptance_contract import unknown_diagnostic_gate  # noqa: E402
 import mesen_mcp.session as _session  # noqa: E402
 
 _session.validate_mesen_build = lambda *_args, **_kwargs: None
@@ -261,6 +262,10 @@ def main() -> int:
         "movie_state_before_stop": movie_state_before_stop,
         "playback_stop_response": playback_stop_response,
         "captures": rows,
+        "acceptance_gate": unknown_diagnostic_gate(
+            "framebuffer_capture",
+            "Capture success is evidence availability, not visual correctness.",
+        ),
     }
     report_path = output / "results.json"
     report_path.write_text(

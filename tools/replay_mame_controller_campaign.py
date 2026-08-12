@@ -42,6 +42,7 @@ from typing import Any, TextIO
 
 from mame_0287 import MAME
 from mame_0287 import identity as mame_identity
+from gameplay_acceptance_contract import gate, tick_coverage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -5640,6 +5641,34 @@ def main() -> int:
     summary["actions_observed"] = sorted(actions_seen)
     summary["event_log"] = str(event_path)
     summary["event_log_sha256"] = sha256(event_path)
+    state_red = bool(
+        summary["oracle_divergence_count"]
+        or summary["player_reference_red"]
+        or summary["boss_events_red"]
+        or summary["death_reference_red"]
+    )
+    state_green = (
+        summary["failure"] is None
+        and summary["result"] in ("green", "partial-green")
+        and not state_red
+    )
+    state_status = "red" if state_red else ("green" if state_green else "unknown")
+    summary["acceptance_gate"] = gate(
+        "state_oracle",
+        state_status,
+        summary["rom_sha256"],
+        tick_coverage(
+            segment_origin_tick,
+            args.mame_end_tick,
+            complete=state_green,
+        ),
+        authority="mame_state_oracle" if state_status != "unknown" else "none",
+        reason=(
+            None
+            if state_status != "unknown"
+            else "Campaign did not complete the requested range or reach a state-oracle mismatch."
+        ),
+    )
     summary_path.write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

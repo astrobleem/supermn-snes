@@ -18,6 +18,8 @@ from typing import Any
 
 from PIL import Image, ImageChops
 
+from gameplay_acceptance_contract import unknown_diagnostic_gate
+
 
 ACTIVE_SIZE = (256, 224)
 PLAYFIELD_BOX = (0, 24, 256, 224)
@@ -142,6 +144,13 @@ def main() -> int:
             "candidate": repetition_metrics(candidate),
         },
         "artifacts": {"difference_mask": str(diff_path.resolve())},
+        "acceptance_gate": unknown_diagnostic_gate(
+            "cross_emulator_pixels",
+            (
+                "A single SNES-to-SNES frame comparison is not an exact-MAME "
+                "sequence or an every-video-frame conservation proof."
+            ),
+        ),
     }
     args.output.write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"

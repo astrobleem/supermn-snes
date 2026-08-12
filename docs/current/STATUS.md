@@ -12,46 +12,34 @@ The port is an **interactive technical-demo response candidate**. It is **not
 playable, release-ready, or shippable**.
 
 The current ordinary `build/interp.sfc`, SHA-256
-`5f5dc9d79e04fe9b0e9c3a59eed55437974b30ad3803502383c692a7fd4e0cd5`, is an
-unpromoted **focused renderer repair candidate**. Its preserved parent
-`11aefd2cfdc6a0c28ad6a69e607d4e5c7f1884db6757b8f385f675d51f965f90` is
-explicitly **red for live Mesen gameplay presentation**. Chad's August 12
-playtest found a repeated/corrupt playfield immediately after coin/start and
-background flashing while scrolling; the supplied window capture is retained at
-`docs/assets/evidence/current-11ae-user-mesen-background-red-20260812.png`
-(SHA-256 `1ee9cdbb5e3564ca0d6fbce979f98362d0ead49610d6de1a57d7656c8c514eda`).
-This invalidates the recommendation to run that ordinary artifact and supersedes
-the earlier still-montage review as a statement about current behavior. Exact
-Mesen reproduction and consecutive-frame comparison are now red: lossless real-
-controller capture finds corruption at extracted frames 165–174 and 225–232.
-The first bad frame changes 50,653/51,200 playfield pixels (98.93%); the second
-changes 30,896/51,200 (60.34%). Focused 5A22 tracing ties them to tilemap uploads
-at emulator frames 6,915 and 6,988. Those maps contain 1,984/2,048 and
-1,938/2,048 zero words, versus 524 and 517 in the immediately recovering maps.
-Because the BG cache allocates real artwork to physical tile slot zero, those
-near-empty maps render as repeated live art rather than transparent cells. The
-slow heavy-render/queue path leaves each obsolete map visible until the fuller
-map arrives; foreground and HUD remain intact. This is confirmed parent-hash
-renderer negative evidence, not a MAME-aligned comparison. The preserved reports
-are under `build/playback-watcher-20260812/current-11ae-mesen211-right-lossless-from6719-v1`
-and `build/playback-watcher-20260812/current-11ae-mesen211-right-bg-map-values-from6891-v5`.
-The repair counts staged nonzero map words only when a complete successor is
-queued. It retains the displayed map below 256 nonzero words, reapplies live
-scroll, and preserves X/Y; queue-free and fuller maps retain the original path.
-The final `5f5d…` checkpoint migration from exact state `02ba3ab7…` advances
-Mesen frames 6,891→7,168 and game ticks 881→1,020 with halt zero. The sparse
-35-cell attempt is suppressed; its fuller successor (1,524 nonzero / 524 zero
-words) commits. Analysis of all 231 lossless framebuffers finds no first
-divergence or mismatch ranges; maximum dominant-tile ratio is 0.11125. Candidate frame 34
-matches the preserved clean-parent background exactly outside local box
-`[127,16,177,98]`; it differs from the corrupt parent frame across the full
-display. Evidence is under
-`build/playback-watcher-20260812/renderer-sparse-conservation-5f5dc9d7-migrated6891-v1`.
-This is migrated-checkpoint evidence only, not fresh boot, MAME-aligned pixels,
-performance, broad renderer conservation, or human acceptance. The first
-queue-wide guard `10dc1a0b…` remained visually red and is rejected; checkpoint-
-green `9ab9a1db…` was superseded before acceptance because its scan did not
-preserve the original X/Y register contract.
+`5f5dc9d79e04fe9b0e9c3a59eed55437974b30ad3803502383c692a7fd4e0cd5`, is
+explicitly **renderer-red**. Chad's exact Mesen 2.1.1 state `interp_1.mss`
+(SHA-256 `63606d27ef9a4c01f4d0e9e77b3df24bd9db48d42d1436f7acdccae6e46bdc24`)
+opens already corrupt at emulator frame 10,118 / game tick 2,465. The displayed
+VRAM map and `$7E:9000` staging map are byte-identical and contain 1,589/2,048
+zero words. A 273-frame real-Right continuation reaches tick 2,578 with halt
+zero; all 228 retained lossless frames trigger the repeated-tile diagnostic.
+The trace records 15 map attempts, eight commits, and static BG scroll.
+Evidence is under
+`build/playback-watcher-20260812/user-interp1-5f5d-right-v1`.
+
+The root is confirmed in source and authenticated graphics. The heavy renderer
+clears empty map entries to word zero and skips arcade code zero, while the
+dynamic cache assigns the first nonempty artwork to physical SNES slot zero.
+Every empty map entry therefore displays that live artwork. Arcade graphics code
+zero is actually a blank 128-byte record. The `5f5d…` heuristic delayed only
+maps with fewer than 256 nonzero words when a successor was queued; this state
+has 459 nonzero words and is repeatedly committed. Slot zero must instead remain
+blank/reserved. No corrected ROM has been built.
+
+The earlier `5f5d…` ticks 881–1,020 result is reclassified as a diagnostic-only
+interval in which a dominant-tile heuristic saw no collapse. It was not an
+aligned MAME comparison or temporal-conservation gate and never authorized
+“no divergence” or a visual-green claim. The tooling now enforces three separate
+gates—state oracle, aligned exact-MAME pixels at every game tick, and conservation
+of every intervening SNES video frame. Missing evidence is `unknown`; only
+`tools/validate_gameplay_acceptance.py` may issue a bounded aggregate green.
+Rejected `10dc1a0b…` and superseded `9ab9a1db…` remain negative history.
 
 The best evidence-backed ordinary line is the following narrow repair candidate.
 It remains unaccepted for release because the Stage-3 timing and rate blockers
@@ -92,7 +80,7 @@ Three ROM identities must not be conflated:
 - `a9765fbf…` is the preserved ordinary candidate with the strongest accepted
   ordinary evidence: fresh controller coverage through tick 10,000 plus its
   focused semantic, combat, crate, HUD, and Stage-3 blocker results.
-- The current source ordinary build is renderer candidate `5f5dc9d7…`, based on
+- The current source ordinary build is renderer-red `5f5dc9d7…`, based on
   red step-cap parent `11aefd2c…`. Neither inherits preserved predecessor
   `4eb9a408…` evidence. Exact-v7 successor `162b757c…` is a separate unpromoted
   diagnostic lineage.

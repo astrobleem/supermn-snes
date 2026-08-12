@@ -10,23 +10,17 @@
 </p>
 
 <p align="center">
-  <strong>Current status: focused renderer repair under validation.</strong><br>
+  <strong>Current status: renderer-red engineering build.</strong><br>
   The project is controllable in bounded tests, but the current ordinary build is
   not a qualified playable demo or release.
 </p>
 
-> **Validation warning (August 12):** preserved parent `11aefd2c…` is not a demo
-> build. A live user-run Mesen playtest found a repeated,
-> corrupt gameplay background immediately after coin/start and flashing while
-> scrolling. Lossless consecutive-frame capture now reproduces two corrupt
-> intervals (frames 165–174 and 225–232): the playfield changes by 98.93% and
-> 60.34% at their first frames while the HUD/foreground remain intact. Focused
-> tracing proves that the renderer uploads near-empty tilemaps whose zero words
-> select live BG tile 0, producing the repeated pattern until a fuller map
-> arrives. Current `build/interp.sfc` is unpromoted repair candidate `5f5dc9d7…`.
-> Its retained-checkpoint framebuffer rerun suppresses the sparse publication and
-> has no repeated-tile mismatch in 231 lossless frames, but it has not received
-> fresh-boot, aligned-MAME, performance, or human acceptance.
+> **Do not use the current ROM as a demo.** `build/interp.sfc` (`5f5dc9d7…`)
+> repeats, skips, and breaks up the gameplay background in exact Mesen 2.1.1.
+> The supplied tick-2,465 state reproduces it immediately and all 228 frames in
+> the focused continuation are anomalous. The confirmed cause is a collision
+> between empty tilemap word zero and dynamically allocated live BG slot zero;
+> the sparse-map heuristic did not repair it. No corrected ROM exists yet.
 
 ## An arcade port, not a remake
 
@@ -61,8 +55,8 @@ Concept cover contributed by Chad.
 - Button 1 punch/fire/charge, Button 2 kick, flight, damage, death, and respawn.
 - Crate pickup, carry, contact, and throw paths.
 - Preserved `4eb9a408…` captures show the corrected combat background, crate tiles,
-  SA-1 boot presentation, and centered HUD. Parent `11aefd2c…` is renderer-red;
-  current candidate `5f5dc9d7…` closes its focused flash interval only.
+  SA-1 boot presentation, and centered HUD. Current `5f5dc9d7…` is renderer-red;
+  those preserved stills do not transfer to it.
 - Exact MC68000 semantic gates: optest 160/160 and opsweep 782/782.
 - Focused Stage 1–3 boss-health differentials and all 14 retained Stage 1 boss
   observations.
@@ -78,6 +72,12 @@ through authenticated save-state migration rather than a fresh power-on run.
 The retained movie ends at tick 139,925, so 31,000 ticks is 22.15% coverage. The
 campaign is intentionally paused at a repeat-validated tick-31,000 state for human
 visual review and can resume at tick 31,001 without replaying the prefix.
+
+Gameplay acceptance is now machine-enforced: one ROM and one exact tick range
+must be green in the MAME state oracle, exact MAME pixel comparison at every game
+tick, and conservation of every intervening SNES video frame. Missing evidence is
+reported as unknown. State lockstep, a clean screenshot, or a repetition scan can
+no longer be promoted by itself.
 
 Before the project earns “playable demo,” it still needs:
 

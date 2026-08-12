@@ -10,7 +10,7 @@ project status and acceptance claims.
 |---|---|---|
 | Best evidence-backed ordinary candidate | `a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60` | Preserved 66-byte terminal-CCR repair with fresh ordinary coverage through tick 10,000. |
 | Red renderer parent | `11aefd2c…` | Preserved step-cap source line; deterministic repeated-tile flashes under live Mesen scrolling. |
-| Current-source ordinary build | `5f5dc9d7…` | Unpromoted sparse-map conservation candidate; focused migrated-checkpoint framebuffer gate is green for 231 frames. |
+| Current-source ordinary build | `5f5dc9d7…` | Renderer-red. Exact Mesen state is corrupt at tick 2,465; all 228 retained continuation frames trigger the repetition diagnostic. No corrected ROM exists. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Player/input/death oracle is green through 16,000; corrected first boss observations are green at 15,908/15,990. No fresh boot. |
@@ -96,18 +96,30 @@ the compact causal report is
 `build/playback-watcher-20260812/current-11ae-mesen211-right-bg-map-values-from6891-v5/watcher-report.json`.
 
 The first queue-wide repair `10dc1a0b…` was rejected because repeated-tile ranges
-persisted. The narrower map-content repair delays a map below 256 nonzero words
-only when a complete successor is queued and continues publishing live scroll.
-The first green form `9ab9a1db…` was superseded on static audit because its scan
-changed X/Y. Final candidate `5f5dc9d7…` restores those registers. From retained
-state `02ba3ab7…`, it advances Mesen frames 6,891→7,168 / ticks 881→1,020,
-suppresses the 35-cell sparse attempt, commits the fuller 1,524-nonzero-word
-successor, and remains halt-zero with no first divergence or mismatch ranges in
-231 lossless frames. Candidate frame 34 retains the clean-parent background
-pixel-for-pixel outside local sprite/HUD box `[127,16,177,98]`. The report is
-`build/playback-watcher-20260812/renderer-sparse-conservation-5f5dc9d7-migrated6891-v1/watcher-report.json`.
-This is checkpoint migration, not fresh boot, MAME alignment, performance, or
-human acceptance.
+persisted. The narrower map-content heuristic delays a map below 256 nonzero
+words only when a complete successor is queued and continues publishing live
+scroll. `9ab9a1db…` was superseded on static audit because its scan changed X/Y;
+`5f5dc9d7…` restores those registers. Its retained ticks 881→1,020 run suppresses
+one 35-cell map and sees no dominant-tile collapse across 231 lossless frames.
+That result is now explicitly diagnostic-only: it was not aligned to exact MAME
+pixels and did not prove temporal conservation.
+
+Chad's exact Mesen 2.1.1 state `interp_1.mss` (SHA-256 `63606d27…`) opens
+`5f5dc9d7…` already corrupt at frame 10,118 / game tick 2,465. Displayed VRAM
+and `$7E:9000` staging maps are byte-identical with 1,589/2,048 zero words. A
+real-Right continuation reaches tick 2,578 with halt zero; all 228 retained
+frames trigger the repetition diagnostic. Fifteen map attempts produce eight
+commits, and the heuristic admits the 459-nonzero-word map. The source-level root
+is the use of physical BG slot zero for live artwork even though empty map words
+select slot zero; authenticated arcade graphics code zero is blank. Slot zero
+must be reserved as blank. No corrected ROM has been built.
+
+Tooling now enforces three independent gates over one authenticated ROM and exact
+tick range: state oracle, aligned exact-MAME pixels at every game tick, and every
+intervening SNES video frame matching the preceding or succeeding accepted MAME
+image. `tools/validate_gameplay_acceptance.py` alone may issue a bounded aggregate
+green. Missing evidence is `unknown`; repetition, capture, trace, cross-emulator,
+and isolated single-frame results cannot authorize “fixed” or “no divergence.”
 
 The committed README montage at `docs/assets/readme/showcase-20260812.png`
 (SHA-256 `afa28ba5…`) supersedes the stale August 11 montage. Its first four

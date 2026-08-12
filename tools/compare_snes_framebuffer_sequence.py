@@ -24,6 +24,7 @@ from compare_snes_framebuffers import (
     normalize,
     repetition_metrics,
 )
+from gameplay_acceptance_contract import unknown_diagnostic_gate
 
 
 def parse_args() -> argparse.Namespace:
@@ -152,6 +153,13 @@ def main() -> int:
         ),
         "mismatch_ranges": mismatch_ranges(results),
         "frames": results,
+        "acceptance_gate": unknown_diagnostic_gate(
+            "cross_emulator_pixel_sequence",
+            (
+                "An aligned SNES-to-SNES sequence does not establish exact-MAME "
+                "pixels or intervening-frame renderer conservation."
+            ),
+        ),
     }
     output.write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"

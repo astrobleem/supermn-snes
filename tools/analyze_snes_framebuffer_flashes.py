@@ -18,6 +18,7 @@ from compare_snes_framebuffers import (
     normalize,
     repetition_metrics,
 )
+from gameplay_acceptance_contract import unknown_diagnostic_gate
 
 
 def parse_args() -> argparse.Namespace:
@@ -102,7 +103,7 @@ def main() -> int:
         )
         previous = image
 
-    mismatch_ranges = ranges(rows)
+    anomaly_ranges = ranges(rows)
     first = next(
         (row for row in rows if row["repeated_tile_collapse"]), None
     )
@@ -116,7 +117,7 @@ def main() -> int:
         "frames_directory": str(args.frames.resolve()),
         "frame_glob": args.glob,
         "frames_compared": len(rows),
-        "result": "red" if first is not None else "green",
+        "diagnostic_result": "anomaly-detected" if first is not None else "clear",
         "threshold": {
             "dominant_tile_ratio": args.dominant_tile_ratio,
             "baseline_frames": len(baseline),
@@ -124,7 +125,7 @@ def main() -> int:
                 row["dominant_tile_ratio"] for row in baseline
             ),
         },
-        "first_divergence": (
+        "first_detected_anomaly": (
             {
                 "index": first["index"],
                 "file": first["file"],
@@ -140,7 +141,14 @@ def main() -> int:
             if first is not None
             else None
         ),
-        "mismatch_ranges": mismatch_ranges,
+        "detected_anomaly_ranges": anomaly_ranges,
+        "acceptance_gate": unknown_diagnostic_gate(
+            "repetition_heuristic",
+            (
+                "A dominant-tile heuristic can detect one symptom but cannot "
+                "prove alignment, correctness, motion, or renderer conservation."
+            ),
+        ),
         "frames": rows,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -150,10 +158,11 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "result": report["result"],
+                "diagnostic_result": report["diagnostic_result"],
                 "frames_compared": report["frames_compared"],
-                "first_divergence": report["first_divergence"],
-                "mismatch_ranges": mismatch_ranges,
+                "first_detected_anomaly": report["first_detected_anomaly"],
+                "detected_anomaly_ranges": anomaly_ranges,
+                "acceptance_status": "unknown",
                 "report": str(args.output.resolve()),
             },
             sort_keys=True,

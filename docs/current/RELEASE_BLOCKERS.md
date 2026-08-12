@@ -10,36 +10,47 @@ retains the exact predecessor.
 ## Playable-demo gate
 
 The corrected README showcase initially passed Chad's August 12 still-image review,
-but a subsequent live user-run Mesen playtest of preserved parent `11aefd2c…`
-showed a repeated/corrupt gameplay background immediately after coin/start and
-flashing while scrolling. That parent is therefore explicitly red,
-and the montage is only preserved-line still evidence. Promotion
-requires one current ROM identity to pass fresh-power-on stage/boss continuity,
-organic Stage 2 and later renderer coverage, a live human combat/audio playtest,
-the 30 game-ticks/s and 358K SA-1 cycles/tick gates, aligned-pixel and renderer
-conservation checks, and real-hardware acceptance. Coin/start and scrolling must
-also pass consecutive-frame Mesen/Nexen comparison so a one-video-frame DMA flash
-cannot hide between logical game-tick samples.
+but live Mesen playtests subsequently found repeated/corrupt gameplay backgrounds
+and flashing while scrolling. Preserved parent `11aefd2c…` and current-source
+ordinary ROM `5f5dc9d7…` are both explicitly renderer-red; the montage is only
+preserved-line still evidence. Promotion requires one ROM identity and one exact
+tick range to pass the machine-enforced state oracle, aligned exact-MAME pixels at
+every game tick, and conservation of every intervening SNES video frame. Missing,
+incomplete, cross-hash, or cross-range evidence is `unknown`, never green. The
+same ROM must additionally pass fresh-power-on stage/boss continuity, organic
+Stage 2 and later renderer coverage, a live human combat/audio playtest, the 30
+game-ticks/s and 358K SA-1 cycles/tick gates, and real-hardware acceptance.
 
-The preserved-parent Mesen framebuffer gate is deterministically red. Lossless
+The preserved-parent Mesen repetition diagnostic is deterministically red. Lossless
 capture reports mismatch ranges 165–174 and 225–232. Clean-to-first-bad comparison
 changes 98.93% and 60.34% of playfield pixels, respectively. A no-write 5A22 trace
 proves that the bad frames follow heavy-path map uploads with 1,984/2,048 and
 1,938/2,048 zero tilemap words; the recovering maps contain only 524 and 517.
 Zero is simultaneously the staging sentinel and a live physical BG-cache slot,
 so the near-empty obsolete maps become repeated tile fields while the separately
-rendered HUD/foreground survive. Current candidate `5f5dc9d7…` delays a below-
+rendered HUD/foreground survive. The `5f5dc9d7…` heuristic delays a below-
 256-nonzero-word map only when a complete successor is queued, preserves X/Y,
-and keeps live scroll. Its focused retained-checkpoint rerun advances ticks
-881→1,020 with halt zero, suppresses the 35-cell sparse attempt, commits the
-1,524-nonzero-word successor, and has no first divergence or mismatch ranges
-across 231 lossless frames. It therefore closes the exact reproduced flash
-interval only. Promotion still requires fresh coin/start and broader scrolling
-capture, exact MAME-aligned pixels, performance, and human acceptance.
+and keeps live scroll. Its retained ticks 881→1,020 scan saw no dominant-tile
+collapse across 231 frames, but that scan is diagnostic-only and did not establish
+aligned pixels or intervening-frame conservation.
 
-Current source builds unpromoted ordinary SHA `5f5dc9d7…` at `build/interp.sfc`.
+Chad's exact Mesen 2.1.1 state `interp_1.mss` proves `5f5dc9d7…` remains red at
+frame 10,118 / tick 2,465. Its displayed and staged tilemaps match and contain
+1,589/2,048 zero words; all 228 retained lossless continuation frames trigger the
+repetition diagnostic. The heuristic admits this 459-nonzero-word map, and eight
+of 15 traced attempts commit it or similarly sparse successors. The actual fix is
+to reserve physical BG tile slot zero as blank. No corrected ROM exists yet.
+
+`tools/validate_gameplay_acceptance.py` is the sole tool authorized to issue a
+bounded gameplay `green`. It accepts only matching reports from the state oracle,
+the every-tick exact-MAME pixel oracle, and every-video-frame temporal
+conservation. Capture, trace, cross-emulator, single-frame, and repetition tools
+always carry diagnostic-only or bounded-oracle authority and cannot fill missing
+aggregate gates.
+
+Current source builds renderer-red ordinary SHA `5f5dc9d7…` at `build/interp.sfc`.
 Its red parent `11aefd2c…` and rejected queue-wide guard `10dc1a0b…` remain
-preserved; superseded checkpoint-green `9ab9a1db…` omitted X/Y preservation.
+preserved; superseded diagnostic-clear `9ab9a1db…` omitted X/Y preservation.
 None inherits evidence from predecessor `4eb9a408…`, preserved as
 `build/interp-visual-eightfix-4eb9a408.sfc`. Superseded `2f590fb1…`
 is fresh-power-on green through tick 3,300 for gameplay/liveness, clean SA-1

@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, "/home/chad/Mesen2/python")
 
 import capture_mesen211_transitions as capture  # noqa: E402
+from gameplay_acceptance_contract import unknown_diagnostic_gate  # noqa: E402
 import mesen_mcp.session as _session  # noqa: E402
 import replay_mame_controller_campaign as campaign  # noqa: E402
 
@@ -357,6 +358,13 @@ def main() -> int:
             "dma_enable_fired": counts["dma_enable_write"] > 0,
             "bg_upload_fired": counts["bg_upload"] > 0,
         },
+        "acceptance_gate": unknown_diagnostic_gate(
+            "renderer_trace",
+            (
+                "Trace/capture success and repetition metrics cannot establish "
+                "aligned pixels or temporal renderer conservation."
+            ),
+        ),
     }
     result["result"] = (
         "captured" if all(result["checks"].values()) else "red"
