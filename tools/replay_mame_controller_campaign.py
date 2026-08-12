@@ -86,6 +86,9 @@ MAME_MOVIE = ROOT / "inp" / "superman_play.inp"
 # successor only guards a zero-entry event batch when the resume tick itself is
 # a controller edge; it changes neither the serialized parent state nor the
 # input schedule represented by that state.
+# `b1e0...` produced the v7 migrated tick-14,750 checkpoint.  Its successor
+# adds authenticated dependency-path handling for migrations and fresh-only
+# boot screenshot retention; neither path executes during a same-ROM resume.
 RESUME_COMPATIBLE_CAMPAIGN_SCRIPT_SHA256S = frozenset(
     {
         "64d43359d189bf6f34e69bdc7d9deb6fc5eab8f56a73642a43549f4dc77d5a1b",
@@ -97,6 +100,7 @@ RESUME_COMPATIBLE_CAMPAIGN_SCRIPT_SHA256S = frozenset(
         "bd6ace3df65ad56cb0cdd7b4578a39bcbdf315f936611abc5e83099acd75107f",
         "2030c2135c724b172670f4322630bbaa9112ef3e941e64dc478d8d1043e179a6",
         "efdb1da62e85e8f20e7f55d95014faed324ac8f47618981f4f93f4c4dd43e426",
+        "b1e0c365af00852b79c0153fec5bae4b45bd59955943dde91c5226e41067be91",
     }
 )
 
