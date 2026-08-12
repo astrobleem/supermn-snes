@@ -1113,6 +1113,17 @@ performance, full-playthrough, production, or release acceptance.
   safe tick-16,000 state SHA is `06da361f…`, IRAM
   `3a672763…`, and resumes at 16,001 without replay.
 
+  The corrected v7 suffix then continues through tick 16,500 with six cumulative
+  Stage-1 boss observations green: the new rows are MAME ticks 16,102/16,201/
+  16,285/16,403 with observed health 34/31/29/25. Player, input, and death
+  references remain fully green with no oracle divergence, halt zero, renderer
+  queue drops zero, and all initialized task stacks valid at minimum margin 138.
+  The repeat-identical tick-16,500 checkpoint is state `f6c5b389…`, IRAM
+  `5de396c8…`, and resumes at 16,501. The compact report is
+  `build/playback-watcher-20260812/v7-boss-observation-resume16001-to16500-v1/watcher-report.json`.
+  This validates only the first six Stage-1 fixtures; it is not full-boss,
+  fresh-boot, production, performance, or playthrough acceptance.
+
   Luna previously continued the older unchanged `14e920eb…` hash from tick
   15,501 through 17,000.
   The run remained live with halt zero, all 15 initialized stacks valid at

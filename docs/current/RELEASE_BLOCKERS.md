@@ -784,6 +784,17 @@ repeat-identical tick-16,000 state is `06da361f…`, IRAM `3a672763…`, resume
 16,001. No ROM rebuild or fresh boot occurred; this harness correction does
 not justify either one.
 
+The corrected v7 suffix continues through tick 16,500 with six cumulative
+Stage-1 boss observations green. New green rows are MAME ticks
+16,102/16,201/16,285/16,403, with health 34/31/29/25; player, input, and
+death references remain green, with no oracle divergence, halt zero, zero
+renderer queue drops, and minimum initialized-stack margin 138. The
+repeat-identical tick-16,500 state is `f6c5b389…`, IRAM `5de396c8…`, and
+resumes at 16,501. Report:
+`build/playback-watcher-20260812/v7-boss-observation-resume16001-to16500-v1/watcher-report.json`.
+This validates only the first six Stage-1 fixtures, not full-boss behavior,
+fresh boot, production, performance, or playthrough acceptance.
+
 The older `14e920eb…` unchanged-hash continuation reaches tick 17,000 with halt zero,
 15 valid initialized stacks at minimum margin 138, and live rendering. Its 38
 segment divergences comprise 13 input, 14 input-response, and 11 Stage-1 boss

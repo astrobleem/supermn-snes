@@ -94,6 +94,18 @@ IRAM `3a672763…`, and resumes at 16,001. Compact evidence is under
 `build/playback-watcher-20260811/v7-input-delayed-resume{15001-to15500-v1,15501-to16000-v1}/`
 and `build/playback-watcher-20260811/v7-boss-health-write-window-v2/`.
 
+The corrected v7 suffix continues through tick 16,500 with six cumulative
+Stage-1 boss observations green. New green rows are MAME ticks
+16,102/16,201/16,285/16,403 with health 34/31/29/25. Player, input, and death
+references remain green; there is no oracle divergence, halt is zero, renderer
+queue drops are zero, and the minimum initialized-stack margin is 138. The
+repeat-identical tick-16,500 state is `f6c5b389…`, IRAM `5de396c8…`, and resumes
+at 16,501. The compact report is
+`build/playback-watcher-20260812/v7-boss-observation-resume16001-to16500-v1/watcher-report.json`.
+This validates only the first six Stage-1 fixtures, not full-boss behavior,
+fresh boot, production, performance, or playthrough acceptance. The historical
+frame-minus-75 rows remain invalid comparisons, not accepted red boss evidence.
+
 ## Screenshots retained locally
 
 Screenshots are ROM-derived evidence and remain gitignored. The curated local
