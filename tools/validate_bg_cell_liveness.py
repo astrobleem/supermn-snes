@@ -176,7 +176,9 @@ def inspect_hash(
     duplicate_slots = sorted(
         {mapped for mapped in mapped_slots if mapped_slots.count(mapped) > 1}
     )
-    bad_slots = sorted({mapped for mapped in mapped_slots if mapped >= 0x00C0})
+    bad_slots = sorted(
+        {mapped for mapped in mapped_slots if mapped == 0 or mapped >= 0x00C0}
+    )
     unreachable = []
     for index, code, _mapped in live_entries:
         probe = (code * hash_multiplier) & 0x01FF
@@ -195,7 +197,9 @@ def inspect_hash(
     free_duplicates = sorted(
         {mapped for mapped in free_slots if free_slots.count(mapped) > 1}
     )
-    free_bad = sorted({mapped for mapped in free_slots if mapped >= 0x00C0})
+    free_bad = sorted(
+        {mapped for mapped in free_slots if mapped == 0 or mapped >= 0x00C0}
+    )
     free_mapped_overlap = sorted(set(free_slots) & set(mapped_slots))
     tilemap_slots = {
         slot(map_words[offset // 2]) for offset in offsets
@@ -249,7 +253,8 @@ def inspect_hash(
         and not free_mapped_overlap
         and not unmapped_tilemap_slots
         and (not reverse_valid or (not reverse_mismatches and not free_reverse_nonzero))
-        and high_water <= 0x00C0
+        and reverse[0] == 0
+        and 1 <= high_water <= 0x00C0
     )
     return {
         "cache_matches_map": cache_matches_map,
@@ -268,6 +273,15 @@ def inspect_hash(
         "reverse_mismatches": reverse_mismatches[:32],
         "free_reverse_nonzero": free_reverse_nonzero[:32],
         "reverse_valid": reverse_valid,
+        "reserved_blank_slot": {
+            "slot": 0,
+            "hash_owned": 0 in mapped_slots,
+            "on_free_list": 0 in free_slots,
+            "reverse_code": reverse[0],
+            "green": (
+                0 not in mapped_slots and 0 not in free_slots and reverse[0] == 0
+            ),
+        },
         "high_water": high_water,
         "raw_semantic_observation_only": True,
         "missing_visible_codes": missing_codes,
@@ -403,7 +417,7 @@ def main() -> int:
                 int.from_bytes(
                     m.read_memory("snesWorkRam", 0x89D0, 2), "little"
                 )
-                == 0xB7C4,
+                == 0xB7C5,
                 cache_generation == rendered_generation and not (cache_generation & 1),
                 args.bg_hash_multiplier,
             )

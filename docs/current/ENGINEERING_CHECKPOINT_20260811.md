@@ -10,7 +10,7 @@ project status and acceptance claims.
 |---|---|---|
 | Best evidence-backed ordinary candidate | `a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60` | Preserved 66-byte terminal-CCR repair with fresh ordinary coverage through tick 10,000. |
 | Red renderer parent | `11aefd2c…` | Preserved step-cap source line; deterministic repeated-tile flashes under live Mesen scrolling. |
-| Current-source ordinary build | `5f5dc9d7…` | Renderer-red. Exact Mesen state is corrupt at tick 2,465; all 228 retained continuation frames trigger the repetition diagnostic. No corrected ROM exists. |
+| Current-source ordinary build | `6413924c9e2137bcba0b87217059bbb9923fbd8612ff5ffce591b556c49e7849` | Unaccepted focused renderer repair: blank slot zero plus a single staging/PPU map authority. Fixtures are green; controlled migrated frames are clear post-vblank. No fresh or aligned-MAME acceptance. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
 | Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Player/input/death oracle is green through 16,000; corrected first boss observations are green at 15,908/15,990. No fresh boot. |
@@ -109,10 +109,27 @@ Chad's exact Mesen 2.1.1 state `interp_1.mss` (SHA-256 `63606d27…`) opens
 and `$7E:9000` staging maps are byte-identical with 1,589/2,048 zero words. A
 real-Right continuation reaches tick 2,578 with halt zero; all 228 retained
 frames trigger the repetition diagnostic. Fifteen map attempts produce eight
-commits, and the heuristic admits the 459-nonzero-word map. The source-level root
-is the use of physical BG slot zero for live artwork even though empty map words
-select slot zero; authenticated arcade graphics code zero is blank. Slot zero
-must be reserved as blank. No corrected ROM has been built.
+commits, and the heuristic admits the 459-nonzero-word map. The first source-level
+root is the use of physical BG slot zero for live artwork even though empty map
+words select slot zero; authenticated arcade graphics code zero is blank. A
+slot-zero-only migration changed the repeated red field to blank holes but did
+not restore missing columns. That negative result confirmed a second root: the
+sparse upload gate could suppress the PPU transfer while advancing staging/cache
+state, allowing later incremental maps to use a non-displayed partial base.
+
+Current candidate `6413924c…` reserves and uploads blank slot zero, moves every
+nonempty cache record to slots 1–191, and removes sparse upload suppression so
+every completed staging map commits. Focused token fixtures are green 3/3 and
+producer/transition fixtures are green 12/12. A controlled migration from a
+retained `4eb9a408…` tick-2,437 snapshot explicitly refreshes the video mirror
+and shifts resident slots 0–44 to 1–45. Its direct held-Right continuation reaches
+tick 2,554; after the recorded pre-vblank serialized image, the reviewed first
+and last frames retain the full scrolling background and the 273-frame sequence
+has no detected repetition/flash range.
+Evidence is under
+`build/playback-watcher-20260812/bg-authority-slotzero-6413924c-migrated2437-direct-right-v2`.
+Because this is an intervened, non-campaign checkpoint and lacks aligned MAME
+pixels, it is diagnostic-only. No fresh-boot campaign was started.
 
 Tooling now enforces three independent gates over one authenticated ROM and exact
 tick range: state oracle, aligned exact-MAME pixels at every game tick, and every

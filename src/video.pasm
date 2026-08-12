@@ -77,7 +77,7 @@ BG_USED_BITMAP=$2E00     ; transient live-tilemap slot bitmap (192 bytes)
 BG_OFFSET_TABLE=$7500    ; 512 words: arcade cell byte offset -> SNES TL map byte offset
 BG_FREE_COUNT=$89C2      ; number of entries currently available in BG_FREE_LIST
 BG_REVERSE_CODE=$D000    ; 192 words: physical BG slot -> active cached code (0 = free)
-BG_REVERSE_MARK=$89D0    ; $B7C4 after bg_hclr initialized BG_REVERSE_CODE
+BG_REVERSE_MARK=$89D0    ; $B7C5 after bg_hclr reserved blank physical slot zero
 RENDER_QUEUE_STATE=$89D2 ; 0 empty, 1 complete, 2 NMI/foreground owns queue storage
 RENDER_QUEUE_DROPS=$89D4 ; deadline reached both still-full queue entries
 RENDER_QUEUE_META=$D180  ; private queue begins immediately after BG_REVERSE_CODE
@@ -827,12 +827,17 @@ vb_dclr:
     ; VRAM tiles PERSIST across frames, so a code already cached just reuses its slot
     ; (bg_slot's hit path skips decode+DMA -> the per-game-frame render is much cheaper
     ; for a static playfield). Evict by full-clear only when the cache is actually full
-    ; (192 of 192 slots), so accumulating codes from scene changes do not trigger a
+    ; (191 of 191 artwork slots), so accumulating codes from scene changes do not trigger a
     ; premature 15-video-frame rebuild while 32 decoded slots are still available.
     ; flushed. (The tilemap + palettes are still rebuilt every frame; only the
-    ; expensive tile decode/DMA is cached.)
+    ; expensive tile decode/DMA is cached.) Physical slot zero is the tilemap's
+    ; empty-cell sentinel, so it is always the authenticated blank graphics record
+    ; and the 191 dynamic artwork slots begin at one.
+    stz $E4              ; arcade graphics code zero is a verified blank record
+    stz $DA              ; overwrite Mode 7 boot pixels in reserved BG slot zero
+    jsr bg_tile_dma
     lda $DC
-    cmp #$00C0           ; 192: match bg_slot/bg_dispatch's real VRAM limit
+    cmp #$00C0           ; next slot past 191: match bg_slot/bg_dispatch's VRAM limit
     bcc vb_keep
     jsr bg_hclr          ; cache full -> evict all (clear hash + count)
 vb_keep:
@@ -895,8 +900,8 @@ vb_done:
 ; (bgpal $F0 <<10) | flipX($4000 if code $F6 bit15) | flipY($8000 if bit14).
 ; map_index = (tx>=32?$400:0) + (ty&31)*32 + (tx&31); store word at BGMAP+mi*2.
 ; bg_slot — code->slot dedup for BG via an open-addressing hash table (O(1) avg, vs
-; the old O(n^2) linear scan). in $E4=code. out $DA=slot. On a new code (cap 192,
-; the BG VRAM budget at char base word $1000) it allocates the next slot, decodes the
+; the old O(n^2) linear scan). in $E4=code. out $DA=slot. On a new code (cap 191;
+; physical slot zero is permanently blank) it allocates the next slot, decodes the
 ; tile, and DMAs it straight to VRAM word $1000+slot*64 (no big staging buffer).
 .org $854E
 bg_slot:
@@ -1088,10 +1093,9 @@ bps_have:
 ; bg_upload: DMA BG tilemap ($7E:9000, 4KB) -> VRAM word $0000, set BG mode/regs/
 ; scroll. (BG tiles were already DMA'd per-tile to word $1000+ in bg_slot.)
 bg_upload:
-    jmp bg_upload_conserve_sparse
-    nop
-bg_upload_commit:
-.a8
+    sep #$20
+    lda #$01
+bg_upload_commit:       ; every completed staging map has exactly one PPU authority
     sta BGMODE           ; mode 1
     lda #$01
     sta BG1SC            ; BG1 map @ word $0000, 64x32
@@ -1913,47 +1917,6 @@ bmst_settled:
     sta $1F1B
     rts
 boot_mode7_scale_tick_end:
-
-; A control-only transition can produce a mostly empty full-rebuild map while
-; the currently displayed gameplay map is still useful. When a complete newer
-; candidate waits in either queue, publishing that sparse map exposes physical
-; BG cache slot zero across nearly the whole screen. Retain the displayed map
-; until its successor is promoted. Queue-free images retain the old behavior.
-.org $8C20
-.a16
-.i16
-bg_upload_conserve_sparse:
-    rep #$30
-    phx
-    phy
-    lda $7E89D2
-    ora $7E89D6
-    beq bucs_upload
-    ldx #$0000
-    ldy #$0000
-bucs_scan:
-    lda $7E9000,x
-    beq bucs_next
-    iny
-    cpy #$0100          ; bad maps have 64/110 nonzero words; good maps >=1524
-    bcs bucs_upload
-bucs_next:
-    inx
-    inx
-    cpx #$1000
-    bne bucs_scan
-    jsr bg_scroll       ; keep live camera registers without replacing map VRAM
-    ply
-    plx
-    rts
-bucs_upload:
-    ply
-    plx
-    sep #$20
-.a8
-    lda #$01
-    jmp bg_upload_commit
-bg_upload_conserve_sparse_end:
 
 ; =============================================================================
 ; Production 30 Hz pacing supervisor — copied by rc_copy and executed from WRAM.
@@ -3465,9 +3428,10 @@ bcrc_reverse_clear:
     inx
     cpx #$0180
     bne bcrc_reverse_clear
-    stz $DC
     sta $7E89C2
-    lda #$B7C4
+    inc a               ; slot zero is the permanent empty-cell/blank-tile sentinel
+    sta $DC             ; first dynamic allocation is physical slot one
+    lda #$B7C5
     sta $7E89D0
     rts
 bg_cache_reset_counts_end:
@@ -4647,6 +4611,9 @@ bg_dispatch_prepared:
 bg_prepared_render:
     rep #$30
     jsr bg_hclr
+    stz $E4              ; prepared maps also reserve zero for empty cells
+    stz $DA              ; replace any Mode 7 or migrated legacy pixels with blank
+    jsr bg_tile_dma
     jsr bg_refresh_pal
 
     ; Populate the persistent code hash without uploading yet.  Y/2 is both
@@ -4681,16 +4648,21 @@ bpr_hash_store:
     sta $7EA000,x
     tya
     lsr a
+    inc a               ; prepared artwork starts at physical slot one
     sta $7EA400,x
-    tyx
+    tya
+    clc
+    adc #$0002          ; reverse word index for physical slot (Y/2)+1
+    tax
     lda $E4
-    sta $7ED000,x        ; Y is already two bytes per physical prepared slot
+    sta $7ED000,x
     iny
     iny
     bra bpr_hash_loop
 bpr_hash_done:
     lda $7E89C4
     lsr a
+    inc a               ; next never-used slot follows the reserved blank plus list
     sta $DC
 
     ; Coalesce adjacent source codes/slots.  Stop at each 64 KiB ROM-bank seam
@@ -4705,6 +4677,7 @@ bpr_run_outer:
     sta $E4              ; first code in run
     tya
     lsr a
+    inc a
     sta $DA              ; first destination slot
     lda #$0001
     sta $E6              ; run length in 128-byte records

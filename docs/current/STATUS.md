@@ -11,26 +11,48 @@ This is the only authoritative project-status summary. Dated reports under
 The port is an **interactive technical-demo response candidate**. It is **not
 playable, release-ready, or shippable**.
 
-The current ordinary `build/interp.sfc`, SHA-256
-`5f5dc9d79e04fe9b0e9c3a59eed55437974b30ad3803502383c692a7fd4e0cd5`, is
-explicitly **renderer-red**. Chad's exact Mesen 2.1.1 state `interp_1.mss`
-(SHA-256 `63606d27ef9a4c01f4d0e9e77b3df24bd9db48d42d1436f7acdccae6e46bdc24`)
-opens already corrupt at emulator frame 10,118 / game tick 2,465. The displayed
-VRAM map and `$7E:9000` staging map are byte-identical and contain 1,589/2,048
-zero words. A 273-frame real-Right continuation reaches tick 2,578 with halt
-zero; all 228 retained lossless frames trigger the repeated-tile diagnostic.
-The trace records 15 map attempts, eight commits, and static BG scroll.
-Evidence is under
-`build/playback-watcher-20260812/user-interp1-5f5d-right-v1`.
+The current ordinary `build/interp.sfc` is the **unaccepted focused renderer
+repair candidate**, SHA-256
+`6413924c9e2137bcba0b87217059bbb9923fbd8612ff5ffce591b556c49e7849`.
+An identical preserved image is
+`build/interp-bg-authority-slotzero-6413924c.sfc`. It reserves physical BG tile
+slot zero for the authenticated blank arcade record and gives every nonempty
+prepared/dynamic record a one-based physical slot. It also removes the sparse
+upload-suppression gate: every completed staging map now commits to the PPU, so
+the displayed map, staging map, cache ownership, and next incremental update
+retain one authority. The immutable C0BC cache still contains exactly 392
+nonempty and 120 empty entries, now using physical slots 1–45.
 
-The root is confirmed in source and authenticated graphics. The heavy renderer
-clears empty map entries to word zero and skips arcade code zero, while the
-dynamic cache assigns the first nonempty artwork to physical SNES slot zero.
-Every empty map entry therefore displays that live artwork. Arcade graphics code
-zero is actually a blank 128-byte record. The `5f5d…` heuristic delayed only
-maps with fewer than 256 nonzero words when a successor was queued; this state
-has 459 nonzero words and is repeatedly committed. Slot zero must instead remain
-blank/reserved. No corrected ROM has been built.
+The complete root had two parts. First, the heavy renderer encoded empty map
+cells as word zero while assigning live artwork to physical slot zero. Second,
+the post-`4eb9a408…` sparse gate could suppress a PPU upload but still advance
+the staging/cache state; a later incremental render then treated a
+non-displayed partial map as its base and could publish it after the queue
+emptied. Reserving slot zero changes the repeated live tile to blank but cannot
+restore the columns discarded by that split authority, so both repairs are
+required.
+
+Focused token/consumer fixtures are green 3/3 at
+`build/playback-watcher-20260812/bg-authority-slotzero-6413924c-token-v1`, and
+producer/transition fixtures are green 12/12 at
+`build/playback-watcher-20260812/bg-authority-slotzero-6413924c-producer-v1`.
+A controlled diagnostic migration of a retained `4eb9a408…` tick-2,437 snapshot
+refreshes the selected ROM's video mirror and shifts the 45 live BG cache slots
+from 0–44 to 1–45 before continuing with real held-Right input. After excluding
+the explicitly recorded serialized pre-vblank image, the reviewed first and last
+captures contain the full scrolling storefront/brick background and the
+273-frame sequence (frames 1–273; ticks 2,437→2,554) has no detected
+repetition/flash range:
+`build/playback-watcher-20260812/bg-authority-slotzero-6413924c-migrated2437-direct-right-v2/repetition-analysis-post-vblank.json`.
+This is bounded diagnostic evidence, not a fresh boot, same-lineage replay,
+aligned MAME pixel comparison, temporal-conservation acceptance, or a playable
+claim. Those gates remain `unknown` until explicitly run on this exact hash.
+
+The superseded `5f5dc9d7…` ROM remains explicit negative evidence. Chad's exact
+Mesen 2.1.1 state `interp_1.mss` (SHA-256 `63606d27…`) opens corrupt at emulator
+frame 10,118 / tick 2,465 with 1,589/2,048 zero map words, and all 228 retained
+continuation frames trigger the repetition diagnostic under
+`build/playback-watcher-20260812/user-interp1-5f5d-right-v1`.
 
 The earlier `5f5d…` ticks 881–1,020 result is reclassified as a diagnostic-only
 interval in which a dominant-tile heuristic saw no collapse. It was not an
@@ -80,10 +102,11 @@ Three ROM identities must not be conflated:
 - `a9765fbf…` is the preserved ordinary candidate with the strongest accepted
   ordinary evidence: fresh controller coverage through tick 10,000 plus its
   focused semantic, combat, crate, HUD, and Stage-3 blocker results.
-- The current source ordinary build is renderer-red `5f5dc9d7…`, based on
-  red step-cap parent `11aefd2c…`. Neither inherits preserved predecessor
-  `4eb9a408…` evidence. Exact-v7 successor `162b757c…` is a separate unpromoted
-  diagnostic lineage.
+- The current source ordinary build is the unaccepted renderer repair
+  `6413924c…`, based on red `5f5dc9d7…`. It has focused fixture and controlled
+  migrated-frame evidence only; it does not inherit preserved predecessor
+  `4eb9a408…` acceptance. Exact-v7 successor `162b757c…` is a separate
+  unpromoted diagnostic lineage.
 - The latest focused VTIME diagnostic is v7 SHA-256
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is

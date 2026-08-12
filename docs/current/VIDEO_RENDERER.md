@@ -11,6 +11,27 @@ were true only before pixels first rendered. For current acceptance state, use
 > title/gameplay/HUD output, but renderer conservation, attack-animation tiles,
 > organic Stage 2 behavior, and aligned MAME pixels remain open.
 
+## Current correction: blank BG slot and one map authority (August 12, 2026)
+
+The unaccepted current candidate `6413924c…` repairs the live scrolling
+corruption reproduced from Chad's Mesen state. Empty heavy-render cells are map
+word zero, and authenticated arcade graphics record zero is 128 blank bytes.
+Physical SNES BG slot zero is therefore permanently reserved and uploaded as
+blank; nonempty dynamic and immutable C0BC records use slots 1–191. The C0BC
+packer asserts record zero is blank, and `tools/test_bg_blank_slot_invariant.py`
+audits source plus the built ROM.
+
+This was necessary but not sufficient. Commit `6aef22a` had introduced a sparse
+map gate that could suppress a PPU tilemap upload while leaving the newer staging
+map and cache state live. Subsequent incremental work then used a map the PPU had
+never displayed as its authority and could eventually publish missing columns.
+The current path removes that split: every completed staging map reaches
+`bg_upload_commit`; there is no sparse suppression helper. A controlled
+tick-2,437 cross-ROM migration is clear for 273 consecutive post-vblank frames
+while scrolling Right, but that is diagnostic-only. Fresh boot, aligned MAME
+pixels, and formal every-video-frame conservation for this exact hash remain
+open; see [STATUS.md](STATUS.md) and [VALIDATION.md](VALIDATION.md).
+
 ## Current correction: one-shot scale-only SA-1 boot ownership (July 23, 2026)
 
 The opening statement above describes the June bring-up and is historical: production now renders
@@ -197,7 +218,8 @@ must keep replaying `cchip_boot_response.bin` — don't break it (see
   cleared $7E (hash uncleared → hang; OAM/tilemap garbage). See
   [the Poppy assembler gotchas](../toolchain/DEBUGGING.md#2-poppy-assembler-gotchas-65816-pasm).
 - **Stage 5 ✓** BG tile cache: open-addressing **hash dedup** (O(1)) + **per-tile VRAM
-  DMA** (no staging cap, up to 192 codes = VRAM budget). The live game now runs ~180x
+  DMA** (no staging cap, 191 artwork codes plus reserved blank slot zero = VRAM budget).
+  The live game now runs ~180x
   faster than the old O(n^2) linear scan (~18 vs ~0.1 interp-steps/frame).
 
 ## Polish status (the four follow-ups)

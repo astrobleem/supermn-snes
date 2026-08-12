@@ -221,6 +221,15 @@ green without the separate aligned-pixel and temporal gates.
 For a reported input-triggered visual failure, continue from the nearest retained
 same-emulator checkpoint with `tools/capture_snes_input_framebuffers.py`; it uses
 only real controller input and saves each framebuffer plus periodic states.
+Cross-ROM renderer labs must opt into each intervention separately:
+`--refresh-video-mirror` replaces the selected ROM's 5A22 video code,
+`--reserve-bg-slot-zero-migration` verifies the new blank-slot layout, and
+`--shift-bg-slots-for-reserved-zero` moves the saved hash, reverse index, free
+list, staging/display maps, and resident VRAM tile records from slot `n` to
+`n+1`. The result is diagnostic-only and its manifest must retain the complete
+intervention ledger. `tools/capture_snes_direct_framebuffers.py` is the focused
+fallback when Nexen's movie-controller request cannot advance a loaded state: it
+holds one real input and advances exactly one video frame per screenshot.
 When legacy Mesen cannot advance a one-frame controller request, use
 `tools/record_snes_input_framebuffers.py`: its emulator-core lossless GIF capture
 retains every rendered framebuffer during one uninterrupted controller span.
@@ -234,6 +243,10 @@ failure mode in which a mostly zero map selects a live physical tile-zero patter
 `tools/analyze_snes_framebuffer_flashes.py` scans the extracted sequence for a
 dominant repeated-tile collapse and reports the first detected anomaly plus
 contiguous anomaly ranges; retain the full per-frame metrics in its JSON output.
+Use `--skip-frames N` only for an explicitly identified acquisition artifact,
+such as a serialized cross-ROM pre-vblank image. The skipped prefix remains in
+the capture manifest and must be disclosed; it cannot hide a live rendered
+failure.
 
 The focused `5f5dc9d7…` diagnostic result is retained at
 `build/playback-watcher-20260812/renderer-sparse-conservation-5f5dc9d7-migrated6891-v1`.
@@ -246,6 +259,22 @@ same ROM is renderer-red at tick 2,465; all 228 retained frames under
 diagnostic. Do not treat the earlier clear interval as fresh boot, aligned MAME
 pixels, temporal conservation, performance, broad renderer conservation, or
 human playtest evidence.
+
+Current focused renderer candidate `6413924c…` is guarded by
+`tools/test_bg_blank_slot_invariant.py`: native graphics record zero must be 128
+zero bytes, physical slot zero must be uploaded blank, all nonempty immutable
+records must use one-based slots, and `bg_upload` must have one direct commit
+authority with no sparse-suppression helper. The token/consumer gate is green
+3/3 and the producer/transition gate is green 12/12. A controlled migration of
+a retained `4eb9a408…` tick-2,437 snapshot shifts 45 resident slots to the new
+layout and continues held Right through tick 2,554. Capture frame zero is the
+recorded serialized pre-vblank image; reviewed frames 1 and 273 retain the full
+background, and the enforced post-vblank heuristic scan of frames 1–273 is clear
+with no detected repetition/flash ranges at
+`build/playback-watcher-20260812/bg-authority-slotzero-6413924c-migrated2437-direct-right-v2/repetition-analysis-post-vblank.json`.
+This remains acceptance-`unknown`: it is a cross-ROM intervened checkpoint, not
+fresh power-on, same-lineage playback, aligned exact-MAME pixels, or the formal
+temporal-conservation oracle.
 
 The MAME/SNES comparator applies the established arcade viewport registration
 (`x=64..319`, `y=1..224`) and reports the intentionally repositioned top HUD

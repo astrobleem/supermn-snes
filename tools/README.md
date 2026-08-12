@@ -126,6 +126,19 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   `build_snes_sprite_scene.py`** [S] — arcade decode + SNES reproduction +
   MAME diff. X1-001-specific; the decode/diff *approach* is general.
 - **`optimize_palettes.py`** — SUPERSEDED for sprites (per-bank dynamic model).
+- **`test_bg_blank_slot_invariant.py`** [S] — source/packed-ROM guard for the
+  reserved blank physical BG slot zero, one-based prepared cache records, and
+  the single direct staging-to-PPU map authority.
+- **`capture_snes_input_framebuffers.py` / `capture_snes_direct_framebuffers.py`**
+  [S] — every-frame checkpoint captures under real controller input. The first
+  supports periodic states and explicit cross-ROM video/cache migrations; the
+  second advances a loaded Nexen state exactly one video frame per screenshot
+  when movie requests cannot advance it. Both record interventions and are
+  diagnostic acquisition, never gameplay acceptance.
+- **`analyze_snes_framebuffer_flashes.py`** [S] — repeated-tile/flash heuristic
+  over a consecutive capture. `--skip-frames` is allowed only for a disclosed
+  acquisition artifact such as a serialized pre-vblank image; a clear result is
+  still acceptance-unknown without aligned MAME and temporal gates.
 
 ## Recovery profiling and architecture labs
 

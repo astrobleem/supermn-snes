@@ -5726,7 +5726,7 @@ rpb_collect_probe:
     bra rpb_collect_probe
 rpb_collect_new:
     lda $0146
-    cmp #$0180          ; 192 BG slots * two-byte code
+    cmp #$017E          ; 191 artwork slots * two-byte code; physical zero is blank
     bcc rpb_collect_capacity
     jmp rpb_fail
 rpb_collect_capacity:
@@ -5870,6 +5870,7 @@ rpb_map_nonempty:
     asl a
     tax
     lda $AC00,x
+    inc a               ; prepared physical slot zero is the empty-cell sentinel
     asl a
     asl a
     sta $0154           ; prepared base tile (sorted slot * 4)

@@ -28,6 +28,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--dominant-tile-ratio", type=float, default=0.5)
     parser.add_argument("--baseline-frames", type=int, default=32)
+    parser.add_argument(
+        "--skip-frames",
+        type=int,
+        default=0,
+        help="exclude this many leading serialized/pre-vblank images",
+    )
     return parser.parse_args()
 
 
@@ -68,9 +74,14 @@ def main() -> int:
         raise SystemExit("--dominant-tile-ratio must be in (0, 1]")
     if args.baseline_frames <= 0:
         raise SystemExit("--baseline-frames must be positive")
+    if args.skip_frames < 0:
+        raise SystemExit("--skip-frames must be nonnegative")
     files = sorted(args.frames.glob(args.glob))
     if not files:
         raise SystemExit("no input framebuffers matched")
+    if args.skip_frames >= len(files):
+        raise SystemExit("--skip-frames excludes every input framebuffer")
+    files = files[args.skip_frames:]
 
     rows: list[dict[str, Any]] = []
     previous = None
@@ -116,6 +127,7 @@ def main() -> int:
         ),
         "frames_directory": str(args.frames.resolve()),
         "frame_glob": args.glob,
+        "leading_frames_excluded": args.skip_frames,
         "frames_compared": len(rows),
         "diagnostic_result": "anomaly-detected" if first is not None else "clear",
         "threshold": {
