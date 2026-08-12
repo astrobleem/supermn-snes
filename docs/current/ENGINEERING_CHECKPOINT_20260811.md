@@ -12,7 +12,7 @@ project status and acceptance claims.
 | Current-source ordinary build | `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963` | Reproducible `build/interp.sfc`; unpromoted complete C0BC consumer/visual-repair candidate, fresh partial-green through tick 3,300 but not acceptance-equivalent to `a976…`. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
-| Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Migrated five-tick seam is green through 14,750; no fresh boot yet. |
+| Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Migrated seam plus exact-v7 same-ROM suffix are green through 15,000; no fresh boot yet. |
 
 Never report one identity's evidence as proof for another. Diagnostic checkpoint
 migration is explicitly unable to prove boot, renderer continuity, performance,
@@ -69,6 +69,16 @@ has no divergence through 14,750: Y is 139 at 14,747 and 136 at 14,748,
 states are byte-identical at SHA `9fde6a6b…` with IRAM `c98e718e…`. The compact
 report is
 `build/playback-watcher-20260811/v7-input-delayed-migrated14745-to14750-v2/watcher-report.json`.
+
+The exact-v7 same-ROM suffix then resumes at 14,751 and remains partial-green
+through 15,000: 2,772/2,772 cumulative player rows, 12/12 death rows, 1,386
+input transitions, zero divergence, halt zero, live rendering, and 15 valid
+initialized task stacks at minimum margin 138. Its repeat-identical tick-15,000
+state is `918098c4…`, IRAM `43c45f3c…`, and resumes at 15,001. The compact
+report is
+`build/playback-watcher-20260811/v7-input-delayed-resume14751-to15000-v3/watcher-report.json`.
+This remains migrated-lineage evidence: it does not prove fresh boot, bosses,
+rate, production, or playthrough acceptance.
 
 ## Screenshots retained locally
 

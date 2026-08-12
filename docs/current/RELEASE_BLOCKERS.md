@@ -35,8 +35,9 @@ report is
 `build/playback-watcher-20260811/visual-eightfix-4eb-fresh-to3300-v1/watcher-report.json`.
 The latest
 focused VTIME image is v7 `45c9096d…`; its ROM-only migrated tick-14,745-to-
-14,750 seam is green after the delayed input-publication repair, but it has no
-fresh-boot or long-suffix authority. The concise identity/evidence handoff is
+14,750 seam and exact-v7 same-ROM continuation through tick 15,000 are green
+after the delayed input-publication repair, but it has no fresh-boot, boss,
+performance, or production authority. The concise identity/evidence handoff is
 [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md).
 
 The active hash is green for its direct exact MAME/native-off/native-on 9/9
@@ -734,8 +735,20 @@ Luna's ROM-only tick-14,745 checkpoint continuation is green through 14,750:
 2,746/2,746 player rows, 12/12 death rows, no oracle divergence, and three
 byte-identical tick-14,750 checkpoints. See
 `build/playback-watcher-20260811/v7-input-delayed-migrated14745-to14750-v2/watcher-report.json`.
-This clears the focused Y/input seam only. The v7 image still lacks fresh-boot,
-long-suffix, performance, hardware, and production acceptance; no fresh
+The same-ROM suffix at
+`build/playback-watcher-20260811/v7-input-delayed-resume14751-to15000-v3/watcher-report.json`
+is then partial-green through tick 15,000: 2,772/2,772 cumulative player rows,
+12/12 death rows, 1,386 input transitions, no oracle or liveness divergence,
+live rendering with zero queue drops, and all 15 initialized task stacks valid
+at minimum margin 138. The former tick-14,748 input/Y seam remains corrected.
+The repeat-identical tick-15,000 state is `918098c4…`, IRAM `43c45f3c…`, and
+resumes at 15,001. An initial retry was rejected before emulator launch because
+the retained lineage's runner and Nexen identities were not selected. The
+finite `b1e0c365…` predecessor-runner admission is guarded without accepting
+arbitrary drift; a later external termination at 14,761 was green and produced
+no new checkpoint. Neither negative implicates the ROM. This clears only the
+bounded migrated-lineage Y/input seam. V7 still lacks fresh-boot, boss,
+performance, hardware, production, and playthrough acceptance; no fresh
 campaign was started.
 
 The next unchanged-hash continuation reaches tick 17,000 with halt zero,

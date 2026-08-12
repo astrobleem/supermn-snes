@@ -60,8 +60,8 @@ Three ROM identities must not be conflated:
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is
   green through tick 14,750 after repairing the one-game-tick input-publication
-  order. This is five-tick checkpoint evidence, not fresh-boot or production
-  acceptance.
+  order; an exact-v7 same-ROM suffix is now green through tick 15,000. This is
+  bounded checkpoint evidence, not fresh-boot or production acceptance.
 
 The checkpointed `14e920eb…` interpreter-only VTIME lineage is oracle-green
 through tick 14,000 and has safe post-divergence coverage through tick 20,000.
@@ -1055,9 +1055,21 @@ performance, full-playthrough, production, or release acceptance.
   three tick-14,750 checkpoints are byte-identical (state `9fde6a6b…`, IRAM
   `c98e718e…`). The compact report is
   `build/playback-watcher-20260811/v7-input-delayed-migrated14745-to14750-v2/watcher-report.json`.
-  This proves only the migrated five-tick seam; it is not a fresh-boot,
-  performance, production, or playthrough result, and no fresh campaign was
-  started.
+  The exact-v7 same-ROM continuation at
+  `build/playback-watcher-20260811/v7-input-delayed-resume14751-to15000-v3/watcher-report.json`
+  then remains partial-green through tick 15,000: cumulative player comparisons
+  are 2,772/2,772, death references 12/12, 1,386 input transitions, halt zero,
+  live rendering with zero queue drops, all 15 initialized task stacks valid at
+  minimum margin 138, and no oracle divergence. The former tick-14,748 input/Y
+  seam stays corrected. Repeat-identical safe checkpoints at
+  14,760/14,775/14,800/14,850/14,900/14,950/15,000 cap replay cost; tick 15,000
+  state SHA is `918098c4…`, IRAM `43c45f3c…`, and resumes at 15,001. The first
+  continuation request was rejected before launch on runner/emulator identity;
+  a finite audited predecessor-runner admission fixed that without relaxing
+  other identity fields. A second run was externally terminated green at
+  14,761 without a new checkpoint. Neither negative is a ROM failure. This is
+  bounded migrated-lineage evidence, not fresh-boot, performance, production,
+  boss, or playthrough acceptance, and no fresh campaign was started.
 
   Luna then continued the unchanged hash from tick 15,501 through 17,000.
   The run remained live with halt zero, all 15 initialized stacks valid at
@@ -2295,8 +2307,8 @@ verdict for v124 or v135.
 The concise prioritized list is in [RELEASE_BLOCKERS.md](RELEASE_BLOCKERS.md). The
 highest-risk items are:
 
-1. fresh-boot and longer post-fix validation of v7 before any diagnostic or
-   ordinary promotion decision;
+1. fresh-boot and farther post-fix/boss validation of v7 before any diagnostic
+   or ordinary promotion decision;
 2. integration of the remaining common-clock/native-owner work and a qualifying
    30 Hz / 358K-cycle result on the eventual ordinary candidate;
 3. renderer conservation, wrong attack-animation tiles, and organic Stage 2
