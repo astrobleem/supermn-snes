@@ -12,7 +12,7 @@ project status and acceptance claims.
 | Current-source ordinary build | `4eb9a4082dac83233304b318cd2d7729923767106e640360988937089a762963` | Reproducible `build/interp.sfc`; unpromoted complete C0BC consumer/visual-repair candidate, fresh partial-green through tick 3,300 but not acceptance-equivalent to `a976…`. |
 | Long checkpointed VTIME lineage | `14e920eb84a5ab44bff902b941f8926c42cab11f39e4537a88d2c4ad0e608750` | Oracle-green through tick 14,000; post-divergence coverage through tick 20,000. |
 | IRQ/VPA/input-diagnosis predecessor v4 | `4a3555fd3d8d9dec589ee27531ec23e7ad7bd5f52c86e983dd1872677049cfb9` | Retained tick-14,745 checkpoint and first input/Y mismatch at 14,748. |
-| Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Migrated seam plus exact-v7 same-ROM suffix are green through 15,000; no fresh boot yet. |
+| Delayed-input diagnostic v7 | `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72` | Player/input/death oracle is green through 16,000; first boss rows are red at 15,906/15,988 from one-update organic alignment. No fresh boot. |
 
 Never report one identity's evidence as proof for another. Diagnostic checkpoint
 migration is explicitly unable to prove boot, renderer continuity, performance,
@@ -79,6 +79,17 @@ report is
 `build/playback-watcher-20260811/v7-input-delayed-resume14751-to15000-v3/watcher-report.json`.
 This remains migrated-lineage evidence: it does not prove fresh boot, bosses,
 rate, production, or playthrough acceptance.
+
+Further exact-v7 same-ROM suffixes keep all player/input/death rows green
+through 16,000 and first diverge only on Stage-1 boss fixtures at 15,906 and
+15,988. Focused writes from the nearest exact states store and commit correct
+health words `$0028` and `$0024` at SNES ticks 15,901 and 15,983—one campaign
+comparison after the stale boss samples. This excludes a separate boss
+initializer/subtractor defect for those writes and leaves organic scheduler/
+oracle alignment red. The repeat-identical tick-16,000 state is `06da361f…`,
+IRAM `3a672763…`, and resumes at 16,001. Compact evidence is under
+`build/playback-watcher-20260811/v7-input-delayed-resume{15001-to15500-v1,15501-to16000-v1}/`
+and `build/playback-watcher-20260811/v7-boss-health-write-window-v2/`.
 
 ## Screenshots retained locally
 

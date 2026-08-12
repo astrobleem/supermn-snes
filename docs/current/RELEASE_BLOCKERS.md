@@ -35,8 +35,9 @@ report is
 `build/playback-watcher-20260811/visual-eightfix-4eb-fresh-to3300-v1/watcher-report.json`.
 The latest
 focused VTIME image is v7 `45c9096d…`; its ROM-only migrated tick-14,745-to-
-14,750 seam and exact-v7 same-ROM continuation through tick 15,000 are green
-after the delayed input-publication repair, but it has no fresh-boot, boss,
+14,750 seam and all exact-v7 player/input/death rows through tick 16,000 are
+green after the delayed input-publication repair. Boss timing first turns red
+at 15,906 despite correct focused health stores; v7 has no fresh-boot, boss,
 performance, or production authority. The concise identity/evidence handoff is
 [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md).
 
@@ -751,7 +752,27 @@ bounded migrated-lineage Y/input seam. V7 still lacks fresh-boot, boss,
 performance, hardware, production, and playthrough acceptance; no fresh
 campaign was started.
 
-The next unchanged-hash continuation reaches tick 17,000 with halt zero,
+The exact-v7 continuation remains player/input/death-oracle green through
+15,905 and first diverges only at the Stage-1 boss fixture at 15,906, with a
+second boss row at 15,988. At 16,000 it has 2,889/2,889 cumulative player rows,
+12/12 death rows, 1,445 input transitions, 0/2 boss rows, halt zero, zero
+renderer queue drops, and 15 valid initialized task stacks at minimum margin
+138. See
+`build/playback-watcher-20260811/v7-input-delayed-resume{15001-to15500-v1,15501-to16000-v1}/watcher-report.json`.
+The boss sample relation is stable at MAME/SNES `15906/15900` and
+`15988/15982`, but focused exact-state write hooks show correct semantics one
+comparison later: init stores big-endian `$0028` at SNES 15,901, and hit 1
+stores `$0024` at 15,983; both words commit exactly. The compact reduction is
+`build/playback-watcher-20260811/v7-boss-health-write-window-v2/raw-classification.json`,
+produced by `tools/trace_v7_boss_health_window.py`. This excludes an independent
+initializer/subtractor defect for those writes. The remaining red result is an
+organic one-update scheduler/oracle-alignment problem compounded by the stable
+six-tick counter offset; later boss hits are not yet v7-proven. The
+repeat-identical tick-16,000 state is `06da361f…`, IRAM `3a672763…`, resume
+16,001. No ROM rebuild or fresh boot occurred, and neither is justified before
+the upstream ordering owner is localized.
+
+The older `14e920eb…` unchanged-hash continuation reaches tick 17,000 with halt zero,
 15 valid initialized stacks at minimum margin 138, and live rendering. Its 38
 segment divergences comprise 13 input, 14 input-response, and 11 Stage-1 boss
 rows. The boss fixtures span sparse MAME ticks 15,906--16,919 and every SNES

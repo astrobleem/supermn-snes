@@ -60,13 +60,15 @@ Three ROM identities must not be conflated:
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is
   green through tick 14,750 after repairing the one-game-tick input-publication
-  order; an exact-v7 same-ROM suffix is now green through tick 15,000. This is
-  bounded checkpoint evidence, not fresh-boot or production acceptance.
+  order. Exact-v7 suffixes keep every player/input/death row green through
+  tick 16,000, but boss timing first turns red at 15,906. This is bounded
+  checkpoint evidence, not fresh-boot or production acceptance.
 
 The checkpointed `14e920eb…` interpreter-only VTIME lineage is oracle-green
 through tick 14,000 and has safe post-divergence coverage through tick 20,000.
 Its retained first mismatch at 14,748 led to the input-publication diagnosis;
-v7 corrects only the nearest migrated seam so far. Save-state reuse, cross-ROM
+v7 corrects that input seam but retains a later one-update boss-ordering split.
+Save-state reuse, cross-ROM
 diagnostic migration, NMI/DMA/renderer liveness repairs, common-clock coverage,
 rejected experiments, exact hashes, and the next decisions are summarized in
 [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md).
@@ -1071,7 +1073,34 @@ performance, full-playthrough, production, or release acceptance.
   bounded migrated-lineage evidence, not fresh-boot, performance, production,
   boss, or playthrough acceptance, and no fresh campaign was started.
 
-  Luna then continued the unchanged hash from tick 15,501 through 17,000.
+  The exact-v7 lineage then stays fully player/input/death-oracle green through
+  tick 15,905. The tick-15,001--15,500 suffix has no divergence, and the next
+  suffix first turns red only at the Stage-1 boss fixture at MAME tick 15,906;
+  a second boss row is red at 15,988. At tick 16,000 the cumulative player rows
+  are 2,889/2,889, death references 12/12, input transitions 1,445, boss rows
+  0/2, halt zero, renderer queue drops zero, and all 15 initialized task stacks
+  valid at minimum margin 138. The compact reports are
+  `build/playback-watcher-20260811/v7-input-delayed-resume15001-to15500-v1/watcher-report.json`
+  and
+  `build/playback-watcher-20260811/v7-input-delayed-resume15501-to16000-v1/watcher-report.json`.
+  The stable counter relation is MAME tick minus six (`15,906/15,900` and
+  `15,988/15,982`), where the campaign samples stale health 0 then 40 instead
+  of 40 then 36. Two exact-state write traces resolve this as organic ordering,
+  not bad boss semantics: the init stores big-endian `$0028` at SNES tick
+  15,901 and the first hit stores `$0024` at 15,983, and both values commit
+  exactly. Thus each correct health change is visible at the following campaign
+  comparison boundary. The compact byte reduction is
+  `build/playback-watcher-20260811/v7-boss-health-write-window-v2/raw-classification.json`;
+  `tools/trace_v7_boss_health_window.py` authenticates the exact ROM, Nexen,
+  state, IRAM, controller mask, and two-byte physical write. The hook-reported
+  logical PC is notification context, not routine-ownership proof. This closes
+  an independent boss initializer/subtractor defect for these two writes, but
+  boss timing/oracle acceptance remains red and later hits remain unproven on
+  v7. Repeat-identical safe tick-16,000 state SHA is `06da361f…`, IRAM
+  `3a672763…`, and resumes at 16,001 without replay.
+
+  Luna previously continued the older unchanged `14e920eb…` hash from tick
+  15,501 through 17,000.
   The run remained live with halt zero, all 15 initialized stacks valid at
   minimum margin 138, and active rendering. It recorded 38 segment
   divergences: 13 input comparisons, 14 input-response comparisons, and 11
@@ -2307,8 +2336,9 @@ verdict for v124 or v135.
 The concise prioritized list is in [RELEASE_BLOCKERS.md](RELEASE_BLOCKERS.md). The
 highest-risk items are:
 
-1. fresh-boot and farther post-fix/boss validation of v7 before any diagnostic
-   or ordinary promotion decision;
+1. localize and repair v7's one-update organic boss/scheduler alignment, then
+   obtain fresh-boot and farther boss validation before any diagnostic or
+   ordinary promotion decision;
 2. integration of the remaining common-clock/native-owner work and a qualifying
    30 Hz / 358K-cycle result on the eventual ordinary candidate;
 3. renderer conservation, wrong attack-animation tiles, and organic Stage 2

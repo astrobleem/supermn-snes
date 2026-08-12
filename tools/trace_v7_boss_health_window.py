@@ -168,24 +168,46 @@ def main() -> int:
             m.drain_notifications(timeout=0.05)
     args.bulk_trace.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in raw), encoding="utf-8")
     owner = raw[0].get("logical_m68k_pc", -1)
-    value = raw[0]["params"].get("value", raw[0]["params"].get("newValue"))
+    write_bytes: dict[int, int] = {}
+    for row in raw:
+        params = row["params"]
+        address = params.get("address")
+        value = params.get("value", params.get("newValue"))
+        if isinstance(address, int) and isinstance(value, int):
+            if HEALTH_ADDR <= address <= HEALTH_END:
+                write_bytes[address] = value & 0xFF
+    write_word = (
+        (write_bytes[HEALTH_ADDR] << 8) | write_bytes[HEALTH_END]
+        if set(write_bytes) == {HEALTH_ADDR, HEALTH_END}
+        else None
+    )
     report = {"scope": "one-entry exact v7 checkpoint health-write diagnostic; no migration/patch; pre-store hook plus one-frame commit confirmation",
               "rom_sha256": rom_sha, "state_sha256": state_sha, "iram_sha256": args.expected_iram_sha256,
               "mame_completed_tick": args.mame_completed_tick, "expected_snes_start_tick": args.expected_snes_start_tick,
               "end_snes_tick": args.end_snes_tick, "held_buttons": args.held_buttons,
               "health_range": [f"{HEALTH_ADDR:06X}", f"{HEALTH_END:06X}"], "frames_advanced": frames_advanced,
-              "pre_health": args.expected_pre_health, "hook_write_value": value, "committed": committed,
+              "pre_health": args.expected_pre_health,
+              "hook_write_bytes": {
+                  f"{address:06X}": value
+                  for address, value in sorted(write_bytes.items())
+              },
+              "hook_write_word": write_word,
+              "committed": committed,
               "logical_owner_pc": owner, "allowed_owner_pcs": args.expected_owner_pc,
-              "owner_allowed": owner in args.expected_owner_pc, "event_order": [r["order"] for r in raw],
+              "notification_context_allowed": owner in args.expected_owner_pc,
+              "notification_pc_scope": (
+                  "observational hook context only; not original-routine "
+                  "ownership proof"
+              ),
+              "event_order": [r["order"] for r in raw],
               "bulk_trace": str(args.bulk_trace.resolve()), "native_targets": "none; interpreted init/damage"}
     report["pass"] = (
-        value == args.expected_new_health
+        write_word == args.expected_new_health
         and committed is not None
         and committed["health"] == args.expected_new_health
         and args.expected_snes_start_tick
         <= int(raw[0]["tick"])
         <= args.end_snes_tick
-        and report["owner_allowed"]
     )
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"output": str(args.output), "frames_advanced": frames_advanced, "committed": committed}, sort_keys=True))
