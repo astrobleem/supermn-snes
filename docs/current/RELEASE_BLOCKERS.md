@@ -7,6 +7,16 @@ native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
 common virtual-IRQ clock. `build/interp-current-5c7e-before-vtime-esc9.sfc`
 retains the exact predecessor.
 
+## Playable-demo gate
+
+The corrected README showcase passed Chad's August 12 still-image review with no
+visible defect, but that does not yet justify a playable-demo label. Promotion
+requires one current ROM identity to pass fresh-power-on stage/boss continuity,
+organic Stage 2 and later renderer coverage, a live human combat/audio playtest,
+the 30 game-ticks/s and 358K SA-1 cycles/tick gates, aligned-pixel and renderer
+conservation checks, and real-hardware acceptance. Until then the public label is
+**interactive technical preview**.
+
 Current source builds ordinary SHA `11aefd2c…` at `build/interp.sfc` after the
 global interpreter step-cap extension. It is unpromoted and has no inherited
 evidence from predecessor `4eb9a408…`, preserved as

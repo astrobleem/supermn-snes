@@ -4,15 +4,16 @@ This directory is the onboarding path for the active Superman SNES/SA-1 port.
 
 ## First hour
 
-1. Read [STATUS.md](STATUS.md) for the honest current verdict.
-2. Read [RELEASE_BLOCKERS.md](RELEASE_BLOCKERS.md) before selecting work.
-3. Follow [BUILDING.md](BUILDING.md) to prepare private inputs and build
+1. Start with the [project overview and visual showcase](../../README.md).
+2. Read [STATUS.md](STATUS.md) for the honest current verdict.
+3. Read [RELEASE_BLOCKERS.md](RELEASE_BLOCKERS.md) before selecting work.
+4. Follow [BUILDING.md](BUILDING.md) to prepare private inputs and build
    `build/interp.sfc`.
-4. Use [CONTROLS.md](CONTROLS.md) for a human playtest.
-5. Select the appropriate gate from [VALIDATION.md](VALIDATION.md).
-6. Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing CPU ownership, memory
+5. Use [CONTROLS.md](CONTROLS.md) for a human playtest.
+6. Select the appropriate gate from [VALIDATION.md](VALIDATION.md).
+7. Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing CPU ownership, memory
    routing, rendering, input, sound, or timing.
-7. Use [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md)
+8. Use [ENGINEERING_CHECKPOINT_20260811.md](ENGINEERING_CHECKPOINT_20260811.md)
    for the latest exact hashes, completed campaign work, and next decisions.
 
 ## Superman-specific deep dives

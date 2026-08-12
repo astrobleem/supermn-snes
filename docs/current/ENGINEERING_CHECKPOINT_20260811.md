@@ -75,13 +75,19 @@ full-playthrough, or production acceptance.
 
 ## Human visual checkpoint
 
-`build/showcase-20260812-fixed.png` (SHA-256 `afa28ba5…`) supersedes the stale
-August 11 montage. Its first four panes come from the preserved fresh `4eb9a408…`
+The committed README montage at `docs/assets/readme/showcase-20260812.png`
+(SHA-256 `afa28ba5…`) supersedes the stale August 11 montage. Its first four
+panes come from the preserved fresh `4eb9a408…`
 visual line and show the clean SA-1 boot, centered HUD/prompt, restored storefront
 combat background, and crate carry without the bogus tile chunk. Its last two
 panes come from the checkpointed v7 Stage-1 boss continuation and are labeled as
 checkpoint evidence. The montage intentionally combines two evidence scopes; it
 does not establish fresh-boot or full-playthrough acceptance for v7/v8.
+Chad's concept cover is retained at repository root as `superman.png` (SHA-256
+`633b9e7a…`); it is presentation artwork, not emulator evidence.
+On August 12 Chad reviewed the corrected montage and reported no visible defect.
+That is human acceptance of these six still images only, not a live gameplay,
+audio, aligned-pixel, or hardware playtest.
 
 ## The tick-14,748 repair
 

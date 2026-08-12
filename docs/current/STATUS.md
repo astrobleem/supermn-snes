@@ -108,10 +108,13 @@ The endpoint safe state is
 `7ab15b2dad152aa2d3b37401c6534e0ae4c4a42dc3a44beef6c21c5c9988ef4c`, resume
 31,001. The retained movie ends at game tick 139,925 / frame 140,000, leaving
 108,925 game ticks (22.15% covered); the campaign is intentionally paused for
-human screenshot review. `build/showcase-20260812-fixed.png` replaces the stale
-montage with four fresh-`4eb…` visual panes and two clearly labeled v7 checkpoint
-panes. This remains checkpoint evidence only: no fresh boot, full playthrough,
-or production acceptance for v8.
+human screenshot review. The README and committed
+`docs/assets/readme/showcase-20260812.png` replace the stale montage with four
+fresh-`4eb…` visual panes and two clearly labeled v7 checkpoint panes. The README
+describes the project as an interactive technical preview, not a playable demo.
+Chad's August 12 review found no visible defect in the corrected six-pane montage;
+that is still-image review only. This remains checkpoint evidence: no fresh boot,
+full playthrough, live combat/audio playtest, or production acceptance for v8.
 
 Superseded candidate `2f590fb1…` has an authorized fresh-power-on Luna campaign
 through tick 3,300 with 118 controller transitions, no gameplay-oracle
