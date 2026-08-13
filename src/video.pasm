@@ -90,7 +90,7 @@ RQ_BG_LEN=$D184
 RQ_PAL_DIRTY=$D186
 RQ_PREP_LEN=$D188
 RQ_FRAME_REQ=$D18A
-RQ_CTRL_3408=$D18C      ; packed: low byte=BG1 VOFS, high byte=raw scrollx[0] low
+RQ_CTRL_3408=$D18C      ; packed: low byte=BG1 VOFS, high byte=raw scrollx[4] low
 RQ_CTRL_3604=$D18E
 RQ_PALETTE=$D1A0        ; $0400 bytes
 RQ_OBJ=$D5A0            ; packed manifest, at most $0300 bytes
@@ -111,16 +111,20 @@ BG_COLUMN_Y_CAPTURE=$74C0   ; sixteen raw X1 source-column Y bytes
 BG_COLUMN_Y_PHYSICAL=$72A0  ; populated source columns resolved to physical slots
 BG_OPT_GLOBAL_VOFS=$72B0    ; Mode-2 fallback for the first three screen characters
 BG_OPT_ENABLED=$72B1        ; zero=legacy Mode 1, nonzero=Mode-2 per-column Y
-BG_LATEST_SCROLLX=$72B2     ; coherent 30 Hz source target, independent of render queue
+BG_LATEST_SCROLLX=$72B2     ; coherent 30 Hz center-column target, independent of render queue
 BG_LATEST_SCROLL_VALID=$72B3 ; $A5 after the first paced source-scroll publication
 BG_PRESENTED_SCROLLX=$72B4  ; 60 Hz cursor: advances at most two pixels per NMI
-BG_PRESENTED_HOFS=$72B5     ; 10-bit integrated PPU coordinate, independent of map queue
-BG_DISPLAYED_MAP_SCROLLX=$72B7 ; coarse camera origin of the tilemap actually in VRAM
+BG_PRESENTED_HOFS=$72B5     ; 10-bit fallback/debug coordinate; exact maps derive H from map+camera
+BG_DISPLAYED_MAP_SCROLLX=$72B7 ; continuous physical basis, seeded from source column 4
 BG_DISPLAYED_MAP_VALID=$72B8 ; $A5 only after a completed exact-map tilemap DMA
 BG_MAP_COMMIT_PENDING=$72B9 ; $A5 only while bg_upload's 4 KiB descriptor is pending
+BG_LATEST_SCROLL_RAW=$72BA ; center-column byte before modulo-32 unwrapping
+BG_MAP_PENDING_BASIS=$72BB ; modal physical basis paired with pending tilemap
+BG_MAP_PENDING_VALID=$72BC ; $A5 only when pending basis metadata is exact
 BG_COLUMN_Y_DIRECT=$72C0    ; source-column Y bytes paired with the direct cache
 BG_COLUMN_Y_PRIMARY=$72D0   ; source-column Y bytes paired with queue 1
 BG_COLUMN_Y_SECONDARY=$72E0 ; source-column Y bytes paired with queue 2
+BG_COLUMN_MAP_DISPLAYED=$72F0 ; source->physical slots paired with displayed VRAM map
 BG_OPT_TABLE=$7300          ; 32 H words + 32 V words, DMAed to VRAM word $7800
 BG_C0BC_TOKEN=$7492       ; token paired with the accepted direct BG image
 RQ_C0BC_TOKEN=$7494       ; token paired with the primary queued image
@@ -1139,8 +1143,9 @@ bg_upload_commit:       ; every completed staging map has exactly one PPU author
     stz DAS0L
     lda #$10
     sta DAS0H            ; 4096 bytes
-    lda #$A5
-    sta $7E72B9          ; service/direct path must commit this map exactly once
+    jsl.l $E9C600        ; pair modal map basis and one-shot commit marker
+    nop
+    nop                  ; retain the old six-byte arm's downstream addresses
     jsr dma0_blank_pulse ; blank only across this tilemap DMA
     jsl.l $E9C340        ; rebase only after the new physical map is actually visible
     ; scroll: H is the live arcade scroll plus the centered-crop X origin.
@@ -1397,8 +1402,8 @@ j5_l:
 ; tilemap builder now places each source column at its complete 9-bit X1
 ; position, relative to the common low-five-bit phase.  The remaining global
 ; SNES offset is therefore only the centered crop origin minus that phase:
-;   hofs = (64 - (scrollx[0] & 31)) & $3FF
-; Keeping the upper bits in the map, rather than folding only column zero into
+;   hofs = (64 - (scrollx[4] & 31)) & $3FF
+; Keeping the upper bits in the map, rather than folding one column into
 ; HOFS, is what preserves Stage 3's non-sequential column order.
 ; The arcade screen is 240 lines, not 256.  Centering its 240->224 crop begins at
 ; arcade Y=8.  obj_pyfix therefore computes 240-(sy+14)-8, modulo 256 for the
@@ -2111,16 +2116,7 @@ pacing_publish_input_and_scroll:
     sep #$20
 .a8
     xba
-    sta $7E72B2          ; latest coherent column-0 scroll X low byte
-    lda $7E72B3
-    cmp #$A5
-    beq ppis_valid
-    lda $7E72B2          ; first publication has no predecessor to interpolate
-    sta $7E72B4
-    jsl.l $E9C1A0        ; seed the integrated 10-bit PPU coordinate once
-    lda #$A5
-    sta $7E72B3
-ppis_valid:
+    jsl.l $E9C720        ; unwrap only the common modulo-32 phase across X1 gaps
     rep #$20
 .a16
     rts
@@ -4207,7 +4203,7 @@ bic_overflow:
 ; word is deliberately packed so the established two-byte scroll mailbox
 ; needs no growth:
 ;   low byte  = BG1VOFS = (scrolly + noflip yoffs(-1) + crop 8) & $FF,
-;   high byte = raw low byte of scrollx[0], consumed by bg_hscroll
+;   high byte = raw low byte of scrollx[4], consumed by bg_hscroll
 ; This helper runs either from ROM while the SA-1 is asleep or from the
 ; matching $7F mirror and preserves P.
 .org $A7BC
@@ -4217,7 +4213,7 @@ capture_bg_vscroll:
     php
     sep #$20
 .a8
-    lda $413409
+    lda $413489                  ; center source column; column 0 can detach across a live gap
     xba                         ; retain scrollx in B
     lda $413481                 ; representative center-playfield column 4
     clc
@@ -7222,12 +7218,10 @@ bg_hscroll_full:
     rtl
 bg_hscroll_full_end:
 
-; A physical-column map rotation changes the tilemap's coordinate basis by a
-; multiple of 32 pixels.  Adjusting HOFS when metadata was accepted made the
-; old map jump several frames before its DMA; never adjusting made the new map
-; jump at publication.  bg_upload calls this only after dma0_blank_pulse has
-; completed the 4 KiB transfer, so the signed coarse-origin delta and the map
-; become visible together.  Ordinary per-NMI motion remains bounded separately.
+; Publish the modal physical-column basis prepared for this exact tilemap only
+; after its DMA completes.  One X1 source column can detach across the two-slot
+; gap while the other thirteen populated columns do not rotate; anchoring HOFS
+; to that one column caused false 64-pixel rebases and visible panel jumps.
 .org $C340
 .a16
 .i16
@@ -7236,6 +7230,7 @@ bg_scroll_map_commit:
     rep #$30
     lda $D0
     pha
+    phx
     sep #$20
 .a8
     lda $7E72B9
@@ -7243,26 +7238,21 @@ bg_scroll_map_commit:
     bne bsmc_restore8
     lda #$00             ; STZ has no long form; Poppy otherwise emits bank-relative
     sta $7E72B9          ; service and foreground callers cannot commit twice
-    rep #$20
-.a16
-    lda $7E8996
-    cmp #$FFFE
-    bcs bsmc_invalidate
-    sep #$20
-.a8
-    lda $7E8995
-    and #$E0
-    sta $D0
+    lda $7E72BC
+    cmp #$A5
+    bne bsmc_invalidate
+    lda #$00
+    sta $7E72BC
     lda $7E72B8
     cmp #$A5
-    bne bsmc_seed
+    bne bsmc_install
     lda $7E72B3
     cmp #$A5
-    bne bsmc_seed
-    lda $D0
+    bne bsmc_install
+    lda $7E72BB
     sec
     sbc $7E72B7
-    beq bsmc_seed
+    beq bsmc_install
     bpl bsmc_positive
     rep #$20
 .a16
@@ -7278,22 +7268,34 @@ bsmc_add:
     adc $7E72B5
     and #$03FF
     sta $7E72B5
-bsmc_seed:
+bsmc_install:
     sep #$20
 .a8
-    lda $D0
+    lda $7E72BB
     sta $7E72B7
     lda #$A5
     sta $7E72B8
+    rep #$20
+.a16
+    ldx #$0000
+bsmc_copy_displayed:
+    lda $7E89F0,x
+    sta $7E72F0,x
+    inx
+    inx
+    cpx #$0010
+    bne bsmc_copy_displayed
     bra bsmc_restore8
 bsmc_invalidate:
     sep #$20
 .a8
     lda #$00             ; keep the invalidation in WRAM regardless of caller DBR
     sta $7E72B8
+    sta $7E72BC
 bsmc_restore8:
     rep #$20
 .a16
+    plx
     pla
     sta $D0
     plp
@@ -7301,18 +7303,28 @@ bsmc_restore8:
 bg_scroll_map_commit_end:
 
 ; Return the BG1 horizontal coordinate in A16.  Exact layouts place source
-; columns according to the camera paired with the accepted tilemap ($8995).
-; A newer presented camera must therefore be expressed relative to that map:
+; columns according to the coarse camera paired with the tilemap actually in
+; VRAM ($72B7).  A newer presented camera must be expressed relative to that
+; displayed map, making those two values the sole visible-coordinate authority:
 ;
-;   H = 64 - (accepted & 31) + (accepted - presented)
+;   H = 64 + signed8(displayed_map_coarse - presented)
 ;
-; Without the second term, a presentation that reaches the next 32-pixel
-; boundary before the slow renderer rotates its map jumps backwards 29 pixels.
+; Do not trust the accumulated $72B5 coordinate once displayed-map authority
+; is valid.  If it drifts by four 32-pixel slots, the map's two deliberately
+; unused physical columns become a visible 64-pixel black band.
 ; Legacy/irregular maps retain their established full-position arithmetic.
 .a16
 .i16
 .org $C280
 bg_compute_hscroll:
+    jmp bg_compute_hscroll_logic
+bg_compute_hscroll_end:
+
+; The full coordinate policy lives after the prepared-cache helper so the
+; fixed $C280 entry and the independently pinned $C300 publisher cannot
+; overlap as this guard grows.
+.org $C500
+bg_compute_hscroll_logic:
     sep #$20
 .a8
     lda $7E72B3
@@ -7323,7 +7335,29 @@ bg_compute_hscroll:
     lda $7E8996
     cmp #$FFFE
     bcs bch_valid_legacy
-    lda $7E72B5          ; exact maps do not rebase the visible PPU coordinate
+    sep #$20
+.a8
+    lda $7E72B8
+    cmp #$A5
+    bne bch_integrated_fallback
+    lda $7E72B7
+    sec
+    sbc $7E72B4
+    rep #$20
+.a16
+    and #$00FF
+    cmp #$0080
+    bcc bch_exact_delta_ready
+    ora #$FF00
+bch_exact_delta_ready:
+    clc
+    adc #$0040
+    and #$03FF
+    rts
+bch_integrated_fallback:
+    rep #$20
+.a16
+    lda $7E72B5          ; only before the first completed exact-map DMA
     and #$03FF
     rts
 bch_valid_legacy:
@@ -7374,7 +7408,210 @@ bch_legacy:
     sbc $D0
     and #$03FF
     rts
-bg_compute_hscroll_end:
+bg_compute_hscroll_logic_end:
+
+; Pair the staged exact tilemap with a physical-map basis before DMA begins.
+; X1 can move one source column across its deliberately unused two-slot gap
+; without rotating the rest of the map.  The only stable global displacement
+; is therefore the modal modulo-16 slot delta across all sixteen columns.
+; This runs in the foreground upload path; the NMI commit below only installs
+; the already-computed byte and copies the accepted map.
+.org $C600
+.a8
+.i16
+bg_scroll_map_prepare:
+    php
+    rep #$30
+.a16
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+    lda $D8
+    pha
+    lda $DA
+    pha
+    phx
+    phy
+    sep #$20
+.a8
+    lda #$A5
+    sta $7E72B9          ; every staged upload owns exactly one commit attempt
+    lda #$00
+    sta $7E72BC          ; invalid unless exact metadata is prepared below
+    rep #$20
+.a16
+    lda $7E8996
+    cmp #$FFFE
+    bcc bsmp_exact
+    jmp bsmp_restore
+
+bsmp_exact:
+    sep #$20
+.a8
+    lda $7E72B8
+    cmp #$A5
+    beq bsmp_modal
+bsmp_seed:
+    lda $7E89F4          ; first exact map: source column 4 is the camera anchor
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    sta $7E72BB
+    lda $7E72B3
+    cmp #$A5
+    bne bsmp_seed_valid
+    lda $7E72B2          ; express the slot anchor in the unwrapped phase domain
+    sec
+    sbc $7E72BA
+    clc
+    adc $7E72BB
+    sta $7E72BB
+bsmp_seed_valid:
+.a8
+    lda #$A5
+    sta $7E72BC
+    bra bsmp_restore
+
+bsmp_modal:
+    rep #$20
+.a16
+    stz $D0              ; outer source-column index
+    stz $D6              ; best modulo-16 delta
+    stz $D8              ; best occurrence count
+bsmp_outer:
+    ldx $D0
+    sep #$20
+.a8
+    lda $7E89F0,x
+    sec
+    sbc $7E72F0,x
+    and #$0F
+    sta $D2              ; candidate delta
+    lda #$00
+    sta $DA              ; candidate occurrence count
+    rep #$20
+.a16
+    stz $D4              ; inner source-column index
+bsmp_inner:
+    ldx $D4
+    sep #$20
+.a8
+    lda $7E89F0,x
+    sec
+    sbc $7E72F0,x
+    and #$0F
+    cmp $D2
+    bne bsmp_no_count
+    inc $DA
+bsmp_no_count:
+    rep #$20
+.a16
+    inc $D4
+    lda $D4
+    cmp #$0010
+    bcc bsmp_inner
+    sep #$20
+.a8
+    lda $DA
+    cmp $D8
+    bcc bsmp_next
+    beq bsmp_next         ; first strict maximum wins deterministic ties
+    sta $D8
+    lda $D2
+    sta $D6
+bsmp_next:
+    rep #$20
+.a16
+    inc $D0
+    lda $D0
+    cmp #$0010
+    bcc bsmp_outer
+
+    sep #$20
+.a8
+    lda $D8
+    cmp #$09             ; sparse/unrelated maps have no trustworthy rotation
+    bcs bsmp_modal_ready
+    jmp bsmp_seed
+bsmp_modal_ready:
+.a8
+    lda $D6
+    and #$07              ; slot delta * 32, modulo the stored low byte
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc $7E72B7
+    sta $7E72BB
+    lda #$A5
+    sta $7E72BC
+bsmp_restore:
+    rep #$20
+.a16
+    ply
+    plx
+    pla
+    sta $DA
+    pla
+    sta $D8
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    plp
+    rtl
+bg_scroll_map_prepare_end:
+
+; Publish only the common sub-32 horizontal phase.  A fixed X1 source column
+; can jump by 64 pixels when it crosses the layout gap even though the camera
+; moved by only -3; reducing the raw delta modulo 32 removes that false jump
+; while retaining the real per-tick motion.
+.org $C720
+.a8
+.i16
+bg_scroll_phase_publish:
+    sta $7E72BA
+    lda $7E72B3
+    cmp #$A5
+    bne bspp_first
+    lda $7E72BA
+    sec
+    sbc $7E72B2
+    and #$1F
+    cmp #$10
+    bcc bspp_delta_ready
+    ora #$E0             ; sign-extend the modulo-32 negative half
+bspp_delta_ready:
+.a8
+    clc
+    adc $7E72B2
+    sta $7E72B2
+    rtl
+bspp_first:
+.a8
+    lda $7E72BA
+    sta $7E72B2
+    sta $7E72B4
+    jsl.l $E9C1A0
+    sep #$20
+.a8
+    lda #$A5
+    sta $7E72B3
+    rtl
+bg_scroll_phase_publish_end:
 
 ; Seed the integrated presentation coordinate from the accepted map before the
 ; valid marker becomes visible.  This is a one-time initialization; ordinary

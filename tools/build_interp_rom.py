@@ -668,8 +668,7 @@ assert VID[
     pacing_publish_input_and_scroll - 0x8000:
     pacing_publish_input_and_scroll_end - 0x8000
 ] == bytes.fromhex(
-    "8f00004120bca7e220eb8fb2727eafb3727ec9a5f012afb2727e8fb4727e"
-    "22a0c1e9a9a58fb3727ec22060"
+    "8f00004120bca7e220eb2220c7e9c22060"
 ), "latest-scroll helper lost its quiescent source-capture contract"
 assert VID[pacing_publish_input_and_scroll_end - 0x8000:0x0F00] == bytes(
     0x8F00 - pacing_publish_input_and_scroll_end
@@ -813,6 +812,12 @@ bg_scroll_map_commit = vid_off("bg_scroll_map_commit")
 bg_scroll_map_commit_end = vid_off("bg_scroll_map_commit_end")
 bg_compute_hscroll = vid_off("bg_compute_hscroll")
 bg_compute_hscroll_end = vid_off("bg_compute_hscroll_end")
+bg_compute_hscroll_logic = vid_off("bg_compute_hscroll_logic")
+bg_compute_hscroll_logic_end = vid_off("bg_compute_hscroll_logic_end")
+bg_scroll_map_prepare = vid_off("bg_scroll_map_prepare")
+bg_scroll_map_prepare_end = vid_off("bg_scroll_map_prepare_end")
+bg_scroll_phase_publish = vid_off("bg_scroll_phase_publish")
+bg_scroll_phase_publish_end = vid_off("bg_scroll_phase_publish_end")
 prepared_bg_cache_reconstruct = vid_off("prepared_bg_cache_reconstruct")
 prepared_bg_cache_reconstruct_end = vid_off(
     "prepared_bg_cache_reconstruct_end"
@@ -863,12 +868,18 @@ assert bg_hscroll_full_bytes == bytes.fromhex(
 ), "BG hscroll helper changed without a fresh-boot-safe fixture"
 assert VID[
     bg_compute_hscroll - 0x8000:bg_compute_hscroll_end - 0x8000
+] == bytes.fromhex("4c00c5"), "BG hscroll wrapper lost the guarded full policy"
+assert bg_compute_hscroll_logic == 0xC500
+assert VID[
+    bg_compute_hscroll_logic - 0x8000:bg_compute_hscroll_logic_end - 0x8000
 ] == bytes.fromhex(
-    "e220afb3727ec9a5d01bc220af96897ec9feffb008afb5727e29ff0360e220"
-    "afb4727e8004af95897ec22029ff0085d0af96897ec9feffb029e220af9589"
-    "7ec22029ff0085d238e5d029ff0085d0a5d2291f0085d2a9400038e5d21865"
-    "d029ff0360af96897e290100eb1869400038e5d029ff0360"
-), "BG hscroll coordinate lost its integrated exact-map presentation policy"
+    "e220afb3727ec9a5d045c220af96897ec9feffb032e220afb8727ec9a5d01e"
+    "afb7727e38efb4727ec22029ff00c9800090030900ff1869400029ff0360c220"
+    "afb5727e29ff0360e220afb4727e8004af95897ec22029ff0085d0af96897e"
+    "c9feffb029e220af95897ec22029ff0085d238e5d029ff0085d0a5d2291f00"
+    "85d2a9400038e5d21865d029ff0360af96897e290100eb1869400038e5d029"
+    "ff0360"
+), "BG hscroll lost displayed-map/presented-camera single authority"
 assert bg_upload_mode_current == 0xC180
 assert VID[
     bg_upload_mode_current - 0x8000:bg_upload_mode_current_end - 0x8000
@@ -914,6 +925,14 @@ assert (
     <= bg_scroll_map_commit
     < bg_scroll_map_commit_end
     <= prepared_bg_cache_reconstruct
+    < prepared_bg_cache_reconstruct_end
+    <= bg_compute_hscroll_logic
+    < bg_compute_hscroll_logic_end
+    <= bg_scroll_map_prepare
+    < bg_scroll_map_prepare_end
+    <= bg_scroll_phase_publish
+    < bg_scroll_phase_publish_end
+    <= queue_promote
 ), "scroll helper islands overlap or moved out of address order"
 for seam_start, seam_end, message in (
     (bg_opt_update_end, bg_upload_mode_current, "Mode-2 builder crossed mode keeper"),
@@ -923,6 +942,10 @@ for seam_start, seam_end, message in (
     (bg_compute_hscroll_end, bg_hscroll_full, "coordinate helper crossed hscroll publisher"),
     (bg_hscroll_full_end, bg_scroll_map_commit, "hscroll publisher crossed map-commit helper"),
     (bg_scroll_map_commit_end, prepared_bg_cache_reconstruct, "map-commit helper crossed cache reconstructor"),
+    (prepared_bg_cache_reconstruct_end, bg_compute_hscroll_logic, "cache reconstructor crossed coordinate policy"),
+    (bg_compute_hscroll_logic_end, bg_scroll_map_prepare, "coordinate policy crossed map-basis preparer"),
+    (bg_scroll_map_prepare_end, bg_scroll_phase_publish, "map-basis preparer crossed phase publisher"),
+    (bg_scroll_phase_publish_end, queue_promote, "phase publisher crossed queue promoter"),
 ):
     assert VID[seam_start - 0x8000:seam_end - 0x8000] == bytes(
         seam_end - seam_start
@@ -931,14 +954,35 @@ assert bg_scroll_map_commit == 0xC340
 assert VID[
     bg_scroll_map_commit - 0x8000:bg_scroll_map_commit_end - 0x8000
 ] == bytes.fromhex(
-    "08c230a5d048e220afb9727ec9a5d066a9008fb9727ec220af96897ec9feffb04de2"
-    "20af95897e29e085d0afb8727ec9a5d02bafb3727ec9a5d023a5d038efb772"
-    "7ef01a1007c2200900ff8005c22029ff00186fb5727e29ff038fb5727ee220"
-    "a5d08fb7727ea9a58fb8727e8008e220a9008fb8727ec2206885d0286b"
-), "tilemap commit lost completed-DMA coarse-coordinate rebasing"
+    "08c230a5d048dae220afb9727ec9a5d07ba9008fb9727eafbc727ec9a5d061a9008f"
+    "bc727eafb8727ec9a5d02dafb3727ec9a5d025afbb727e38efb7727ef01a1007c220"
+    "0900ff8005c22029ff00186fb5727e29ff038fb5727ee220afbb727e8fb7727ea9a5"
+    "8fb8727ec220a20000bff0897e9ff0727ee8e8e01000d0f1800ce220a9008fb8727e"
+    "8fbc727ec220fa6885d0286b"
+), "tilemap commit lost prepared modal-basis installation or displayed-map copy"
 assert bytes.fromhex("9cb972") not in VID[
     bg_scroll_map_commit - 0x8000:bg_scroll_map_commit_end - 0x8000
 ], "map-commit pending clear silently regressed to bank-relative STZ"
+assert bg_scroll_map_prepare == 0xC600
+assert VID[
+    bg_scroll_map_prepare - 0x8000:bg_scroll_map_prepare_end - 0x8000
+] == bytes.fromhex(
+    "08c230a5d048a5d248a5d448a5d648a5d848a5da48da5ae220a9a58fb9727ea900"
+    "8fbc727ec220af96897ec9feff90034cebc6e220afb8727ec9a5f02faff4897e0a"
+    "0a0a0a0a8fbb727eafb3727ec9a5d012afb2727e38efba727e186fbb727e8fbb72"
+    "7ea9a58fbc727e807fc22064d064d664d8a6d0e220bff0897e38fff0727e290f85"
+    "d2a90085dac22064d4a6d4e220bff0897e38fff0727e290fc5d2d002e6dac220e6"
+    "d4a5d4c9100090e0e220a5dac5d89008f00685d8a5d285d6c220e6d0a5d0c910"
+    "0090ace220a5d8c909b0034c3dc6a5d629070a0a0a0a0a186fb7727e8fbb727ea9"
+    "a58fbc727ec2207afa6885da6885d86885d66885d46885d26885d0286b"
+), "map-basis preparer lost consensus guard, phase-domain seed, or modal selection"
+assert bg_scroll_phase_publish == 0xC720
+assert VID[
+    bg_scroll_phase_publish - 0x8000:bg_scroll_phase_publish_end - 0x8000
+] == bytes.fromhex(
+    "8fba727eafb3727ec9a5d01bafba727e38efb2727e291fc910900209e0186fb272"
+    "7e8fb2727e6bafba727e8fb2727e8fb4727e22a0c1e9e220a9a58fb3727e6b"
+), "live horizontal publisher lost modulo-32 X1 gap unwrapping"
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
     bg_test - palette_test_end
 ), "palette manifest consumer overlapped the fixed BG consumer"
@@ -1043,8 +1087,8 @@ assert VID[bg_upload - 0x8000:obj_hclr_stub - 0x8000].count(
     bytes((0x22, bg_scroll_map_commit & 0xFF, bg_scroll_map_commit >> 8, 0xE9))
 ) == 1, "BG tilemap upload lost its completed-DMA coordinate commit"
 assert VID[bg_upload - 0x8000:obj_hclr_stub - 0x8000].count(
-    bytes.fromhex("a9a58fb9727e")
-) == 1, "BG tilemap upload no longer arms exactly one guarded map commit"
+    bytes((0x22, bg_scroll_map_prepare & 0xFF, bg_scroll_map_prepare >> 8, 0xE9))
+) == 1, "BG tilemap upload no longer prepares exactly one guarded map commit"
 assert bytes.fromhex("5c00ed7e") in VID[
     render_queue_finish - 0x8000:render_queue_install - 0x8000
 ], "queue-finish helper no longer jumps to private $7E:ED00 promoter code"
@@ -1147,7 +1191,7 @@ capture_vscroll_bytes = VID[
     capture_bg_vscroll - 0x8000:capture_bg_vscroll_end - 0x8000
 ]
 assert capture_vscroll_bytes == bytes.fromhex(
-    "08e220af093441ebaf813441186907c2202860"
+    "08e220af893441ebaf813441186907c2202860"
 ), "vertical-scroll capture lost center-column selection, exact -1/+8 offset, or side effects"
 assert VID.count(
     bytes((0x20, capture_bg_vscroll & 0xFF, capture_bg_vscroll >> 8))
@@ -1261,6 +1305,12 @@ assert (
     < bg_scroll_map_commit_end
     <= prepared_bg_cache_reconstruct
     < prepared_bg_cache_reconstruct_end
+    <= bg_compute_hscroll_logic
+    < bg_compute_hscroll_logic_end
+    <= bg_scroll_map_prepare
+    < bg_scroll_map_prepare_end
+    <= bg_scroll_phase_publish
+    < bg_scroll_phase_publish_end
     <= queue_promote
 )
 bg_map_update_code = VID[
@@ -1356,10 +1406,19 @@ assert bg_opt_update_code.count(
     bytes((0x20, bg_compute_hscroll & 0xFF, bg_compute_hscroll >> 8))
 ) == 1, "Mode-2 offset builder lost presented-map-relative H selection"
 assert VID[
-    prepared_bg_cache_reconstruct_end - 0x8000:queue_promote - 0x8000
-] == bytes(queue_promote - prepared_bg_cache_reconstruct_end), (
-    "prepared-cache reconstructor crossed the private-WRAM queue-promoter island"
+    prepared_bg_cache_reconstruct_end - 0x8000:bg_compute_hscroll_logic - 0x8000
+] == bytes(bg_compute_hscroll_logic - prepared_bg_cache_reconstruct_end), (
+    "prepared-cache reconstructor crossed the hscroll-policy island"
 )
+assert VID[
+    bg_compute_hscroll_logic_end - 0x8000:bg_scroll_map_prepare - 0x8000
+] == bytes(bg_scroll_map_prepare - bg_compute_hscroll_logic_end)
+assert VID[
+    bg_scroll_map_prepare_end - 0x8000:bg_scroll_phase_publish - 0x8000
+] == bytes(bg_scroll_phase_publish - bg_scroll_map_prepare_end)
+assert VID[
+    bg_scroll_phase_publish_end - 0x8000:queue_promote - 0x8000
+] == bytes(queue_promote - bg_scroll_phase_publish_end)
 prepared_reconstruct_code = VID[
     prepared_bg_cache_reconstruct - 0x8000:
     prepared_bg_cache_reconstruct_end - 0x8000

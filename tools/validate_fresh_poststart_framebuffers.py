@@ -43,6 +43,8 @@ from mesen_mcp import McpSession  # noqa: E402
 
 DEFAULT_EMULATOR = ROOT / "tools" / "mesen211_mcp_controller.sh"
 BG_GRAPHICS_FILE_BASE = 0x090000
+VERTICAL_BLACK_COLUMN_RATIO = 0.98
+MAX_VERTICAL_BLACK_RUN = 47
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,10 +158,31 @@ def image_metrics(path: Path) -> dict[str, Any]:
     playfield = image.crop(PLAYFIELD_BOX)
     pixels = list(playfield.getdata())
     black = sum(pixel == (0, 0, 0) for pixel in pixels)
+    black_columns = []
+    for x in range(playfield.width):
+        column_black = sum(
+            playfield.getpixel((x, y)) == (0, 0, 0)
+            for y in range(playfield.height)
+        )
+        black_columns.append(
+            column_black / playfield.height >= VERTICAL_BLACK_COLUMN_RATIO
+        )
+    max_vertical_black_run = 0
+    current_vertical_black_run = 0
+    for is_black in black_columns:
+        if is_black:
+            current_vertical_black_run += 1
+            max_vertical_black_run = max(
+                max_vertical_black_run, current_vertical_black_run
+            )
+        else:
+            current_vertical_black_run = 0
     repetition = repetition_metrics(image)
     return {
         "playfield_black_ratio": black / len(pixels),
         "playfield_unique_colors": len(set(pixels)),
+        "max_vertical_black_run": max_vertical_black_run,
+        "vertical_black_column_ratio": VERTICAL_BLACK_COLUMN_RATIO,
         "dominant_tile_ratio": repetition["dominant_tile_ratio"],
         "unique_tiles": repetition["unique_tiles"],
     }
@@ -242,6 +265,15 @@ def evaluate_rows(
                         "relative_frame": row["relative_frame"],
                         "kind": "repeated_tile_collapse",
                         "value": metrics["dominant_tile_ratio"],
+                    }
+                )
+            if metrics["max_vertical_black_run"] > MAX_VERTICAL_BLACK_RUN:
+                failures.append(
+                    {
+                        "relative_frame": row["relative_frame"],
+                        "kind": "vertical_black_band",
+                        "value": metrics["max_vertical_black_run"],
+                        "maximum": MAX_VERTICAL_BLACK_RUN,
                     }
                 )
             if row["forced_blank"] or not (row["main_screen_layers"] & 0x01):

@@ -134,18 +134,30 @@ def main() -> int:
 
     source_steps: list[tuple[int, int]] = []
     ppu_steps: list[tuple[int, int]] = []
+    # Current renderer builds explicitly publish the common modulo-32 camera
+    # phase in latest_scrollx.  A raw X1 source column can jump by 64 pixels
+    # when it crosses the hardware layout gap; treating that column as camera
+    # truth recreates the very false discontinuity this gate must distinguish.
+    # Retain the raw-column fallback for authenticated historical captures.
+    source_key = (
+        "latest_scrollx"
+        if all("latest_scrollx" in row for row in captures)
+        else (
+            "live_scrollx_column4"
+            if all("live_scrollx_column4" in row for row in captures)
+            else "live_scrollx_column0"
+        )
+    )
     for index in range(max(1, args.warmup_frames + 1), len(captures)):
         before = captures[index - 1]
         after = captures[index]
-        if int(after["live_scrollx_column0"]) != int(
-            before["live_scrollx_column0"]
-        ):
+        if int(after[source_key]) != int(before[source_key]):
             source_steps.append(
                 (
                     index,
                     signed8_delta(
-                        int(before["live_scrollx_column0"]),
-                        int(after["live_scrollx_column0"]),
+                        int(before[source_key]),
+                        int(after[source_key]),
                     ),
                 )
             )
@@ -345,6 +357,7 @@ def main() -> int:
         "authenticated_framebuffers": authenticated,
         "frame_range": [captures[0]["frame"], captures[-1]["frame"]],
         "warmup_frames": args.warmup_frames,
+        "source_scroll_key": source_key,
         "source_step_count": len(source_steps),
         "source_step_histogram": dict(sorted(source_histogram.items())),
         "dominant_source_step": dominant_source_step,

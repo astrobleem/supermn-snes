@@ -1,6 +1,6 @@
 # Superman release blockers
 
-Current temporal-scroll candidate `d6a8c025…` is not playable or shippable. This file
+Current bounded renderer/scroll candidate `21abe04c…` is not playable or shippable. This file
 lists what must change or be proven before either label can return. The preserved
 `a9765fbf…` timing evidence line is a 66-byte, hash-guarded patch of preserved `5c7e…`, limited to two terminal
 native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
@@ -69,13 +69,15 @@ frames. It therefore missed the intervening 60 Hz holds and falsely promoted a
 every consecutive authenticated framebuffer and makes this predecessor red: 48
 holds and 49 three-pixel moves.
 
-Current `d6a8c025…` integrates each -3-pixel 30 Hz source step as one- and
-two-pixel 60 Hz presentations. Its retained-checkpoint diagnostic is green over
-101 consecutive frames: 49 source changes, 48 one-pixel and 49 two-pixel
-registrations, no hold/reversal/oversized step, and no background mismatch. Six
-physical tilemap rotations retain zero residual pixel mismatch. The formerly red
-transition pairs and the sequence contact sheet were manually reviewed. The
-real-65816/PPU bridge is green 12/12.
+Current `21abe04c…` integrates each -3-pixel 30 Hz source step as one- and
+two-pixel 60 Hz presentations without treating an X1 layout-gap jump as camera
+motion. Its exact-hash fresh-power coin/Start gate retains 601 consecutive
+post-Start frames 5,512–6,112 / ticks 190–490 and is framebuffer-clear. The
+same authenticated images pass the every-frame temporal gate: 152 exact
+-3-pixel source changes, 151 one-pixel and 152 two-pixel presentations, no
+hold/reversal/oversized step, and no background mismatch. All 15 physical-map
+changes have zero residual pixel mismatch. The contact sheet and former rebase
+points were manually reviewed. The real-65816/PPU bridge is green 16/16.
 
 Intermediate candidates were correctly rejected by the new gate. `b1e57e0e…`
 had the correct 1/2-pixel cadence but flashed at tilemap publications;
@@ -84,10 +86,11 @@ background discontinuities because Poppy silently encoded the impossible long
 `STZ` marker clear as a bank-relative store. Current source uses a legal explicit
 long store and pack-time guards pin same-NMI commit/clear ownership.
 
-This remains checkpointed cross-ROM diagnostic evidence, not a fresh-power
-successor gate. Fresh `50bbed41…` artifacts and exact-hash `3a5f3694…` boot
-liveness remain preserved but do not transfer to the new hash. No fresh boot,
-organic coin/Start, or long gameplay replay has been started for `d6a8c025…`.
+This closes only the reproduced bounded Stage-1 black-band and cadence
+regressions. Aligned exact-MAME pixels, formal MAME-frame conservation, later
+stages/organic Stage 2, renderer throughput, current performance, hardware, and
+human combat/audio acceptance remain open. No full long gameplay replay has
+been started for `21abe04c…`.
 
 Promotion of a successor still requires this one
 ROM identity and one exact tick range to pass the machine-enforced state oracle,
@@ -166,8 +169,8 @@ conservation. Capture, trace, cross-emulator, single-frame, and repetition tools
 always carry diagnostic-only or bounded-oracle authority and cannot fill missing
 aggregate gates.
 
-Current source builds unaccepted ordinary SHA `d6a8c025…` at `build/interp.sfc`;
-the identical test image is `build/interp-scroll-continuous-d6a8c025.sfc`.
+Current source builds unaccepted ordinary SHA `21abe04c…` at `build/interp.sfc`;
+the identical test image is `build/interp-scroll-validated-21abe04c.sfc`.
 The superseded `3a5f3694…` pin and earlier ROMs/evidence are preserved outside
 the repository under `/home/chad/supermn-snes-artifacts/`; the archive README
 maps former `build/` paths to their retained locations. Predecessor `6413924c…`'s focused token and producer

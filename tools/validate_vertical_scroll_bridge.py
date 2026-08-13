@@ -159,23 +159,86 @@ def run_helper(
         # The Mode-2 helper can publish a DMA descriptor and wait for the NMI
         # service path.  Allow the handler to return before judging the parked
         # caller PC; short helpers still stop immediately on the same hook.
-        result = m.run_until(max_frames=3, hook_handle=hook)
-        m.pause()
-        state = dict(m.get_cpu_state("Snes"))
+        for _attempt in range(3):
+            result = m.run_until(max_frames=3, hook_handle=hook)
+            m.pause()
+            state = dict(m.get_cpu_state("Snes"))
+            pc = ((int(state["k"]) & 0xFF) << 16) | (
+                int(state["pc"]) & 0xFFFF
+            )
+            if pc == return_spin or (result or {}).get("reason") != "hookFired":
+                break
     finally:
         m.remove_hook(hook)
         m.drain_notifications(timeout=0.05)
     pc = ((int(state["k"]) & 0xFF) << 16) | (int(state["pc"]) & 0xFFFF)
     # A helper that waits for one real DMA window can reach the installed
-    # return spin on the same boundary where run_until reports maxFrames.
-    # Conversely, an interrupt can begin after the exact exec hook fires but
-    # before the subsequent state query.  Either direct observation is enough;
-    # anything that has neither is a real failure.
-    if (result or {}).get("reason") != "hookFired" and pc != return_spin:
+    # return spin on the same boundary where run_until reports maxFrames.  An
+    # interrupt can also begin after the exec hook but before the state query;
+    # resume through it and require the stable spin rather than sampling the
+    # interrupt's temporary registers as a false helper failure.
+    if pc != return_spin:
         trace = m.trace_log(count=48, cpu_type="Snes")
         raise RuntimeError(
             f"helper did not return to ${return_spin:06X}: result={result!r}, "
             f"pc=${pc:06X}, trace={trace!r}"
+        )
+    return state
+
+
+def run_rtl_helper(
+    m: McpSession,
+    entry: int,
+    return_spin: int,
+    *,
+    a: int = 0x5A3C,
+    m8: bool = False,
+) -> dict[str, Any]:
+    previous = m.get_cpu_state("Snes")
+    ps = (int(previous["ps"]) & ~0x30) | 0x04
+    if m8:
+        ps |= 0x20
+    return_minus_one = (return_spin - 1) & 0xFFFF
+    m.write_memory(
+        "snesMemory",
+        0x001FED,
+        return_minus_one.to_bytes(2, "little").hex()
+        + f"{(return_spin >> 16) & 0xFF:02x}",
+    )
+    set_cpu(
+        m,
+        "Snes",
+        pc=entry & 0xFFFF,
+        k=(entry >> 16) & 0xFF,
+        a=a,
+        x=0x1234,
+        y=0x5678,
+        sp=0x1FEC,
+        d=0,
+        dbr=0,
+        ps=ps,
+        emulationMode=False,
+    )
+    hook = m.add_exec_hook(return_spin, cpu_type="Snes")
+    m.drain_notifications(timeout=0.05)
+    try:
+        for _attempt in range(3):
+            result = m.run_until(max_frames=3, hook_handle=hook)
+            m.pause()
+            state = dict(m.get_cpu_state("Snes"))
+            pc = ((int(state["k"]) & 0xFF) << 16) | (
+                int(state["pc"]) & 0xFFFF
+            )
+            if pc == return_spin or (result or {}).get("reason") != "hookFired":
+                break
+    finally:
+        m.remove_hook(hook)
+        m.drain_notifications(timeout=0.05)
+    pc = ((int(state["k"]) & 0xFF) << 16) | (int(state["pc"]) & 0xFFFF)
+    if pc != return_spin:
+        raise RuntimeError(
+            f"RTL helper did not return to ${return_spin:06X}: "
+            f"result={result!r}, state={state!r}"
         )
     return state
 
@@ -193,7 +256,7 @@ def write_scroll_shadow(
     scrollx: int,
     sampled: dict[int, int],
 ) -> None:
-    m.write_memory("snesMemory", 0x413409, f"{scrollx & 0xFF:02x}")
+    m.write_memory("snesMemory", 0x413489, f"{scrollx & 0xFF:02x}")
     for column in (2, 4, 6, 8, 9):
         value = sampled.get(column, sampled[4])
         m.write_memory(
@@ -224,6 +287,9 @@ def main() -> int:
     apply_end = symbol_address(args.symbols, "bg_scroll_end")
     apply_opt = symbol_address(args.symbols, "bg_scroll_with_opt")
     apply_opt_end = symbol_address(args.symbols, "bg_scroll_with_opt_end")
+    map_commit = symbol_address(args.symbols, "bg_scroll_map_commit")
+    map_prepare = symbol_address(args.symbols, "bg_scroll_map_prepare")
+    phase_publish = symbol_address(args.symbols, "bg_scroll_phase_publish")
     return_spin = capture_end + 1
     configure_runtime()
 
@@ -354,29 +420,182 @@ def main() -> int:
             }
         )
 
-        # Exact maps use the integrated 10-bit presentation coordinate.  A
-        # newly accepted physical-column map must not rebase it and move
-        # otherwise stationary pixels by 32 pixels at a map boundary.
+        # The sparse title composition and the first full gameplay map are not
+        # rotations of one another.  Their strongest delta has only 3/16
+        # support, so seed the new source-column-4 slot in the already
+        # unwrapped phase domain instead of accepting a false 128-pixel shift.
+        displayed_map = bytes([4, 5, 6, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        applied_map = bytes([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 0])
+        m.write_memory("snesWorkRam", 0x72F0, displayed_map.hex())
+        m.write_memory("snesWorkRam", 0x89F0, applied_map.hex())
+        m.write_memory("snesWorkRam", 0x8996, "003f")
+        m.write_memory("snesWorkRam", 0x72B2, "00a500400000a500800000")
+        run_rtl_helper(m, map_prepare, return_spin, m8=True)
+        prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        run_rtl_helper(m, map_commit, return_spin, m8=True)
+        committed = bytes(m.read_memory("snesWorkRam", 0x72B5, 8))
+        copied_map = bytes(m.read_memory("snesWorkRam", 0x72F0, 16))
+        rows.append(
+            {
+                "kind": "map-commit",
+                "name": "sparse-title-to-gameplay-seeds-phase-domain",
+                "raw_center": 0x80,
+                "latest_unwrapped_phase": 0,
+                "source_column4_physical_basis": 0x80,
+                "expected_basis": 0,
+                "observed_basis": committed[2],
+                "expected_hscroll": 0x040,
+                "observed_hscroll": int.from_bytes(committed[0:2], "little"),
+                "prepared_pending_basis": prepared.hex(),
+                "displayed_map_copied": copied_map == applied_map,
+                "pass": (
+                    prepared == bytes((0xA5, 0x80, 0x00, 0xA5))
+                    and committed[2] == 0
+                    and int.from_bytes(committed[0:2], "little") == 0x040
+                    and committed[4] == 0
+                    and committed[7] == 0
+                    and copied_map == applied_map
+                ),
+            }
+        )
+
+        # One source column can cross the two-slot gap without rotating the
+        # other populated columns.  The modal delta is zero, so the displayed
+        # basis and integrated fallback must remain unchanged.
+        displayed_map = bytes(
+            [8, 9, 10, 11, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 0, 0]
+        )
+        applied_map = bytes(
+            [8, 9, 10, 11, 12, 15, 0, 1, 2, 3, 4, 5, 6, 7, 0, 0]
+        )
+        m.write_memory("snesWorkRam", 0x72F0, displayed_map.hex())
+        m.write_memory("snesWorkRam", 0x89F0, applied_map.hex())
+        m.write_memory("snesWorkRam", 0x8996, "3f00")
+        m.write_memory("snesWorkRam", 0x72B3, "a5")
+        m.write_memory("snesWorkRam", 0x72B5, "5b00")
+        m.write_memory("snesWorkRam", 0x72B7, "c0a500000000")
+        run_rtl_helper(m, map_prepare, return_spin, m8=True)
+        prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        run_rtl_helper(m, map_commit, return_spin, m8=True)
+        committed = bytes(m.read_memory("snesWorkRam", 0x72B5, 8))
+        copied_map = bytes(m.read_memory("snesWorkRam", 0x72F0, 16))
+        rows.append(
+            {
+                "kind": "map-commit",
+                "name": "isolated-column4-does-not-rebase-whole-map",
+                "old_basis": 0xC0,
+                "expected_basis": 0xC0,
+                "observed_basis": committed[2],
+                "old_integrated_hscroll": 0x05B,
+                "expected_integrated_hscroll": 0x05B,
+                "observed_integrated_hscroll": int.from_bytes(
+                    committed[0:2], "little"
+                ),
+                "prepared_pending_basis": prepared.hex(),
+                "expected_pending": 0,
+                "observed_pending": committed[4],
+                "displayed_map_copied": copied_map == applied_map,
+                "pass": (
+                    prepared == bytes((0xA5, 0x00, 0xC0, 0xA5))
+                    and committed[2] == 0xC0
+                    and int.from_bytes(committed[0:2], "little") == 0x05B
+                    and committed[4] == 0
+                    and committed[7] == 0
+                    and copied_map == applied_map
+                ),
+            }
+        )
+
+        # When thirteen populated columns rotate left by one physical slot,
+        # the same modal policy must commit exactly -32 pixels even though one
+        # detached column reports -96 and the two empty columns report zero.
+        displayed_map = bytes(
+            [14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0]
+        )
+        applied_map = bytes(
+            [11, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 0]
+        )
+        m.write_memory("snesWorkRam", 0x72F0, displayed_map.hex())
+        m.write_memory("snesWorkRam", 0x89F0, applied_map.hex())
+        m.write_memory("snesWorkRam", 0x8996, "3f00")
+        m.write_memory("snesWorkRam", 0x72B3, "a5")
+        m.write_memory("snesWorkRam", 0x72B5, "5b00")
+        m.write_memory("snesWorkRam", 0x72B7, "c0a500000000")
+        run_rtl_helper(m, map_prepare, return_spin, m8=True)
+        prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        run_rtl_helper(m, map_commit, return_spin, m8=True)
+        committed = bytes(m.read_memory("snesWorkRam", 0x72B5, 8))
+        copied_map = bytes(m.read_memory("snesWorkRam", 0x72F0, 16))
+        rows.append(
+            {
+                "kind": "map-commit",
+                "name": "modal-populated-rotation-commits-one-slot",
+                "old_basis": 0xC0,
+                "expected_basis": 0xA0,
+                "observed_basis": committed[2],
+                "old_integrated_hscroll": 0x05B,
+                "expected_integrated_hscroll": 0x03B,
+                "observed_integrated_hscroll": int.from_bytes(
+                    committed[0:2], "little"
+                ),
+                "prepared_pending_basis": prepared.hex(),
+                "displayed_map_copied": copied_map == applied_map,
+                "pass": (
+                    prepared == bytes((0xA5, 0x00, 0xA0, 0xA5))
+                    and committed[2] == 0xA0
+                    and int.from_bytes(committed[0:2], "little") == 0x03B
+                    and committed[4] == 0
+                    and committed[7] == 0
+                    and copied_map == applied_map
+                ),
+            }
+        )
+
+        # A fixed source column's raw byte can jump -67 at the X1 gap while
+        # the common phase moved -3.  The live publisher must retain -3 only.
+        m.write_memory("snesWorkRam", 0x72B2, "c3a5c3000000000000")
+        run_rtl_helper(m, phase_publish, return_spin, a=0x0080, m8=True)
+        phase_state = bytes(m.read_memory("snesWorkRam", 0x72B2, 9))
+        rows.append(
+            {
+                "kind": "phase-publish",
+                "name": "fixed-column-gap-jump-unwraps-to-minus-three",
+                "raw_previous": 0xC3,
+                "raw_current": 0x80,
+                "expected_latest": 0xC0,
+                "observed_latest": phase_state[0],
+                "expected_raw_retained": 0x80,
+                "observed_raw_retained": phase_state[8],
+                "pass": phase_state[0] == 0xC0 and phase_state[8] == 0x80,
+            }
+        )
+
+        # Exact maps derive H from the map actually displayed and the current
+        # presented camera.  Poison the old integrated coordinate to prove it
+        # cannot expose the map's deliberately unused physical columns.
         m.write_memory("snesWorkRam", 0x8994, "477a")
         m.write_memory("snesWorkRam", 0x8996, "003f")
         m.write_memory("snesWorkRam", 0x72B2, "55a555")
-        integrated_hscroll = 0x04B
+        m.write_memory("snesWorkRam", 0x72B7, "60a5")
+        poisoned_integrated_hscroll = 0x0CB
         m.write_memory(
             "snesWorkRam",
             0x72B5,
-            integrated_hscroll.to_bytes(2, "little").hex(),
+            poisoned_integrated_hscroll.to_bytes(2, "little").hex(),
         )
         run_helper(m, apply_scroll, return_spin)
         layer = m.get_ppu_state()["layers"][0]
+        expected_hscroll = (0x40 + 0x60 - 0x55) & 0x3FF
         rows.append(
             {
-                "kind": "apply-integrated-scroll",
-                "name": "exact-map-does-not-rebase-presented-coordinate",
-                "accepted_scrollx": 0x7A,
+                "kind": "apply-displayed-map-scroll",
+                "name": "exact-map-ignores-poisoned-integrated-coordinate",
+                "displayed_map_scrollx": 0x60,
                 "presented_scrollx": 0x55,
-                "expected_hscroll": integrated_hscroll,
+                "poisoned_integrated_hscroll": poisoned_integrated_hscroll,
+                "expected_hscroll": expected_hscroll,
                 "observed_hscroll": int(layer["hscroll"]),
-                "pass": int(layer["hscroll"]) == integrated_hscroll,
+                "pass": int(layer["hscroll"]) == expected_hscroll,
             }
         )
 
@@ -401,6 +620,7 @@ def main() -> int:
         m.write_memory("snesWorkRam", 0x2000, raw_codes.hex())
         m.write_memory("snesWorkRam", 0x72C0, source_y.hex())
         m.write_memory("snesWorkRam", 0x72B2, "00a5004000")
+        m.write_memory("snesWorkRam", 0x72B7, "00a5")
         m.write_memory("snesWorkRam", 0x89E0, physical_map.hex())
         m.write_memory("snesWorkRam", 0x8994, "aa00003f")
         m.write_memory("snesWorkRam", 0x89BE, "0000")
@@ -513,6 +733,9 @@ def main() -> int:
             "apply_end": f"{apply_end:06X}",
             "apply_opt": f"{apply_opt:06X}",
             "apply_opt_end": f"{apply_opt_end:06X}",
+            "map_prepare": f"{map_prepare:06X}",
+            "map_commit": f"{map_commit:06X}",
+            "phase_publish": f"{phase_publish:06X}",
             "return_spin": f"{return_spin:06X}",
         },
         "rows": rows,

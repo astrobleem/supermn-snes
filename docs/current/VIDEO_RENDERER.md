@@ -27,12 +27,14 @@ silently skipping the intervening held frames. Reanalysis over every consecutive
 video frame exposes the user-visible `hold, +3` cadence: 48 holds and 49
 three-pixel jumps.
 
-Current `d6a8c025…` adds a 60 Hz presentation cursor at `$72B4` and an integrated
-10-bit PPU coordinate at `$72B5/$72B6`. Each -3-pixel source update is presented
-as a two-pixel step followed by a one-pixel step; image/tile ownership remains on
-the slower renderer queue. The PPU coordinate is also rebased by 32 pixels in the
-same NMI that publishes a rotated physical tilemap, so the coordinate change and
-map-basis change cancel visually.
+Current `21abe04c…` retains the 60 Hz presentation cursor at `$72B4` but makes
+the camera and displayed-map authorities explicit. `$72B2` is now the common
+modulo-32 camera phase: a raw source-column jump across the X1 two-slot gap is
+reduced to the real -3-pixel motion. Before each exact tilemap DMA, the foreground
+compares all sixteen new/applied physical-column mappings with the displayed map
+at `$72F0-$72FF`. A modal delta is accepted only with at least 9/16 agreement;
+sparse/unrelated transitions instead seed source column 4 in the unwrapped phase
+domain. NMI installs only that prepared basis after the paired map is visible.
 
 The path took several deliberately rejected builds. `b1e57e0e…` achieved the
 1/2-pixel cadence but flashed at map publication. `d43c8bb4…` committed the
@@ -43,21 +45,30 @@ never cleared and later unrelated DMAs repeated the rebase. The final source use
 `LDA #0 / STA long` for both marker clears. Packer guards pin the legal bytes,
 same-NMI call count, and one-shot marker protocol.
 
-The current focused bridge is green 12/12. The retained-checkpoint capture covers
-101 consecutive authenticated frames and 49 source steps: visible registration
-is one pixel 48 times and two pixels 49 times, with no holds, reversals,
-oversized steps, or background discontinuities. All six displayed-map changes
-have zero post-registration mismatch. Sol manually reviewed the sequence sheet
-and every transition pair that was red in `562928a5…`. Evidence is under
-`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8/` and
-`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`.
+Fresh post-Start evidence rejected three later anchor policies. `b5ce230b…`
+trusted source column 0 and injected a 64-pixel rebase when that column crossed
+the X1 gap. `686bc109…` moved the anchor to column 4, but the gap migrates and
+that column later detached by two slots while the other thirteen did not move.
+`4279fb5b…` used the modal 16-column delta and fixed those gameplay rotations,
+but accepted a weak 3/16 relationship between the sparse title map and the first
+full gameplay map, producing a persistent 64-pixel black band after Start. Those
+negative runs are retained under their hash-prefixed directories in
+`/home/chad/supermn-snes-artifacts/active/`; none is a handoff ROM.
 
-This does not make the renderer fast: the successor still completes only 18
-images and records 33 queue drops over the predecessor's measured 100 frames.
-The current work closes the reproduced horizontal camera-cadence symptom in a
-checkpoint lab only. Fresh
-power, later stages, aligned MAME pixels, formal temporal conservation, and human
-acceptance remain open.
+The current focused real-65816/PPU bridge is green 16/16, including the exact
+sparse title-to-gameplay map, an isolated column crossing the gap, a real
+thirteen-column rotation, and a raw -67 jump unwrapped to -3. The exact-hash
+fresh-power gate retains 601 consecutive post-Start frames 5,512–6,112 / ticks
+190–490 and is framebuffer-clear. Its every-frame temporal report has 152 exact
+-3 source changes, 151 one-pixel and 152 two-pixel visible registrations, no
+holds/reversals/oversized steps, and zero mismatch at all 15 displayed-map
+changes. Sol manually reviewed the full contact sheet and former rebase points.
+Evidence is under
+`/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`.
+
+This does not make the renderer fast or prove later stages. Aligned MAME pixels,
+formal MAME-frame conservation, organic Stage 2 and later coverage, performance,
+hardware, and human combat/audio acceptance remain open.
 
 ## Current bounded clear: prepared raw BG baseline (August 13, 2026)
 

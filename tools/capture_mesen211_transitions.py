@@ -140,8 +140,11 @@ def snapshot(m: McpSession) -> dict[str, Any]:
     sa1_cpu = m.get_cpu_state("Sa1")
     ppu = m.get_ppu_state()
     bg1 = ppu["layers"][0]
-    live_scrollx = int(
+    live_scrollx_column0 = int(
         m.read_memory("snesMemory", 0x413409, 1)[0]
+    )
+    live_scrollx = int(
+        m.read_memory("snesMemory", 0x413489, 1)[0]
     )
     live_scrolly = int(
         m.read_memory("snesMemory", 0x413481, 1)[0]
@@ -225,7 +228,8 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         # diagnostics can distinguish a slow producer from dropped snapshots.
         "live_scroll_packed": (live_scrollx << 8)
         | ((live_scrolly + 7) & 0xFF),
-        "live_scrollx_column0": live_scrollx,
+        "live_scrollx_column0": live_scrollx_column0,
+        "live_scrollx_column4": live_scrollx,
         "live_scrolly_column4": live_scrolly,
         "latest_scrollx": int(
             m.read_memory("snesWorkRam", 0x72B2, 1)[0]
@@ -248,6 +252,18 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "map_commit_pending": int(
             m.read_memory("snesWorkRam", 0x72B9, 1)[0]
         ),
+        "latest_scroll_raw": int(
+            m.read_memory("snesWorkRam", 0x72BA, 1)[0]
+        ),
+        "pending_map_scrollx": int(
+            m.read_memory("snesWorkRam", 0x72BB, 1)[0]
+        ),
+        "pending_map_valid": int(
+            m.read_memory("snesWorkRam", 0x72BC, 1)[0]
+        ),
+        "displayed_column_map": bytes(
+            m.read_memory("snesWorkRam", 0x72F0, 16)
+        ).hex(),
         "bg_column_kind": le16(
             m.read_memory("snesWorkRam", 0x8996, 2)
         ),

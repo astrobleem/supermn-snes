@@ -65,6 +65,7 @@ def main() -> int:
         "image_metrics": {
             "playfield_black_ratio": 1.0,
             "dominant_tile_ratio": 1.0,
+            "max_vertical_black_run": 256,
         },
     }
     clear = {
@@ -76,6 +77,7 @@ def main() -> int:
         "image_metrics": {
             "playfield_black_ratio": 0.1,
             "dominant_tile_ratio": 0.1,
+            "max_vertical_black_run": 0,
         },
     }
     assert gate.evaluate_rows([transition, clear], 1) == []
@@ -83,6 +85,7 @@ def main() -> int:
     assert [item["kind"] for item in transition_failures] == [
         "blank_playfield",
         "repeated_tile_collapse",
+        "vertical_black_band",
     ]
 
     with tempfile.TemporaryDirectory(prefix="fresh-poststart-gate-test-") as raw:
@@ -92,6 +95,21 @@ def main() -> int:
         metrics = gate.image_metrics(black)
         assert metrics["playfield_black_ratio"] == 1.0
         assert metrics["dominant_tile_ratio"] == 1.0
+        assert metrics["max_vertical_black_run"] == 256
+
+        band = temp / "vertical-band.png"
+        band_image = Image.new("RGB", (256, 224), (40, 80, 120))
+        for x in range(96, 160):
+            for y in range(24, 224):
+                band_image.putpixel((x, y), (0, 0, 0))
+        band_image.save(band)
+        band_metrics = gate.image_metrics(band)
+        assert band_metrics["max_vertical_black_run"] == 64
+        band_row = dict(clear)
+        band_row["image_metrics"] = band_metrics
+        assert "vertical_black_band" in [
+            item["kind"] for item in gate.evaluate_rows([band_row], 0)
+        ]
 
         second = temp / "second.png"
         Image.new("RGB", (256, 224), (40, 80, 120)).save(second)

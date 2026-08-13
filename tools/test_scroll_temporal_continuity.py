@@ -51,6 +51,8 @@ def make_capture(directory: Path, *, failure: str | None) -> Path:
             {
                 "frame": frame,
                 "live_scrollx_column0": (0x80 - tick * 3) & 0xFF,
+                "live_scrollx_column4": (0x80 - tick * 3) & 0xFF,
+                "latest_scrollx": (0x80 - tick * 3) & 0xFF,
                 "bg1_hscroll": ppu_position,
                 "displayed_bg_map_sha256": (
                     "map-after" if failure == "coordinate_rebase" and frame >= 14
@@ -96,6 +98,7 @@ def main() -> int:
         assert smooth.returncode == 0, smooth.stderr or smooth.stdout
         smooth_report = json.loads(smooth_output.read_text())
         assert smooth_report["result"] == "green"
+        assert smooth_report["source_scroll_key"] == "latest_scrollx"
         assert smooth_report["source_step_count"] == 12
         assert smooth_report["ppu_step_count"] == 25
         assert smooth_report["registration_shift_histogram"] == {"1": 13, "2": 12}

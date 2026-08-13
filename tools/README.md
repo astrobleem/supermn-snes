@@ -160,7 +160,8 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   `StartWithoutSaveData` movie with organic coin and Start input. It retains
   fresh loading, actual title/credit milestones, every actual post-Start video frame,
   periodic states and BG graphics checks, and a mandatory-review contact sheet.
-  Blank/repeated playfields, hidden BG1, absent BG ownership, partial tile DMA,
+  Blank/repeated playfields, persistent vertical black bands, hidden BG1,
+  absent BG ownership, partial tile DMA,
   nonconsecutive frames, and interpreter halts are machine-red after the default
   100-frame organic Stage-1 fade grace. A clear result
   remains acceptance-unknown until the contact sheet is manually inspected and
@@ -175,7 +176,8 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   still acceptance-unknown without aligned MAME and temporal gates.
 - **`validate_scroll_temporal_continuity.py`** [S] — offline horizontal-camera
   cadence gate for a consecutive Mesen capture. It authenticates every PNG,
-  compares live X1 source steps with every intervening 60 Hz BG1HOFS change,
+  compares the renderer's unwrapped published source phase (with historical raw
+  X1 fallback) with every intervening 60 Hz BG1HOFS change,
   rejects holds, reversals, oversized/accumulated motion, and residual background
   mismatch, and explicitly accounts for same-frame physical-map coordinate
   rebases. It is focused stutter evidence, not aligned-MAME, fresh-boot,
@@ -193,8 +195,9 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
 - **`capture_mesen211_transitions.py`** [S] — fresh-power-on or named-state Mesen 2.1.1 frame
   capture for title/transition compatibility. It records exact ROM/emulator/controller provenance,
   screenshots, checkpoints, PPU Mode/brightness/forced-blank/layer state, the boot-activity byte,
-  BG1 H/V offsets, accepted/latest/live X1-001 scroll state, integrated presented
-  HOFS, displayed-map origin/validity, map-commit marker, DMA0 descriptor,
+  BG1 H/V offsets, accepted/latest/raw/live X1-001 scroll state, integrated
+  presented HOFS, displayed/pending map origin and full column maps, map-commit
+  markers, DMA0 descriptor,
   halt/tick/render state, and a JSON manifest. For an
   explicitly checkpointed cross-version renderer lab, `--refresh-video-mirror` replaces and
   verifies saved `$7F:8000-$AFFF` from the selected ROM and records that intervention in
@@ -221,8 +224,9 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   focused cross-version evidence, never organic cold-boot or FPS evidence.
 - **`validate_vertical_scroll_bridge.py`** [S] — isolated Nexen real-65816/PPU lab for the shipped
   vertical-scroll capture and apply helpers. It covers Stage 1 wrap-to-zero, general motion,
-  byte wrap, MAME-derived Stage 2 per-column patterns, actual BG1 H/V register publication, and
-  the exact-title zero guard. Its scroll shadow is synthetic; it is not gameplay, cold boot,
+  byte wrap, MAME-derived Stage 2 per-column patterns, sparse-to-full map seeding,
+  isolated-gap and modal map changes, raw-phase unwrapping, actual BG1 H/V
+  register publication, and the exact-title zero guard. Its scroll shadow is synthetic; it is not gameplay, cold boot,
   stability, or performance evidence.
 - **`validate_obj_cache_vram.py`** [S] — paused-checkpoint oracle for every persistent OBJ-cache
   hash claim. It reconstructs each physical 16x16 slot from PPU VRAM, compares it with the exact

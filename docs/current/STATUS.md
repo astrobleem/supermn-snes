@@ -11,50 +11,57 @@ This is the only authoritative project-status summary. Dated reports under
 The port is an **interactive technical-demo response candidate**. It is **not
 playable, release-ready, or shippable**.
 
-The current ordinary `build/interp.sfc` is the **unaccepted focused
-temporal-scroll response candidate**, SHA-256
-`d6a8c025723b957380609e0a440a9f26d2e9560a075981ed910af3d7a380a449`.
+The current ordinary `build/interp.sfc` is the **unaccepted bounded
+renderer/scroll response candidate**, SHA-256
+`21abe04cdb897a92992329d96ae9baf22acd6f68a1c01ff2bf77dafb40c0de70`.
 The identical human-test copy is
-`build/interp-scroll-continuous-d6a8c025.sfc`. The `build/` top level contains
-only those two ROM names; historical and diagnostic output is preserved under
-`/home/chad/supermn-snes-artifacts/`.
+`build/interp-scroll-validated-21abe04c.sfc`. Those are the only visible files
+at the `build/` top level (beside the hidden screenshot lock); historical and
+diagnostic output is preserved under `/home/chad/supermn-snes-artifacts/`.
 
-This candidate corrects a human-visible regression that the former gate missed.
-Rejected `3a5f3694…` applied each -3-pixel game-tick camera change at once and
-held the intervening 60 Hz frame. Its old validator inspected only source-change
-frames and therefore falsely called 49 three-pixel registrations green. The
-rewritten every-frame validator reclassifies it red: 48 held presentations and
-49 three-pixel steps. That is the hard skip Chad observed in Mesen.
+This candidate closes the reproduced post-Start black-band and hard-skip
+symptoms in the bounded Stage-1 window. The failure was organic and did not
+require movement input: after coin + Start, a physical X1 source column can
+cross the two-slot layout gap and jump by 64 pixels while the camera moves only
+-3. A fixed-column camera or map anchor therefore injects false 64-pixel
+rebases. A second failure occurred at title-to-gameplay: the sparse title map
+and full gameplay map are unrelated, so accepting their weak modal delta
+injected a false 128-pixel basis.
 
-`d6a8c025…` integrates each 30 Hz source step across the two SNES video frames.
-From the retained predecessor checkpoint at frame 5,871 / tick 370, a 101-frame
-diagnostic capture has 49 exact -3-pixel source steps, 48 one-pixel and 49
-two-pixel visible registrations, zero held/reversed/oversized presentations,
-and zero background discontinuities. All six displayed-map changes register
-with zero residual pixel mismatch. Sol manually reviewed the complete sequence
-contact sheet and all nine transition pairs that failed in rejected predecessor
-`562928a5…`; the wall, floor, palette, and HUD remain whole.
+Current source publishes only the common modulo-32 camera phase, computes a
+tilemap rebase from the modal delta across all sixteen columns, requires at least
+9/16 agreement before accepting that relationship, and otherwise seeds the new
+map's source-column-4 slot in the already-unwrapped phase domain. The map basis
+is prepared before DMA and installed only after that exact tilemap is visible.
+The explicit long-store one-shot commit protocol remains pack-guarded against
+Poppy's invalid long-`STZ` encoding. The focused real-65816/PPU bridge is green
+16/16, including the sparse title transition, an isolated gap-column change, a
+thirteen-column rotation, and a raw -67-to-logical--3 phase jump.
 
-The confirmed final root was a Poppy addressing trap. `STZ` has no long form,
-but Poppy accepted `stz $7E72B9` and emitted bank-relative `STZ $72B9`. The
-map-commit marker therefore remained armed and unrelated graphics/offset-table
-DMAs repeatedly applied 32-pixel coordinate rebases. Source now uses explicit
-`LDA #0 / STA long`; ROM-pack guards require the exact long stores, exactly one
-same-NMI map commit per pending tilemap DMA, and reject the bad bank-relative
-encoding. The focused real-65816/PPU bridge is green 12/12.
+The exact-hash bounded fresh-power gate starts from power-on, records and
+replays organic coin + Start, and retains 601 consecutive post-Start video
+frames 5,512–6,112 / ticks 190–490. Its framebuffer result is clear with no
+post-grace vertical black band, incomplete BG graphics record, frame gap, halt,
+or blank/repeated playfield. The complete contact sheet and the former rebase
+points were manually reviewed: the textured pillar/lamp, wall, floor, palette,
+HUD, and player remain whole.
 
-Evidence is preserved at
-`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8/` and
-`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`.
-The latter contains all 101 authenticated PNGs, `temporal-scroll-report.json`,
-`sequence-contact-sheet.png`, and `former-red-transition-pairs.png`.
+The every-frame temporal gate over those same authenticated PNGs is green. Its
+explicit unwrapped source authority has 152 exact -3-pixel changes; visible
+presentation has 151 one-pixel and 152 two-pixel moves, zero held, reversed, or
+oversized frames, and zero background discontinuities. All 15 displayed-map
+changes have zero post-registration mismatch. Evidence is preserved at
+`/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`,
+with focused bridge/build evidence under
+`/home/chad/supermn-snes-artifacts/active/21abe04c-build-diagnostics-v1/` and the
+checkpoint diagnostic under
+`/home/chad/supermn-snes-artifacts/active/21abe04c-from-4279-frame50-transition-v2/`.
 
-This is cross-ROM checkpoint evidence only. It does not establish fresh boot,
-organic coin/Start, aligned MAME pixels, formal MAME-frame conservation,
-renderer throughput, later-stage coverage, performance, or gameplay acceptance.
-No fresh-power replay was started. The exact-hash cold-boot evidence for
-`3a5f3694…` remains historical liveness evidence and does not transfer to
-`d6a8c025…`.
+This bounded result does not establish aligned MAME pixels, formal
+MAME-frame conservation, later-stage/organic Stage-2 coverage, renderer
+throughput, performance, hardware behavior, or gameplay acceptance. No full
+long gameplay campaign was started; that campaign still requires explicit user
+approval. Builds and bounded fresh-power regression gates do not.
 
 Preserved predecessor `50bbed41…` is pinned as
 `build/interp-prepared-bg-dualpath-50bbed41.sfc`. Its bounded fresh gate starts

@@ -37,7 +37,12 @@ def parse_args() -> argparse.Namespace:
 def visual_transition_observations(
     rows: list[dict[str, Any]], visual_grace_frames: int
 ) -> list[dict[str, Any]]:
-    kinds = {"blank_playfield", "repeated_tile_collapse", "bg1_not_visible"}
+    kinds = {
+        "blank_playfield",
+        "repeated_tile_collapse",
+        "vertical_black_band",
+        "bg1_not_visible",
+    }
     return [
         failure
         for failure in evaluate_rows(rows, 0)
@@ -87,7 +92,11 @@ def main() -> int:
         if sha256(screenshot) != row["screenshot"]["sha256"]:
             raise RuntimeError(f"retained framebuffer hash mismatch: {screenshot}")
         recomputed = image_metrics(screenshot)
-        if recomputed != row["image_metrics"]:
+        stored_metrics = row["image_metrics"]
+        if any(
+            key not in recomputed or recomputed[key] != value
+            for key, value in stored_metrics.items()
+        ):
             raise RuntimeError(f"stored framebuffer metrics changed: {screenshot}")
         row["image_metrics"] = recomputed
         rows.append(row)

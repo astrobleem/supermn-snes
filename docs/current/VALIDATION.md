@@ -216,8 +216,10 @@ aggregate contract:
   evidence, not a substitute for the exact-MAME gate.
 
 Correct pixels at sparse checkpoints can still conceal a visibly jerky camera.
-For a consecutive capture that retains `live_scrollx_column0`, actual BG1HOFS,
-and authenticated screenshots, run the focused temporal-scroll gate offline:
+For a consecutive capture that retains the renderer's unwrapped
+`latest_scrollx`, actual BG1HOFS, and authenticated screenshots, run the focused
+temporal-scroll gate offline. Historical captures fall back to raw X1 columns;
+current evidence must use the explicit unwrapped authority:
 
 ```sh
 python3 tools/validate_scroll_temporal_continuity.py \
@@ -226,7 +228,7 @@ python3 tools/validate_scroll_temporal_continuity.py \
 ```
 
 The gate requires consecutive actual video frames, authenticates every PNG,
-derives the stable X1 source step, and evaluates every intervening presentation,
+derives the stable published source step, and evaluates every intervening presentation,
 including frames on which the 30 Hz source does not change. It rejects holds,
 reversals, oversized steps, accumulated motion, residual background mismatch,
 and incorrect physical-map coordinate rebases.
@@ -234,14 +236,15 @@ and incorrect physical-map coordinate rebases.
 This stricter contract reclassifies rejected `3a5f3694…` red. Its former gate
 looked only at the 49 source-change frames and called each three-pixel move green;
 the missing intervening coverage contains 48 held presentations. Current
-`d6a8c025…` is focused-green over 101 consecutive authenticated frames: 49
-source steps, 48 one-pixel plus 49 two-pixel registrations, no holds/reversals/
-oversized steps, and no background discontinuities. Six displayed-map changes
-have zero residual pixel mismatch. The report and manually reviewed sheets are
-under
-`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`.
+`21abe04c…` is exact-hash fresh-power green over 601 consecutive post-Start
+frames: 152 exact -3-pixel published source steps, 151 one-pixel plus 152
+two-pixel registrations, no holds/reversals/oversized steps, and no background
+discontinuities. All 15 displayed-map changes have zero residual pixel mismatch.
+The report and manually reviewed contact sheet are under
+`/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`.
 This result remains acceptance-`unknown`; it does not replace aligned MAME
-pixels, formal MAME-frame conservation, fresh power, or human review.
+pixels, formal MAME-frame conservation, later stages, performance, hardware, or
+human combat/audio review.
 
 Nexen's 256x239 capture is normalized to the top 256x224 active display used by
 Mesen. A green player/input/health oracle must never be reported as visually
@@ -327,15 +330,13 @@ build is not viable without a bounded cold-boot liveness smoke. The retained
 This proves exit from loading only; it is not a fresh gameplay campaign or visual
 acceptance.
 
-Current `d6a8c025…` retains that vertical bridge and adds integrated 60 Hz
-horizontal presentation plus same-NMI map-basis commits. Its exact-hash focused
-bridge is green 12/12 at
-`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8/vertical-scroll-bridge.json`.
-The retained frame-5,871 checkpoint migration and offline temporal gate are at
-`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`;
-this is cross-ROM diagnostic evidence, not the required fresh-power successor
-gate. The bounded loading-exit smoke for rejected `3a5f3694…` is historical
-liveness evidence only and does not transfer to the current hash.
+Current `21abe04c…` retains that vertical bridge and adds unwrapped modulo-32
+camera publication plus consensus-guarded physical-map basis commits. Its
+exact-hash focused bridge is green 16/16 under
+`/home/chad/supermn-snes-artifacts/active/21abe04c-build-diagnostics-v1/`.
+The bounded fresh-power framebuffer and temporal gates are both green under
+`/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`;
+they remain bounded renderer evidence, not aggregate gameplay acceptance.
 
 Legacy Mesen writes screenshots through global filenames. Parallel capture
 processes can therefore copy one another's PNGs even when their emulator states
