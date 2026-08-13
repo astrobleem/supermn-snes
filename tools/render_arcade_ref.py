@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Pure-Python (no numpy/PIL) arcade full-frame decode from the captured c_*.bin,
-ported from render_full_frame.py (which matched MAME 47/47 colors). Writes a PNG so
-the interp's render can be compared to an independent renderer of the same data."""
-import struct, zlib
-MT = "tools/mame-trace"
+"""Pure-Python arcade full-frame decode from captured X1-001 planes."""
+import argparse, struct, zlib
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--input-dir", default="tools/mame-trace")
+parser.add_argument("--gfx", default="tools/mame-trace/gfx1.bin")
+parser.add_argument("--output", default="/tmp/arcade_ref.png")
+args = parser.parse_args()
+MT = args.input_dir
 W_, H_ = 384, 240
 XOFF = [x if x < 8 else 256+(x-8) for x in range(16)]
 YOFF = [y*32 if y < 8 else 512+(y-8)*32 for y in range(16)]
 PLANE = [0, 8, 16, 24]
-gfx = open(f"{MT}/gfx1.bin", "rb").read()
+gfx = open(args.gfx, "rb").read()
 sc = struct.unpack("<8192H", open(f"{MT}/c_spritecode_full.bin", "rb").read())
 yl = open(f"{MT}/c_spriteylow.bin", "rb").read()
 ctrl = struct.unpack("<4H", open(f"{MT}/c_spritectrl.bin", "rb").read())
@@ -81,5 +85,5 @@ def write_png(path, w, h, rgb):
     raw=bytearray()
     for y in range(h): raw.append(0); raw += rgb[y*w*3:(y+1)*w*3]
     open(path,"wb").write(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack(">IIBBBBB",w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(bytes(raw),9))+chunk(b'IEND',b''))
-write_png("/tmp/arcade_ref.png", W_, H_, fb)
-print("wrote /tmp/arcade_ref.png", W_, "x", H_, "; distinct colors:", len({tuple(fb[i*3:i*3+3]) for i in range(W_*H_)}))
+write_png(args.output, W_, H_, fb)
+print("wrote", args.output, W_, "x", H_, "; distinct colors:", len({tuple(fb[i*3:i*3+3]) for i in range(W_*H_)}))

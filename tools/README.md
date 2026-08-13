@@ -130,15 +130,56 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   reserved blank physical BG slot zero, one-based prepared cache records, and
   the single direct staging-to-PPU map authority.
 - **`capture_snes_input_framebuffers.py` / `capture_snes_direct_framebuffers.py`**
-  [S] — every-frame checkpoint captures under real controller input. The first
-  supports periodic states and explicit cross-ROM video/cache migrations; the
-  second advances a loaded Nexen state exactly one video frame per screenshot
-  when movie requests cannot advance it. Both record interventions and are
-  diagnostic acquisition, never gameplay acceptance.
+  [S] — checkpoint captures under real controller input. Movie replay in the
+  first verifies each retained framebuffer is the next actual video frame and
+  supports periodic states plus explicit cross-ROM video/cache migrations.
+  Legacy Mesen's direct-controller request can advance zero, one, or two actual
+  video frames, so the second is sampling-only and records each observed delta;
+  it must never claim consecutive coverage. Its coherent-idle stop retains two
+  additional samples by default so screenshot latency cannot expose the pre-DMA
+  image. Both record interventions and are diagnostic acquisition, never
+  gameplay acceptance.
+- **`drain_mesen211_renderer.py` / `inspect_mesen211_bg_state.py`** [S] — focused
+  legacy-Mesen checkpoint tools. The drain parks the paused SA-1 at its exact PC
+  while the 5A22 empties renderer queues; the inspector then checks the selected
+  dynamic column layout, final tile targets, reverse owners, intentional X1
+  overlaps, stale targets, palette mapping, and native graphics bytes without
+  advancing the state. Neither is fresh-boot or exact-MAME evidence.
+- **`extract_x1_shadow_from_state.py`** [S] — read-only extraction of a paused
+  checkpoint's logical X1 palette/Y/control/code planes for the established
+  software renderer. It also records canonical raw BG planes and their exact
+  byte comparison against live X1. Its output is a diagnostic reference, not an
+  exact MAME frame.
+- **`prove_prepared_bg_cache_reconstruction.py`** [S] — intervened causal test
+  for a retained primary `$FFFE` queue entry. It inverts the exact prepared
+  map/code-list/palette-map representation, requires the result to match paused
+  live X1 code/color planes, writes only canonical raw caches `$2000/$2400`, and
+  continues the same ROM with periodic screenshots. Its WRAM writes are always
+  recorded; it can never issue organic or gameplay acceptance.
+- **`validate_fresh_poststart_framebuffers.py`** [S] — records and replays a
+  `StartWithoutSaveData` movie with organic coin and Start input. It retains
+  fresh loading, actual title/credit milestones, every actual post-Start video frame,
+  periodic states and BG graphics checks, and a mandatory-review contact sheet.
+  Blank/repeated playfields, hidden BG1, absent BG ownership, partial tile DMA,
+  nonconsecutive frames, and interpreter halts are machine-red after the default
+  100-frame organic Stage-1 fade grace. A clear result
+  remains acceptance-unknown until the contact sheet is manually inspected and
+  the separate exact-MAME pixel/temporal gates pass.
+- **`reanalyze_fresh_poststart_framebuffers.py`** [S] — re-verifies the ROM,
+  movie, contact sheet, every retained PNG hash, and every recomputed framebuffer
+  metric before reapplying the visual gate with a new grace threshold. It performs
+  no emulator replay or runtime writes and cannot issue gameplay acceptance.
 - **`analyze_snes_framebuffer_flashes.py`** [S] — repeated-tile/flash heuristic
   over a consecutive capture. `--skip-frames` is allowed only for a disclosed
   acquisition artifact such as a serialized pre-vblank image; a clear result is
   still acceptance-unknown without aligned MAME and temporal gates.
+- **`validate_scroll_temporal_continuity.py`** [S] — offline horizontal-camera
+  cadence gate for a consecutive Mesen capture. It authenticates every PNG,
+  compares live X1 source steps with every intervening 60 Hz BG1HOFS change,
+  rejects holds, reversals, oversized/accumulated motion, and residual background
+  mismatch, and explicitly accounts for same-frame physical-map coordinate
+  rebases. It is focused stutter evidence, not aligned-MAME, fresh-boot,
+  gameplay, or performance acceptance.
 
 ## Recovery profiling and architecture labs
 
@@ -152,7 +193,9 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
 - **`capture_mesen211_transitions.py`** [S] — fresh-power-on or named-state Mesen 2.1.1 frame
   capture for title/transition compatibility. It records exact ROM/emulator/controller provenance,
   screenshots, checkpoints, PPU Mode/brightness/forced-blank/layer state, the boot-activity byte,
-  BG1 H/V offsets, packed/X1-001 scroll state, halt/tick/render state, and a JSON manifest. For an
+  BG1 H/V offsets, accepted/latest/live X1-001 scroll state, integrated presented
+  HOFS, displayed-map origin/validity, map-commit marker, DMA0 descriptor,
+  halt/tick/render state, and a JSON manifest. For an
   explicitly checkpointed cross-version renderer lab, `--refresh-video-mirror` replaces and
   verifies saved `$7F:8000-$AFFF` from the selected ROM and records that intervention in
   provenance; it requires `--state`. The default fresh-power path performs no memory write. This

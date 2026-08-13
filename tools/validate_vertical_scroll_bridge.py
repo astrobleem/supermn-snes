@@ -3,8 +3,9 @@
 
 This is an isolated Mesen/Nexen machine-code lab.  It redirects the paused
 5A22 to the production helpers, supplies synthetic X1-001 scroll-shadow bytes,
-and checks both the packed snapshot result and the PPU BG1 scroll registers.
-It is not gameplay, cold-boot, stability, or performance evidence.
+and checks the packed snapshot result, legacy PPU BG1 scroll registers, and the
+Mode-2 per-column offset table.  It is not gameplay, cold-boot, stability, or
+performance evidence.
 """
 
 from __future__ import annotations
@@ -155,14 +156,22 @@ def run_helper(
     hook = m.add_exec_hook(return_spin, cpu_type="Snes")
     m.drain_notifications(timeout=0.05)
     try:
-        result = m.run_until(max_frames=1, hook_handle=hook)
+        # The Mode-2 helper can publish a DMA descriptor and wait for the NMI
+        # service path.  Allow the handler to return before judging the parked
+        # caller PC; short helpers still stop immediately on the same hook.
+        result = m.run_until(max_frames=3, hook_handle=hook)
         m.pause()
         state = dict(m.get_cpu_state("Snes"))
     finally:
         m.remove_hook(hook)
         m.drain_notifications(timeout=0.05)
     pc = ((int(state["k"]) & 0xFF) << 16) | (int(state["pc"]) & 0xFFFF)
-    if (result or {}).get("reason") != "hookFired" or pc != return_spin:
+    # A helper that waits for one real DMA window can reach the installed
+    # return spin on the same boundary where run_until reports maxFrames.
+    # Conversely, an interrupt can begin after the exact exec hook fires but
+    # before the subsequent state query.  Either direct observation is enough;
+    # anything that has neither is a real failure.
+    if (result or {}).get("reason") != "hookFired" and pc != return_spin:
         trace = m.trace_log(count=48, cpu_type="Snes")
         raise RuntimeError(
             f"helper did not return to ${return_spin:06X}: result={result!r}, "
@@ -213,6 +222,8 @@ def main() -> int:
     capture_end = symbol_address(args.symbols, "capture_bg_vscroll_end")
     apply_scroll = symbol_address(args.symbols, "bg_scroll")
     apply_end = symbol_address(args.symbols, "bg_scroll_end")
+    apply_opt = symbol_address(args.symbols, "bg_scroll_with_opt")
+    apply_opt_end = symbol_address(args.symbols, "bg_scroll_with_opt_end")
     return_spin = capture_end + 1
     configure_runtime()
 
@@ -290,8 +301,11 @@ def main() -> int:
             ("title-guard", 0x7A47, 0x80, 0x00),
         )
         for name, packed, title_high, expected_vscroll in apply_cases:
+            m.write_memory("snesWorkRam", 0x72B3, "00")
             m.write_memory("snesWorkRam", 0x8994, packed.to_bytes(2, "little").hex())
-            m.write_memory("snesWorkRam", 0x8997, "00")
+            # These are the legacy/irregular-layout register cases.  Exact
+            # layouts intentionally keep only the common sub-32 X phase.
+            m.write_memory("snesWorkRam", 0x8996, "feff")
             m.write_memory("snesWorkRam", 0x89BF, f"{title_high:02x}")
             run_helper(m, apply_scroll, return_spin)
             layer = m.get_ppu_state()["layers"][0]
@@ -313,6 +327,174 @@ def main() -> int:
                 }
             )
 
+        # Paced gameplay publishes the newest coherent horizontal source byte
+        # independently of the slower immutable render candidate.  Prove the
+        # valid marker selects it while the accepted-cache vertical byte and
+        # legacy-layout arithmetic remain unchanged.
+        m.write_memory("snesWorkRam", 0x8994, "477a")
+        m.write_memory("snesWorkRam", 0x8996, "feff")
+        m.write_memory("snesWorkRam", 0x89BF, "00")
+        m.write_memory("snesWorkRam", 0x72B2, "55a555")
+        run_helper(m, apply_scroll, return_spin)
+        layer = m.get_ppu_state()["layers"][0]
+        rows.append(
+            {
+                "kind": "apply-latest-scroll",
+                "name": "paced-latest-over-accepted-cache",
+                "accepted_scrollx": 0x7A,
+                "latest_scrollx": 0x55,
+                "expected_hscroll": (0x40 - 0x55) & 0x3FF,
+                "observed_hscroll": int(layer["hscroll"]),
+                "expected_vscroll": 0x47,
+                "observed_vscroll": int(layer["vscroll"]),
+                "pass": (
+                    int(layer["hscroll"]) == ((0x40 - 0x55) & 0x3FF)
+                    and int(layer["vscroll"]) == 0x47
+                ),
+            }
+        )
+
+        # Exact maps use the integrated 10-bit presentation coordinate.  A
+        # newly accepted physical-column map must not rebase it and move
+        # otherwise stationary pixels by 32 pixels at a map boundary.
+        m.write_memory("snesWorkRam", 0x8994, "477a")
+        m.write_memory("snesWorkRam", 0x8996, "003f")
+        m.write_memory("snesWorkRam", 0x72B2, "55a555")
+        integrated_hscroll = 0x04B
+        m.write_memory(
+            "snesWorkRam",
+            0x72B5,
+            integrated_hscroll.to_bytes(2, "little").hex(),
+        )
+        run_helper(m, apply_scroll, return_spin)
+        layer = m.get_ppu_state()["layers"][0]
+        rows.append(
+            {
+                "kind": "apply-integrated-scroll",
+                "name": "exact-map-does-not-rebase-presented-coordinate",
+                "accepted_scrollx": 0x7A,
+                "presented_scrollx": 0x55,
+                "expected_hscroll": integrated_hscroll,
+                "observed_hscroll": int(layer["hscroll"]),
+                "pass": int(layer["hscroll"]) == integrated_hscroll,
+            }
+        )
+
+        # Reproduce the supplied attract-state layout: source columns 0..13
+        # are populated, 14/15 are empty overlaps of physical slots 4/7, and
+        # the four visible source groups carry distinct vertical phases.  The
+        # empty overlaps must not replace populated slots' Y values.
+        source_y = bytes(
+            [
+                0xF2, 0xF2, 0xF2, 0xF2,
+                0x9F, 0x9F, 0x9F, 0x9F,
+                0x45, 0x45, 0x45, 0x45,
+                0xF9, 0xF9, 0xF2, 0x45,
+            ]
+        )
+        physical_map = bytes(
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 4, 7]
+        )
+        raw_codes = bytearray(0x400)
+        for column in range(14):
+            raw_codes[column * 0x40:column * 0x40 + 2] = b"\x01\x00"
+        m.write_memory("snesWorkRam", 0x2000, raw_codes.hex())
+        m.write_memory("snesWorkRam", 0x72C0, source_y.hex())
+        m.write_memory("snesWorkRam", 0x72B2, "00a5004000")
+        m.write_memory("snesWorkRam", 0x89E0, physical_map.hex())
+        m.write_memory("snesWorkRam", 0x8994, "aa00003f")
+        m.write_memory("snesWorkRam", 0x89BE, "0000")
+        run_helper(m, apply_opt, return_spin)
+
+        expected_physical_y = bytes(
+            [
+                0xF2, 0xF2, 0xF2, 0xF2,
+                0x9F, 0x9F, 0x9F, 0x9F,
+                0x45, 0x45, 0x45, 0x45,
+                0xF9, 0xF9, 0x9F, 0x9F,
+            ]
+        )
+        hscroll = 0x40
+        expected_table = bytearray(0x80)
+        for index in range(32):
+            pixel = (index * 8 - 24 + hscroll) & 0x1FF
+            slot = (pixel >> 5) & 0x0F
+            word = 0x2000 | ((expected_physical_y[slot] + 7) & 0xFF)
+            expected_table[0x40 + index * 2:0x42 + index * 2] = (
+                word.to_bytes(2, "little")
+            )
+        observed_physical_y = bytes(
+            m.read_memory("snesWorkRam", 0x72A0, 0x10)
+        )
+        observed_opt_control = bytes(
+            m.read_memory("snesWorkRam", 0x72B0, 2)
+        )
+        observed_table = bytes(
+            m.read_memory("snesWorkRam", 0x7300, 0x80)
+        )
+        observed_vram = bytes(
+            m.read_memory("snesVideoRam", 0xF000, 0x80)
+        )
+        ppu = m.get_ppu_state()
+        layer = ppu["layers"][0]
+        opt_pass = (
+            int(ppu.get("bgMode", -1)) == 2
+            and int(layer["hscroll"]) == hscroll
+            and int(layer["vscroll"]) == 0xF9
+            and observed_physical_y == expected_physical_y
+            and observed_opt_control == bytes((0xF9, 0x01))
+            and observed_table == expected_table
+            and observed_vram == expected_table
+        )
+        rows.append(
+            {
+                "kind": "mode2-offset-table",
+                "name": "attract-populated-overlap",
+                "expected_mode": 2,
+                "observed_mode": int(ppu.get("bgMode", -1)),
+                "expected_hscroll": hscroll,
+                "observed_hscroll": int(layer["hscroll"]),
+                "expected_vscroll": 0xF9,
+                "observed_vscroll": int(layer["vscroll"]),
+                "expected_physical_y": expected_physical_y.hex(),
+                "observed_physical_y": observed_physical_y.hex(),
+                "expected_opt_control": "f901",
+                "observed_opt_control": observed_opt_control.hex(),
+                "wram_table_sha256": hashlib.sha256(observed_table).hexdigest(),
+                "vram_table_sha256": hashlib.sha256(observed_vram).hexdigest(),
+                "expected_table_sha256": hashlib.sha256(expected_table).hexdigest(),
+                "pass": opt_pass,
+            }
+        )
+
+        # An exact-looking column map must still respect the explicit title
+        # composition bit: Mode-2 offsets would override the zero VOFS guard.
+        m.write_memory("snesWorkRam", 0x8996, "003f")
+        m.write_memory("snesWorkRam", 0x89BE, "0080")
+        run_helper(m, apply_opt, return_spin)
+        ppu = m.get_ppu_state()
+        layer = ppu["layers"][0]
+        observed_opt_control = bytes(
+            m.read_memory("snesWorkRam", 0x72B0, 2)
+        )
+        rows.append(
+            {
+                "kind": "mode2-title-fallback",
+                "name": "exact-map-title-guard",
+                "expected_mode": 1,
+                "observed_mode": int(ppu.get("bgMode", -1)),
+                "expected_vscroll": 0,
+                "observed_vscroll": int(layer["vscroll"]),
+                "expected_opt_enabled": 0,
+                "observed_opt_enabled": observed_opt_control[1],
+                "pass": (
+                    int(ppu.get("bgMode", -1)) == 1
+                    and int(layer["vscroll"]) == 0
+                    and observed_opt_control[1] == 0
+                ),
+            }
+        )
+
     report = {
         "scope": (
             "isolated real-65816/PPU vertical-scroll bridge lab; synthetic "
@@ -329,6 +511,8 @@ def main() -> int:
             "capture_end": f"{capture_end:06X}",
             "apply": f"{apply_scroll:06X}",
             "apply_end": f"{apply_end:06X}",
+            "apply_opt": f"{apply_opt:06X}",
+            "apply_opt_end": f"{apply_opt_end:06X}",
             "return_spin": f"{return_spin:06X}",
         },
         "rows": rows,

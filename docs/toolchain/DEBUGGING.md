@@ -114,7 +114,8 @@ any other `$400000,x` fast-path READ whose An can be ROM.
    its tail — a lost `sec/rts` corrupted the boot RAM-test). **Defense:** after every
    layout change, assert slack seams in the ROM-pack script (see `build_interp_rom.py`
    guards) — assert the bytes just before each `.org` boundary are the expected
-   terminator/padding.
+   terminator/padding. Upstream report and owner-map fix proposal:
+   [Poppy #377](https://github.com/TheAnsarya/poppy/issues/377#issuecomment-5283787467).
 2. **Mode inference resets at labels after `rtl`/`rts`.** Code after a label following a
    return is assembled as if `.a16` even when every caller arrives in A8 — 8-bit
    immediates then swallow the next opcode byte (BRK storms). **Explicit `.a8`/`.i16`
@@ -123,8 +124,13 @@ any other `$400000,x` fast-path READ whose An can be ROM.
 3. **Never insert code mid-file in `interp.pasm`** — long-range branches wrap silently.
    Append new bodies at the end / in escape banks and reach them with stubs.
 4. **`rep #$30` before 16-bit immediates** in any code Poppy might size as 8-bit.
-5. **Forward-referenced `jml`/`jml [abs]` is mis-sized** — use a literal 24-bit target
-   or the push+RTL pattern (see `xlat_dispatch`).
+5. **Forward-reference sizing is not limited to `jml`.** Upstream Poppy `main`
+   at `fa44a809…` mis-sizes forward `jsl target` by one byte and `jml [$1234]`
+   by one byte during semantic layout even though code generation emits the full
+   instruction. It also freezes labels before pass-2 macro expansion. Use a
+   literal 24-bit target or the push+RTL pattern (see `xlat_dispatch`), and keep
+   pack-time byte/seam assertions. Minimized evidence and proposed source seam:
+   [Poppy #376](https://github.com/TheAnsarya/poppy/issues/376#issuecomment-5283787271).
 6. Escape banks: start files with `.snes`(+`.sa1_enabled`); use explicit `jsl.l`/`jml.l`
    for cross-bank; branchless sign-extension beats branchy (see `escape-bank` notes in
    PROFILE_CAMPAIGN).
@@ -132,6 +138,26 @@ any other `$400000,x` fast-path READ whose An can be ROM.
    do NOT track relocations in the other file. **After moving anything in `interp.pasm`,
    grep every other `.pasm` for hardcoded addresses into it** — a stale one is a
    mid-instruction `jml` landmine that presents as a silent SA-1 runaway.
+8. **Unsupported 24-bit operands can truncate with exit zero.** For example,
+   `sta $7E74C0,y` emits `99 C0 74` and `stx $7E1234` emits `8E 34 12`, silently
+   discarding bank `$7E`. Reject known illegal encodings in the ROM packer and
+   express the operation through a legal long-X sequence or explicit helper.
+   Upstream report: [Poppy #379](https://github.com/TheAnsarya/poppy/issues/379).
+9. **Macro expansion can move bytes without moving labels.** A two-NOP macro can
+   emit `EA EA` while labels after its invocation remain at the definition address;
+   a macro-local branch can also fail operand evaluation. Do not use macros in
+   packed production islands until the pass model is fixed and compile-tested.
+10. **The ca65 converter is not a verified translation path.** On current upstream
+   it drops the dots from `.setcpu/.a16/.i16/.org`, converts `@loop` to an
+   incompatible `.loop`, and places macro bodies at the definition while the
+   invocation becomes a no-op. The output can assemble with exit zero and wrong
+   bytes. Upstream report: [Poppy #380](https://github.com/TheAnsarya/poppy/issues/380).
+
+The public minimized fixture bundle for items 1, 2, 5, 8, 9, and 10 is
+[poppy-65816-repros](https://gist.github.com/astrobleem/df4465b29b4ea740e5cbc21b44249ad9).
+It was rerun after a forced non-incremental build of clean upstream Poppy
+`fa44a809…`; the rebuilt CLI DLL was byte-identical (SHA-256 `f98d6561…e126c`),
+so these are not local-source or stale-binary differences.
 
 ## 3. Emulator-harness operational gotchas
 

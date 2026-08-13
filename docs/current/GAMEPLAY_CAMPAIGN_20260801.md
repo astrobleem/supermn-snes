@@ -1661,7 +1661,8 @@ nearest checkpoint with focused tests and batch nonblocking fixes. Luna owns
 all long playback; the main thread consumes only compact watcher reports. Do
 not create another ROM lineage until the confirmed root cause, rebuild need,
 and invalidated fresh evidence have been reported. Do not launch a new fresh-
-boot campaign without explicit user approval.
+boot full long gameplay campaign without explicit user approval. Builds and
+bounded fresh-power regression gates do not require separate approval.
 
 `build/playtest-investigation-20260725/campaign-stall-threeway-rom9415-v1/summary.json` is the retained-hash paired forensic run. It compares the corresponding failure against MAME and both native configurations. Native-off clears `$071A/$073A`; native-on preserves them. Both remain at the same `ispin`, registers, CCR, stack window, virtual PC/opcode, and `$DEAD` halt for 120 neutral frames. The native gates therefore do not cause or release this failure. The observed terminal is an interpreter unimplemented-opcode/invalid-PC path, with upstream PC corruption still under investigation. It is not a full playthrough or a current-hash fresh-boot result.
 

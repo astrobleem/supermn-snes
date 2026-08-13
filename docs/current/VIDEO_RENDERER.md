@@ -11,9 +11,151 @@ were true only before pixels first rendered. For current acceptance state, use
 > title/gameplay/HUD output, but renderer conservation, attack-animation tiles,
 > organic Stage 2 behavior, and aligned MAME pixels remain open.
 
-## Current correction: blank BG slot and one map authority (August 12, 2026)
+## Current focused correction: every-frame scroll integration (August 13, 2026)
 
-The unaccepted current candidate `6413924c…` repairs the live scrolling
+Preserved `50bbed41…` produces the right Stage-1 wall/floor but does not move it
+at source cadence. In the retained exact-hash frame-5,871 suffix, live X1 column
+zero advances by exactly -3 pixels on all 50 game ticks. The PPU changes BG1HOFS
+only 17 times because a physical-column change forces a heavy tilemap remap,
+both immutable-image queues remain full, and 33 later candidates are dropped.
+The resulting accepted controls contain accumulated 6-15-pixel motion.
+
+Rejected `3a5f3694…` first decoupled latest coherent X1 scroll from immutable
+image ownership. Its validator nevertheless sampled only frames on which the
+30 Hz source changed. It reported 49 correct three-pixel registrations while
+silently skipping the intervening held frames. Reanalysis over every consecutive
+video frame exposes the user-visible `hold, +3` cadence: 48 holds and 49
+three-pixel jumps.
+
+Current `d6a8c025…` adds a 60 Hz presentation cursor at `$72B4` and an integrated
+10-bit PPU coordinate at `$72B5/$72B6`. Each -3-pixel source update is presented
+as a two-pixel step followed by a one-pixel step; image/tile ownership remains on
+the slower renderer queue. The PPU coordinate is also rebased by 32 pixels in the
+same NMI that publishes a rotated physical tilemap, so the coordinate change and
+map-basis change cancel visually.
+
+The path took several deliberately rejected builds. `b1e57e0e…` achieved the
+1/2-pixel cadence but flashed at map publication. `d43c8bb4…` committed the
+coarse rebase one video frame late. `562928a5…` moved it into the correct NMI but
+still had nine discontinuities because Poppy accepted `stz $7E72B9` even though
+65816 has no long `STZ`, emitting bank-relative `9C B9 72`; the commit marker
+never cleared and later unrelated DMAs repeated the rebase. The final source uses
+`LDA #0 / STA long` for both marker clears. Packer guards pin the legal bytes,
+same-NMI call count, and one-shot marker protocol.
+
+The current focused bridge is green 12/12. The retained-checkpoint capture covers
+101 consecutive authenticated frames and 49 source steps: visible registration
+is one pixel 48 times and two pixels 49 times, with no holds, reversals,
+oversized steps, or background discontinuities. All six displayed-map changes
+have zero post-registration mismatch. Sol manually reviewed the sequence sheet
+and every transition pair that was red in `562928a5…`. Evidence is under
+`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8/` and
+`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`.
+
+This does not make the renderer fast: the successor still completes only 18
+images and records 33 queue drops over the predecessor's measured 100 frames.
+The current work closes the reproduced horizontal camera-cadence symptom in a
+checkpoint lab only. Fresh
+power, later stages, aligned MAME pixels, formal temporal conservation, and human
+acceptance remain open.
+
+## Current bounded clear: prepared raw BG baseline (August 13, 2026)
+
+Exact ROM `c6ec69a1…` organically consumes a credit and starts Stage 1. Corrected
+movie replay proves 457 consecutive actual video frames (5,634–6,090), all with
+HUD/OBJ over an absent BG. The older 601-sample controller capture is negative
+evidence but is not consecutive-frame coverage. VRAM map
+and native tile bytes are present and the live X1 shadow contains the complete
+392-cell scene. The failure is consumer state: primary prepared (`$FFFE`)
+promotion copies `$D8A0`'s exact logical map, `$E8A0`'s sorted codes, and
+`$EA20`'s palette map, but leaves canonical raw planes `$2000/$2400` holding
+the preceding 35-cell title image. Later sparse/clean candidates are defined
+relative to those planes, so they erase or retain the wrong scene even though
+the prepared transition itself was exact.
+
+In rejected `d4873020…`, `prepared_bg_cache_reconstruct` ran only during queued
+primary prepared promotion, before dynamic column remapping. It uses the immutable logical offset table at
+5A22 `$EF:6800` to invert each prepared TL map word, recover the sorted arcade
+code and arcade palette bank, reverse the single-axis flip mapping, and publish
+big-endian canonical code/color words. The lazy WRAM promoter grows from `$026A`
+to `$026E`; the packer checks both the new span and its `$E9:C400` call.
+
+The initial cache-only proof restored the scene but exposed black tile chunks.
+Its prepared graphics list contains 178 consecutive 128-byte records; the old
+`$1700` chunk size consumed the VBlank window and corrupted record tails at
+physical slots 46 and 138. `bg_tile_run_dma_chunks` now uses `$1600`, retaining
+a full-record margin, and both DMA wait paths reset the OPVCT phase with
+`STAT78`. A phase reset alone was tested and rejected as insufficient.
+
+Actual assembled-helper execution also caught and rejected an initial
+`$EF:E800` table reference: the table is SA-1 `$9E:E800` at file `$2F6800`, so
+the 5A22 address is `$EF:6800`. With that corrected, the actual helper and
+promoter produce raw code/color planes byte-identical to live X1. The 500-frame
+intervened continuation has 178/178 exact graphics records and no structural,
+palette, or stale-target mismatch; manually inspected frames 50, 200, and 500
+and the full 50-frame checkpoint contact sheet show the complete scrolling
+background without black chunks. The corresponding X1 source sheet confirms the
+early gray-green palette transition is not SNES-only. Evidence is
+`build/playback-watcher-20260813/c6ec-assembled-prepared-dma1600-proof-v3/`
+and `c6ec-assembled-prepared-dma1600-proof-v3-final-cache-v1/`; the corrupted
+expected/observed records remain in `c6ec-prepared-cache-proof-v4-final-cache-v3/`.
+
+Rejected ROM `d4873020…` contains the queued-path bytes, but its fresh gate is
+still red. `snapshot_acquire_paced` takes the direct prepared path through
+`psd_prepared_dma`; that path copies BGMAP, sorted codes, and palette map without
+calling the reconstructor. A same-hash `$E9:C400` execution hook remains silent
+while live X1 changes to 392 Stage-1 cells and the raw cache remains the exact
+35-cell title image. The queue-only intervention therefore proved its named
+branch but did not cover organic fresh execution.
+
+Its fresh evidence and reviewed contact sheet are in
+`d487-fresh-poststart-framebuffers-v2`; helper-flow evidence is
+`d487-organic-helper-poststart0-v1`.
+
+Current `50bbed41…` places the same `$E9:C400` reconstruction call after the
+direct prepared map/list/palette snapshot. Pack-time guards require exactly one
+call in both direct and queued consumers. Its organic fresh movie retains 602
+consecutive post-Start frames. The old 50-frame grace flags only the real
+Stage-1 fade (black 50–65, dark/gray through 89); manual review shows geometry
+from frame 66 and the complete wall/floor/palette by frame 90. Authenticated
+offline reanalysis verifies every PNG and is clear from frame 100 through 601.
+At frame 100 the raw code/color planes match live X1 byte-for-byte, structural
+ownership is 392/392, and all 178 native BG graphics records match. Evidence is
+under `50bbed41-fresh-poststart-framebuffers-v1`,
+`50bbed41-fresh-poststart-x1-100-v2`, and
+`50bbed41-fresh-poststart-inspect-100-v1`. This closes the reproduced missing-BG
+regression, not aligned-MAME pixels, temporal conservation, later-stage coverage,
+performance, hardware, or gameplay acceptance.
+
+## Current correction: bank-safe per-column vertical scroll (August 12, 2026)
+
+Preserved unaccepted candidate `c6ec69a1…` added the per-column vertical-scroll
+capture and Mode-2 window path on top of the blank-slot/map-authority repair.
+Rejected predecessor `95b44eb7…` used `sta $7E74C0,y`; that addressing mode does
+not exist on 65816, and Poppy silently emitted DB-relative absolute,Y bytes
+`99 C0 74`. Those stores corrupted the arcade boot RAM test, which is why the ROM
+stayed on the loading screen despite passing the focused renderer fixture.
+
+The repaired capture preserves X, transfers Y to X, and uses legal long,X:
+`DA BB 9F C0 74 7E FA`. `tools/build_interp_rom.py` rejects the bad encoding and
+requires this sequence. A bounded exact-hash cold-boot smoke reaches tick 185,
+render 89, PC `$0818`, Mode 2, halt zero; the focused real-5A22/PPU bridge gate is
+green 10/10.
+
+Both supplied old Mesen states now rebuild to complete, settled Mode-2 frames
+under an explicit checkpoint migration. State one proves 384/384 final target
+owners from 442 occupied source cells and 58 intentional X1 draw-order overlaps;
+state two proves 392/392 without overlap. Both have zero unclaimed stale cells,
+palette mismatches, or native-graphics mismatches, and their dynamic offset
+tables match their live/applied column maps. A first-idle black half-screen was
+Mesen screenshot latency: the identical coherent state shows the complete frame
+after two parked PPU frames. These remain intervened structural/pixel-availability
+diagnostics. Exact aligned-MAME pixels and formal temporal conservation remain
+open.
+
+## Preserved correction: blank BG slot and one map authority (August 12, 2026)
+
+Preserved predecessor `6413924c…` repairs the live scrolling
 corruption reproduced from Chad's Mesen state. Empty heavy-render cells are map
 word zero, and authenticated arcade graphics record zero is 128 blank bytes.
 Physical SNES BG slot zero is therefore permanently reserved and uploaded as
@@ -25,7 +167,7 @@ This was necessary but not sufficient. Commit `6aef22a` had introduced a sparse
 map gate that could suppress a PPU tilemap upload while leaving the newer staging
 map and cache state live. Subsequent incremental work then used a map the PPU had
 never displayed as its authority and could eventually publish missing columns.
-The current path removes that split: every completed staging map reaches
+That path removes the split: every completed staging map reaches
 `bg_upload_commit`; there is no sparse suppression helper. A controlled
 tick-2,437 cross-ROM migration is clear for 273 consecutive post-vblank frames
 while scrolling Right, but that is diagnostic-only. Fresh boot, aligned MAME

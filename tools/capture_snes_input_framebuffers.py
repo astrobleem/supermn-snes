@@ -36,6 +36,8 @@ from mesen_mcp import McpSession  # noqa: E402
 
 BUTTONS = {
     "neutral": 0,
+    "select": McpSession.BTN_SELECT,
+    "start": McpSession.BTN_START,
     "right": McpSession.BTN_RIGHT,
     "left": McpSession.BTN_LEFT,
     "up": McpSession.BTN_UP,
@@ -282,6 +284,25 @@ def apply_checkpoint_migration(
     shift_slot_zero: bool,
 ) -> list[dict[str, Any]]:
     interventions: list[dict[str, Any]] = []
+    if reserve_slot_zero:
+        busy = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x0899C, 2), "little"
+        )
+        queue_states = [
+            int.from_bytes(m.read_memory("snesWorkRam", offset, 2), "little")
+            for offset in (0x089D2, 0x089D6)
+        ]
+        generations = [
+            int.from_bytes(m.read_memory("snesWorkRam", offset, 2), "little")
+            for offset in (0x0899A, 0x089A0, 0x089A4)
+        ]
+        if busy or any(queue_states) or len(set(generations)) != 1:
+            raise RuntimeError(
+                "full BG checkpoint migration requires a drained renderer: "
+                f"busy={busy}, queues={queue_states}, generations={generations}. "
+                "Continue the checkpoint without migration to an idle saved "
+                "state, then retry."
+            )
     mirror = rom_bytes[VIDEO_FILE_BASE:VIDEO_FILE_BASE + VIDEO_WRAM_LENGTH]
     if len(mirror) != VIDEO_WRAM_LENGTH:
         raise RuntimeError("selected ROM does not contain the video mirror span")
@@ -317,12 +338,58 @@ def apply_checkpoint_migration(
     if not reserve_slot_zero:
         return interventions
 
+    # A cross-ROM checkpoint may originate from an in-flight capture; the
+    # guard above requires a drained state before this migration runs. Merely
+    # invalidating the 5A22 cache and setting its local manifest to $FFFF is
+    # insufficient: snapshot_acquire_paced waits for a new private generation,
+    # and the next organic producer snapshot can legitimately publish a zero
+    # manifest because the SA-1 already acknowledged this live X1 image. That
+    # used to replace the forced manifest before the worker claimed it.
+    #
+    # Seed the consumer cache from the authoritative, paused live X1 planes and
+    # publish the seeded cache as one new private renderer generation. Clearing
+    # old queue markers is required because their sparse payloads are relative
+    # to the superseded ROM lineage.
+    live_bg = bytes(m.read_memory("snesMemory", 0x414800, 0x0800))
+    live_palette = bytes(m.read_memory("snesMemory", 0x412000, 0x0400))
+    interventions.append(
+        write_checked(
+            m,
+            0x02000,
+            live_bg,
+            "seed renderer BG code/color cache from paused live X1 planes",
+        )
+    )
+    interventions.append(
+        write_checked(
+            m,
+            0x02800,
+            live_palette,
+            "seed renderer palette cache from paused live X1 palette",
+        )
+    )
+    for offset, label in (
+        (0x089D2, "discard primary queue from superseded ROM lineage"),
+        (0x089D6, "discard secondary queue from superseded ROM lineage"),
+    ):
+        interventions.append(write_checked(m, offset, bytes(2), label))
     for offset, length, label in (
         (0x0A000, 0x0800, "clear legacy BG code/slot hash"),
         (0x0D000, 0x0180, "clear legacy BG reverse ownership"),
         (0x07C00, 0x00C0, "clear legacy BG free list"),
     ):
         interventions.append(write_checked(m, offset, bytes(length), label))
+    interventions.append(
+        write_checked(
+            m,
+            0x089F0,
+            bytes([0xFF]) * 16,
+            (
+                "invalidate the superseded checkpoint's applied BG column map "
+                "so the selected ROM rebuilds its 1 KiB offset lookup"
+            ),
+        )
+    )
     for offset, value, label in (
         (0x089C2, 0x0000, "reset BG free-list count"),
         (0x000DC, 0x0001, "start BG artwork allocation at physical slot one"),
@@ -331,10 +398,39 @@ def apply_checkpoint_migration(
         (0x08982, 0x0000, "invalidate legacy raw BG cache marker"),
         (0x08990, 0x0001, "force a BG renderer event"),
         (0x089BC, 0xFFFF, "force one complete BG rebuild"),
+        (0x089BE, 0x0001, "force the seeded live palette to the renderer"),
     ):
         interventions.append(
             write_checked(m, offset, value.to_bytes(2, "little"), label)
         )
+    generation = int.from_bytes(
+        m.read_memory("snesWorkRam", 0x089A0, 2), "little"
+    )
+    forced_generation = (generation + 2) & 0xFFFE
+    if forced_generation == 0:
+        forced_generation = 2
+    interventions.append(
+        write_checked(
+            m,
+            0x0899A,
+            forced_generation.to_bytes(2, "little"),
+            "publish the seeded cache as a complete private generation",
+        )
+    )
+    frame_ack = int.from_bytes(
+        m.read_memory("snesMemory", 0x003302, 2), "little"
+    )
+    forced_request = (frame_ack + 1) & 0xFFFF
+    if forced_request == 0:
+        forced_request = 1
+    interventions.append(
+        write_checked(
+            m,
+            0x01F1E,
+            forced_request.to_bytes(2, "little"),
+            "publish the forced local BG rebuild to the idle render worker",
+        )
+    )
     return interventions
 
 
@@ -534,6 +630,20 @@ def main() -> int:
         movie_state_before_stop = m.movie_state()
         playback_stop_response = m.stop_movie()
 
+    coverage = {
+        "game_tick_start": rows[0]["tick"],
+        "game_tick_end": rows[-1]["tick"],
+        "video_frame_start": start_frame,
+        "video_frame_end": rows[-1]["frame"],
+        "captured_video_frames": len(rows),
+        "complete": len(rows) == recorded_frames + 1,
+    }
+    acceptance_gate = unknown_diagnostic_gate(
+        "framebuffer_capture",
+        "Capture success is evidence availability, not visual correctness.",
+    )
+    acceptance_gate["rom_sha256"] = provenance["rom_sha256"]
+    acceptance_gate["coverage"] = coverage
     report = {
         "schema": 1,
         "provenance": provenance,
@@ -542,11 +652,9 @@ def main() -> int:
         "play_response": play_response,
         "movie_state_before_stop": movie_state_before_stop,
         "playback_stop_response": playback_stop_response,
+        "coverage": coverage,
         "captures": rows,
-        "acceptance_gate": unknown_diagnostic_gate(
-            "framebuffer_capture",
-            "Capture success is evidence availability, not visual correctness.",
-        ),
+        "acceptance_gate": acceptance_gate,
     }
     report_path = output / "results.json"
     report_path.write_text(

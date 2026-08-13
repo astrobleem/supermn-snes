@@ -14,11 +14,14 @@ OAMDATA=$2104
 BGMODE=$2105
 BG1SC=$2107
 BG2SC=$2108
+BG3SC=$2109
 BG12NBA=$210B
 BG1HOFS=$210D
 BG1VOFS=$210E
 BG2HOFS=$210F
 BG2VOFS=$2110
+BG3HOFS=$2111
+BG3VOFS=$2112
 VMAIN=$2115
 VMADDL=$2116
 VMADDH=$2117
@@ -104,11 +107,26 @@ BG_COLUMN_MAP=$89E0      ; accepted source-column -> physical 32px slot bytes
 BG_COLUMN_MAP_APPLIED=$89F0 ; map currently represented by BG_OFFSET_TABLE
 BG_COLUMN_MAP_CAPTURE=$74E0 ; 16-byte producer scratch below BG_OFFSET_TABLE
 BG_COLUMN_MAP_SELECTOR=$74D0
+BG_COLUMN_Y_CAPTURE=$74C0   ; sixteen raw X1 source-column Y bytes
+BG_COLUMN_Y_PHYSICAL=$72A0  ; populated source columns resolved to physical slots
+BG_OPT_GLOBAL_VOFS=$72B0    ; Mode-2 fallback for the first three screen characters
+BG_OPT_ENABLED=$72B1        ; zero=legacy Mode 1, nonzero=Mode-2 per-column Y
+BG_LATEST_SCROLLX=$72B2     ; coherent 30 Hz source target, independent of render queue
+BG_LATEST_SCROLL_VALID=$72B3 ; $A5 after the first paced source-scroll publication
+BG_PRESENTED_SCROLLX=$72B4  ; 60 Hz cursor: advances at most two pixels per NMI
+BG_PRESENTED_HOFS=$72B5     ; 10-bit integrated PPU coordinate, independent of map queue
+BG_DISPLAYED_MAP_SCROLLX=$72B7 ; coarse camera origin of the tilemap actually in VRAM
+BG_DISPLAYED_MAP_VALID=$72B8 ; $A5 only after a completed exact-map tilemap DMA
+BG_MAP_COMMIT_PENDING=$72B9 ; $A5 only while bg_upload's 4 KiB descriptor is pending
+BG_COLUMN_Y_DIRECT=$72C0    ; source-column Y bytes paired with the direct cache
+BG_COLUMN_Y_PRIMARY=$72D0   ; source-column Y bytes paired with queue 1
+BG_COLUMN_Y_SECONDARY=$72E0 ; source-column Y bytes paired with queue 2
+BG_OPT_TABLE=$7300          ; 32 H words + 32 V words, DMAed to VRAM word $7800
 BG_C0BC_TOKEN=$7492       ; token paired with the accepted direct BG image
 RQ_C0BC_TOKEN=$7494       ; token paired with the primary queued image
 RQ2_C0BC_TOKEN=$7496      ; token paired with the secondary queued image
 BG_C0BC_APPLIED=$7498     ; C0BC token represented by the resident direct tilemap
-RENDER_QUEUE_CODE_BYTES=$0252 ; build guard proves this matches the final promoter span
+RENDER_QUEUE_CODE_BYTES=$026E ; build guard proves this matches the final promoter span
 OBJ_HASH_CODE=$5000    ; 1024 authoritative code words in retired snapshot WRAM
 OBJ_HASH_SLOT=$5800    ; parallel physical-slot words; complete table ends at $6000
 RQ2_SEQ=$B000           ; secondary compact-only slot occupies production-unused
@@ -124,8 +142,9 @@ RQ2_OBJ=$B420           ; $0300 bytes
 RQ2_BG_LIST=$B720       ; incremental list below $0100 bytes
 RQ2_BG_VALUES=$B820     ; corresponding pairs below $0200 bytes; ends before $BC00
 ; $7E:5000-$74FF formerly held an abandoned double-buffer snapshot design.
-; No runtime instruction references those retired constants.  The widened OBJ
-; hash above owns only $5000-$5FFF; $6000-$74FF remains deliberately unclaimed.
+; The widened OBJ hash owns $5000-$5FFF; title staging uses $6000-$6D3F, and
+; $72A0-$737F now holds the exact per-column-Y/Mode-2 bridge.  The remaining
+; space stays private renderer scratch and must not alias queue payloads.
 STAGING_CGRAM=$8000
 TITLE_TEXT_META=$89BE ; palette dirty bit 15 = overloaded title composition uses BG2
 TITLE_FONT_MARK=$89DC ; $A55B after coherent BG2 font/map VRAM has been initialized
@@ -1093,10 +1112,12 @@ bps_have:
 ; bg_upload: DMA BG tilemap ($7E:9000, 4KB) -> VRAM word $0000, set BG mode/regs/
 ; scroll. (BG tiles were already DMA'd per-tile to word $1000+ in bg_slot.)
 bg_upload:
-    sep #$20
-    lda #$01
+    jsl.l $E9C180        ; retain the active gameplay Mode 1/2 policy during DMA wait
+.a8                     ; the helper returns A8; keep Poppy's immediate widths honest
 bg_upload_commit:       ; every completed staging map has exactly one PPU authority
-    sta BGMODE           ; mode 1
+    nop
+    nop
+    nop
     lda #$01
     sta BG1SC            ; BG1 map @ word $0000, 64x32
     lda #$61
@@ -1118,23 +1139,16 @@ bg_upload_commit:       ; every completed staging map has exactly one PPU author
     stz DAS0L
     lda #$10
     sta DAS0H            ; 4096 bytes
+    lda #$A5
+    sta $7E72B9          ; service/direct path must commit this map exactly once
     jsr dma0_blank_pulse ; blank only across this tilemap DMA
-    nop
-    nop
+    jsl.l $E9C340        ; rebase only after the new physical map is actually visible
     ; scroll: H is the live arcade scroll plus the centered-crop X origin.
     ; V follows the arcade center playfield column's scrolly plus its -1
     ; noflip offset and the centered-crop Y origin.
     ; (byte-neutral swap: jsr(3)+7*nop = the 10 bytes the old hofs block used, so no
     ;  downstream code shifts -> avoids the Poppy relative-branch-wrap hazard.)
-    jsr bg_scroll        ; BG1 HOFS + guarded VOFS from one coherent snapshot
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
+    jsr bg_scroll_with_opt ; publish exact per-column Y table, then H/V registers
     nop
     nop
     nop
@@ -1401,7 +1415,7 @@ oy_done:
     rts
 
 bg_hscroll:
-    jsl.l $E9BB00
+    jsl.l $E9C300
     rts
 
 ; dma0_blank_pulse — publish a channel-0 DMA for the next NMI/VBlank.
@@ -1626,15 +1640,15 @@ bg_tile_run_dma_chunks:
 .a16
 btr_chunk_loop:
     lda $D6
-    cmp #$1701
+    cmp #$1601
     bcc btr_final_chunk
     sec
-    sbc #$1700
+    sbc #$1600
     pha
     sep #$20
 .a8
     stz DAS0L
-    lda #$17             ; 5.75 KiB: about 35 of the 37 VBlank scanlines
+    lda #$16             ; 5.5 KiB: retain a full-record margin before visible scanline 0
     sta DAS0H
     jsr dma0_blank_pulse
     rep #$20
@@ -1657,7 +1671,7 @@ bg_tile_run_dma_chunks_end:
 ; Service a foreground-published PPU DMA only after the scheduler wake has run
 ; at its established leading-edge position.  Controller sampling follows the
 ; DMA but still completes before NMI return and the next wake decision.  A
-; 5.75 KiB transfer consumes roughly 35 scanlines; running it before
+; A multi-KiB transfer consumes most of VBlank; running it before
 ; pacing_try_wake shifted the SA-1 release deep into VBlank and eventually
 ; destroyed the task-ordering contract.  Small CGRAM/OAM transfers are different:
 ; queue-capture work can move the following NMI entry to line 236, but a sub-1 KiB
@@ -1705,6 +1719,7 @@ spd_line_ok:
     stz $1F11
     lda #$01
     sta MDMAEN
+    jsl.l $E9C340        ; commit a pending BG-map basis inside this same NMI
 spd_done:
     rts
 service_pending_dma0_end:
@@ -1725,6 +1740,7 @@ dma0_blank_pulse_extended:
     lda DAS0H
     cmp #$04
     bcs dma0_publish
+    lda STAT78           ; reset OPVCT to low-byte-first before the private latch
     lda SLHV
     lda OPVCT
     tax
@@ -1994,7 +2010,8 @@ ptw_deadline_due:
     sta $410122          ; claim before touching the stable live shadow
     lda $7E1F12          ; real pad sampled after the previous wake decision
     ora $410002          ; combine the current headless/harness injection word
-    sta $410000          ; sole ordered mailbox publish while the SA-1 is quiescent
+    jsr pacing_publish_input_and_scroll
+    nop                  ; retain the fixed renderer-ownership guard address
 ptw_renderer_ownership_guard:
     lda $7E899C          ; renderer owns the direct WRAM caches until vid_frame returns
     bne ptw_snapshot_queued
@@ -2079,6 +2096,36 @@ pacing_publish_vtime_joy:
     rts
 pacing_helpers_end:
 
+; Publish the controller mailbox exactly as before, then retain the live X1
+; horizontal phase separately from the immutable render candidate.  A heavy
+; column remap can take many video frames and fill both image queues; coupling
+; BG1HOFS to the oldest retained image made a correct -3 px/tick source camera
+; appear as irregular 6-15 px jumps.  pacing_try_wake calls this only after
+; arm=$0003 has claimed the quiescent SA-1 shadow.
+.org $8ED0
+.a16
+.i16
+pacing_publish_input_and_scroll:
+    sta $410000          ; sole ordered controller mailbox publication
+    jsr capture_bg_vscroll
+    sep #$20
+.a8
+    xba
+    sta $7E72B2          ; latest coherent column-0 scroll X low byte
+    lda $7E72B3
+    cmp #$A5
+    beq ppis_valid
+    lda $7E72B2          ; first publication has no predecessor to interpolate
+    sta $7E72B4
+    jsl.l $E9C1A0        ; seed the integrated 10-bit PPU coordinate once
+    lda #$A5
+    sta $7E72B3
+ppis_valid:
+    rep #$20
+.a16
+    rts
+pacing_publish_input_and_scroll_end:
+
 .org $8F00
 nmi_pacing_wram:
     php
@@ -2087,6 +2134,13 @@ nmi_pacing_wram:
     phx
     phy
     phb
+    ; TAD legitimately runs foreground code with Direct Page at $2100.  NMI
+    ; can interrupt that span, while every pacing/render helper below assumes
+    ; DP=$0000 for scratch such as $D0/$D2.  Preserve the interrupted D and
+    ; establish the handler's own zero-page contract before touching helpers.
+    phd
+    lda #$0000
+    tcd
     sep #$20
     lda #$00
     pha
@@ -2101,6 +2155,7 @@ nmi_pacing_wram:
     jsr pacing_sample_joy
     jsr nmi_video_keepalive
     lda $3302            ; leave Bus-A latched on IRAM, not a ROM fetch
+    pld                   ; restore the interrupted foreground Direct Page
     plb
     ; Preserve both saved status bytes exactly.  RTI already restores the
     ; interrupted I state: ordinary code returns with IRQs enabled, while an
@@ -2133,6 +2188,11 @@ irq_pacing_wram:
     phx
     phy
     phb
+    ; The coprocessor IRQ can also interrupt TAD with D=$2100.  Snapshot
+    ; capture uses DP scratch and must never inherit foreground Direct Page.
+    phd
+    lda #$0000
+    tcd
     sep #$20
     lda #$00
     pha
@@ -2152,6 +2212,7 @@ irq_pacing_wram:
     nop
     nop
     lda $3302            ; leave Bus-A latched on IRAM
+    pld                   ; restore the interrupted foreground Direct Page
     plb
     rep #$30
     ply
@@ -2184,13 +2245,23 @@ nmi_video_keepalive:
     rep #$20
     lda $D0
     pha
+    sep #$20
+    jsl.l $E9C200
+    rep #$20
     jsr bg_scroll        ; current accepted cache: HOFS + guarded VOFS only
     pla
     sta $D0
     sep #$20
 nvk_done:
     rts
+nmi_video_keepalive_end:
 
+; Split a normal three-pixel 30 Hz target into two then one pixels on the two
+; 60 Hz video frames.  The signed eight-bit delta chooses the shortest route
+; across source-byte wrap; a pathological backlog is still bounded to two
+; pixels per presentation instead of becoming a visible catch-up jump.
+.a8
+.i16
 ; ============================================================================
 ; sound_tick — P2 STEP 2: drain the 68K sound-command ring and drive TAD.
 ; ----------------------------------------------------------------------------
@@ -2498,7 +2569,7 @@ bg_dispatch_fast:
     beq bg_dispatch_pal_ready
     jsr bg_refresh_pal   ; restore BG's bank->slot mapping after a real palette rebuild
 bg_dispatch_pal_ready:
-    jsr bg_scroll        ; tilemap/tiles persist, but both scroll axes remain live
+    jsr bg_scroll_with_opt ; tilemap persists; refresh exact per-column scroll state
     plp
     rts
 
@@ -3280,7 +3351,13 @@ bg_scroll:
 .a8
     lda $7E89BF
     bmi bgs_vertical_zero
+    lda $7E72B1
+    beq bgs_vertical_legacy
+    lda $7E72B0
+    bra bgs_vertical_write
+bgs_vertical_legacy:
     lda $7E8994
+bgs_vertical_write:
     sta BG1VOFS
     lda #$00
     sta BG1VOFS
@@ -3293,6 +3370,14 @@ bgs_vertical_zero:
     plp
     rts
 bg_scroll_end:
+
+; Foreground rendering owns the accepted snapshot and may update VRAM.  NMI
+; calls bg_scroll directly and therefore reapplies registers only; it must not
+; start an offset-table DMA asynchronously inside the keepalive path.
+bg_scroll_with_opt:
+    jsl.l $E9C000
+    jmp bg_scroll
+bg_scroll_with_opt_end:
 pacing_palette_cache_test_end:
 
 .org $A1E8
@@ -3874,7 +3959,7 @@ bg_incremental_finish:
     beq bif_scroll
     jsr bg_refresh_pal
 bif_scroll:
-    jmp bg_scroll
+    jmp bg_scroll_with_opt ; accepted per-column Y changes even when cell diffs are incremental
 
 ; Finish obj_hide_tail_fast in the former zero seam.  Low OAM is persistent:
 ; entries above the previous active prefix are already exactly
@@ -4598,7 +4683,9 @@ ppd_palette_map:
     ldy #$8940
     lda #$0020
     jsr pacing_snapshot_dma ; arcade palette-bank -> SNES BG palette slot
+    jsl.l $E9C400        ; direct prepared image becomes the canonical sparse baseline
     rts
+psd_prepared_dma_end:
 
 ; Consume a producer-prepared full image.  The ready map is already private in
 ; BGMAP, and the sorted code list defines the exact slots embedded in it.
@@ -6164,8 +6251,24 @@ capture_bg_upper_full:
 
     ldx #$0000           ; byte offset into the 16 X1 column records
 cbuf_map_loop:
+    txa
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    tay                  ; dense source-column index 0..15
     sep #$20
 .a8
+    lda $413401,x        ; raw per-source-column Y position
+    ; 65816 has no long,Y store.  The rejected implementation wrote
+    ; `sta $7E74C0,y`; Poppy silently truncated that to DB:$74C0 and corrupted
+    ; the boot RAM test.  Move the dense index to X only around the real long,X
+    ; store, preserving the source-record X cursor.
+    phx
+    tyx
+    sta $7E74C0,x
+    plx
     lda $413409,x        ; raw X low byte
     lsr a
     lsr a
@@ -6369,6 +6472,40 @@ cbuf_copy_next:
     cpx #$0010
     bne cbuf_copy_map_loop
 
+    ; Keep all sixteen Y values paired with the same immutable image as the
+    ; layout map.  The foreground Mode-2 builder later resolves source columns
+    ; to physical slots while consulting the accepted raw code plane, so an
+    ; empty overlapping source cannot replace a populated column's Y phase.
+    ldx #$0000
+cbuf_copy_y_loop:
+    lda $7E74C0,x
+    sta $D0
+    lda $7E74D0
+    beq cbuf_copy_y_snapshot
+    cmp #$0001
+    beq cbuf_copy_y_direct
+    cmp #$0002
+    beq cbuf_copy_y_primary
+    lda $D0
+    sta $7E72E0,x
+    bra cbuf_copy_y_next
+cbuf_copy_y_snapshot:
+    lda $D0
+    sta $417416,x
+    bra cbuf_copy_y_next
+cbuf_copy_y_direct:
+    lda $D0
+    sta $7E72C0,x
+    bra cbuf_copy_y_next
+cbuf_copy_y_primary:
+    lda $D0
+    sta $7E72D0,x
+cbuf_copy_y_next:
+    inx
+    inx
+    cpx #$0010
+    bne cbuf_copy_y_loop
+
     ; Keep the immutable-$C0BC provenance paired with the same selected image
     ; as its position metadata.  A later control-only frame can then rebuild
     ; the moving prompt from the canonical ROM map instead of trying to invert
@@ -6420,47 +6557,6 @@ cbuf_return_clear:
     rtl
 capture_bg_upper_full_end:
 
-; ROM-side implementation for the fixed WRAM-mirror bg_hscroll entry.
-.org $BB00
-.a16
-.i16
-bg_hscroll_full:
-    php
-    rep #$30
-    sep #$20
-.a8
-    lda $7E8995
-    rep #$20
-.a16
-    and #$00FF
-    sta $D0
-    lda $7E8996
-    cmp #$FFFE
-    bcs bghf_legacy
-    lda $D0
-    and #$001F
-    sta $D0              ; exact regular layout: common sub-column phase
-    lda #$0040
-    bra bghf_legacy_subtract
-bghf_legacy:
-    lda $7E8996
-    and #$0001
-    xba
-    clc
-    adc #$0040
-bghf_legacy_subtract:
-    sec
-    sbc $D0
-    and #$03FF
-    sep #$20
-.a8
-    sta BG1HOFS
-    xba
-    sta BG1HOFS
-    plp
-    rtl
-bg_hscroll_full_end:
-
 ; Accept the layout metadata that was captured with the selected immutable BG
 ; image.  These replace fixed-size load/store pairs in the WRAM-mirrored
 ; acquisition paths, so no established mirror address moves.
@@ -6476,6 +6572,8 @@ accept_bg_columns_snapshot:
 abcs_copy:
     lda $417404,x
     sta $7E89E0,x
+    lda $417416,x
+    sta $7E72C0,x
     inx
     inx
     cpx #$0010
@@ -6833,6 +6931,703 @@ bcmu_c0bc_cache_load:
     rts
 bcmu_c0bc_cache_load_end:
 
+; Build and publish the SNES Mode-2 offset-per-tile table for the accepted X1
+; image.  The Nintendo PPU fetch pipeline consumes BG3 offset entry N for
+; screen character N-3; the first three characters therefore use BG1VOFS.
+; Resolve source-column Y values through the accepted physical X map, but only
+; let a populated source claim a slot.  This preserves X1 draw order while an
+; empty overlapping control column cannot replace the visible source's phase.
+;
+; BG3 is an offset table only (TM keeps it hidden).  Mode 2 retains 4bpp BG1,
+; BG2, and all eight palettes, so ordinary artwork and the title BG2 overlay
+; keep their existing formats.  Irregular layouts retain the documented Mode-1
+; fallback instead of pretending that one table describes them exactly.
+.org $C000
+.a16
+.i16
+bg_opt_update:
+    php
+    phb
+    rep #$30
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+    lda $D8
+    pha
+    lda $DA
+    pha
+
+    sep #$20
+.a8
+    lda #$7E
+    pha
+    plb
+    rep #$20
+.a16
+    lda $89BE
+    bmi bou_legacy       ; title BG2 composition must not receive gameplay OPT offsets
+    lda $8996
+    cmp #$FFFE
+    bcc bou_exact
+
+bou_legacy:
+    sep #$20
+.a8
+    stz $72B1
+    lda #$00
+    pha
+    plb
+    lda #$01
+    sta BGMODE           ; title/irregular composition keeps legacy Mode 1
+    jmp bou_restore8
+
+bou_exact:
+    ; Give unclaimed physical slots the center-column phase.  They are blank,
+    ; but deterministic values make the complete table stable and testable.
+    sep #$20
+.a8
+    lda $72C4
+    ldx #$0000
+bou_physical_fill:
+    sta $72A0,x
+    inx
+    cpx #$0010
+    bne bou_physical_fill
+    rep #$20
+.a16
+
+    stz $D8              ; source column 0..15
+bou_source_loop:
+    lda $D8
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    tax                  ; 32 source words = 64 bytes per column
+    ldy #$0000
+bou_occupied_scan:
+    lda $2000,x
+    and #$FF3F
+    bne bou_source_occupied
+    inx
+    inx
+    iny
+    iny
+    cpy #$0040
+    bne bou_occupied_scan
+    bra bou_source_next
+bou_source_occupied:
+    ldx $D8
+    sep #$20
+.a8
+    lda $89E0,x
+    rep #$20
+.a16
+    and #$00FF
+    tay
+    sep #$20
+.a8
+    lda $72C0,x
+    sta $72A0,y
+    rep #$20
+.a16
+bou_source_next:
+    inc $D8
+    lda $D8
+    cmp #$0010
+    bne bou_source_loop
+
+    ; Use the exact same tilemap-relative presented coordinate as BG1HOFS.
+    ; This keeps the Mode-2 screen-column selection attached to the pixels
+    ; actually visible while a newer camera target waits on the render queue.
+    jsr bg_compute_hscroll
+    sta $D0              ; presented BG1HOFS in pixels
+
+    ; The first three screen characters cannot receive OPT data.  They all
+    ; lie in the same 32-pixel X1 column at the centered 64px crop boundary.
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    and #$000F
+    tax
+    sep #$20
+.a8
+    lda $72A0,x
+    clc
+    adc #$07             ; X1 noflip y=-1 plus centered crop origin 8
+    sta $72B0
+    lda #$01
+    sta $72B1
+    rep #$20
+.a16
+
+    ; Mode 2 uses row 0 for horizontal offsets and row 1 for vertical offsets.
+    ; Horizontal placement remains in the exact 64x32 BG1 tilemap.
+    lda #$0000
+    ldx #$0000
+bou_h_clear:
+    sta $7300,x
+    inx
+    inx
+    cpx #$0040
+    bne bou_h_clear
+
+    stz $D8              ; byte offset of BG3 offset-table word 0..62
+bou_v_loop:
+    lda $D8
+    asl a
+    asl a                ; (word index * 8 pixels)
+    sec
+    sbc #$0018           ; entry N applies to screen character N-3
+    clc
+    adc $D0
+    and #$01FF
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    and #$000F
+    tax
+    sep #$20
+.a8
+    lda $72A0,x
+    clc
+    adc #$07
+    rep #$20
+.a16
+    and #$00FF
+    ora #$2000           ; vertical offset enabled for BG1 only
+    ldx $D8
+    sta $7340,x
+    inc $D8
+    inc $D8
+    lda $D8
+    cmp #$0040
+    bne bou_v_loop
+
+    ; Publish the hidden BG3 offset map, then select Mode 2.  The established
+    ; DMA helper waits until this complete 128-byte descriptor has run, so a
+    ; later renderer DMA cannot overwrite it before publication.
+    sep #$20
+.a8
+    lda #$00
+    pha
+    plb
+    lda #$78
+    sta BG3SC            ; offset table at VRAM word $7800, 32x32
+    stz BG3HOFS
+    stz BG3HOFS
+    stz BG3VOFS
+    stz BG3VOFS
+    lda #$80
+    sta VMAIN
+    stz VMADDL
+    lda #$78
+    sta VMADDH
+    lda #$01
+    sta DMAP0
+    lda #$18
+    sta BBAD0
+    stz A1T0L
+    lda #$73
+    sta A1T0H
+    lda #$7E
+    sta A1B0
+    lda #$80
+    sta DAS0L
+    stz DAS0H
+    jsr dma0_blank_pulse
+    lda #$02
+    sta BGMODE
+
+bou_restore8:
+    rep #$30
+.a16
+    pla
+    sta $DA
+    pla
+    sta $D8
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plb
+    plp
+    rtl
+bg_opt_update_end:
+
+; Tilemap DMA can wait for NMI while the preceding map remains visible.  Keep
+; that map's established mode during the wait instead of forcing Mode 1 and
+; briefly disabling live Mode-2 per-column vertical offsets.
+.org $C180
+.a8
+.i16
+bg_upload_mode_current:
+    sep #$20
+    lda $7E72B1
+    beq bumc_mode1
+    lda #$02
+    bra bumc_write
+bumc_mode1:
+    lda #$01
+bumc_write:
+    sta BGMODE
+    rtl
+bg_upload_mode_current_end:
+
+; ROM-side implementation for the fixed WRAM-mirror bg_hscroll entry.
+.org $C300
+.a16
+.i16
+bg_hscroll_full:
+    php
+    rep #$30
+    lda $D0
+    pha
+    lda $D2
+    pha
+    jsr bg_compute_hscroll
+    sep #$20
+.a8
+    sta BG1HOFS
+    xba
+    sta BG1HOFS
+    rep #$20
+.a16
+    pla
+    sta $D2
+    pla
+    sta $D0
+    plp
+    rtl
+bg_hscroll_full_end:
+
+; A physical-column map rotation changes the tilemap's coordinate basis by a
+; multiple of 32 pixels.  Adjusting HOFS when metadata was accepted made the
+; old map jump several frames before its DMA; never adjusting made the new map
+; jump at publication.  bg_upload calls this only after dma0_blank_pulse has
+; completed the 4 KiB transfer, so the signed coarse-origin delta and the map
+; become visible together.  Ordinary per-NMI motion remains bounded separately.
+.org $C340
+.a16
+.i16
+bg_scroll_map_commit:
+    php
+    rep #$30
+    lda $D0
+    pha
+    sep #$20
+.a8
+    lda $7E72B9
+    cmp #$A5
+    bne bsmc_restore8
+    lda #$00             ; STZ has no long form; Poppy otherwise emits bank-relative
+    sta $7E72B9          ; service and foreground callers cannot commit twice
+    rep #$20
+.a16
+    lda $7E8996
+    cmp #$FFFE
+    bcs bsmc_invalidate
+    sep #$20
+.a8
+    lda $7E8995
+    and #$E0
+    sta $D0
+    lda $7E72B8
+    cmp #$A5
+    bne bsmc_seed
+    lda $7E72B3
+    cmp #$A5
+    bne bsmc_seed
+    lda $D0
+    sec
+    sbc $7E72B7
+    beq bsmc_seed
+    bpl bsmc_positive
+    rep #$20
+.a16
+    ora #$FF00           ; sign-extend the modulo-256 coarse camera delta
+    bra bsmc_add
+bsmc_positive:
+.a8
+    rep #$20
+.a16
+    and #$00FF
+bsmc_add:
+    clc
+    adc $7E72B5
+    and #$03FF
+    sta $7E72B5
+bsmc_seed:
+    sep #$20
+.a8
+    lda $D0
+    sta $7E72B7
+    lda #$A5
+    sta $7E72B8
+    bra bsmc_restore8
+bsmc_invalidate:
+    sep #$20
+.a8
+    lda #$00             ; keep the invalidation in WRAM regardless of caller DBR
+    sta $7E72B8
+bsmc_restore8:
+    rep #$20
+.a16
+    pla
+    sta $D0
+    plp
+    rtl
+bg_scroll_map_commit_end:
+
+; Return the BG1 horizontal coordinate in A16.  Exact layouts place source
+; columns according to the camera paired with the accepted tilemap ($8995).
+; A newer presented camera must therefore be expressed relative to that map:
+;
+;   H = 64 - (accepted & 31) + (accepted - presented)
+;
+; Without the second term, a presentation that reaches the next 32-pixel
+; boundary before the slow renderer rotates its map jumps backwards 29 pixels.
+; Legacy/irregular maps retain their established full-position arithmetic.
+.a16
+.i16
+.org $C280
+bg_compute_hscroll:
+    sep #$20
+.a8
+    lda $7E72B3
+    cmp #$A5
+    bne bch_cached_scroll
+    rep #$20
+.a16
+    lda $7E8996
+    cmp #$FFFE
+    bcs bch_valid_legacy
+    lda $7E72B5          ; exact maps do not rebase the visible PPU coordinate
+    and #$03FF
+    rts
+bch_valid_legacy:
+    sep #$20
+.a8
+    lda $7E72B4
+    bra bch_presented_ready
+bch_cached_scroll:
+    lda $7E8995
+bch_presented_ready:
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0              ; presented scroll low byte
+    lda $7E8996
+    cmp #$FFFE
+    bcs bch_legacy
+
+    sep #$20
+.a8
+    lda $7E8995
+    rep #$20
+.a16
+    and #$00FF
+    sta $D2              ; camera paired with the accepted physical map
+    sec
+    sbc $D0
+    and #$00FF
+    sta $D0              ; accepted-to-presented displacement modulo 256
+    lda $D2
+    and #$001F
+    sta $D2
+    lda #$0040
+    sec
+    sbc $D2
+    clc
+    adc $D0
+    and #$03FF
+    rts
+
+bch_legacy:
+    lda $7E8996
+    and #$0001
+    xba
+    clc
+    adc #$0040
+    sec
+    sbc $D0
+    and #$03FF
+    rts
+bg_compute_hscroll_end:
+
+; Seed the integrated presentation coordinate from the accepted map before the
+; valid marker becomes visible.  This is a one-time initialization; ordinary
+; map-queue changes must not rebase the PPU and move stationary pixels.
+.org $C1A0
+.a16
+.i16
+bg_scroll_present_init:
+    php
+    rep #$30
+    lda $D0
+    pha
+    lda $7E8996
+    cmp #$FFFE
+    bcs bspi_legacy
+    sep #$20
+.a8
+    lda $7E8995
+    rep #$20
+.a16
+    and #$001F
+    sta $D0
+    lda #$0040
+    sec
+    sbc $D0
+    bra bspi_store
+bspi_legacy:
+    sep #$20
+.a8
+    lda $7E72B4
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0
+    lda $7E8996
+    and #$0001
+    xba
+    clc
+    adc #$0040
+    sec
+    sbc $D0
+bspi_store:
+    and #$03FF
+    sta $7E72B5
+    pla
+    sta $D0
+    plp
+    rtl
+bg_scroll_present_init_end:
+
+; Advance both representations once per NMI.  The byte cursor follows the
+; shortest signed route to the latest camera target.  The integrated 10-bit
+; HOFS moves in the opposite direction by the same bounded one/two-pixel step.
+.org $C200
+.a16
+.i16
+bg_scroll_present_step:
+    php
+    rep #$30
+    lda $D0
+    pha
+    sep #$20
+.a8
+    lda $7E72B3
+    cmp #$A5
+    bne bspr_restore8
+    lda $7E72B2
+    sec
+    sbc $7E72B4
+    beq bspr_restore8
+    bmi bspr_negative
+    cmp #$02
+    bcc bspr_positive_ready
+    lda #$02
+bspr_positive_ready:
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0
+    sep #$20
+.a8
+    clc
+    adc $7E72B4
+    sta $7E72B4
+    rep #$20
+.a16
+    lda $7E72B5
+    sec
+    sbc $D0
+    bra bspr_store_h
+bspr_negative:
+.a8
+    eor #$FF
+    inc a
+    cmp #$02
+    bcc bspr_negative_ready
+    lda #$02
+bspr_negative_ready:
+.a8
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0
+    sep #$20
+.a8
+    lda $7E72B4
+    sec
+    sbc $D0
+    sta $7E72B4
+    rep #$20
+.a16
+    lda $7E72B5
+    clc
+    adc $D0
+bspr_store_h:
+    and #$03FF
+    sta $7E72B5
+bspr_restore:
+    pla
+    sta $D0
+    plp
+    rtl
+bspr_restore8:
+    rep #$20
+    bra bspr_restore
+bg_scroll_present_step_end:
+
+; A producer-prepared ($FFFE) queue entry carries an exact logical tilemap,
+; sorted code list, and palette map, but not the redundant raw code/color
+; planes.  Those raw planes are nevertheless the canonical baseline for every
+; later sparse or clean candidate.  Leaving the preceding title image in
+; $2000/$2400 made the prepared Stage-1 frame display briefly, then let the
+; next clean candidate rebuild/retain the title's nearly empty map: organic
+; coin+Start therefore had sprites and HUD over black.
+;
+; Reconstruct the canonical big-endian raw planes while the promoted prepared
+; map is still in logical source-column order.  The immutable table is SA-1
+; $9E:E800 at file $2F6800, which the 5A22 sees as $EF:6800.  This is the same
+; 512-cell logical-map offset table used by the SA-1 producer.  This
+; runs only on the rare prepared transition, before dynamic column remapping.
+.org $C400
+.a16
+.i16
+prepared_bg_cache_reconstruct:
+    php
+    phb
+    rep #$30
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+
+    sep #$20
+.a8
+    lda #$7E
+    pha
+    plb                         ; short indexed accesses below own private WRAM
+    lda #$FF
+    ldx #$0000
+pbcr_inverse_clear:
+    sta $7480,x                 ; BG palette slot -> arcade palette bank
+    inx
+    cpx #$0008
+    bne pbcr_inverse_clear
+    ldx #$0000
+pbcr_inverse_build:
+    lda $8940,x
+    cmp #$FF
+    beq pbcr_inverse_next
+    tay
+    txa
+    sta $7480,y
+pbcr_inverse_next:
+    inx
+    cpx #$0020
+    bne pbcr_inverse_build
+
+    rep #$20
+.a16
+    ldy #$0000                 ; logical raw-plane byte offset 0..$03FE
+pbcr_cell_loop:
+    tyx
+    lda.l $EF6800,x            ; logical cell -> prepared tilemap byte offset
+    tax
+    lda $9000,x
+    sta $D0                    ; prepared TL tile/palette/flip word
+    and #$03FF
+    beq pbcr_empty
+
+    lsr a
+    lsr a                      ; tile number -> prepared physical record slot
+    dec a                      ; slot zero is the empty sentinel
+    asl a                      ; sorted-code-list byte offset
+    tax
+    lda $7900,x
+    and #$3FFF
+    sta $D2
+    lda $D0
+    and #$C000
+    beq pbcr_flip_ready
+    cmp #$C000
+    beq pbcr_flip_ready
+    eor #$C000                 ; inverse of arcade -> SNES single-axis mapping
+pbcr_flip_ready:
+    ora $D2
+    xba
+    sta $2000,y                ; canonical raw code is big-endian
+
+    lda $D0
+    xba
+    lsr a
+    lsr a
+    and #$0007                 ; prepared BG palette slot
+    tax
+    sep #$20
+.a8
+    lda $7480,x                ; recover the logical arcade palette bank
+    rep #$20
+.a16
+    and #$00FF
+    xba
+    asl a
+    asl a
+    asl a                      ; bank << 11
+    xba
+    sta $2400,y                ; canonical raw color is big-endian
+    bra pbcr_next
+
+pbcr_empty:
+    lda #$0000
+    sta $2000,y
+    sta $2400,y
+pbcr_next:
+    iny
+    iny
+    cpy #$0400
+    bne pbcr_cell_loop
+
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plb
+    plp
+    rtl
+prepared_bg_cache_reconstruct_end:
+
 ; The first primary capture lazily copies this island to the identical private
 ; $7E:ED00 offset after production pacing has armed and while the SA-1 sleeps.
 ; Bank $7F is deliberately never used: it is the game's entire emulated 68000
@@ -6982,6 +7777,7 @@ rqp_bg_prepared_pal:
     ldx #$EA20
     ldy #$8940
     jsr rqp_copy
+    jsl.l $E9C400        ; prepared image becomes the canonical sparse baseline
 rqp_bg_done:
 
     lda $7ED18C
@@ -6991,6 +7787,10 @@ rqp_bg_done:
     lda #$000F
     ldx #$D190
     ldy #$3606
+    jsr rqp_copy
+    lda #$000F
+    ldx #$72D0
+    ldy #$72C0
     jsr rqp_copy
     lda $7E7494
     sta $7E7492
@@ -7064,6 +7864,10 @@ rqp2_bg_done:
     lda #$000F
     ldx #$B010
     ldy #$3606
+    jsr rqp_copy
+    lda #$000F
+    ldx #$72E0
+    ldy #$72C0
     jsr rqp_copy
     lda $7E7496
     sta $7E7492

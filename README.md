@@ -10,17 +10,21 @@
 </p>
 
 <p align="center">
-  <strong>Current status: renderer-red engineering build.</strong><br>
+  <strong>Current status: unaccepted renderer/scroll engineering candidate.</strong><br>
   The project is controllable in bounded tests, but the current ordinary build is
   not a qualified playable demo or release.
 </p>
 
-> **Do not use the current ROM as a demo.** `build/interp.sfc` (`5f5dc9d7…`)
-> repeats, skips, and breaks up the gameplay background in exact Mesen 2.1.1.
-> The supplied tick-2,465 state reproduces it immediately and all 228 frames in
-> the focused continuation are anomalous. The confirmed cause is a collision
-> between empty tilemap word zero and dynamically allocated live BG slot zero;
-> the sparse-map heuristic did not repair it. No corrected ROM exists yet.
+> **Do not use the current ROM as a qualified demo.** `build/interp.sfc`
+> (`d6a8c025…`) is an unaccepted focused temporal-scroll response candidate,
+> pinned as `build/interp-scroll-continuous-d6a8c025.sfc`. Its every-frame gate
+> covers 101 consecutive authenticated frames: 49 source camera steps become
+> 48 one-pixel and 49 two-pixel presentations, with no holds, reversals,
+> oversized moves, flashes, or background discontinuities. The sequence and all
+> formerly bad map-crossing pairs were manually reviewed. This is a cross-ROM
+> retained-checkpoint diagnostic, not fresh-power acceptance. There is still no
+> current-hash fresh gameplay, aligned-MAME pixel gate, formal MAME-frame
+> conservation result, or human combat/audio acceptance.
 
 ## An arcade port, not a remake
 
@@ -55,8 +59,11 @@ Concept cover contributed by Chad.
 - Button 1 punch/fire/charge, Button 2 kick, flight, damage, death, and respawn.
 - Crate pickup, carry, contact, and throw paths.
 - Preserved `4eb9a408…` captures show the corrected combat background, crate tiles,
-  SA-1 boot presentation, and centered HUD. Current `5f5dc9d7…` is renderer-red;
-  those preserved stills do not transfer to it.
+  SA-1 boot presentation, and centered HUD. Preserved `50bbed41…` has a clear
+  bounded fresh-power framebuffer regression through post-Start frame 601.
+  Current `d6a8c025…` adds checkpoint-proven smooth 1/2-pixel 60 Hz scroll
+  presentation; none of these separate scopes establishes full current-ROM
+  acceptance.
 - Exact MC68000 semantic gates: optest 160/160 and opsweep 782/782.
 - Focused Stage 1–3 boss-health differentials and all 14 retained Stage 1 boss
   observations.
@@ -108,9 +115,12 @@ bash tools/build_interp.sh
 sha256sum build/interp.sfc
 ```
 
-The ROM is written to `build/interp.sfc`. Exact FM authoring WAVs are separate
-private VGM/ymfm inputs; the preparer derives the program, graphics, C-Chip
-response, and drums but does not invent replacements for those WAVs.
+The ROM is written to `build/interp.sfc`; the current human-test copy is
+`build/interp-scroll-continuous-d6a8c025.sfc`. Those are the only two files at
+the top of `build/`. Historical and diagnostic artifacts are preserved outside
+the repository at `/home/chad/supermn-snes-artifacts/`. Exact FM authoring WAVs
+are separate private VGM/ymfm inputs; the preparer derives the program, graphics,
+C-Chip response, and drums but does not invent replacements for those WAVs.
 
 See [complete build and toolchain setup](docs/current/BUILDING.md) and
 [private-input details](docs/current/ROM_INPUTS.md).

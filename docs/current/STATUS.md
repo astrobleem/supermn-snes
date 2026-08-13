@@ -1,6 +1,6 @@
 # Authoritative Superman project status
 
-Last evidence review: August 12, 2026.
+Last evidence review: August 13, 2026.
 
 This is the only authoritative project-status summary. Dated reports under
 `docs/history/` retain the evidence and failed experiments behind it, but their
@@ -11,17 +11,189 @@ This is the only authoritative project-status summary. Dated reports under
 The port is an **interactive technical-demo response candidate**. It is **not
 playable, release-ready, or shippable**.
 
-The current ordinary `build/interp.sfc` is the **unaccepted focused renderer
-repair candidate**, SHA-256
-`6413924c9e2137bcba0b87217059bbb9923fbd8612ff5ffce591b556c49e7849`.
-An identical preserved image is
-`build/interp-bg-authority-slotzero-6413924c.sfc`. It reserves physical BG tile
-slot zero for the authenticated blank arcade record and gives every nonempty
-prepared/dynamic record a one-based physical slot. It also removes the sparse
-upload-suppression gate: every completed staging map now commits to the PPU, so
-the displayed map, staging map, cache ownership, and next incremental update
-retain one authority. The immutable C0BC cache still contains exactly 392
-nonempty and 120 empty entries, now using physical slots 1–45.
+The current ordinary `build/interp.sfc` is the **unaccepted focused
+temporal-scroll response candidate**, SHA-256
+`d6a8c025723b957380609e0a440a9f26d2e9560a075981ed910af3d7a380a449`.
+The identical human-test copy is
+`build/interp-scroll-continuous-d6a8c025.sfc`. The `build/` top level contains
+only those two ROM names; historical and diagnostic output is preserved under
+`/home/chad/supermn-snes-artifacts/`.
+
+This candidate corrects a human-visible regression that the former gate missed.
+Rejected `3a5f3694…` applied each -3-pixel game-tick camera change at once and
+held the intervening 60 Hz frame. Its old validator inspected only source-change
+frames and therefore falsely called 49 three-pixel registrations green. The
+rewritten every-frame validator reclassifies it red: 48 held presentations and
+49 three-pixel steps. That is the hard skip Chad observed in Mesen.
+
+`d6a8c025…` integrates each 30 Hz source step across the two SNES video frames.
+From the retained predecessor checkpoint at frame 5,871 / tick 370, a 101-frame
+diagnostic capture has 49 exact -3-pixel source steps, 48 one-pixel and 49
+two-pixel visible registrations, zero held/reversed/oversized presentations,
+and zero background discontinuities. All six displayed-map changes register
+with zero residual pixel mismatch. Sol manually reviewed the complete sequence
+contact sheet and all nine transition pairs that failed in rejected predecessor
+`562928a5…`; the wall, floor, palette, and HUD remain whole.
+
+The confirmed final root was a Poppy addressing trap. `STZ` has no long form,
+but Poppy accepted `stz $7E72B9` and emitted bank-relative `STZ $72B9`. The
+map-commit marker therefore remained armed and unrelated graphics/offset-table
+DMAs repeatedly applied 32-pixel coordinate rebases. Source now uses explicit
+`LDA #0 / STA long`; ROM-pack guards require the exact long stores, exactly one
+same-NMI map commit per pending tilemap DMA, and reject the bad bank-relative
+encoding. The focused real-65816/PPU bridge is green 12/12.
+
+Evidence is preserved at
+`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8/` and
+`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`.
+The latter contains all 101 authenticated PNGs, `temporal-scroll-report.json`,
+`sequence-contact-sheet.png`, and `former-red-transition-pairs.png`.
+
+This is cross-ROM checkpoint evidence only. It does not establish fresh boot,
+organic coin/Start, aligned MAME pixels, formal MAME-frame conservation,
+renderer throughput, later-stage coverage, performance, or gameplay acceptance.
+No fresh-power replay was started. The exact-hash cold-boot evidence for
+`3a5f3694…` remains historical liveness evidence and does not transfer to
+`d6a8c025…`.
+
+Preserved predecessor `50bbed41…` is pinned as
+`build/interp-prepared-bg-dualpath-50bbed41.sfc`. Its bounded fresh gate starts
+from `StartWithoutSaveData`, uses
+organic coin and Start, and retains 602 consecutive actual post-Start frames
+(fresh frames 5,521–6,122; ticks 195–495) plus loading/title/credit milestones.
+The initial machine report is red only because its old 50-frame visual grace
+classified the normal Stage-1 fade: blank frames 50–65 and a repeated-tile
+heuristic during the dark/gray fade through frame 89. Manual review proves
+geometry appears at frame 66, the complete wall/floor and palette are present by
+frame 90, and the scene remains present through frame 601. Authenticated offline
+reanalysis verifies every one of the 602 PNG hashes and metrics and is clear for
+frames 100–601 without replaying the 5,521-frame prefix. Evidence is
+`build/playback-watcher-20260813/50bbed41-fresh-poststart-framebuffers-v1/`,
+including `reanalysis-grace100.json` and the manually reviewed contact sheet.
+
+At exact-hash frame 100, canonical raw BG code/color planes match live X1
+byte-for-byte: zero mismatches, hashes `7914696b…` and `22ef727c…`. Structural
+inspection finds 392/392 final target owners, 178 unique codes/slots, and zero
+graphics, ownership, stale-empty, or palette mismatch. Every retained checkpoint
+from frames 100–600 has 178/178 exact native graphics records. Evidence is
+`50bbed41-fresh-poststart-x1-100-v2` and
+`50bbed41-fresh-poststart-inspect-100-v1` beside the fresh run.
+
+The fresh `d4873020…` gate started from `StartWithoutSaveData`, used
+organic coin and Start, and retained 601 consecutive actual post-Start frames
+(fresh frames 5,451–6,051; ticks 159–459) plus loading/title/credit milestones.
+SA-1 boot, title, credit, Start, HUD, and OBJ are present, but the gameplay
+playfield is blank from relative frame 50 through 600. Sol manually reviewed
+the contact sheet and confirmed the machine result. Evidence is
+`build/playback-watcher-20260813/d487-fresh-poststart-framebuffers-v2/`.
+
+Read-only inspection proves native BG graphics DMA is no longer the failure:
+checkpoints contain as many as 191/191 exact ROM-to-VRAM graphics records with
+zero byte mismatches. Live X1 contains the complete 392-cell/178-code Stage-1
+scene, while canonical raw planes `$7E:2000/$2400` remain byte-identical to the
+35-cell/27-code title image through frame 600.
+
+The rejected `d4873020…` cause was missing path coverage. The assembled helper and
+622-byte promoter are byte-exact in the fresh states, but an execution hook at
+`$E9:C400` never fires across the exact post-Start transition. Source calls the
+helper only from queued primary prepared promotion. Organic fresh gameplay takes
+the direct `snapshot_acquire_paced` prepared path (`psd_prepared_dma`), which
+copies the map/list/palette payload but does not reconstruct the raw baseline.
+`50bbed41…` adds the equivalent direct call; the exact frame-100 equality and
+continued visible scene above prove that organic path now publishes the baseline.
+
+Preserved predecessor `c6ec69a1…` is also organically **visual-red after coin + Start**. The original
+same-hash report retained 601 controller-request samples, but that API can
+advance zero, one, or two actual video frames and therefore was not consecutive
+coverage. The corrected movie replay retains 457 consecutive actual frames,
+legacy-Mesen frames 5,634–6,090, with every frame-counter delta proven `+1`.
+Start consumes the credit, yet HUD/OBJ remain over an absent Stage-1 BG throughout.
+The live X1 shadow still contains the complete playfield. Evidence is
+`build/playback-watcher-20260813/c6ec-poststart-exact-video-frames-v1/`;
+the old `c6ec-t185-poststart-v2` directory remains labeled sampled negative
+evidence, not 600 consecutive video frames.
+
+The confirmed repair has two parts. First, primary `$FFFE` promotion copied its
+exact prepared tilemap, sorted code list, and palette map but left canonical raw
+planes `$7E:2000/$2400` holding the preceding 35-cell title baseline. Later
+clean candidates therefore erased or rebuilt from stale title data. Rejected
+`d4873020…` reconstructed both raw planes during queued prepared promotion only;
+current `50bbed41…` covers both consumers. The immutable logical
+offset table is SA-1 `$9E:E800` at ROM file `$2F6800`, seen by the 5A22 as
+`$EF:6800`; an initial `$EF:E800` implementation was rejected when actual
+assembled execution failed the exact live-X1 invariant.
+
+Second, that first cache repair exposed partial graphics records. The prepared
+run is 178 consecutive 128-byte records, but `$1700`-byte DMA chunks consumed
+the VBlank budget and corrupted the tails of physical slots 46 and 138.
+Source now uses record-aligned `$1600` chunks with a full-record margin and
+resets the `OPVCT` byte phase through `STAT78` in both DMA wait paths. A packer
+guard requires the corrected table address, chunk size, phase resets, helper
+span, and promoter call.
+
+Before that fresh rejection, an intervened same-ROM test executed the actual
+assembled helper and promoter, proved its 1,024-byte code and color outputs
+byte-exact against live X1, then continued for 500 frames. The final inspector
+reports 178/178 native graphics owners correct, with zero graphics, ownership,
+stale-target, palette, or hash-layout mismatches. Its aggregate `green` remains
+false because the chosen final checkpoint was mid-render with queues populated;
+it is causal/structural evidence, not organic acceptance. Frames 50, 200, and
+500 were manually inspected and show the complete scrolling wall/floor without
+the earlier black chunks. The retained SNES and same-frame X1 review sheets are
+`review-contact-sheet.png` and `x1-source-contact-sheet.png` (SHA-256
+`303b98f0…` and `3822169d…`). Evidence:
+`build/playback-watcher-20260813/c6ec-assembled-prepared-dma1600-proof-v3/`
+and its `-final-cache-v1` inspector. The negative `$1700` boundary records are
+preserved under `c6ec-prepared-cache-proof-v4-final-cache-v3/`.
+
+That intervention did not cover the organic direct prepared path and therefore
+could not accept `d4873020…`; `d4873020…` and `c6ec69a1…` remain red. Their
+authenticated states, every retained PNG, live-X1 planes, prepared payloads, expected/observed
+corrupt VRAM records, assembled outputs, final states, hashes, and intervention
+ledgers remain preserved alongside the bounded-clear `50bbed41…` successor.
+
+The first implementation of that scroll work, rejected `95b44eb7…`, never left
+the loading screen. The confirmed cause was source operand `sta $7E74C0,y`:
+65816 has no long-addressed `STA ...,Y`, and Poppy silently emitted bytes
+`99 C0 74` (`STA` absolute,Y), dropping bank `$7E`. The resulting DB-relative
+stores corrupted the arcade boot RAM test and entered its failure loop. Current
+`c6ec69a1…` preserves X, transfers Y to X, and performs the legal long-X store
+(`DA BB 9F C0 74 7E FA`). Both `c6ec69a1…` and `d4873020…` contain that repair.
+The ROM packer now rejects the invalid three-byte
+encoding and requires the long-X sequence.
+
+A bounded exact-hash Luna cold-boot smoke proves liveness, not gameplay
+acceptance: frames 1,250/1,500 remain on the valid Mode-7 RAM-test path with
+halt zero; by frames 5,250/5,500 the game is at tick 60/185, render 27/89,
+virtual PC `$0818`, Mode 2, and halt zero. Evidence is
+`build/playback-watcher-20260812/boot-liveness-c6ec69a1-v1/watcher-report.json`.
+The focused real-5A22/PPU bridge gate is green 10/10 at
+`build/playback-watcher-20260812/vertical-scroll-mode2-c6ec-v1/report.json`.
+
+The two supplied old Mesen 2.1.1 states now have authenticated, same-emulator
+checkpoint rebuilds. The lab parks the SA-1 at its exact paused PC, drains the
+5A22 renderer to empty queues/equal generations, seeds the selected ROM from the
+paused live X1 planes, invalidates serialized cache and applied-column-map
+authority, and stops after two additional coherent-idle frames so Mesen's PNG
+pipeline shows the completed DMA. Legacy Mesen screenshot acquisition is also
+serialized with a repository lock; the earlier parallel `v1` PNGs and first-idle
+PNGs are invalid evidence.
+
+State one is green for checkpoint structure at tick 34,940: 442 occupied source
+cells resolve through 384 final physical targets, all 384 have the exact reverse
+owner, 58 earlier cells are intentionally shadowed by X1 draw-order overlaps,
+and stale-empty, palette, and graphics mismatches are all zero. Its live/applied
+map is `00..0D,04,07`, the dynamic lookup matches that map, and the settled PNG
+is complete. State two is green at tick 1,918: 392/392 final targets have exact
+ownership, with zero shadowed, stale-empty, palette, or graphics mismatches; its
+map is `06..0F,00..05,00,00` and its settled PNG is complete. Evidence is under
+`user-attract1-c6ec-frozen-auth-rebuild-v3` and the August 13
+`user-attract2-c6ec-frozen-auth-rebuild-v7`. These are intervened checkpoint
+diagnostics, not fresh-boot or exact-MAME pixel acceptance.
+
+There is no same-hash aligned-MAME pixel comparison, formal temporal-conservation
+result, fresh gameplay campaign, or human acceptance for `c6ec69a1…`. Those
+gates remain `unknown`.
 
 The complete root had two parts. First, the heavy renderer encoded empty map
 cells as word zero while assigning live artwork to physical slot zero. Second,
@@ -32,7 +204,7 @@ emptied. Reserving slot zero changes the repeated live tile to blank but cannot
 restore the columns discarded by that split authority, so both repairs are
 required.
 
-Focused token/consumer fixtures are green 3/3 at
+Predecessor `6413924c…`'s focused token/consumer fixtures are green 3/3 at
 `build/playback-watcher-20260812/bg-authority-slotzero-6413924c-token-v1`, and
 producer/transition fixtures are green 12/12 at
 `build/playback-watcher-20260812/bg-authority-slotzero-6413924c-producer-v1`.
@@ -102,11 +274,12 @@ Three ROM identities must not be conflated:
 - `a9765fbf…` is the preserved ordinary candidate with the strongest accepted
   ordinary evidence: fresh controller coverage through tick 10,000 plus its
   focused semantic, combat, crate, HUD, and Stage-3 blocker results.
-- The current source ordinary build is the unaccepted renderer repair
-  `6413924c…`, based on red `5f5dc9d7…`. It has focused fixture and controlled
-  migrated-frame evidence only; it does not inherit preserved predecessor
-  `4eb9a408…` acceptance. Exact-v7 successor `162b757c…` is a separate
-  unpromoted diagnostic lineage.
+- The current source ordinary build is unaccepted renderer/scroll candidate
+  `c6ec69a1…`. It retains `6413924c…`'s blank-slot/map-authority correction and
+  fixes rejected `95b44eb7…`'s invalid long-Y boot corruption. It has bounded
+  exact-hash boot, focused bridge, and controlled save-state evidence only; it
+  does not inherit preserved predecessor `4eb9a408…` acceptance. Exact-v7
+  successor `162b757c…` is a separate unpromoted diagnostic lineage.
 - The latest focused VTIME diagnostic is v7 SHA-256
   `45c9096dfda3d4203878c18954725ff4814f23f4e28a1e623f3cf07b647e6c72`.
   A ROM-only migration from the authenticated v4 tick-14,745 checkpoint is
@@ -1013,8 +1186,9 @@ performance, full-playthrough, production, or release acceptance.
   and continue past oracle mismatches when state safety permits. Diagnose any
   discrepancy from its nearest checkpoint; batch nonblocking fixes. Before a
   new ROM lineage, report the confirmed root cause, why rebuilding is needed,
-  and which fresh replay it invalidates, then obtain explicit approval for any
-  fresh-boot campaign. Do not replay the 9,432-frame bootstrap implicitly.
+  and which fresh replay it invalidates. Builds and bounded fresh-power regression
+  gates do not require separate approval; a full long gameplay campaign does. Do
+  not replay the 9,432-frame bootstrap implicitly.
 
   The next Luna-owned same-hash continuation is partial-green through tick
   6,500: 1,499/1,499 segment and 6,332/6,332 cumulative interpreted entries,

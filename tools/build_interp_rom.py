@@ -534,8 +534,27 @@ assert (
 service_pending_dma0_bytes = VID[
     service_pending_dma0 - 0x8000:service_pending_dma0_end - 0x8000
 ]
+bg_tile_run_dma_chunks_bytes = VID[
+    bg_tile_run_dma_chunks - 0x8000:bg_tile_run_dma_chunks_end - 0x8000
+]
+assert bytes.fromhex("c90116901938e90016") in bg_tile_run_dma_chunks_bytes, (
+    "prepared BG DMA chunks no longer retain the proven $1600-byte "
+    "record-aligned VBlank margin"
+)
 assert bytes.fromhex("ad3f21ad3721ad3d21") in service_pending_dma0_bytes, (
     "pending DMA0 service no longer resets OPVCT low/high phase through "
+    "STAT78 before latching and reading the vertical counter"
+)
+assert service_pending_dma0_bytes.count(bytes.fromhex("2240c3e9")) == 1, (
+    "pending BG tilemap DMA no longer commits its coordinate rebase exactly "
+    "once in the same NMI"
+)
+dma0_blank_pulse_extended_bytes = VID[
+    dma0_blank_pulse_extended - 0x8000:
+    dma0_blank_pulse_extended_end - 0x8000
+]
+assert bytes.fromhex("ad3f21ad3721ad3d21") in dma0_blank_pulse_extended_bytes, (
+    "direct DMA0 service no longer resets OPVCT low/high phase through "
     "STAT78 before latching and reading the vertical counter"
 )
 assert VID[
@@ -585,6 +604,13 @@ pacing_snapshot_publish = vid_off("ptw_snapshot_direct")
 pacing_vtime_publish_tail = vid_off("pacing_vtime_publish_tail")
 pacing_publish_vtime_joy = vid_off("pacing_publish_vtime_joy")
 pacing_helpers_end = vid_off("pacing_helpers_end")
+pacing_publish_input_and_scroll = vid_off(
+    "pacing_publish_input_and_scroll"
+)
+pacing_publish_input_and_scroll_end = vid_off(
+    "pacing_publish_input_and_scroll_end"
+)
+nmi_video_keepalive_end = vid_off("nmi_video_keepalive_end")
 assert pacing_try_wake == 0x8E00
 assert (
     pacing_try_wake
@@ -604,6 +630,12 @@ assert VID[
     pacing_vtime_publish_tail - 0x8000:pacing_publish_vtime_joy - 0x8000
 ] == bytes.fromhex("4cab8e"), (
     "VTIME input sampler tail no longer jumps to its adjacent publisher"
+)
+assert VID[
+    pacing_renderer_ownership_guard - 0x8000 - 4:
+    pacing_renderer_ownership_guard - 0x8000
+] == bytes.fromhex("20d08eea"), (
+    "paced wake no longer publishes input and latest coherent scroll before dispatch"
 )
 renderer_guard_offset = pacing_renderer_ownership_guard - 0x8000
 assert VID[renderer_guard_offset:renderer_guard_offset + 5] == bytes.fromhex(
@@ -625,31 +657,51 @@ if pending_guard_branch >= 0x80:
 assert pacing_pending_direct_guard + 9 + pending_guard_branch == pacing_snapshot_publish, (
     "pending-direct equality branch no longer reaches direct snapshot publication"
 )
-assert VID[pacing_helpers_end - 0x8000:0x0F00] == bytes(
-    0x8F00 - pacing_helpers_end
-), "pacing helper grew into the fixed NMI handler"
-assert VID[0x0F00:0x0F3A] == bytes.fromhex(
-    "08c23048da5a8be220a90048aba9808d"
+assert pacing_publish_input_and_scroll == 0x8ED0
+assert VID[
+    pacing_helpers_end - 0x8000:
+    pacing_publish_input_and_scroll - 0x8000
+] == bytes(pacing_publish_input_and_scroll - pacing_helpers_end), (
+    "VTIME publisher grew into the latest-scroll helper"
+)
+assert VID[
+    pacing_publish_input_and_scroll - 0x8000:
+    pacing_publish_input_and_scroll_end - 0x8000
+] == bytes.fromhex(
+    "8f00004120bca7e220eb8fb2727eafb3727ec9a5f012afb2727e8fb4727e"
+    "22a0c1e9a9a58fb3727ec22060"
+), "latest-scroll helper lost its quiescent source-capture contract"
+assert VID[pacing_publish_input_and_scroll_end - 0x8000:0x0F00] == bytes(
+    0x8F00 - pacing_publish_input_and_scroll_end
+), "latest-scroll helper grew into the fixed NMI handler"
+assert VID[0x0F00:0x0F40] == bytes.fromhex(
+    "08c23048da5a8b0ba900005be220a90048aba9808d"
     "0122af2a01411a8f2a014120008e2033"
-    "8a208a8e20808fad0233ab"
+    "8a208a8e20808fad02332bab"
     "eaeaeaeaeaeaeaea"
     "c2307afa682840"
 ), (
     "pacing NMI handler lost its leading-edge wake/DMA/cache-scroll wrapper "
-    "or A-preserving restore order"
+    "or its A/Direct-Page-preserving restore order"
 )
-assert VID[0x0F3A:0x0F40] == bytes(0x06), (
-    "pacing NMI handler grew into the fixed coprocessor-IRQ handler"
-)
-assert VID[0x0F68:0x0F80] == bytes(0x18) and VID[0x0F96:0x1000] == bytes(0x6A), (
+assert VID[0x0F40:0x0F69] == bytes.fromhex(
+    "08c23048da5a8b0ba900005be220a90048aba9808d"
+    "022220008eeaeaeaad02332babc2307afa682840"
+), "pacing IRQ handler no longer establishes and restores Direct Page zero"
+assert VID[0x0F69:0x0F80] == bytes(0x17), (
     "pacing IRQ/cache-scroll handler grew into an adjacent reserved island"
 )
-assert VID[0x0F80:0x0F96] == bytes.fromhex(
-    "20008bad0233f00dc220a5d04820b0a16885d0e22060"
+assert VID[0x0F80:nmi_video_keepalive_end - 0x8000] == bytes.fromhex(
+    "20008bad0233f015c220a5d048e2202200c2e9c22020b0a16885d0e22060"
 ), (
     "NMI cache-scroll wrapper no longer preserves boot ownership, waits for an "
-    "acknowledged frame, preserves renderer DP scratch, or reapplies only the "
-    "cached BG scroll registers"
+    "acknowledged frame, advances presentation once, preserves renderer DP "
+    "scratch, or reapplies only the cached BG scroll registers"
+)
+assert VID[nmi_video_keepalive_end - 0x8000:0x1000] == bytes(
+    0x9000 - nmi_video_keepalive_end
+), (
+    "NMI scroll wrapper grew into the sound-driver island"
 )
 # Keep each renderer island inside its declared execution domain.  Symbol bounds
 # plus explicit zero seams catch Poppy's permissive .org overlap without freezing
@@ -658,6 +710,8 @@ palette_test = vid_off("pacing_palette_cache_test")
 palette_test_end = vid_off("pacing_palette_cache_test_end")
 bg_scroll = vid_off("bg_scroll")
 bg_scroll_end = vid_off("bg_scroll_end")
+bg_scroll_with_opt = vid_off("bg_scroll_with_opt")
+bg_scroll_with_opt_end = vid_off("bg_scroll_with_opt_end")
 bg_hscroll = vid_off("bg_hscroll")
 bg_test = vid_off("pacing_bg_cache_test")
 bg_test_end = vid_off("pacing_bg_cache_test_end")
@@ -703,6 +757,8 @@ vid_obj_packed = vid_off("vid_obj_packed")
 vid_obj_packed_end = vid_off("vid_obj_packed_end")
 snapshot_dma_helpers = vid_off("psd_palette_dma")
 snapshot_dma_helpers_end = vid_off("psd_manifest_dma_end")
+psd_prepared_dma = vid_off("psd_prepared_dma")
+psd_prepared_dma_end = vid_off("psd_prepared_dma_end")
 bg_incremental = vid_off("vid_bg_incremental")
 bg_incremental_end = vid_off("vid_bg_incremental_end")
 capture_bg_vscroll = vid_off("capture_bg_vscroll")
@@ -743,8 +799,24 @@ bg_offset_table_build = vid_off("bg_offset_table_build")
 bg_offset_table_build_end = vid_off("bg_offset_table_build_end")
 capture_bg_upper_full = vid_off("capture_bg_upper_full")
 capture_bg_upper_full_end = vid_off("capture_bg_upper_full_end")
+bg_opt_update = vid_off("bg_opt_update")
+bg_opt_update_end = vid_off("bg_opt_update_end")
+bg_upload_mode_current = vid_off("bg_upload_mode_current")
+bg_upload_mode_current_end = vid_off("bg_upload_mode_current_end")
+bg_scroll_present_init = vid_off("bg_scroll_present_init")
+bg_scroll_present_init_end = vid_off("bg_scroll_present_init_end")
+bg_scroll_present_step = vid_off("bg_scroll_present_step")
+bg_scroll_present_step_end = vid_off("bg_scroll_present_step_end")
 bg_hscroll_full = vid_off("bg_hscroll_full")
 bg_hscroll_full_end = vid_off("bg_hscroll_full_end")
+bg_scroll_map_commit = vid_off("bg_scroll_map_commit")
+bg_scroll_map_commit_end = vid_off("bg_scroll_map_commit_end")
+bg_compute_hscroll = vid_off("bg_compute_hscroll")
+bg_compute_hscroll_end = vid_off("bg_compute_hscroll_end")
+prepared_bg_cache_reconstruct = vid_off("prepared_bg_cache_reconstruct")
+prepared_bg_cache_reconstruct_end = vid_off(
+    "prepared_bg_cache_reconstruct_end"
+)
 accept_bg_columns_snapshot = vid_off("accept_bg_columns_snapshot")
 accept_bg_columns_snapshot_end = vid_off("accept_bg_columns_snapshot_end")
 accept_bg_columns_direct = vid_off("accept_bg_columns_direct")
@@ -762,23 +834,111 @@ boot_screen_init = vid_off("boot_screen_init")
 boot_screen_init_end = vid_off("boot_screen_init_end")
 video_image_end = vid_off("video_image_end")
 assert palette_test == 0xA1A0 and palette_test < palette_test_end <= bg_test == 0xA1E8
-assert palette_test < bg_scroll == 0xA1B0 < bg_scroll_end == palette_test_end
+assert (
+    palette_test
+    < bg_scroll == 0xA1B0
+    < bg_scroll_end == bg_scroll_with_opt
+    < bg_scroll_with_opt_end == palette_test_end
+)
 assert VID[
     bg_scroll - 0x8000:bg_scroll_end - 0x8000
 ] == bytes.fromhex(
-    "20998808e220afbf897e300eaf94897e8d0e21a9008d0e212860"
+    "20998808e220afbf897e301aafb1727ef006afb0727e8004af94897e"
+    "8d0e21a9008d0e212860"
     "a9008d0e218d0e212860"
-), "BG scroll dispatcher lost its title guard or two-write VOFS publication"
+), "BG scroll dispatcher lost its title/OPT guard or two-write VOFS publication"
+assert VID[
+    bg_scroll_with_opt - 0x8000:bg_scroll_with_opt_end - 0x8000
+] == bytes.fromhex("2200c0e94cb0a1"), (
+    "foreground BG scroll no longer publishes the Mode-2 table before registers"
+)
 assert VID[bg_hscroll - 0x8000:bg_hscroll - 0x8000 + 5] == bytes.fromhex(
-    "2200bbe960"
+    "2200c3e960"
 ), "BG hscroll wrapper no longer reaches the fixed ROM helper"
 bg_hscroll_full_bytes = VID[
     bg_hscroll_full - 0x8000:bg_hscroll_full_end - 0x8000
 ]
 assert bg_hscroll_full_bytes == bytes.fromhex(
-    "08c230e220af95897ec22029ff0085d0af96897ec9feffb00ca5d0291f0085d0a"
-    "94000800caf96897e290100eb1869400038e5d029ff03e2208d0d21eb8d0d21286b"
+    "08c230a5d048a5d2482080c2e2208d0d21eb8d0d21c2206885d26885d0286b"
 ), "BG hscroll helper changed without a fresh-boot-safe fixture"
+assert VID[
+    bg_compute_hscroll - 0x8000:bg_compute_hscroll_end - 0x8000
+] == bytes.fromhex(
+    "e220afb3727ec9a5d01bc220af96897ec9feffb008afb5727e29ff0360e220"
+    "afb4727e8004af95897ec22029ff0085d0af96897ec9feffb029e220af9589"
+    "7ec22029ff0085d238e5d029ff0085d0a5d2291f0085d2a9400038e5d21865"
+    "d029ff0360af96897e290100eb1869400038e5d029ff0360"
+), "BG hscroll coordinate lost its integrated exact-map presentation policy"
+assert bg_upload_mode_current == 0xC180
+assert VID[
+    bg_upload_mode_current - 0x8000:bg_upload_mode_current_end - 0x8000
+] == bytes.fromhex(
+    "e220afb1727ef004a9028002a9018d05216b"
+), "BG upload mode keeper lost its live Mode-1/Mode-2 selection"
+assert bg_scroll_present_init == 0xC1A0
+assert VID[
+    bg_scroll_present_init - 0x8000:bg_scroll_present_init_end - 0x8000
+] == bytes.fromhex(
+    "08c230a5d048af96897ec9feffb015e220af95897ec220291f0085d0a94000"
+    "38e5d0801ce220afb4727ec22029ff0085d0af96897e290100eb1869400038"
+    "e5d029ff038fb5727e6885d0286b"
+), "scroll presenter lost its one-time accepted-map coordinate seed"
+assert bg_scroll_present_step == 0xC200
+bg_scroll_present_step_bytes = VID[
+    bg_scroll_present_step - 0x8000:bg_scroll_present_step_end - 0x8000
+]
+assert bg_scroll_present_step_bytes == bytes.fromhex(
+    "08c230a5d048e220afb3727ec9a5d062afb2727e38efb4727ef0573023c902"
+    "9002a902c22029ff0085d0e220186fb4727e8fb4727ec220afb5727e38e5d0"
+    "802649ff1ac9029002a902c22029ff0085d0e220afb4727e38e5d08fb4727e"
+    "c220afb5727e1865d029ff038fb5727e6885d0286bc22080f7"
+), "scroll presenter lost bounded per-NMI cursor/coordinate motion"
+assert bytes.fromhex("ceb472") not in bg_scroll_present_step_bytes, (
+    "Poppy truncated forbidden long DEC of the presented-scroll cursor"
+)
+assert bytes.fromhex("49ff00") not in bg_scroll_present_step_bytes, (
+    "Poppy inferred a 16-bit EOR immediate at the runtime-A8 negative branch"
+)
+assert (
+    bg_opt_update_end
+    <= bg_upload_mode_current
+    < bg_upload_mode_current_end
+    <= bg_scroll_present_init
+    < bg_scroll_present_init_end
+    <= bg_scroll_present_step
+    < bg_scroll_present_step_end
+    <= bg_compute_hscroll
+    < bg_compute_hscroll_end
+    <= bg_hscroll_full
+    < bg_hscroll_full_end
+    <= bg_scroll_map_commit
+    < bg_scroll_map_commit_end
+    <= prepared_bg_cache_reconstruct
+), "scroll helper islands overlap or moved out of address order"
+for seam_start, seam_end, message in (
+    (bg_opt_update_end, bg_upload_mode_current, "Mode-2 builder crossed mode keeper"),
+    (bg_upload_mode_current_end, bg_scroll_present_init, "mode keeper crossed presenter init"),
+    (bg_scroll_present_init_end, bg_scroll_present_step, "presenter init crossed presenter step"),
+    (bg_scroll_present_step_end, bg_compute_hscroll, "presenter step crossed coordinate helper"),
+    (bg_compute_hscroll_end, bg_hscroll_full, "coordinate helper crossed hscroll publisher"),
+    (bg_hscroll_full_end, bg_scroll_map_commit, "hscroll publisher crossed map-commit helper"),
+    (bg_scroll_map_commit_end, prepared_bg_cache_reconstruct, "map-commit helper crossed cache reconstructor"),
+):
+    assert VID[seam_start - 0x8000:seam_end - 0x8000] == bytes(
+        seam_end - seam_start
+    ), message
+assert bg_scroll_map_commit == 0xC340
+assert VID[
+    bg_scroll_map_commit - 0x8000:bg_scroll_map_commit_end - 0x8000
+] == bytes.fromhex(
+    "08c230a5d048e220afb9727ec9a5d066a9008fb9727ec220af96897ec9feffb04de2"
+    "20af95897e29e085d0afb8727ec9a5d02bafb3727ec9a5d023a5d038efb772"
+    "7ef01a1007c2200900ff8005c22029ff00186fb5727e29ff038fb5727ee220"
+    "a5d08fb7727ea9a58fb8727e8008e220a9008fb8727ec2206885d0286b"
+), "tilemap commit lost completed-DMA coarse-coordinate rebasing"
+assert bytes.fromhex("9cb972") not in VID[
+    bg_scroll_map_commit - 0x8000:bg_scroll_map_commit_end - 0x8000
+], "map-commit pending clear silently regressed to bank-relative STZ"
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
     bg_test - palette_test_end
 ), "palette manifest consumer overlapped the fixed BG consumer"
@@ -877,8 +1037,14 @@ assert VID[vf_tick - 0x8000 + 9:vf_tick - 0x8000 + 12] == bytes.fromhex(
 ), "vf_tick no longer calls the complete-frame renderer"
 assert bg_upload == 0x86D0 and bg_upload_commit == 0x86D4
 assert VID[bg_upload - 0x8000:bg_upload_commit - 0x8000] == bytes.fromhex(
-    "e220a901"
-), "BG upload no longer commits every completed staging map directly"
+    "2280c1e9"
+), "BG upload no longer preserves the active Mode 1/2 policy before DMA wait"
+assert VID[bg_upload - 0x8000:obj_hclr_stub - 0x8000].count(
+    bytes((0x22, bg_scroll_map_commit & 0xFF, bg_scroll_map_commit >> 8, 0xE9))
+) == 1, "BG tilemap upload lost its completed-DMA coordinate commit"
+assert VID[bg_upload - 0x8000:obj_hclr_stub - 0x8000].count(
+    bytes.fromhex("a9a58fb9727e")
+) == 1, "BG tilemap upload no longer arms exactly one guarded map commit"
 assert bytes.fromhex("5c00ed7e") in VID[
     render_queue_finish - 0x8000:render_queue_install - 0x8000
 ], "queue-finish helper no longer jumps to private $7E:ED00 promoter code"
@@ -888,9 +1054,9 @@ assert bytes.fromhex("9f00ed7e") not in VID[
 assert bytes.fromhex("9f00ed7e") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
 ], "lazy queue installer no longer places the promoter at private $7E:ED00"
-assert bytes.fromhex("e05202") in VID[
+assert bytes.fromhex("e06e02") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
-], "lazy queue installer lost its pinned 594-byte copy bound"
+], "lazy queue installer lost its pinned 622-byte copy bound"
 assert bytes.fromhex("9f00f17f") not in VID, (
     "queue code must never overwrite live emulated 68000 RAM at $7F:F100"
 )
@@ -985,7 +1151,10 @@ assert capture_vscroll_bytes == bytes.fromhex(
 ), "vertical-scroll capture lost center-column selection, exact -1/+8 offset, or side effects"
 assert VID.count(
     bytes((0x20, capture_bg_vscroll & 0xFF, capture_bg_vscroll >> 8))
-) == 4, "all direct/queued/legacy snapshots must pack vertical scroll coherently"
+) == 5, (
+    "direct/queued/legacy snapshots plus the paced latest-scroll publication "
+    "must capture X1 scroll coherently"
+)
 for helper in (
     capture_bg_upper_snapshot,
     capture_bg_upper_direct,
@@ -995,12 +1164,21 @@ for helper in (
     assert VID.count(bytes((0x20, helper & 0xFF, helper >> 8))) == 1, (
         "each direct/queued/legacy snapshot must select one coherent X1 column-map destination"
     )
-assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 3, (
-    "full, unchanged, and NMI cache-keepalive paths must each reapply the "
-    "same accepted BG scroll helper"
+assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 1, (
+    "the NMI cache-keepalive path must retain the plain accepted BG scroll helper"
 )
 assert VID.count(bytes((0x4C, bg_scroll & 0xFF, bg_scroll >> 8))) == 1, (
-    "full, incremental, and unchanged BG paths must all publish vertical scroll"
+    "the OPT wrapper tail must publish accepted BG scroll"
+)
+assert VID.count(
+    bytes((0x20, bg_scroll_with_opt & 0xFF, bg_scroll_with_opt >> 8))
+) == 2, (
+    "full and unchanged BG paths must refresh the accepted per-column OPT bridge"
+)
+assert VID.count(
+    bytes((0x4C, bg_scroll_with_opt & 0xFF, bg_scroll_with_opt >> 8))
+) == 1, (
+    "the incremental BG path must refresh the accepted per-column OPT bridge"
 )
 assert VID[bg_incremental_end - 0x8000:bg_cache_extended - 0x8000] == bytes(
     bg_cache_extended - bg_incremental_end
@@ -1057,8 +1235,6 @@ assert (
     < bg_offset_table_build_end
     <= capture_bg_upper_full
     < capture_bg_upper_full_end
-    <= bg_hscroll_full
-    < bg_hscroll_full_end
     <= accept_bg_columns_snapshot
     < accept_bg_columns_snapshot_end
     <= accept_bg_columns_direct
@@ -1069,6 +1245,22 @@ assert (
     < prepared_bg_map_remap_end
     <= bcmu_c0bc_cache_load
     < bcmu_c0bc_cache_load_end
+    <= bg_opt_update
+    < bg_opt_update_end
+    <= bg_upload_mode_current
+    < bg_upload_mode_current_end
+    <= bg_scroll_present_init
+    < bg_scroll_present_init_end
+    <= bg_scroll_present_step
+    < bg_scroll_present_step_end
+    <= bg_compute_hscroll
+    < bg_compute_hscroll_end
+    <= bg_hscroll_full
+    < bg_hscroll_full_end
+    <= bg_scroll_map_commit
+    < bg_scroll_map_commit_end
+    <= prepared_bg_cache_reconstruct
+    < prepared_bg_cache_reconstruct_end
     <= queue_promote
 )
 bg_map_update_code = VID[
@@ -1102,15 +1294,19 @@ assert VID[
 ] == bytes(capture_bg_upper_full - bg_offset_table_build_end), (
     "dynamic-column table builder crossed the full control-capture helper"
 )
-assert VID[
-    capture_bg_upper_full_end - 0x8000:bg_hscroll_full - 0x8000
-] == bytes(bg_hscroll_full - capture_bg_upper_full_end), (
-    "full control-capture helper crossed the horizontal-scroll helper"
+capture_bg_upper_code = VID[
+    capture_bg_upper_full - 0x8000:capture_bg_upper_full_end - 0x8000
+]
+assert bytes.fromhex("99c074") not in capture_bg_upper_code, (
+    "Poppy truncated forbidden long,Y BG-column storage to DB:$74C0"
+)
+assert capture_bg_upper_code.count(bytes.fromhex("dabb9fc0747efa")) == 1, (
+    "BG-column Y capture lost its X-preserving, bank-explicit long,X store"
 )
 assert VID[
-    bg_hscroll_full_end - 0x8000:accept_bg_columns_snapshot - 0x8000
-] == bytes(accept_bg_columns_snapshot - bg_hscroll_full_end), (
-    "horizontal-scroll helper crossed the snapshot column-acceptor"
+    capture_bg_upper_full_end - 0x8000:accept_bg_columns_snapshot - 0x8000
+] == bytes(accept_bg_columns_snapshot - capture_bg_upper_full_end), (
+    "full control-capture helper crossed the snapshot column-acceptor"
 )
 assert VID[
     accept_bg_columns_snapshot_end - 0x8000:accept_bg_columns_direct - 0x8000
@@ -1149,9 +1345,33 @@ assert VID[
     "8fc4897e7afaab60"
 ), "C0BC cache loader changed immutable code/palette semantics"
 assert VID[
-    bcmu_c0bc_cache_load_end - 0x8000:queue_promote - 0x8000
-] == bytes(queue_promote - bcmu_c0bc_cache_load_end), (
-    "C0BC cache-loader crossed the private-WRAM queue-promoter island"
+    bcmu_c0bc_cache_load_end - 0x8000:bg_opt_update - 0x8000
+] == bytes(bg_opt_update - bcmu_c0bc_cache_load_end), (
+    "C0BC cache-loader crossed the Mode-2 offset builder"
+)
+bg_opt_update_code = VID[
+    bg_opt_update - 0x8000:bg_opt_update_end - 0x8000
+]
+assert bg_opt_update_code.count(
+    bytes((0x20, bg_compute_hscroll & 0xFF, bg_compute_hscroll >> 8))
+) == 1, "Mode-2 offset builder lost presented-map-relative H selection"
+assert VID[
+    prepared_bg_cache_reconstruct_end - 0x8000:queue_promote - 0x8000
+] == bytes(queue_promote - prepared_bg_cache_reconstruct_end), (
+    "prepared-cache reconstructor crossed the private-WRAM queue-promoter island"
+)
+prepared_reconstruct_code = VID[
+    prepared_bg_cache_reconstruct - 0x8000:
+    prepared_bg_cache_reconstruct_end - 0x8000
+]
+assert bytes.fromhex("bf0068ef") in prepared_reconstruct_code, (
+    "prepared-cache reconstructor lost the immutable logical offset table"
+)
+assert bytes.fromhex("990020") in prepared_reconstruct_code, (
+    "prepared-cache reconstructor no longer publishes the raw code baseline"
+)
+assert bytes.fromhex("990024") in prepared_reconstruct_code, (
+    "prepared-cache reconstructor no longer publishes the raw color baseline"
 )
 assert VID[
     prepared_bg_map_remap - 0x8000:prepared_bg_map_remap - 0x8000 + 36
@@ -1186,9 +1406,24 @@ assert bytes.fromhex("a9618d0b21") in VID[
     bg_upload - 0x8000:bg_upload - 0x8000 + 0x80
 ], "BG upload no longer preserves the live title BG2 character base"
 assert queue_promote == 0xED00 and queue_promote < queue_promote_end <= 0xF000
-assert queue_promote_end - queue_promote == 0x0252, (
+assert queue_promote_end - queue_promote == 0x026E, (
     "pinned lazy-installer size no longer matches the queue promoter"
 )
+assert bytes.fromhex("2200c4e9") in VID[
+    queue_promote - 0x8000:queue_promote_end - 0x8000
+], "prepared queue promotion lost canonical raw-cache reconstruction"
+assert (
+    VID[
+        psd_prepared_dma - 0x8000:psd_prepared_dma_end - 0x8000
+    ].count(bytes.fromhex("2200c4e9"))
+    == 1
+), "direct prepared snapshot lost canonical raw-cache reconstruction"
+assert (
+    VID[
+        queue_promote - 0x8000:queue_promote_end - 0x8000
+    ].count(bytes.fromhex("2200c4e9"))
+    == 1
+), "queued prepared promotion must reconstruct the canonical raw cache exactly once"
 assert queue_promote_end <= boot_screen_init == 0xF000
 assert VID[
     queue_promote_end - 0x8000:boot_screen_init - 0x8000

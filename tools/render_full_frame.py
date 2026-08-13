@@ -5,6 +5,7 @@ Full-frame arcade renderer: backdrop + background (X1-001 type0) + foreground
 Inputs (tools/mame-trace/, all via read_u16):
   gfx1.bin, c_spritecode_full.bin, c_spriteylow.bin, c_spritectrl.bin, c_palette.bin
 """
+import argparse
 import struct
 from pathlib import Path
 import numpy as np
@@ -31,12 +32,37 @@ def decode_16x16(gfx, code):
     return out
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input-dir", type=Path, default=MT)
+    parser.add_argument(
+        "--gfx",
+        type=Path,
+        default=MT / "gfx1.bin",
+        help="authenticated private X1 graphics region",
+    )
+    parser.add_argument("--output", type=Path, default=Path("render_full_arcade.png"))
+    parser.add_argument(
+        "--mame",
+        type=Path,
+        help="optional exact 384x240 MAME screenshot for the historical comparison",
+    )
+    parser.add_argument(
+        "--compare-output",
+        type=Path,
+        default=Path("render_full_compare.png"),
+    )
+    return parser.parse_args()
+
+
 def main():
-    gfx = np.frombuffer((MT / "gfx1.bin").read_bytes(), np.uint8)
-    sc = struct.unpack("<8192H", (MT / "c_spritecode_full.bin").read_bytes())
-    yl = (MT / "c_spriteylow.bin").read_bytes()
-    ctrl = struct.unpack("<4H", (MT / "c_spritectrl.bin").read_bytes())
-    palw = struct.unpack("<2048H", (MT / "c_palette.bin").read_bytes())
+    args = parse_args()
+    source = args.input_dir
+    gfx = np.frombuffer(args.gfx.read_bytes(), np.uint8)
+    sc = struct.unpack("<8192H", (source / "c_spritecode_full.bin").read_bytes())
+    yl = (source / "c_spriteylow.bin").read_bytes()
+    ctrl = struct.unpack("<4H", (source / "c_spritectrl.bin").read_bytes())
+    palw = struct.unpack("<2048H", (source / "c_palette.bin").read_bytes())
 
     def prgb(idx):
         Wd = palw[idx]
@@ -107,11 +133,16 @@ def main():
         blit(cw & 0x3FFF, (xv >> 11) & 0x1F, cw & 0x8000, cw & 0x4000, sx, py)
 
     from PIL import Image
-    Image.fromarray(fb).save("render_full_arcade.png")
-    mame = Image.open(sorted((MT / "snap/superman").glob("*.png"))[-1]).convert("RGB")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(fb).save(args.output)
+    if args.mame is None:
+        print(f"wrote {args.output}")
+        return
+    mame = Image.open(args.mame).convert("RGB")
     combo = Image.new("RGB", (W_ * 2 + 8, H_), (40, 40, 40))
     combo.paste(mame, (0, 0)); combo.paste(Image.fromarray(fb), (W_ + 8, 0))
-    combo.save("render_full_compare.png")
+    args.compare_output.parent.mkdir(parents=True, exist_ok=True)
+    combo.save(args.compare_output)
     # color membership
     mc = set(map(tuple, np.unique(np.array(mame).reshape(-1, 3), axis=0)))
     mine = np.unique(fb.reshape(-1, 3), axis=0)
@@ -121,7 +152,7 @@ def main():
     m = np.array(mame).astype(int)
     diff = np.abs(fb.astype(int) - m).max(axis=2)
     print(f"exact pixel match to MAME: {100*(diff<=4).mean():.1f}%")
-    print("wrote render_full_compare.png")
+    print(f"wrote {args.compare_output}")
 
 
 if __name__ == "__main__":

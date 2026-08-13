@@ -624,7 +624,8 @@ promotion, or production fitness. Continue the current hash in bounded Luna-
 owned segments and continue post-divergence when state safety permits; focus
 diagnosis at the nearest checkpoint and batch nonblocking fixes. Before a new
 ROM lineage, disclose the confirmed root cause, rebuild necessity, and fresh
-evidence invalidated. A new fresh boot requires explicit approval. The focused
+evidence invalidated. Builds and bounded fresh-power regression gates do not
+require separate approval; a full long gameplay campaign does. The focused
 paced-default, DBcc, and current-hash campaign tests guard these limits and
 checkpoint transitions.
 Stage-3 rate, ordinary three-way recovery, boss gameplay, and global

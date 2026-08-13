@@ -1,8 +1,8 @@
 # Superman release blockers
 
-The preserved `a9765fbf…` ordinary evidence line is not playable or shippable. This file
-lists what must change or be proven before either label can return. It is a
-66-byte, hash-guarded patch of preserved `5c7e…`, limited to two terminal
+Current temporal-scroll candidate `d6a8c025…` is not playable or shippable. This file
+lists what must change or be proven before either label can return. The preserved
+`a9765fbf…` timing evidence line is a 66-byte, hash-guarded patch of preserved `5c7e…`, limited to two terminal
 native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
 common virtual-IRQ clock. `build/interp-current-5c7e-before-vtime-esc9.sfc`
 retains the exact predecessor.
@@ -12,9 +12,84 @@ retains the exact predecessor.
 The corrected README showcase initially passed Chad's August 12 still-image review,
 but live Mesen playtests subsequently found repeated/corrupt gameplay backgrounds
 and flashing while scrolling. Preserved parent `11aefd2c…` and superseded
-`5f5dc9d7…` are explicitly renderer-red. Current source builds the focused repair
-candidate `6413924c…`; it reserves blank physical BG slot zero and removes the
-staging/PPU split-authority sparse-upload gate. Promotion still requires this one
+`5f5dc9d7…` are explicitly renderer-red. Preserved renderer/scroll predecessor
+`c6ec69a1…` retains `6413924c…`'s blank physical
+BG slot zero and single staging/PPU map authority, and adds the per-column
+vertical-scroll/Mode-2 path. It is now explicitly red on an organic same-hash
+coin/Start suffix: corrected movie replay proves 457 consecutive actual video
+frames (5,634–6,090), all with gameplay HUD and sprites over black. The older
+601-sample capture remains negative evidence but is not consecutive coverage.
+The producer's exact prepared Stage-1 entry was promoted without replacing the
+canonical raw BG code/color baseline, so later clean candidates used the
+preceding title image. The first reconstruction proof then exposed a second
+root: `$1700`-byte BG graphics chunks overran the safe VBlank budget and left
+partial 128-byte tile records at physical slots 46 and 138.
+
+Rejected successor `d4873020…` now proves that source reconstructs
+`$7E:2000/$2400` only on the queued primary prepared path. It otherwise reads
+the prepared tilemap/code
+list/palette map, reads the immutable table at the correct 5A22 address
+`$EF:6800`, limits chunks to record-aligned `$1600`, and resets `OPVCT` phase in
+both DMA paths. The actual assembled helper/promoter was executed under a fully
+recorded same-ROM intervention: its raw outputs match live X1 byte-for-byte,
+the scene scrolls for 500 frames, manually reviewed screenshots contain the
+complete wall/floor without black chunks, and the final inspector has 178/178
+correct graphics owners with zero graphics/ownership/stale/palette mismatches.
+The fresh gate for `d4873020…` covers power-on through frame 6,051
+and 601 consecutive post-Start frames. It is visual-red from post-Start frame 50
+through 600. The contact sheet was manually reviewed. Native graphics are exact,
+but live X1 has 392 cells/178 codes while `$7E:2000/$2400` retain the exact
+35-cell/27-code title hashes.
+
+The helper/promoter bytes are present and exact, but `$E9:C400` never executes
+across the fresh transition. Organic gameplay uses direct
+`snapshot_acquire_paced` → `psd_prepared_dma`; only queued promotion calls the
+helper. Current `50bbed41…` adds that direct call, while pack-time guards require
+exactly one call in both prepared consumers. Its fresh organic movie retains 602
+consecutive post-Start frames. Manual review shows the Stage-1 fade completing by
+frame 90 and the complete wall/floor remaining through frame 601. Authenticated
+offline reanalysis verifies every framebuffer and is clear from frame 100 onward.
+At frame 100 raw code/color planes match live X1 byte-for-byte, ownership is
+392/392, and all 178 BG graphics records match. This closes the reproduced
+missing-background regression only; `d4873020…` and `c6ec69a1…` remain red.
+
+Chad's next live playtest found that this whole background still moved in hard
+skips. Retained consecutive-frame evidence confirms a temporal failure that the
+still-image and repetition gates did not measure: over 100 video frames from
+frame 5,871 / tick 370, the X1 source camera takes 50 exact -3-pixel steps while
+`50bbed41…` changes BG1HOFS only 17 times. Both renderer queues remain saturated,
+33 newer candidates are dropped, and the visible steps accumulate into irregular
+6-15-pixel jumps. The offline temporal-scroll gate is deliberately red for the
+predecessor (49 measured source steps, 16 PPU steps after warmup).
+
+Rejected `3a5f3694…` published the latest coherent X1 scroll byte independently
+of the immutable image queue, but its original gate checked only source-change
+frames. It therefore missed the intervening 60 Hz holds and falsely promoted a
+`hold, +3 pixels` cadence that remained visibly jerky. The rewritten gate examines
+every consecutive authenticated framebuffer and makes this predecessor red: 48
+holds and 49 three-pixel moves.
+
+Current `d6a8c025…` integrates each -3-pixel 30 Hz source step as one- and
+two-pixel 60 Hz presentations. Its retained-checkpoint diagnostic is green over
+101 consecutive frames: 49 source changes, 48 one-pixel and 49 two-pixel
+registrations, no hold/reversal/oversized step, and no background mismatch. Six
+physical tilemap rotations retain zero residual pixel mismatch. The formerly red
+transition pairs and the sequence contact sheet were manually reviewed. The
+real-65816/PPU bridge is green 12/12.
+
+Intermediate candidates were correctly rejected by the new gate. `b1e57e0e…`
+had the correct 1/2-pixel cadence but flashed at tilemap publications;
+`d43c8bb4…` rebased one frame after the DMA; and `562928a5…` still had nine
+background discontinuities because Poppy silently encoded the impossible long
+`STZ` marker clear as a bank-relative store. Current source uses a legal explicit
+long store and pack-time guards pin same-NMI commit/clear ownership.
+
+This remains checkpointed cross-ROM diagnostic evidence, not a fresh-power
+successor gate. Fresh `50bbed41…` artifacts and exact-hash `3a5f3694…` boot
+liveness remain preserved but do not transfer to the new hash. No fresh boot,
+organic coin/Start, or long gameplay replay has been started for `d6a8c025…`.
+
+Promotion of a successor still requires this one
 ROM identity and one exact tick range to pass the machine-enforced state oracle,
 aligned exact-MAME pixels at every game tick, and conservation of every
 intervening SNES video frame. Missing, incomplete, cross-hash, or cross-range
@@ -22,6 +97,43 @@ evidence is `unknown`, never green. The same ROM must additionally pass
 fresh-power-on stage/boss continuity, organic Stage 2 and later renderer coverage,
 a live human combat/audio playtest, the 30 game-ticks/s and 358K SA-1 cycles/tick
 gates, and real-hardware acceptance.
+
+Retain the current-hash organic failure and intervened proof at
+`build/playback-watcher-20260813/c6ec-poststart-exact-video-frames-v1/`,
+`c6ec-prepared-cache-proof-v4-final-cache-v3/`, and
+`c6ec-assembled-prepared-dma1600-proof-v3/` plus its `-final-cache-v1`
+inspector. A new hash invalidates the `c6ec69a1…` save-state suffix as acceptance
+evidence for the successor; every artifact remains regression and root-cause
+evidence.
+
+Retain the failed successor at
+`build/interp-prepared-bg-dma1600-d4873020.sfc` and its fresh evidence at
+`build/playback-watcher-20260813/d487-fresh-poststart-framebuffers-v2/`.
+Focused same-hash inspection and helper-flow reports are under the adjacent
+`d487-fresh-poststart-inspect-*`, `d487-fresh-poststart-x1-*`, and
+`d487-organic-helper-poststart0-v1` directories. No longer campaign was started.
+
+Retain current `50bbed41…` evidence at
+`build/playback-watcher-20260813/50bbed41-fresh-poststart-framebuffers-v1/`,
+including `reanalysis-grace100.json`, plus adjacent
+`50bbed41-fresh-poststart-x1-100-v2` and
+`50bbed41-fresh-poststart-inspect-100-v1`. No long campaign was started.
+
+The fresh successor gate starts from `StartWithoutSaveData`, not a retained
+checkpoint. `tools/validate_fresh_poststart_framebuffers.py` records and replays
+one organic power-on/coin/Start movie, retains loading/title/credit milestones,
+every actual post-Start frame, periodic states and BG graphics records, and a
+contact sheet. Blank/repeated playfields, hidden BG1, absent ownership, partial
+tile DMA, frame gaps, or halt are machine-red, and Sol must manually inspect the
+contact sheet before any visual-clear report. Even a clear result remains
+acceptance-unknown until exact-MAME pixel and temporal-conservation gates run.
+Its default 100-frame grace covers the observed organic Stage-1 fade;
+`tools/reanalyze_fresh_poststart_framebuffers.py` can authenticate and reclassify
+all retained PNGs after threshold-only changes without replaying the boot prefix.
+Builds and this bounded fresh-power regression gate do not require separate
+approval. A full long gameplay campaign does. Before rebuilding, report the
+confirmed cause, why a new hash is necessary, and which exact-hash acceptance
+evidence will no longer transfer.
 
 The preserved-parent Mesen repetition diagnostic is deterministically red. Lossless
 capture reports mismatch ranges 165–174 and 225–232. Clean-to-first-bad comparison
@@ -54,9 +166,11 @@ conservation. Capture, trace, cross-emulator, single-frame, and repetition tools
 always carry diagnostic-only or bounded-oracle authority and cannot fill missing
 aggregate gates.
 
-Current source builds unaccepted ordinary SHA `6413924c…` at `build/interp.sfc`;
-the exact image is preserved as
-`build/interp-bg-authority-slotzero-6413924c.sfc`. Focused token and producer
+Current source builds unaccepted ordinary SHA `d6a8c025…` at `build/interp.sfc`;
+the identical test image is `build/interp-scroll-continuous-d6a8c025.sfc`.
+The superseded `3a5f3694…` pin and earlier ROMs/evidence are preserved outside
+the repository under `/home/chad/supermn-snes-artifacts/`; the archive README
+maps former `build/` paths to their retained locations. Predecessor `6413924c…`'s focused token and producer
 fixtures are green 3/3 and 12/12. A controlled cross-ROM migration from a retained
 `4eb9a408…` tick-2,437 snapshot continues through tick 2,554; its reviewed first
 and last post-vblank frames retain the full background and the 273-frame
@@ -64,7 +178,27 @@ heuristic finds no repetition/flash ranges. This closes the reproduced symptom
 only in a bounded diagnostic: the snapshot is not resumable campaign
 lineage, its video mirror/cache migration is an intervention, and no exact-MAME
 pixel oracle was run. The exact-hash fresh-boot, aligned-pixel, and every-frame
-temporal gates therefore remain `unknown`. Its red parents `5f5dc9d7…` and
+temporal gates therefore remain `unknown`.
+
+Rejected intermediate `95b44eb7…` never exited loading because Poppy silently
+encoded invalid source `sta $7E74C0,y` as DB-relative absolute,Y bytes
+`99 C0 74`, corrupting the arcade boot RAM test. Current `c6ec69a1…` uses an
+X-preserving legal long-X store and adds a ROM-pack assertion against recurrence.
+Its bounded cold-boot smoke reaches tick 185/render 89/PC `$0818` with halt zero,
+and the exact-hash vertical-scroll bridge gate is green 10/10. Both supplied old
+Mesen states now pass the explicit same-emulator checkpoint rebuild contract.
+State one has 384/384 final-target ownership with 58 intentional draw-order
+overlaps; state two has 392/392 with no overlaps. Both have zero stale-empty,
+palette, and native-graphics mismatches, matching live/applied column maps, equal
+completed generations, and complete two-frame-settled PNGs. This required fixing
+the lab itself: serialize Mesen's global screenshot path, refuse non-drained
+migration, publish a private generation/worker request, seed live X1 cache and
+palette, invalidate serialized applied-map authority, and wait out screenshot
+latency. These are intervened checkpoint diagnostics, not formal aligned-pixel or
+temporal-conservation acceptance.
+
+The exact-hash fresh gameplay, aligned-pixel, and every-frame temporal gates
+remain `unknown`. Its red parents `5f5dc9d7…` and
 `11aefd2c…`, plus rejected queue-wide guard `10dc1a0b…`, remain preserved;
 superseded diagnostic-clear `9ab9a1db…` omitted X/Y preservation.
 None inherits evidence from predecessor `4eb9a408…`, preserved as
@@ -978,8 +1112,9 @@ from this Stage-1 prefix. Keep long playback Luna-owned and on this ROM hash;
 continue post-divergence when state safety permits, diagnose from the nearest
 checkpoint, and batch nonblocking fixes. Before creating another ROM lineage,
 state the confirmed root cause, rebuild necessity, and fresh evidence that
-would be invalidated. A new fresh-boot campaign requires explicit user
-approval. The old ledger, fresh bisect, paced default, calibration, and
+would be invalidated. Builds and bounded fresh-power regression gates do not
+require separate approval; a full long gameplay campaign requires explicit
+user approval. The old ledger, fresh bisect, paced default, calibration, and
 checkpoint contracts are guarded by the focused
 `tools/test_vtime_interpreter_only_*dbcc*.py`,
 `tools/test_vtime_interpreter_only_choke_gate_vtwrite_charge.py`, and

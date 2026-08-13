@@ -132,6 +132,7 @@ Choose the focused validator for the changed path:
 - `tools/validate_obj_cache_vram.py`
 - `tools/validate_paced_obj_sources.py`
 - `tools/validate_vertical_scroll_bridge.py`
+- `tools/validate_scroll_temporal_continuity.py`
 - `tools/capture_mesen211_transitions.py`
 - `tools/trace_playtest_actions.py`
 
@@ -214,22 +215,54 @@ aggregate contract:
   result is always acceptance-`unknown`; an anomaly is diagnostic negative
   evidence, not a substitute for the exact-MAME gate.
 
+Correct pixels at sparse checkpoints can still conceal a visibly jerky camera.
+For a consecutive capture that retains `live_scrollx_column0`, actual BG1HOFS,
+and authenticated screenshots, run the focused temporal-scroll gate offline:
+
+```sh
+python3 tools/validate_scroll_temporal_continuity.py \
+  --results build/path/to/consecutive-capture/results.json \
+  --output build/path/to/consecutive-capture/temporal-scroll.json
+```
+
+The gate requires consecutive actual video frames, authenticates every PNG,
+derives the stable X1 source step, and evaluates every intervening presentation,
+including frames on which the 30 Hz source does not change. It rejects holds,
+reversals, oversized steps, accumulated motion, residual background mismatch,
+and incorrect physical-map coordinate rebases.
+
+This stricter contract reclassifies rejected `3a5f3694…` red. Its former gate
+looked only at the 49 source-change frames and called each three-pixel move green;
+the missing intervening coverage contains 48 held presentations. Current
+`d6a8c025…` is focused-green over 101 consecutive authenticated frames: 49
+source steps, 48 one-pixel plus 49 two-pixel registrations, no holds/reversals/
+oversized steps, and no background discontinuities. Six displayed-map changes
+have zero residual pixel mismatch. The report and manually reviewed sheets are
+under
+`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`.
+This result remains acceptance-`unknown`; it does not replace aligned MAME
+pixels, formal MAME-frame conservation, fresh power, or human review.
+
 Nexen's 256x239 capture is normalized to the top 256x224 active display used by
 Mesen. A green player/input/health oracle must never be reported as visually
 green without the separate aligned-pixel and temporal gates.
 
-For a reported input-triggered visual failure, continue from the nearest retained
-same-emulator checkpoint with `tools/capture_snes_input_framebuffers.py`; it uses
-only real controller input and saves each framebuffer plus periodic states.
+For root-cause diagnosis of a reported input-triggered visual failure, a retained
+same-emulator checkpoint may be continued with
+`tools/capture_snes_input_framebuffers.py`; it uses only real controller input,
+movie replay, and saves each verified-consecutive framebuffer plus periodic
+states. Retained or cross-hash states are diagnostic only and must never replace
+a fresh-power successor gate.
 Cross-ROM renderer labs must opt into each intervention separately:
 `--refresh-video-mirror` replaces the selected ROM's 5A22 video code,
 `--reserve-bg-slot-zero-migration` verifies the new blank-slot layout, and
 `--shift-bg-slots-for-reserved-zero` moves the saved hash, reverse index, free
 list, staging/display maps, and resident VRAM tile records from slot `n` to
 `n+1`. The result is diagnostic-only and its manifest must retain the complete
-intervention ledger. `tools/capture_snes_direct_framebuffers.py` is the focused
-fallback when Nexen's movie-controller request cannot advance a loaded state: it
-holds one real input and advances exactly one video frame per screenshot.
+intervention ledger. `tools/capture_snes_direct_framebuffers.py` is a focused
+sampling fallback when movie replay cannot be used. Legacy Mesen's direct
+controller request can advance zero, one, or two actual video frames; the tool
+records that delta and must never claim consecutive coverage.
 When legacy Mesen cannot advance a one-frame controller request, use
 `tools/record_snes_input_framebuffers.py`: its emulator-core lossless GIF capture
 retains every rendered framebuffer during one uninterrupted controller span.
@@ -260,7 +293,7 @@ diagnostic. Do not treat the earlier clear interval as fresh boot, aligned MAME
 pixels, temporal conservation, performance, broad renderer conservation, or
 human playtest evidence.
 
-Current focused renderer candidate `6413924c…` is guarded by
+Preserved focused renderer predecessor `6413924c…` is guarded by
 `tools/test_bg_blank_slot_invariant.py`: native graphics record zero must be 128
 zero bytes, physical slot zero must be uploaded blank, all nonempty immutable
 records must use one-based slots, and `bg_upload` must have one direct commit
@@ -275,6 +308,99 @@ with no detected repetition/flash ranges at
 This remains acceptance-`unknown`: it is a cross-ROM intervened checkpoint, not
 fresh power-on, same-lineage playback, aligned exact-MAME pixels, or the formal
 temporal-conservation oracle.
+
+Preserved focused renderer/scroll candidate `c6ec69a1…` added a legal bank-long
+per-column Y capture and the Mode-2 window path. Run the focused bridge gate and
+retain its machine-readable report:
+
+```sh
+python3 tools/validate_vertical_scroll_bridge.py \
+  --rom build/interp.sfc \
+  --output build/playback-watcher-20260812/vertical-scroll-mode2-c6ec-v1
+```
+
+The retained exact-hash result is green 10/10. Because rejected `95b44eb7…`
+passed that focused fixture while corrupting the arcade boot RAM test, a renderer
+build is not viable without a bounded cold-boot liveness smoke. The retained
+`c6ec69a1…` smoke reaches tick 185/render 89/PC `$0818`/Mode 2 with halt zero at
+`build/playback-watcher-20260812/boot-liveness-c6ec69a1-v1/watcher-report.json`.
+This proves exit from loading only; it is not a fresh gameplay campaign or visual
+acceptance.
+
+Current `d6a8c025…` retains that vertical bridge and adds integrated 60 Hz
+horizontal presentation plus same-NMI map-basis commits. Its exact-hash focused
+bridge is green 12/12 at
+`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8/vertical-scroll-bridge.json`.
+The retained frame-5,871 checkpoint migration and offline temporal gate are at
+`/home/chad/supermn-snes-artifacts/active/d6a8c025-scroll-v8-checkpoint350-frames5871-5971/`;
+this is cross-ROM diagnostic evidence, not the required fresh-power successor
+gate. The bounded loading-exit smoke for rejected `3a5f3694…` is historical
+liveness evidence only and does not transfer to the current hash.
+
+Legacy Mesen writes screenshots through global filenames. Parallel capture
+processes can therefore copy one another's PNGs even when their emulator states
+are distinct. `tools/capture_mesen211_transitions.py` now holds
+`build/.mesen-screenshot-capture.lock` across each emulator screenshot request
+and file copy. The parallel `user-attract{1,2}-c6ec-neutral-v1` directories and
+the first-idle PNGs are invalid evidence.
+
+For an old cross-ROM renderer checkpoint, use `tools/drain_mesen211_renderer.py`
+to park the SA-1 at its exact paused PC while leaving the 5A22/NMI consumer free
+to drain. Migration refuses anything except busy zero, empty queues, and equal
+snapshot/direct/rendered generations. The explicit slot-zero migration then
+refreshes the selected video mirror, seeds BG/palette cache from the paused live
+X1 planes, clears old allocator/queue authority, invalidates the serialized
+applied column map, publishes a private generation and worker request, and
+requires two additional coherent-idle frames before retaining the final PNG.
+`tools/inspect_mesen211_bg_state.py` reads the resulting state in legacy Mesen
+and checks dynamic offset-table layout, final target ownership, intentional X1
+overlaps, stale empty targets, palette mapping, and native graphics bytes.
+
+Those structural checks do not prove that a prepared transition updated the
+canonical raw baseline. The `c6ec69a1…` organic coin/Start negative fixture is
+`c6ec-poststart-exact-video-frames-v1`: 457 consecutive actual video frames,
+5,634–6,090, all retain HUD/OBJ over an absent BG even though live X1 remains
+complete. The older `c6ec-t185-poststart-v2` capture has 601 request-indexed
+samples and must not be described as consecutive coverage.
+
+`tools/prove_prepared_bg_cache_reconstruction.py` is the intervened causal
+oracle. It retains the prepared map/list/palette inputs, stale and reconstructed
+raw planes, live X1 planes, periodic raw X1 source captures and screenshots, an
+authenticated final state, and every runtime write. Its actual-assembly mode
+must execute the helper/promoter and require the produced raw planes to match
+both the independently reconstructed expectation and live X1 byte-for-byte.
+It may never report organic acceptance. The corrected actual-code proof is
+`c6ec-assembled-prepared-dma1600-proof-v3`; its final inspector reports 178/178
+exact graphics records and zero structural/palette mismatches. The rejected
+`$1700` chunk's expected/observed corrupt slots 46 and 138 are preserved in
+`c6ec-prepared-cache-proof-v4-final-cache-v3`.
+
+After a successor ROM exists, do not use the old state as its first visual gate.
+Run `tools/validate_fresh_poststart_framebuffers.py` from
+`StartWithoutSaveData`: organic power-on, coin, and Start; loading/title/credit
+milestone PNGs; every actual post-Start framebuffer; periodic states and exact
+native BG-record checks; and a contact sheet that Sol must inspect. The machine
+gate is red for blank/repeated playfields, hidden BG1, absent cache ownership,
+partial tile DMA, nonconsecutive frames, or interpreter halt. It remains
+acceptance-unknown even when clear until the separate exact-MAME pixels and
+every-video-frame temporal-conservation reports cover the same ROM/range. The
+default 100-frame visual grace covers the authenticated organic Stage-1 fade;
+`tools/reanalyze_fresh_poststart_framebuffers.py` re-verifies every retained PNG
+hash and metric after threshold-only changes, without replaying the boot prefix.
+Do not
+start a full long gameplay campaign without explicit approval. Builds and bounded
+fresh-power regression gates do not require separate approval; before rebuilding,
+report the confirmed cause, why a new hash is necessary, and which exact-hash
+acceptance evidence will no longer transfer.
+
+Retained state-one evidence at
+`build/playback-watcher-20260812/user-attract1-c6ec-frozen-auth-rebuild-v3`
+is green for 384/384 final targets (442 source cells, 58 intentional overlaps),
+with zero stale/palette/graphics mismatches. Retained state-two evidence at
+`build/playback-watcher-20260813/user-attract2-c6ec-frozen-auth-rebuild-v7`
+is green 392/392 with zero overlaps or mismatches. Both remain intervened
+checkpoint diagnostics with acceptance `unknown`, not fresh boot, aligned MAME
+pixels, or formal every-video-frame conservation.
 
 The MAME/SNES comparator applies the established arcade viewport registration
 (`x=64..319`, `y=1..224`) and reports the intentionally repositioned top HUD

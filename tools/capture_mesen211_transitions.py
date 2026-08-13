@@ -12,6 +12,7 @@ The capture is a rendering compatibility diagnostic, not performance evidence.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -37,6 +38,7 @@ REAL_MESEN = Path("/home/chad/Mesen2/bin/linux-x64/Release/Mesen")
 VIDEO_FILE_BASE = 0x298000
 VIDEO_WRAM_OFFSET = 0x18000
 VIDEO_WRAM_LENGTH = 0x3000
+SCREENSHOT_LOCK = ROOT / "build" / ".mesen-screenshot-capture.lock"
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,6 +59,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Checkpoint lab only: replace saved $7F:8000-$AFFF with the "
             "selected ROM's video supervisor before resuming."
+        ),
+    )
+    parser.add_argument(
+        "--mirror-live-scroll",
+        action="store_true",
+        help=(
+            "Checkpoint diagnostic only: before each resumed video frame, "
+            "copy live X1 column-0 scroll X into the renderer's cached scroll "
+            "byte. This tests register-only temporal decoupling without a ROM build."
         ),
     )
     return parser.parse_args()
@@ -95,12 +106,75 @@ def le16(data: bytes) -> int:
     return int.from_bytes(data, "little")
 
 
+def park_sa1_at_current_pc(m: McpSession, reason: str) -> dict[str, Any]:
+    """Park the paused SA-1 CPU without stopping the 5A22/NMI consumer.
+
+    MCP debugger writes to I/O memory do not guarantee device side effects, so
+    checkpoint diagnostics cannot reliably freeze the SA-1 by poking CCNT.
+    Replacing the instruction at the exact paused SA-1 PC with ``BRA -2`` keeps
+    the coprocessor on that address while normal SNES frames and NMI continue.
+    The edit is emulator-runtime-only; it does not modify the ROM file.
+    """
+    cpu = m.get_cpu_state("Sa1")
+    address = ((int(cpu["k"]) & 0xFF) << 16) | (int(cpu["pc"]) & 0xFFFF)
+    original = bytes(m.read_memory("sa1Memory", address, 2))
+    parked = b"\x80\xFE"
+    m.write_memory("sa1Memory", address, parked.hex())
+    observed = bytes(m.read_memory("sa1Memory", address, 2))
+    if observed != parked:
+        raise RuntimeError(
+            f"SA-1 park did not verify at ${address:06X}: {observed.hex()}"
+        )
+    return {
+        "region": f"sa1Memory ${address:06X}-${address + 1:06X}",
+        "bytes": parked.hex(),
+        "original_bytes": original.hex(),
+        "sa1_pc": address,
+        "reason": reason,
+    }
+
+
 def snapshot(m: McpSession) -> dict[str, Any]:
     state = m.get_state()
+    snes_cpu = m.get_cpu_state("Snes")
+    sa1_cpu = m.get_cpu_state("Sa1")
     ppu = m.get_ppu_state()
     bg1 = ppu["layers"][0]
+    live_scrollx = int(
+        m.read_memory("snesMemory", 0x413409, 1)[0]
+    )
+    live_scrolly = int(
+        m.read_memory("snesMemory", 0x413481, 1)[0]
+    )
+    bg_cgram = bytes(m.read_memory("snesCgRam", 0, 0x100))
+    bg_cgram_staging = bytes(
+        m.read_memory("snesWorkRam", 0x8000, 0x100)
+    )
+    raw_palette = bytes(
+        m.read_memory("snesWorkRam", 0x2800, 0x400)
+    )
+    displayed_bg_map = bytes(
+        m.read_memory("snesVideoRam", 0x0000, 0x1000)
+    )
+    displayed_bg_graphics = bytes(
+        m.read_memory("snesVideoRam", 0x2000, 0x6000)
+    )
+    displayed_opt_table = bytes(
+        m.read_memory("snesVideoRam", 0xF000, 0x80)
+    )
+    staged_bg_map = bytes(
+        m.read_memory("snesWorkRam", 0x9000, 0x1000)
+    )
     return {
         "frame": int(state.get("frameCount", 0)),
+        "snes_pc": (
+            ((int(snes_cpu.get("k", 0)) & 0xFF) << 16)
+            | (int(snes_cpu.get("pc", 0)) & 0xFFFF)
+        ),
+        "sa1_pc": (
+            ((int(sa1_cpu.get("k", 0)) & 0xFF) << 16)
+            | (int(sa1_cpu.get("pc", 0)) & 0xFFFF)
+        ),
         "tick": le16(m.read_memory("Sa1Memory", 0x0760, 2)),
         "halt": le16(m.read_memory("Sa1Memory", 0x004E, 2)),
         "pc68k": int.from_bytes(
@@ -110,8 +184,32 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "task_mask": int.from_bytes(
             m.read_memory("snesMemory", 0x400002, 2), "big"
         ),
+        "credits": int.from_bytes(
+            m.read_memory("snesMemory", 0x401C62, 2), "big"
+        ),
         "render_complete": le16(
             m.read_memory("snesWorkRam", 0x89A2, 2)
+        ),
+        "renderer_busy": le16(
+            m.read_memory("snesWorkRam", 0x899C, 2)
+        ),
+        "snapshot_generation": le16(
+            m.read_memory("snesWorkRam", 0x899A, 2)
+        ),
+        "direct_generation": le16(
+            m.read_memory("snesWorkRam", 0x89A0, 2)
+        ),
+        "rendered_generation": le16(
+            m.read_memory("snesWorkRam", 0x89A4, 2)
+        ),
+        "render_queue_primary": le16(
+            m.read_memory("snesWorkRam", 0x89D2, 2)
+        ),
+        "render_queue_secondary": le16(
+            m.read_memory("snesWorkRam", 0x89D6, 2)
+        ),
+        "render_queue_drops": le16(
+            m.read_memory("snesWorkRam", 0x89D4, 2)
         ),
         "boot_activity": int(
             m.read_memory("snesWorkRam", 0x1F1B, 1)[0]
@@ -121,6 +219,99 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "bg1_vscroll": int(bg1["vscroll"]),
         "scroll_packed": le16(
             m.read_memory("snesWorkRam", 0x8994, 2)
+        ),
+        # The renderer-owned packed value above can lag while its queues are
+        # saturated.  Retain the coherent live X1 source too so temporal-scroll
+        # diagnostics can distinguish a slow producer from dropped snapshots.
+        "live_scroll_packed": (live_scrollx << 8)
+        | ((live_scrolly + 7) & 0xFF),
+        "live_scrollx_column0": live_scrollx,
+        "live_scrolly_column4": live_scrolly,
+        "latest_scrollx": int(
+            m.read_memory("snesWorkRam", 0x72B2, 1)[0]
+        ),
+        "latest_scroll_valid": int(
+            m.read_memory("snesWorkRam", 0x72B3, 1)[0]
+        ),
+        "presented_scrollx": int(
+            m.read_memory("snesWorkRam", 0x72B4, 1)[0]
+        ),
+        "presented_hofs": le16(
+            m.read_memory("snesWorkRam", 0x72B5, 2)
+        ),
+        "displayed_map_scrollx": int(
+            m.read_memory("snesWorkRam", 0x72B7, 1)[0]
+        ),
+        "displayed_map_valid": int(
+            m.read_memory("snesWorkRam", 0x72B8, 1)[0]
+        ),
+        "map_commit_pending": int(
+            m.read_memory("snesWorkRam", 0x72B9, 1)[0]
+        ),
+        "bg_column_kind": le16(
+            m.read_memory("snesWorkRam", 0x8996, 2)
+        ),
+        "bg_dirty": le16(
+            m.read_memory("snesWorkRam", 0x8990, 2)
+        ),
+        "bg_manifest": le16(
+            m.read_memory("snesWorkRam", 0x89BC, 2)
+        ),
+        # Retain the displayed/staged BG colors and their logical source.  A
+        # geometrically aligned framebuffer can still flash when a palette
+        # slot is republished or overwritten between video frames.
+        "bg_cgram": bg_cgram.hex(),
+        "bg_cgram_sha256": hashlib.sha256(bg_cgram).hexdigest(),
+        "bg_cgram_staging": bg_cgram_staging.hex(),
+        "bg_cgram_staging_sha256": hashlib.sha256(
+            bg_cgram_staging
+        ).hexdigest(),
+        "raw_palette_sha256": hashlib.sha256(raw_palette).hexdigest(),
+        "bg_palette_bank_map": bytes(
+            m.read_memory("snesWorkRam", 0x8940, 0x20)
+        ).hex(),
+        "displayed_bg_map_sha256": hashlib.sha256(
+            displayed_bg_map
+        ).hexdigest(),
+        "displayed_bg_map": displayed_bg_map.hex(),
+        "staged_bg_map_sha256": hashlib.sha256(staged_bg_map).hexdigest(),
+        "staged_bg_map": staged_bg_map.hex(),
+        "dma0_pending": int(
+            m.read_memory("snesWorkRam", 0x1F11, 1)[0]
+        ),
+        "dma0_descriptor": bytes(
+            m.read_memory("snesMemory", 0x004300, 7)
+        ).hex(),
+        "displayed_bg_graphics_sha256": hashlib.sha256(
+            displayed_bg_graphics
+        ).hexdigest(),
+        "displayed_bg_graphics_record_sha256": [
+            hashlib.sha256(
+                displayed_bg_graphics[offset : offset + 0x80]
+            ).hexdigest()
+            for offset in range(0, len(displayed_bg_graphics), 0x80)
+        ],
+        "displayed_opt_table": displayed_opt_table.hex(),
+        "displayed_opt_table_sha256": hashlib.sha256(
+            displayed_opt_table
+        ).hexdigest(),
+        "bg_cache_marker": le16(
+            m.read_memory("snesWorkRam", 0x8982, 2)
+        ),
+        "bg_column_map": bytes(
+            m.read_memory("snesWorkRam", 0x89E0, 16)
+        ).hex(),
+        "bg_column_y_direct": bytes(
+            m.read_memory("snesWorkRam", 0x72C0, 16)
+        ).hex(),
+        "bg_column_y_physical": bytes(
+            m.read_memory("snesWorkRam", 0x72A0, 16)
+        ).hex(),
+        "bg_opt_global_vofs": int(
+            m.read_memory("snesWorkRam", 0x72B0, 1)[0]
+        ),
+        "bg_opt_enabled": int(
+            m.read_memory("snesWorkRam", 0x72B1, 1)[0]
         ),
         "x1_scrolly_columns_2_4_6_8_9": [
             m.read_memory(
@@ -158,8 +349,14 @@ def save_checkpoint(m: McpSession, path: Path) -> dict[str, Any]:
 
 
 def take_screenshot(m: McpSession, path: Path) -> dict[str, Any]:
-    response = m.take_screenshot(format="path")
-    shutil.copy2(Path(response["path"]), path)
+    # Separate Mesen processes share one screenshot directory and can choose
+    # the same numeric filename.  Serialize the emulator write plus our copy;
+    # otherwise parallel captures can silently import another process's frame.
+    SCREENSHOT_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with SCREENSHOT_LOCK.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        response = m.take_screenshot(format="path")
+        shutil.copy2(Path(response["path"]), path)
     return {
         "path": str(path),
         "sha256": sha256(path),
@@ -174,6 +371,8 @@ def main() -> int:
         raise SystemExit("invalid capture frame range")
     if args.step <= 0 or args.checkpoint_step <= 0:
         raise SystemExit("step sizes must be positive")
+    if args.mirror_live_scroll and args.step != 1:
+        raise SystemExit("--mirror-live-scroll requires --step 1")
     for label, path in (
         ("ROM", args.rom),
         ("Mesen", args.mesen),
@@ -213,7 +412,7 @@ def main() -> int:
         "capture_step": args.step,
         "checkpoint_step": args.checkpoint_step,
         "runtime_memory_pokes": (
-            [
+            ([
                 {
                     "region": "snesWorkRam $7F:8000-$AFFF",
                     "source": (
@@ -224,7 +423,15 @@ def main() -> int:
                 }
             ]
             if args.refresh_video_mirror
-            else []
+            else [])
+            + ([
+                {
+                    "region": "snesWorkRam $7E:8995",
+                    "source": "live X1 column-0 scroll byte at $41:3409",
+                    "cadence": "once before every resumed video frame",
+                    "reason": "same-ROM register-only temporal-scroll diagnostic",
+                }
+            ] if args.mirror_live_scroll else [])
         ),
         "input": "controller idle",
     }
@@ -345,6 +552,13 @@ def main() -> int:
             )
             if current == args.end_frame:
                 break
+            if args.mirror_live_scroll:
+                live_scrollx = int(
+                    m.read_memory("snesMemory", 0x413409, 1)[0]
+                )
+                m.write_memory(
+                    "snesWorkRam", 0x8995, f"{live_scrollx:02x}"
+                )
             count = min(args.step, args.end_frame - current)
             m.run_frames(count)
             current = int(m.get_state().get("frameCount", 0))
