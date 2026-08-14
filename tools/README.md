@@ -17,6 +17,20 @@ workflow. Legend:
   [private ROM inputs](../docs/current/ROM_INPUTS.md); exact FM authoring WAV
   regeneration remains outside this ROM-only path.
 
+## Fail-closed human-test promotion
+
+- **`promote_human_test_rom.py`** [S] — the sole supported creator of
+  `Superman-Arcade-Edition-<hash>-test.sfc`. It verifies the 4 MiB production ROM,
+  binds every report and artifact to the full ROM SHA-256, and rejects missing,
+  incomplete, `unknown`, red, cross-hash, mutated, or unauthenticated evidence.
+  Required reports separately cover boot geometry, credit/Start, left/right walk
+  semantics, attack motion, scroll continuity, the complete fence interaction,
+  full-composite MAME/SNES frames, intervening-frame conservation, and Sol visual
+  review. `build/interp.sfc` remains unverified regardless of narrower green gates.
+- **`test_promote_human_test_rom.py`** [G] — pure regression tests proving that a
+  complete exact-hash manifest passes while a missing scenario, mismatched ROM,
+  `unknown` walk result, false facing check, or missing artifact fails closed.
+
 ## Tracing & coverage (gate G1)
 - **`mame-trace/trace68k.lua`** [G] — headless 68K PC+disasm trace
   (`-debug -debugger none`). env `T68K_OUT/START/FRAMES`.

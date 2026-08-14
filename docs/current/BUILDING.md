@@ -27,10 +27,23 @@ sha256sum build/interp.sfc
 ```
 
 At the August 14 engineering checkpoint, an ordinary build of current source is
-the bounded human-test candidate `f25a0e68…`. The reviewed convenience copy is
-`build/Superman-Arcade-Edition-f25a0e68-test.sfc`; it is not a playable or
-release claim. Its exact hash, validation scope, rejected predecessors, and
-remaining blockers are recorded in [STATUS.md](STATUS.md).
+rejected hash `f25a0e68…`. It has a clipped/left-shifted SA-1 boot logo and wrong
+walking presentation. `build/interp.sfc` is always unverified and must never be
+renamed or handed off as a test candidate. Its exact evidence scope and remaining
+blockers are recorded in [STATUS.md](STATUS.md).
+
+Human-test ROM creation is fail-closed and separate from building:
+
+```sh
+python3 tools/promote_human_test_rom.py \
+  --rom build/interp.sfc \
+  --manifest /path/to/exact-hash-evidence/promotion-manifest.json
+```
+
+This command refuses promotion unless every mandatory fresh-power scenario and
+Sol visual-review report is present, green, exact-hash, complete, mutation-free,
+and artifact-authenticated. It is the only supported creator of a `*-test.sfc`
+file. A normal build never implies promotion.
 
 The normal ROM must be 4,194,304 bytes. Its hash depends on the exact source revision
 and private audio inputs; compare a release candidate only with the hash in

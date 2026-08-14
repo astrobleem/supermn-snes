@@ -6,12 +6,13 @@ The harness first records an organic coin/Start movie from
 save state, retains every actual post-Start video frame, and verifies that each
 stored image advances Mesen's frame counter by exactly one.  Machine checks
 catch blank/repeated playfields and partial persistent-BG tile DMAs.  A contact
-sheet makes human screenshot review mandatory in the handoff contract.
+sheet supports human review but does not authorize a ROM handoff.
 
-This is a bounded rendering regression gate, not exact-MAME pixels, temporal
-conservation against MAME, aggregate gameplay acceptance, FPS, or hardware
-evidence.  Its acceptance gate therefore remains UNKNOWN even when the named
-regression checks are clear.
+This is a bounded background rendering regression gate, not boot-logo geometry,
+player facing/animation, fence behavior, full-composite exact-MAME pixels,
+temporal conservation against MAME, aggregate gameplay acceptance, FPS, or
+hardware evidence.  Its acceptance gate remains UNKNOWN and its promotion status
+remains BLOCKED even when the named regression checks are clear.
 """
 
 from __future__ import annotations
@@ -499,6 +500,16 @@ def main() -> int:
     )
     acceptance_gate["rom_sha256"] = rom_sha256
     acceptance_gate["coverage"] = coverage
+    not_checked = [
+        "cold_boot_logo_geometry",
+        "walking_direction",
+        "player_facing",
+        "player_animation_order",
+        "attack_motion",
+        "fence_collision_break_and_passage",
+        "aligned_full_composite_mame_pixels",
+        "intervening_snes_frame_conservation_against_mame",
+    ]
     report = {
         "schema": 1,
         "scope": (
@@ -542,6 +553,17 @@ def main() -> int:
         "first_failure": failures[0] if failures else None,
         "failures": failures,
         "acceptance_gate": acceptance_gate,
+        "not_checked": not_checked,
+        "promotion": {
+            "eligible": False,
+            "status": "blocked",
+            "authority": "none",
+            "reason": (
+                "This background/cache gate cannot satisfy the fail-closed "
+                "human-test scenario manifest."
+            ),
+            "required_tool": "tools/promote_human_test_rom.py",
+        },
     }
     target = output / "results.json"
     target.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
@@ -554,6 +576,8 @@ def main() -> int:
                 "contact_sheet": contact_sheet["path"],
                 "report": str(target),
                 "acceptance_status": "unknown",
+                "promotion_status": "blocked",
+                "not_checked": not_checked,
             },
             sort_keys=True,
         )

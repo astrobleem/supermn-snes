@@ -3,6 +3,31 @@
 Run the smallest gate that can falsify the change, then add wider gates in proportion
 to the risk. Assembly success alone is never a correctness result.
 
+## Fail-closed human-test promotion
+
+`build/interp.sfc` is always unverified. Do not hand it off, copy it, or rename it
+to a human-test filename. The only supported promotion command is:
+
+```sh
+python3 tools/promote_human_test_rom.py \
+  --rom build/interp.sfc \
+  --manifest /path/to/exact-hash-evidence/promotion-manifest.json
+```
+
+The manifest must authenticate independent green reports for every scenario named
+in `promote_human_test_rom.py`: cold-boot logo geometry, title/credit/Start, walking
+right and left with correct facing and animation progression, stationary/moving
+attacks, every-frame scroll continuity, complete fence collision/break/passage,
+aligned full-composite MAME/SNES comparison including OBJ and HUD, conservation of
+intervening SNES frames, and recorded Sol review of the visual artifacts. All
+reports must use the exact ROM SHA-256 and fresh-power movie lineage with no save
+state or runtime memory writes.
+
+Missing coverage is not neutral: it is a hard promotion failure. `unknown`, red,
+partial, cross-hash, cross-range, mutated, unauthenticated, background-only, or
+state-only evidence cannot create a test ROM. A new ROM hash invalidates all prior
+promotion reports for the successor.
+
 ## Documentation and private-input tooling
 
 ```sh

@@ -10,22 +10,18 @@
 </p>
 
 <p align="center">
-  <strong>Current status: bounded Stage-1 human-test candidate.</strong><br>
-  The project is controllable and visually clear in a fresh 601-frame Stage-1
-  gate, but it is not a qualified playable demo or release.
+  <strong>Current status: no promoted human-test ROM.</strong><br>
+  The project is interactive in bounded tests, but the latest ordinary build is
+  visually rejected and is not a qualified playable demo or release.
 </p>
 
-> **Do not use the current ROM as a qualified demo.** The clearly named test copy
-> is `build/Superman-Arcade-Edition-f25a0e68-test.sfc` (the ordinary
-> `build/interp.sfc` is byte-identical), SHA-256 `f25a0e684180cd0d…`.
-> It fixes a line-0 DMA race: `HVBJOY` could still report VBlank while `OPVCT`
-> had wrapped to `$0000`, causing a direct VRAM write to be rejected after cache
-> ownership was already published. The exact formerly corrupt slot now matches
-> 128/128 bytes, and the fresh organic coin/Start gate retains 601 consecutive
-> clear post-Start framebuffers with green temporal continuity. This is bounded
-> Stage-1 evidence only. Aligned-MAME pixels, formal MAME-frame conservation,
-> later-stage acceptance, performance, hardware, and human combat/audio
-> acceptance remain open.
+> **Do not hand off or rename `build/interp.sfc`.** Ordinary builds are unverified.
+> Former candidate `f25a0e68…` fixed its named line-zero BG DMA race, but live
+> testing then found an obviously left-shifted/clipped SA-1 boot logo and incorrect
+> Superman walking presentation. Its background-continuity result remains valid
+> only for that narrow frame range; the ROM is rejected. Human-test copies are now
+> created only by the fail-closed promotion guard after every required exact-hash
+> scenario passes.
 
 ## An arcade port, not a remake
 
@@ -63,10 +59,11 @@ Concept cover contributed by Chad.
   SA-1 boot presentation, and centered HUD. Preserved `50bbed41…` has a clear
   bounded fresh-power framebuffer regression through post-Start frame 601.
   Preserved `382b76a4…` adds bounded smooth 1/2-pixel 60 Hz BG and world-object
-  presentation plus exact record-aligned graphics DMA. Current `f25a0e68…`
+  presentation plus exact record-aligned graphics DMA. Rejected `f25a0e68…`
   retains the absolute map-basis and `$0100` frame-counter repairs, rejects the
-  VBlank-high line-0 DMA boundary, and passes its bounded fresh framebuffer and
-  temporal gates. This scope does not establish full-ROM acceptance.
+  VBlank-high line-0 DMA boundary, and passes its bounded background framebuffer
+  and temporal gates. It fails boot-presentation and walking review, demonstrating
+  why those narrow results cannot establish whole-ROM visual acceptance.
 - Exact MC68000 semantic gates: optest 160/160 and opsweep 782/782.
 - Focused Stage 1–3 boss-health differentials and all 14 retained Stage 1 boss
   observations.
@@ -118,11 +115,11 @@ bash tools/build_interp.sh
 sha256sum build/interp.sfc
 ```
 
-The build writes `build/interp.sfc`. The currently reviewed human-test copy is
-`build/Superman-Arcade-Edition-f25a0e68-test.sfc`; both files have SHA-256
-`f25a0e684180cd0d1998f85569deae05cef0e8e89ab0f0188134f32f388ab835`.
-Generated intermediates and superseded test ROMs are kept out of the top of
-`build/`; Chad's supplied fence state remains there intentionally. Historical and diagnostic artifacts are
+The build writes only the unverified `build/interp.sfc`. A human-test filename may
+be created only by `tools/promote_human_test_rom.py` from complete, exact-hash,
+fail-closed scenario evidence. There is currently no promoted human-test ROM.
+Generated intermediates and rejected test ROMs are kept out of the top of `build/`;
+Chad's supplied fence state remains there intentionally. Historical and diagnostic artifacts are
 preserved outside the repository at `/home/chad/supermn-snes-artifacts/`. Exact FM authoring WAVs
 are separate private VGM/ymfm inputs; the preparer derives the program, graphics,
 C-Chip response, and drums but does not invent replacements for those WAVs.

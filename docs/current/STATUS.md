@@ -8,15 +8,26 @@ This is the only authoritative project-status summary. Dated reports under
 
 ## Verdict
 
-The port is an **interactive technical-demo response candidate**. It is **not
-playable, release-ready, or shippable**.
+The port is an **interactive technical-demo response candidate**. It has **no
+promoted human-test ROM** and is **not playable, release-ready, or shippable**.
 
-The current ordinary `build/interp.sfc` and the reviewed human-test copy
-`build/Superman-Arcade-Edition-f25a0e68-test.sfc` are byte-identical bounded
-renderer/scroll candidates, SHA-256
-`f25a0e684180cd0d1998f85569deae05cef0e8e89ab0f0188134f32f388ab835`.
-This is not promotion to playable or release status. Historical and diagnostic
-output is preserved under `/home/chad/supermn-snes-artifacts/`.
+The current ordinary `build/interp.sfc`, SHA-256
+`f25a0e684180cd0d1998f85569deae05cef0e8e89ab0f0188134f32f388ab835`, is
+unverified handoff output and is rejected as a human-test candidate. Live testing
+found the SA-1 boot logo shifted/clipped against the far left edge and Superman's
+walking presentation visibly opposite the requested motion. The former
+`build/Superman-Arcade-Edition-f25a0e68-test.sfc` convenience copy has been
+demoted to rejected evidence. Historical and diagnostic output is preserved under
+`/home/chad/supermn-snes-artifacts/`; the exact rejection record is
+`active/f25a0e68-line0-dma-fix-v1/rejection.json` there.
+
+Human-test promotion is now fail-closed. Only
+`tools/promote_human_test_rom.py` may create a `*-test.sfc` copy, and only after
+the exact ROM hash has explicit green fresh-power reports for boot presentation,
+title/credit/Start, left/right walking, attack motion, scroll continuity, fence
+collision/break/passage, aligned full-composite MAME/SNES frames, intervening-frame
+conservation, and recorded Sol artifact review. Missing, narrow, `unknown`, red,
+cross-hash, or mutated evidence blocks promotion.
 
 The physical-map correction now uses an absolute basis paired with each
 immutable exact image:
@@ -67,6 +78,11 @@ frames 100, 300, and 600: the Stage-1 wall, columns, floor, HUD, and scrolling
 remain continuous without a black vertical seam. Evidence is under
 `/home/chad/supermn-snes-artifacts/active/f25a0e68-line0-dma-fix-v1/`.
 
+That report did not machine-gate boot-logo geometry, walking direction, facing, or
+animation order. Its machine `clear` therefore remains a narrow background/cache
+result, not a whole-ROM visual result. Chad's subsequent live boot screenshot and
+walking observation reject `f25a0e68…`; no successor has been built yet.
+
 Chad's supplied old-hash fence checkpoint remains focused cross-ROM diagnostic
 evidence. Current renderer code and the two logged provenance bytes produce
 HScroll 58, halt zero, valid task contexts, an intact fence/sign overlay, and no
@@ -78,7 +94,7 @@ MAME evidence: its tick-3718 64 KiB work image differs from canonical MAME in
 16/(200,64). Equal tick numbers do not establish shared game state. The X1/SNES
 comparison proves only renderer registration for the supplied state.
 
-Rejected `893d467b…`, `b92ac14f…`, `36d664e6…`, and `60481722…` remain retained
+Rejected `f25a0e68…`, `893d467b…`, `b92ac14f…`, `36d664e6…`, and `60481722…` remain retained
 negative evidence, not handoff ROMs. No full gameplay campaign was launched.
 
 This bounded result does not establish aligned MAME pixels, formal

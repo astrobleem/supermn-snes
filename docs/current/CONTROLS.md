@@ -18,15 +18,17 @@ from the arcade input map.
 
 ## Starting a playtest
 
-1. Verify the ROM before reporting a result:
+There is currently no promoted human-test ROM. Do not substitute
+`build/interp.sfc`; it is always unverified, and current hash `f25a0e68…` is
+visually rejected.
+
+When the fail-closed promotion tool eventually creates a test ROM:
+
+1. Verify its hash against the adjacent promotion record before reporting a result:
 
    ```sh
-   sha256sum build/interp-2429c-tstb-ccr-isolated-current-5c7e.sfc
+   sha256sum build/Superman-Arcade-Edition-<hash>-test.sfc
    ```
-
-   The evidence-backed ordinary playtest candidate is
-   `a9765fbfbd2a0863f093ff1bb887cfd422ecde26e3c46bae0afd56bf8b1dac60`,
-   preserved at `build/interp-2429c-tstb-ccr-isolated-current-5c7e.sfc`.
 
 2. Load that hash-verified preserved ROM in Mesen 2.1.1 or the project Nexen build
    with a standard SNES controller on port 0.
@@ -35,14 +37,9 @@ from the arcade input map.
    percentage or proof of a specific RAM/ROM test.
 4. At the title, press Select for a credit and Start to begin.
 
-The old v135 playtest copy remains at
-`build/playtest/superman-snes-v135-5aac64b6.sfc`. The evidence-backed ordinary
-candidate is the preserved `a976…` file named above. A normal current-source build
-writes a different, unpromoted `build/interp.sfc` at exact SHA `4eb9a408…`; do
-not silently substitute it or any VTIME diagnostic for the preserved candidate.
-See [STATUS.md](STATUS.md) and the
-[August 11 checkpoint](ENGINEERING_CHECKPOINT_20260811.md) for their distinct
-evidence scopes.
+Historical playtest copies remain evidence only. A normal current-source build is
+not a candidate, even if an older narrow gate passed. See [STATUS.md](STATUS.md)
+and the [validation contract](VALIDATION.md) for the exact fail-closed rules.
 
 ## Useful playtest route
 

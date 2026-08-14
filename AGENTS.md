@@ -37,10 +37,9 @@ instruction.
 
 ## Honest baseline
 
-- The current v135 response candidate is interactive in bounded tests but is not
-  playable or shippable.
-- v135 SHA-256 is
-  `5aac64b67cfc04caf88b44198b762ddbf283ac38dfc831956290db7a99dd025a`.
+- There is no promoted human-test ROM. Ordinary build `f25a0e68…` is interactive
+  in bounded tests but is visually rejected for a clipped/left-shifted SA-1 boot
+  logo and wrong walking presentation; it is not playable or shippable.
 - v124 is the latest formal production run:
   1,783 ticks / 3,602 video frames = 29.700167 game-fps and 360,990.164 SA-1
   cycles/tick. It misses the 30 Hz and 358K gates.
@@ -131,6 +130,38 @@ it.
 - Retain MAME Lua taps in globals. Snap MAME cannot read `.claude` paths; keep runnable
   scripts and artifacts under the project. Use `SDL_VIDEODRIVER=dummy` headlessly.
 - Never use `pkill -f mame`; inspect and terminate the exact process.
+
+## Fail-closed human-test ROM handoff
+
+This policy is mandatory. It exists because narrow background-continuity gates were
+repeatedly overstated as whole-ROM visual checks while visible boot, object-motion,
+and interaction regressions remained.
+
+- `build/interp.sfc` is always an **unverified ordinary build**. Never hand it to Chad
+  as a test candidate and never manually copy or rename it to a `*-test.sfc` file.
+- `tools/promote_human_test_rom.py` is the sole path allowed to create a human-test
+  ROM. Its exact-hash evidence manifest must pass every required scenario. Missing,
+  incomplete, stale, cross-hash, `unknown`, or red evidence is a hard failure.
+- Required bounded fresh-power scenarios are: centered and unclipped cold-boot
+  presentation; title/credit/Start; walking right; walking left; stationary and
+  moving attacks; every-frame scroll continuity; intact-fence collision, attack,
+  break animation, and post-break passage; aligned full-composite framebuffer
+  comparison covering background, objects, and HUD; and recorded Sol visual review
+  of the required screenshots/contact sheets.
+- A background-only, tile-cache-only, state-only, liveness-only, or still-image gate
+  can never satisfy a composite or behavior scenario. No green result may be widened
+  beyond the scenario and exact frame range named by its report.
+- Every scenario report must identify the full ROM SHA-256, start from fresh power
+  without a save state or runtime memory mutation, retain explicit frame coverage,
+  list zero failures, and authenticate its visual artifacts. Rebuilding creates a new
+  hash and invalidates every prior promotion report for the successor.
+- Long playback belongs to the Luna playback watcher, with raw logs and frame data on
+  disk. Sol reads the compact discrepancy report and opens the mandatory visual
+  artifacts. Promotion remains blocked until that review is recorded green.
+- Handoff wording must come from the promotion record. If a scenario is not in that
+  record, describe it as **NOT CHECKED**, never inferred clear. If promotion fails,
+  preserve the ROM as rejected evidence outside the top of `build/`; do not present a
+  convenience test copy.
 
 ## Assembly and layout hazards
 

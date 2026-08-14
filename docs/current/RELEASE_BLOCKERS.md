@@ -1,6 +1,7 @@
 # Superman release blockers
 
-Current bounded renderer/scroll candidate `f25a0e68…` is not playable or shippable. This file
+There is no promoted human-test ROM. Rejected bounded renderer/scroll build
+`f25a0e68…` is not playable or shippable. This file
 lists what must change or be proven before either label can return. The preserved
 `a9765fbf…` timing evidence line is a 66-byte, hash-guarded patch of preserved `5c7e…`, limited to two terminal
 native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
@@ -124,6 +125,21 @@ gate is green (302 PPU steps, 151 source steps, no discontinuity), and Sol revie
 the contact sheet plus frames 100/300/600. This closes the reproduced title-slot
 corruption and bounded black-seam regression only.
 
+The same `f25a0e68…` ROM is nevertheless human-test red. Chad's live cold-boot
+screenshot shows the SA-1 logo shifted and clipped against the far left edge, and
+the post-Start playtest reports Superman walking with visibly wrong/opposite motion
+presentation. The prior validator captured boot milestones but did not assert their
+geometry; its pass/fail loop covered post-Start background/cache conditions and did
+not assert player facing or animation order. No narrow `clear` result may be widened
+into a visual handoff claim again.
+
+Promotion is now fail-closed through `tools/promote_human_test_rom.py`. The tool
+requires exact-hash green fresh-power evidence for boot, title/credit/Start, both
+walking directions, attack motion, every-frame scrolling, fence collision/break/
+passage, aligned full-composite background/OBJ/HUD comparison, intervening-frame
+conservation, and recorded Sol review. Any absent, incomplete, `unknown`, red,
+cross-hash, mutated, or unauthenticated evidence blocks creation of a test ROM.
+
 Intermediate candidates were correctly rejected by the new gate. `b1e57e0e…`
 had the correct 1/2-pixel cadence but flashed at tilemap publications;
 `d43c8bb4…` rebased one frame after the DMA; and `562928a5…` still had nine
@@ -132,7 +148,7 @@ background discontinuities because Poppy silently encoded the impossible long
 long store and pack-time guards pin same-NMI commit/clear ownership.
 
 This closes only the reproduced bounded Stage-1 black-band and cadence
-regressions. Aligned exact-MAME pixels, formal MAME-frame conservation, later
+regressions; it does not promote `f25a0e68…`. Aligned exact-MAME pixels, formal MAME-frame conservation, later
 stages/organic Stage 2, renderer throughput, current performance, hardware, and
 human combat/audio acceptance remain open. No full long gameplay replay has
 been started for `f25a0e68…`.
@@ -214,8 +230,8 @@ conservation. Capture, trace, cross-emulator, single-frame, and repetition tools
 always carry diagnostic-only or bounded-oracle authority and cannot fill missing
 aggregate gates.
 
-Current source builds bounded SHA `f25a0e68…` at `build/interp.sfc`; the reviewed,
-byte-identical test copy is `build/Superman-Arcade-Edition-f25a0e68-test.sfc`.
+Current source builds rejected SHA `f25a0e68…` at the unverified ordinary path
+`build/interp.sfc`. There is no reviewed or promoted byte-identical test copy.
 The superseded `3a5f3694…` pin and earlier ROMs/evidence are preserved outside
 the repository under `/home/chad/supermn-snes-artifacts/`; the archive README
 maps former `build/` paths to their retained locations. Predecessor `6413924c…`'s focused token and producer
