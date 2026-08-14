@@ -359,8 +359,7 @@ def main() -> int:
             description="power-on, coin, Start, neutral post-Start coverage",
             from_="StartWithoutSaveData",
         )
-        m.run_frames(args.title_frame)
-        m.pause()
+        advance_to(m, args.title_frame)
         title_frame = frame_count(m)
         title_credits = credits(m)
         coin_response = m.set_input(McpSession.BTN_SELECT, args.coin_frames)
@@ -514,6 +513,7 @@ def main() -> int:
         "movie_sha256": sha256(movie),
         "movie_start": "StartWithoutSaveData",
         "runtime_memory_writes": [],
+        "obj_temporal_capture": True,
         "recording": {
             "record_response": record_response,
             "coin_response": coin_response,

@@ -1,6 +1,6 @@
 # Authoritative Superman project status
 
-Last evidence review: August 13, 2026.
+Last evidence review: August 14, 2026.
 
 This is the only authoritative project-status summary. Dated reports under
 `docs/history/` retain the evidence and failed experiments behind it, but their
@@ -11,51 +11,75 @@ This is the only authoritative project-status summary. Dated reports under
 The port is an **interactive technical-demo response candidate**. It is **not
 playable, release-ready, or shippable**.
 
-The current ordinary `build/interp.sfc` is the **unaccepted bounded
-renderer/scroll response candidate**, SHA-256
-`21abe04cdb897a92992329d96ae9baf22acd6f68a1c01ff2bf77dafb40c0de70`.
-The identical human-test copy is
-`build/interp-scroll-validated-21abe04c.sfc`. Those are the only visible files
-at the `build/` top level (beside the hidden screenshot lock); historical and
-diagnostic output is preserved under `/home/chad/supermn-snes-artifacts/`.
+The current ordinary `build/interp.sfc` and the reviewed human-test copy
+`build/Superman-Arcade-Edition-f25a0e68-test.sfc` are byte-identical bounded
+renderer/scroll candidates, SHA-256
+`f25a0e684180cd0d1998f85569deae05cef0e8e89ab0f0188134f32f388ab835`.
+This is not promotion to playable or release status. Historical and diagnostic
+output is preserved under `/home/chad/supermn-snes-artifacts/`.
 
-This candidate closes the reproduced post-Start black-band and hard-skip
-symptoms in the bounded Stage-1 window. The failure was organic and did not
-require movement input: after coin + Start, a physical X1 source column can
-cross the two-slot layout gap and jump by 64 pixels while the camera moves only
--3. A fixed-column camera or map anchor therefore injects false 64-pixel
-rebases. A second failure occurred at title-to-gameplay: the sparse title map
-and full gameplay map are unrelated, so accepting their weak modal delta
-injected a false 128-pixel basis.
+The physical-map correction now uses an absolute basis paired with each
+immutable exact image:
+`slot(source column 4) * 32 + unwrapped phase - raw column-4 X (mod 256)`.
+This cancels isolated X1 gap crossings and whole-layout rotations without
+retaining the rejected modal accumulator's false `+64`. Exact-layout HScroll
+remains `64 + signed8(displayed map basis - presented camera)`. The focused
+real-65816/PPU bridge is green 22/22, including absolute basis zero, isolated
+gap changes, a whole rotation, raw -67-to-logical--3 phase unwrapping, OAM base
+publication, and Chad's fence tuple: old serialized basis `$A0`, corrected
+basis `$60`, camera `$66`, HScroll `$3A` (58). Rejected `60481722…` instead
+removed the required centered crop after its X1 reference had been resized
+rather than cropped; its apparent alignment was invalid.
 
-Current source publishes only the common modulo-32 camera phase, computes a
-tilemap rebase from the modal delta across all sixteen columns, requires at least
-9/16 agreement before accepting that relationship, and otherwise seeds the new
-map's source-column-4 slot in the already-unwrapped phase domain. The map basis
-is prepared before DMA and installed only after that exact tilemap is visible.
-The explicit long-store one-shot commit protocol remains pack-guarded against
-Poppy's invalid long-`STZ` encoding. The focused real-65816/PPU bridge is green
-16/16, including the sparse title transition, an isolated gap-column change, a
-thirteen-column rotation, and a raw -67-to-logical--3 phase jump.
+The first absolute-basis build, rejected `36d664e6…`, exposed a separate
+deterministic presentation deadlock during fresh coin + Start. Frame ACK was
+`$0100`, but `nmi_present_before_dma` ran in A8 and tested only low byte `$3302`.
+It therefore mistook a live sequence for the power-on zero value, skipped every
+BG/OBJ presentation, and left the foreground waiting forever on OBJ due state
+`3`. The retained 601-frame run is explicitly red: 303 moving-camera frames
+were held, with zero PPU movement for 456 pixels of source motion.
 
-The exact-hash bounded fresh-power gate starts from power-on, records and
-replays organic coin + Start, and retains 601 consecutive post-Start video
-frames 5,512–6,112 / ticks 190–490. Its framebuffer result is clear with no
-post-grace vertical black band, incomplete BG graphics record, frame gap, halt,
-or blank/repeated playfield. The complete contact sheet and the former rebase
-points were manually reviewed: the textured pillar/lamp, wall, floor, palette,
-HUD, and player remain whole.
+Rejected `893d467b…` tests all bytes of the 16-bit request and ACK sequences,
+suppressing gameplay presentation only while both counters are truly zero. It
+recovers the exact ACK `$0100` state, but its fresh run exposed a separate title
+graphics failure: physical BG slot 2 published owner `$19AE` while retaining
+127 bytes of old Mode-7 data. Rejected `b92ac14f…` proved that merely disabling
+the line-256+ direct-DMA tier was insufficient.
 
-The every-frame temporal gate over those same authenticated PNGs is green. Its
-explicit unwrapped source authority has 152 exact -3-pixel changes; visible
-presentation has 151 one-pixel and 152 two-pixel moves, zero held, reversed, or
-oversized frames, and zero background discontinuities. All 15 displayed-map
-changes have zero post-registration mismatch. Evidence is preserved at
-`/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`,
-with focused bridge/build evidence under
-`/home/chad/supermn-snes-artifacts/active/21abe04c-build-diagnostics-v1/` and the
-checkpoint diagnostic under
-`/home/chad/supermn-snes-artifacts/active/21abe04c-from-4279-frame50-transition-v2/`.
+The passive exact event trace on `b92ac14f…` records the real failure sequence:
+slot-2 owner low/high `$AE/$19`, tile DMA entry, helper, direct path,
+`MDMAEN=$01`, and return, with the destination unchanged. At that helper call,
+`HVBJOY=$C2` still advertises VBlank while `OPVCT=$0000`. The old low-page path
+assumed VBlank implied lines 225-255 and issued a visible-line VRAM write at the
+line-0 transition. Current `f25a0e68…` requires low-page `OPVCT >= $E1`; lower
+lines and every high-page descriptor publish for the next NMI. Its packed
+branch, fixed helper seams, and retired high-page tier are build-guarded.
+
+At exact fresh frame 5,250, current slot 2 owns `$19AE` and its 128-byte VRAM
+record matches ROM hash `a7551da6…` byte-for-byte. The exact-title recorder was
+also fixed to advance monotonically in checked chunks after Mesen returned early
+from a large `run_frames` request. The resulting current-hash organic coin/Start
+movie covers fresh frames 0-6,304 and retains every post-Start framebuffer
+5,704-6,304. Machine evaluation is clear with zero failures; the temporal gate
+is green across the same 601 images (302 PPU steps, 151 source steps, no wrong
+registration or discontinuity). Sol manually reviewed the contact sheet and
+frames 100, 300, and 600: the Stage-1 wall, columns, floor, HUD, and scrolling
+remain continuous without a black vertical seam. Evidence is under
+`/home/chad/supermn-snes-artifacts/active/f25a0e68-line0-dma-fix-v1/`.
+
+Chad's supplied old-hash fence checkpoint remains focused cross-ROM diagnostic
+evidence. Current renderer code and the two logged provenance bytes produce
+HScroll 58, halt zero, valid task contexts, an intact fence/sign overlay, and no
+screen-spanning black seam; Superman remains blocked at world X 224. The dark
+area behind the fence is also present in the checkpoint's live X1 background and
+is the doorway, not a missing 64-pixel band. This checkpoint is **not** aligned
+MAME evidence: its tick-3718 64 KiB work image differs from canonical MAME in
+2,291 bytes; SNES player health/position are 10/(224,97), versus MAME
+16/(200,64). Equal tick numbers do not establish shared game state. The X1/SNES
+comparison proves only renderer registration for the supplied state.
+
+Rejected `893d467b…`, `b92ac14f…`, `36d664e6…`, and `60481722…` remain retained
+negative evidence, not handoff ROMs. No full gameplay campaign was launched.
 
 This bounded result does not establish aligned MAME pixels, formal
 MAME-frame conservation, later-stage/organic Stage-2 coverage, renderer

@@ -1,6 +1,6 @@
 # Superman release blockers
 
-Current bounded renderer/scroll candidate `21abe04c…` is not playable or shippable. This file
+Current bounded renderer/scroll candidate `f25a0e68…` is not playable or shippable. This file
 lists what must change or be proven before either label can return. The preserved
 `a9765fbf…` timing evidence line is a 66-byte, hash-guarded patch of preserved `5c7e…`, limited to two terminal
 native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
@@ -69,7 +69,7 @@ frames. It therefore missed the intervening 60 Hz holds and falsely promoted a
 every consecutive authenticated framebuffer and makes this predecessor red: 48
 holds and 49 three-pixel moves.
 
-Current `21abe04c…` integrates each -3-pixel 30 Hz source step as one- and
+Preserved `21abe04c…` integrates each -3-pixel 30 Hz source step as one- and
 two-pixel 60 Hz presentations without treating an X1 layout-gap jump as camera
 motion. Its exact-hash fresh-power coin/Start gate retains 601 consecutive
 post-Start frames 5,512–6,112 / ticks 190–490 and is framebuffer-clear. The
@@ -77,7 +77,52 @@ same authenticated images pass the every-frame temporal gate: 152 exact
 -3-pixel source changes, 151 one-pixel and 152 two-pixel presentations, no
 hold/reversal/oversized step, and no background mismatch. All 15 physical-map
 changes have zero residual pixel mismatch. The contact sheet and former rebase
-points were manually reviewed. The real-65816/PPU bridge is green 16/16.
+points were manually reviewed. Its real-65816/PPU bridge is green 16/16.
+
+Preserved `382b76a4…` extends that authority to world-space OAM. The foreground
+plane contains both fixed HUD and player/crate/pillar records, so NMI now advances
+only compact world-X descriptors with the same one/two-pixel BG cursor while
+keeping HUD rows fixed. It preserves renderer-base delta publications through
+alignment and samples the quiescent camera before every due wake; the focused
+real-core bridge is green 21/21. A fresh rejected `$1600` build exposed truncated
+BG graphics at every 44-record boundary after the added NMI work. Current
+`$1500` chunks contain 42 complete records and leave the required two-record
+margin. Its exact-hash fresh run retains frames 5,581–6,181 / ticks 223–523:
+framebuffer clear, 153 exact -3 source steps presented as 152 one-pixel and 153
+two-pixel moves, zero BG holds/discontinuities, zero OBJ violations across 358
+same-base transitions, and exact former boundary slots 43/44, 87/88, 131/132,
+175/176. Sol reviewed the contact sheet and key frames.
+
+Chad's live fence checkpoint exposed a different 64-pixel registration failure.
+The retained modal map origin was stale by `+64`; the immutable image instead
+proves absolute basis `$60` from slot/phase/raw-column metadata. Rejected
+`60481722…` diagnosed this with a resized X1 reference and removed the required
+centered crop, shifting the scene the opposite way. Rejected `893d467b…` retained
+the crop and replaces only the stale map basis. The real-core bridge is green
+22/22, including the exact `$A0->$60`, camera `$66`, HScroll `$3A` regression.
+
+Rejected `36d664e6…` first implemented that absolute basis but deadlocked the
+fresh transition: ACK `$0100` was tested in 8-bit mode as low byte zero, so NMI
+skipped BG/OBJ forever while foreground waited on OAM due `3`. Its retained
+601-frame run is red for 303 held moving-camera frames. Rejected `893d467b…`
+tests the complete request/ACK readiness state. The exact red checkpoint now
+clears due `3` on the first NMI and resumes ACK, renderer, and OAM publication.
+A focused continuation of the supplied fence state keeps the player at world X
+224 with HScroll 58 and halt zero; its X1/SNES side-by-side aligns the wall,
+windows, doorway, floor, and fence. It is not canonical-MAME alignment: the
+tick-3718 SNES/MAME work images differ in 2,291 bytes and player health/position.
+
+The fresh `893d467b…` run then exposed one persistent wrong native record:
+slot 2 owned `$19AE` but retained 127 bytes of Mode-7 data. Passive tracing proves
+that `HVBJOY=$C2` remained VBlank-high at `OPVCT=$0000`; the low-page helper
+mistook line 0 for lines 225-255, took direct DMA, and returned after Mesen
+rejected the VRAM write. Rejected `b92ac14f…` disabled only line-256+ direct DMA
+and stayed red. Current `f25a0e68…` rejects all low-page lines below 225 as well.
+Its exact frame-5,250 slot matches 128/128 bytes, and its exact-title organic
+coin/Start run retains 601 clear post-Start framebuffers 5,704-6,304. The temporal
+gate is green (302 PPU steps, 151 source steps, no discontinuity), and Sol reviewed
+the contact sheet plus frames 100/300/600. This closes the reproduced title-slot
+corruption and bounded black-seam regression only.
 
 Intermediate candidates were correctly rejected by the new gate. `b1e57e0e…`
 had the correct 1/2-pixel cadence but flashed at tilemap publications;
@@ -90,7 +135,7 @@ This closes only the reproduced bounded Stage-1 black-band and cadence
 regressions. Aligned exact-MAME pixels, formal MAME-frame conservation, later
 stages/organic Stage 2, renderer throughput, current performance, hardware, and
 human combat/audio acceptance remain open. No full long gameplay replay has
-been started for `21abe04c…`.
+been started for `f25a0e68…`.
 
 Promotion of a successor still requires this one
 ROM identity and one exact tick range to pass the machine-enforced state oracle,
@@ -169,8 +214,8 @@ conservation. Capture, trace, cross-emulator, single-frame, and repetition tools
 always carry diagnostic-only or bounded-oracle authority and cannot fill missing
 aggregate gates.
 
-Current source builds unaccepted ordinary SHA `21abe04c…` at `build/interp.sfc`;
-the identical test image is `build/interp-scroll-validated-21abe04c.sfc`.
+Current source builds bounded SHA `f25a0e68…` at `build/interp.sfc`; the reviewed,
+byte-identical test copy is `build/Superman-Arcade-Edition-f25a0e68-test.sfc`.
 The superseded `3a5f3694…` pin and earlier ROMs/evidence are preserved outside
 the repository under `/home/chad/supermn-snes-artifacts/`; the archive README
 maps former `build/` paths to their retained locations. Predecessor `6413924c…`'s focused token and producer

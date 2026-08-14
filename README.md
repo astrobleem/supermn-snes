@@ -10,21 +10,22 @@
 </p>
 
 <p align="center">
-  <strong>Current status: unaccepted renderer/scroll engineering candidate.</strong><br>
-  The project is controllable in bounded tests, but the current ordinary build is
-  not a qualified playable demo or release.
+  <strong>Current status: bounded Stage-1 human-test candidate.</strong><br>
+  The project is controllable and visually clear in a fresh 601-frame Stage-1
+  gate, but it is not a qualified playable demo or release.
 </p>
 
-> **Do not use the current ROM as a qualified demo.** `build/interp.sfc`
-> (`21abe04c…`) is an unaccepted bounded renderer/scroll response candidate,
-> pinned as `build/interp-scroll-validated-21abe04c.sfc`. Its exact-hash
-> fresh-power coin/Start gate retains 601 consecutive post-Start frames and is
-> framebuffer-clear. The every-frame temporal gate measures 152 exact -3-pixel
-> source steps as 151 one-pixel and 152 two-pixel presentations, with no holds,
-> reversals, oversized moves, flashes, or background discontinuities. The
-> contact sheet and former map-rebase points were manually reviewed. There is
-> still no aligned-MAME pixel gate, formal MAME-frame conservation result,
-> later-stage acceptance, or human combat/audio acceptance for this hash.
+> **Do not use the current ROM as a qualified demo.** The clearly named test copy
+> is `build/Superman-Arcade-Edition-f25a0e68-test.sfc` (the ordinary
+> `build/interp.sfc` is byte-identical), SHA-256 `f25a0e684180cd0d…`.
+> It fixes a line-0 DMA race: `HVBJOY` could still report VBlank while `OPVCT`
+> had wrapped to `$0000`, causing a direct VRAM write to be rejected after cache
+> ownership was already published. The exact formerly corrupt slot now matches
+> 128/128 bytes, and the fresh organic coin/Start gate retains 601 consecutive
+> clear post-Start framebuffers with green temporal continuity. This is bounded
+> Stage-1 evidence only. Aligned-MAME pixels, formal MAME-frame conservation,
+> later-stage acceptance, performance, hardware, and human combat/audio
+> acceptance remain open.
 
 ## An arcade port, not a remake
 
@@ -61,9 +62,11 @@ Concept cover contributed by Chad.
 - Preserved `4eb9a408…` captures show the corrected combat background, crate tiles,
   SA-1 boot presentation, and centered HUD. Preserved `50bbed41…` has a clear
   bounded fresh-power framebuffer regression through post-Start frame 601.
-  Current `21abe04c…` adds fresh-power-proven smooth 1/2-pixel 60 Hz scroll
-  presentation and a clear 601-frame post-Start framebuffer gate; this bounded
-  scope does not establish full current-ROM acceptance.
+  Preserved `382b76a4…` adds bounded smooth 1/2-pixel 60 Hz BG and world-object
+  presentation plus exact record-aligned graphics DMA. Current `f25a0e68…`
+  retains the absolute map-basis and `$0100` frame-counter repairs, rejects the
+  VBlank-high line-0 DMA boundary, and passes its bounded fresh framebuffer and
+  temporal gates. This scope does not establish full-ROM acceptance.
 - Exact MC68000 semantic gates: optest 160/160 and opsweep 782/782.
 - Focused Stage 1–3 boss-health differentials and all 14 retained Stage 1 boss
   observations.
@@ -115,10 +118,12 @@ bash tools/build_interp.sh
 sha256sum build/interp.sfc
 ```
 
-The ROM is written to `build/interp.sfc`; the current human-test copy is
-`build/interp-scroll-validated-21abe04c.sfc`. Those are the only two visible files at
-the top of `build/`. Historical and diagnostic artifacts are preserved outside
-the repository at `/home/chad/supermn-snes-artifacts/`. Exact FM authoring WAVs
+The build writes `build/interp.sfc`. The currently reviewed human-test copy is
+`build/Superman-Arcade-Edition-f25a0e68-test.sfc`; both files have SHA-256
+`f25a0e684180cd0d1998f85569deae05cef0e8e89ab0f0188134f32f388ab835`.
+Generated intermediates and superseded test ROMs are kept out of the top of
+`build/`; Chad's supplied fence state remains there intentionally. Historical and diagnostic artifacts are
+preserved outside the repository at `/home/chad/supermn-snes-artifacts/`. Exact FM authoring WAVs
 are separate private VGM/ymfm inputs; the preparer derives the program, graphics,
 C-Chip response, and drums but does not invent replacements for those WAVs.
 

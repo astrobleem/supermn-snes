@@ -515,6 +515,9 @@ service_pending_dma0 = vid_off("service_pending_dma0")
 service_pending_dma0_end = vid_off("service_pending_dma0_end")
 dma0_blank_pulse_extended = vid_off("dma0_blank_pulse_extended")
 dma0_blank_pulse_extended_end = vid_off("dma0_blank_pulse_extended_end")
+dma0_high_page = vid_off("dma0_high_page")
+dma0_direct = vid_off("dma0_direct")
+dma0_publish = vid_off("dma0_publish")
 boot_mode7_tick = vid_off("boot_mode7_tick")
 boot_mode7_tick_end = vid_off("boot_mode7_tick_end")
 obj_cache_protect_displayed = vid_off("obj_cache_protect_displayed")
@@ -537,9 +540,12 @@ service_pending_dma0_bytes = VID[
 bg_tile_run_dma_chunks_bytes = VID[
     bg_tile_run_dma_chunks - 0x8000:bg_tile_run_dma_chunks_end - 0x8000
 ]
-assert bytes.fromhex("c90116901938e90016") in bg_tile_run_dma_chunks_bytes, (
-    "prepared BG DMA chunks no longer retain the proven $1600-byte "
-    "record-aligned VBlank margin"
+assert bytes.fromhex("c90115901938e90015") in bg_tile_run_dma_chunks_bytes, (
+    "prepared BG DMA chunks no longer retain the $1500-byte record-aligned "
+    "VBlank margin required by NMI BG/OBJ presentation"
+)
+assert 0x1500 % 0x80 == 0 and 0x1500 // 0x80 == 42, (
+    "prepared BG chunk must contain exactly 42 complete 128-byte records"
 )
 assert bytes.fromhex("ad3f21ad3721ad3d21") in service_pending_dma0_bytes, (
     "pending DMA0 service no longer resets OPVCT low/high phase through "
@@ -549,6 +555,16 @@ assert service_pending_dma0_bytes.count(bytes.fromhex("2240c3e9")) == 1, (
     "pending BG tilemap DMA no longer commits its coordinate rebase exactly "
     "once in the same NMI"
 )
+assert service_pending_dma0_bytes.count(bytes.fromhex("2240cde9")) == 1, (
+    "pending tilemap DMA no longer reapplies scroll registers after its basis commit"
+)
+assert bytes.fromhex("2220cde99c111f") in service_pending_dma0_bytes, (
+    "qualified tile DMA no longer calls the guarded early presenter before "
+    "clearing the foreground descriptor"
+)
+assert service_pending_dma0_end == dma0_blank_pulse_extended == 0x8A7F, (
+    "pending DMA service lost its checkpoint/caller-stable return boundary"
+)
 dma0_blank_pulse_extended_bytes = VID[
     dma0_blank_pulse_extended - 0x8000:
     dma0_blank_pulse_extended_end - 0x8000
@@ -556,6 +572,22 @@ dma0_blank_pulse_extended_bytes = VID[
 assert bytes.fromhex("ad3f21ad3721ad3d21") in dma0_blank_pulse_extended_bytes, (
     "direct DMA0 service no longer resets OPVCT low/high phase through "
     "STAT78 before latching and reading the vertical counter"
+)
+assert (
+    dma0_high_page == 0x8AB0
+    and dma0_direct == 0x8ACB
+    and dma0_publish == 0x8AD2
+), "DMA0 late-VBlank direct/publish ABI moved"
+assert VID[dma0_high_page - 0x8000:dma0_high_page - 0x8000 + 2] == bytes.fromhex(
+    "8020"
+), "line-256+ DMA0 descriptors no longer defer to the next NMI"
+assert bytes.fromhex("8ac9e190") in dma0_blank_pulse_extended_bytes, (
+    "low-page DMA0 path no longer rejects the VBlank-high line-0 boundary"
+)
+assert VID[
+    dma0_high_page - 0x8000 + 2:dma0_direct - 0x8000
+] == bytes(dma0_direct - dma0_high_page - 2), (
+    "retired high-page direct-DMA tiers no longer remain inert"
 )
 assert VID[
     dma0_blank_pulse_extended_end - 0x8000:boot_mode7_tick - 0x8000
@@ -611,6 +643,10 @@ pacing_publish_input_and_scroll_end = vid_off(
     "pacing_publish_input_and_scroll_end"
 )
 nmi_video_keepalive_end = vid_off("nmi_video_keepalive_end")
+nmi_present_then_wake = vid_off("nmi_present_then_wake")
+nmi_present_then_wake_end = vid_off("nmi_present_then_wake_end")
+nmi_present_then_sample = vid_off("nmi_present_then_sample")
+nmi_present_then_sample_end = vid_off("nmi_present_then_sample_end")
 assert pacing_try_wake == 0x8E00
 assert (
     pacing_try_wake
@@ -675,13 +711,12 @@ assert VID[pacing_publish_input_and_scroll_end - 0x8000:0x0F00] == bytes(
 ), "latest-scroll helper grew into the fixed NMI handler"
 assert VID[0x0F00:0x0F40] == bytes.fromhex(
     "08c23048da5a8b0ba900005be220a90048aba9808d"
-    "0122af2a01411a8f2a014120008e2033"
-    "8a208a8e20808fad02332bab"
+    "0122af2a01411a8f2a014120b08f20338a20d08f20808fad02332bab"
     "eaeaeaeaeaeaeaea"
     "c2307afa682840"
 ), (
-    "pacing NMI handler lost its leading-edge wake/DMA/cache-scroll wrapper "
-    "or its A/Direct-Page-preserving restore order"
+    "pacing NMI handler lost its wake/DMA adjacency, input/tail presentation "
+    "order, or its A/Direct-Page-preserving restore order"
 )
 assert VID[0x0F40:0x0F69] == bytes.fromhex(
     "08c23048da5a8b0ba900005be220a90048aba9808d"
@@ -691,16 +726,37 @@ assert VID[0x0F69:0x0F80] == bytes(0x17), (
     "pacing IRQ/cache-scroll handler grew into an adjacent reserved island"
 )
 assert VID[0x0F80:nmi_video_keepalive_end - 0x8000] == bytes.fromhex(
-    "20008bad0233f015c220a5d048e2202200c2e9c22020b0a16885d0e22060"
+    "20008baf9b717ec9a5d007a9008f9b717e60a9008f9b717e"
+    "ad0233f0042200cde960"
 ), (
-    "NMI cache-scroll wrapper no longer preserves boot ownership, waits for an "
-    "acknowledged frame, advances presentation once, preserves renderer DP "
-    "scratch, or reapplies only the cached BG scroll registers"
+    "NMI tail no longer preserves boot ownership, consumes the early-presentation "
+    "marker exactly once, or routes an unpresented game frame to the shared helper"
 )
-assert VID[nmi_video_keepalive_end - 0x8000:0x1000] == bytes(
-    0x9000 - nmi_video_keepalive_end
+assert nmi_present_then_wake == 0x8FB0
+assert VID[nmi_video_keepalive_end - 0x8000:nmi_present_then_wake - 0x8000] == bytes(
+    nmi_present_then_wake - nmi_video_keepalive_end
+), "NMI tail grew into the fixed leading-edge presentation wrapper"
+assert VID[
+    nmi_present_then_wake - 0x8000:nmi_present_then_wake_end - 0x8000
+] == bytes.fromhex("af84717ec9a5d0042200cfe94c008e"), (
+    "leading-edge NMI wrapper lost its coherent-image guard, arbiter call, or wake tail-call"
+)
+assert nmi_present_then_sample == 0x8FD0
+assert VID[
+    nmi_present_then_wake_end - 0x8000:nmi_present_then_sample - 0x8000
+] == bytes(nmi_present_then_sample - nmi_present_then_wake_end), (
+    "leading-edge NMI wrapper grew into the fixed post-DMA wrapper"
+)
+assert VID[
+    nmi_present_then_sample - 0x8000:nmi_present_then_sample_end - 0x8000
+] == bytes.fromhex("ad111ff009a9a58f9b717e4c8a8e2220cde94c8a8e"), (
+    "post-DMA NMI wrapper no longer holds BG/OBJ together while tile DMA is "
+    "pending or presents before tail-calling the historical controller sampler"
+)
+assert VID[nmi_present_then_sample_end - 0x8000:0x1000] == bytes(
+    0x9000 - nmi_present_then_sample_end
 ), (
-    "NMI scroll wrapper grew into the sound-driver island"
+    "post-DMA NMI wrapper grew into the sound-driver island"
 )
 # Keep each renderer island inside its declared execution domain.  Symbol bounds
 # plus explicit zero seams catch Poppy's permissive .org overlap without freezing
@@ -822,6 +878,28 @@ prepared_bg_cache_reconstruct = vid_off("prepared_bg_cache_reconstruct")
 prepared_bg_cache_reconstruct_end = vid_off(
     "prepared_bg_cache_reconstruct_end"
 )
+obj_present_commit = vid_off("obj_present_commit")
+obj_present_commit_end = vid_off("obj_present_commit_end")
+obj_present_step = vid_off("obj_present_step")
+obj_present_step_end = vid_off("obj_present_step_end")
+obj_present_nmi = vid_off("obj_present_nmi")
+obj_present_nmi_end = vid_off("obj_present_nmi_end")
+obj_present_wait = vid_off("obj_present_wait")
+obj_present_wait_end = vid_off("obj_present_wait_end")
+obj_present_dma_partial = vid_off("obj_present_dma_partial")
+obj_present_dma_partial_end = vid_off("obj_present_dma_partial_end")
+obj_present_dma_base = vid_off("obj_present_dma_base")
+obj_present_dma_base_end = vid_off("obj_present_dma_base_end")
+nmi_gameplay_present = vid_off("nmi_gameplay_present")
+nmi_gameplay_present_end = vid_off("nmi_gameplay_present_end")
+nmi_present_before_dma = vid_off("nmi_present_before_dma")
+nmi_present_before_dma_end = vid_off("nmi_present_before_dma_end")
+nmi_bg_reapply = vid_off("nmi_bg_reapply")
+nmi_bg_reapply_end = vid_off("nmi_bg_reapply_end")
+obj_base_span_prepare = vid_off("obj_base_span_prepare")
+obj_base_span_prepare_end = vid_off("obj_base_span_prepare_end")
+nmi_present_arbitrate = vid_off("nmi_present_arbitrate")
+nmi_present_arbitrate_end = vid_off("nmi_present_arbitrate_end")
 accept_bg_columns_snapshot = vid_off("accept_bg_columns_snapshot")
 accept_bg_columns_snapshot_end = vid_off("accept_bg_columns_snapshot_end")
 accept_bg_columns_direct = vid_off("accept_bg_columns_direct")
@@ -932,6 +1010,28 @@ assert (
     < bg_scroll_map_prepare_end
     <= bg_scroll_phase_publish
     < bg_scroll_phase_publish_end
+    <= obj_present_commit
+    < obj_present_commit_end
+    <= obj_present_step
+    < obj_present_step_end
+    <= obj_present_nmi
+    < obj_present_nmi_end
+    <= obj_present_wait
+    < obj_present_wait_end
+    <= obj_present_dma_partial
+    < obj_present_dma_partial_end
+    <= obj_present_dma_base
+    < obj_present_dma_base_end
+    <= nmi_gameplay_present
+    < nmi_gameplay_present_end
+    <= nmi_present_before_dma
+    < nmi_present_before_dma_end
+    <= nmi_bg_reapply
+    < nmi_bg_reapply_end
+    <= obj_base_span_prepare
+    < obj_base_span_prepare_end
+    <= nmi_present_arbitrate
+    < nmi_present_arbitrate_end
     <= queue_promote
 ), "scroll helper islands overlap or moved out of address order"
 for seam_start, seam_end, message in (
@@ -945,7 +1045,18 @@ for seam_start, seam_end, message in (
     (prepared_bg_cache_reconstruct_end, bg_compute_hscroll_logic, "cache reconstructor crossed coordinate policy"),
     (bg_compute_hscroll_logic_end, bg_scroll_map_prepare, "coordinate policy crossed map-basis preparer"),
     (bg_scroll_map_prepare_end, bg_scroll_phase_publish, "map-basis preparer crossed phase publisher"),
-    (bg_scroll_phase_publish_end, queue_promote, "phase publisher crossed queue promoter"),
+    (bg_scroll_phase_publish_end, obj_present_commit, "phase publisher crossed OBJ commit"),
+    (obj_present_commit_end, obj_present_step, "OBJ commit crossed presentation step"),
+    (obj_present_step_end, obj_present_nmi, "OBJ step crossed NMI publisher"),
+    (obj_present_nmi_end, obj_present_wait, "OBJ NMI publisher crossed wait helper"),
+    (obj_present_wait_end, obj_present_dma_partial, "OBJ wait helper crossed compact DMA"),
+    (obj_present_dma_partial_end, obj_present_dma_base, "compact OBJ DMA crossed base-delta DMA"),
+    (obj_present_dma_base_end, nmi_gameplay_present, "base-delta OBJ DMA crossed gameplay presenter"),
+    (nmi_gameplay_present_end, nmi_present_before_dma, "gameplay presenter crossed early-present guard"),
+    (nmi_present_before_dma_end, nmi_bg_reapply, "early-present guard crossed BG reapply helper"),
+    (nmi_bg_reapply_end, obj_base_span_prepare, "BG reapply helper crossed OBJ span preparer"),
+    (obj_base_span_prepare_end, nmi_present_arbitrate, "OBJ span preparer crossed NMI arbiter"),
+    (nmi_present_arbitrate_end, queue_promote, "NMI arbiter crossed queue promoter"),
 ):
     assert VID[seam_start - 0x8000:seam_end - 0x8000] == bytes(
         seam_end - seam_start
@@ -959,7 +1070,7 @@ assert VID[
     "0900ff8005c22029ff00186fb5727e29ff038fb5727ee220afbb727e8fb7727ea9a5"
     "8fb8727ec220a20000bff0897e9ff0727ee8e8e01000d0f1800ce220a9008fb8727e"
     "8fbc727ec220fa6885d0286b"
-), "tilemap commit lost prepared modal-basis installation or displayed-map copy"
+), "tilemap commit lost prepared absolute-basis installation or displayed-map copy"
 assert bytes.fromhex("9cb972") not in VID[
     bg_scroll_map_commit - 0x8000:bg_scroll_map_commit_end - 0x8000
 ], "map-commit pending clear silently regressed to bank-relative STZ"
@@ -968,14 +1079,14 @@ assert VID[
     bg_scroll_map_prepare - 0x8000:bg_scroll_map_prepare_end - 0x8000
 ] == bytes.fromhex(
     "08c230a5d048a5d248a5d448a5d648a5d848a5da48da5ae220a9a58fb9727ea900"
-    "8fbc727ec220af96897ec9feff90034cebc6e220afb8727ec9a5f02faff4897e0a"
-    "0a0a0a0a8fbb727eafb3727ec9a5d012afb2727e38efba727e186fbb727e8fbb72"
+    "8fbc727ec220af96897ec9feff90034cebc6e220afb8727ec9a58000aff4897e0a"
+    "0a0a0a0a8fbb727eafb3727ec9a5d012af80717e38ef95897e186fbb727e8fbb72"
     "7ea9a58fbc727e807fc22064d064d664d8a6d0e220bff0897e38fff0727e290f85"
     "d2a90085dac22064d4a6d4e220bff0897e38fff0727e290fc5d2d002e6dac220e6"
     "d4a5d4c9100090e0e220a5dac5d89008f00685d8a5d285d6c220e6d0a5d0c910"
     "0090ace220a5d8c909b0034c3dc6a5d629070a0a0a0a0a186fb7727e8fbb727ea9"
     "a58fbc727ec2207afa6885da6885d86885d66885d46885d26885d0286b"
-), "map-basis preparer lost consensus guard, phase-domain seed, or modal selection"
+), "map-basis preparer lost the immutable-image-paired absolute seed"
 assert bg_scroll_phase_publish == 0xC720
 assert VID[
     bg_scroll_phase_publish - 0x8000:bg_scroll_phase_publish_end - 0x8000
@@ -983,6 +1094,155 @@ assert VID[
     "8fba727eafb3727ec9a5d01bafba727e38efb2727e291fc910900209e0186fb272"
     "7e8fb2727e6bafba727e8fb2727e8fb4727e22a0c1e9e220a9a58fb3727e6b"
 ), "live horizontal publisher lost modulo-32 X1 gap unwrapping"
+assert (
+    obj_present_commit == 0xC800
+    and obj_present_step == 0xC900
+    and obj_present_nmi == 0xCA80
+    and obj_present_wait == 0xCBA0
+    and obj_present_dma_partial == 0xCC00
+    and obj_present_dma_base == 0xCC80
+    and nmi_gameplay_present == 0xCD00
+    and nmi_present_before_dma == 0xCD20
+    and nmi_bg_reapply == 0xCD40
+    and obj_base_span_prepare == 0xCE00
+    and nmi_present_arbitrate == 0xCF00
+), "OBJ presentation helpers moved from their guarded ROM islands"
+obj_present_commit_code = VID[
+    obj_present_commit - 0x8000:obj_present_commit_end - 0x8000
+]
+obj_present_step_code = VID[
+    obj_present_step - 0x8000:obj_present_step_end - 0x8000
+]
+obj_present_nmi_code = VID[
+    obj_present_nmi - 0x8000:obj_present_nmi_end - 0x8000
+]
+assert obj_present_commit_code.count(bytes.fromhex("547e7e")) == 1, (
+    "OBJ commit lost its exact 544-byte WRAM-to-WRAM presentation copy"
+)
+assert bytes.fromhex("a9808f89717ea9008f84717e") in obj_present_commit_code, (
+    "OBJ commit lost its NMI-visible construction lock"
+)
+assert bytes.fromhex("2200cee9") in obj_present_commit_code, (
+    "OBJ commit lost its packed active-span preparation"
+)
+assert bytes.fromhex("ad9471c9a5f0") in obj_present_commit_code and bytes.fromhex(
+    "a9038d8971"
+) in obj_present_commit_code, "subsequent OBJ bases no longer select delta publication"
+assert bytes.fromhex("e220ad9471c9a5f004a9018002a9038d8971") in obj_present_commit_code, (
+    "OBJ commit no longer selects first-full versus subsequent-delta publication"
+)
+assert bytes.fromhex("c918") in obj_present_commit_code and bytes.fromhex(
+    "c9c8"
+) in obj_present_commit_code, "OBJ world list lost its top/bottom HUD exclusions"
+assert bytes.fromhex("bd607159436d9d6071") in obj_present_step_code, (
+    "OBJ presentation step no longer toggles the packed ninth-X OAM bit"
+)
+assert bytes.fromhex(
+    "9c6043a9048d6143a9608d6243a96f8d6343a97e8d6443"
+) in obj_present_nmi_code, (
+    "NMI OBJ publisher lost private DMA-channel-6 ownership or presentation source"
+)
+assert bytes.fromhex("a9408d0b42") in obj_present_nmi_code, (
+    "NMI OBJ publisher no longer starts only private DMA channel 6"
+)
+assert bytes.fromhex(
+    "c220af8a717e8f90717ee220af83717e8f92717e"
+    "af85717e8f93717ea9a58f94717ea9008f89717e"
+) in obj_present_nmi_code, (
+    "NMI OBJ publisher lost hardware provenance or release-after-publication order"
+)
+assert bytes.fromhex("a9008f89717e") in obj_present_nmi_code, (
+    "NMI OBJ publisher lost its legal bank-long pending clear"
+)
+assert bytes.fromhex("9c8971") not in obj_present_nmi_code, (
+    "Poppy silently truncated the OBJ pending clear to bank-relative STZ"
+)
+assert bytes.fromhex("af89717ec980") in obj_present_nmi_code, (
+    "NMI OBJ publisher no longer rejects the foreground construction lock"
+)
+obj_present_wait_code = VID[
+    obj_present_wait - 0x8000:obj_present_wait_end - 0x8000
+]
+obj_present_dma_partial_code = VID[
+    obj_present_dma_partial - 0x8000:obj_present_dma_partial_end - 0x8000
+]
+obj_present_dma_base_code = VID[
+    obj_present_dma_base - 0x8000:obj_present_dma_base_end - 0x8000
+]
+assert bytes.fromhex("8f89717e") not in obj_present_wait_code and bytes.fromhex(
+    "8d8971"
+) not in obj_present_wait_code, (
+    "OBJ wait must not publish pending before the immutable image is coherent"
+)
+assert obj_present_dma_partial_code == bytes.fromhex(
+    "08c22048af97717ef061af95717e4ae2208d02219c03219c6043a9048d6143"
+    "c220af95717e1869606f8d6243e220a97e8d6443c220af97717e8d6543e220"
+    "a9408d0b429c0221a9018d0321c220a960718d6243a920008d6543e220a940"
+    "8d0b42c220af99717e1a8f99717e682860"
+), "compact OBJ publisher lost its world-span/high-table channel-6 DMA contract"
+assert obj_present_dma_base_code.startswith(bytes.fromhex("08c22048afa2717e"))
+assert bytes.fromhex("a9608d6243a96f8d6343a97e8d6443") in obj_present_dma_base_code, (
+    "base-delta OBJ publisher lost its active-span presentation source"
+)
+assert bytes.fromhex("a960718d6243a920008d6543") in obj_present_dma_base_code, (
+    "base-delta OBJ publisher lost its complete packed high-table transfer"
+)
+assert VID[
+    nmi_gameplay_present - 0x8000:nmi_gameplay_present_end - 0x8000
+] == bytes.fromhex(
+    "08e2202200c2e92240cde92280cae9286b"
+), "shared NMI gameplay presenter lost DP preservation or BG-before-OBJ order"
+assert VID[
+    nmi_present_before_dma - 0x8000:nmi_present_before_dma_end - 0x8000
+] == bytes.fromhex(
+    "af9b717e3018ad00330d01330d02330d0333f00a2200cde9a9a58f9b717e6b"
+), "early gameplay presenter lost its once-only marker or 16-bit frame-ready guard"
+assert VID[
+    nmi_bg_reapply - 0x8000:nmi_bg_reapply_end - 0x8000
+] == bytes.fromhex(
+    "08c220a5d048e22020b0a1c2206885d0286b"
+), "BG register reapply helper lost direct-page preservation or byte-width guards"
+obj_base_span_prepare_code = VID[
+    obj_base_span_prepare - 0x8000:obj_base_span_prepare_end - 0x8000
+]
+assert bytes.fromhex("a5d00a0a85d6cfa0717e") in obj_base_span_prepare_code, (
+    "OBJ base-span helper lost its packed new-span or old-span comparison"
+)
+assert bytes.fromhex("8fa2717ea5d68fa0717e") in obj_base_span_prepare_code, (
+    "OBJ base-span helper lost union/current publication"
+)
+assert bytes.fromhex("e220a9f09d616fc2208a18690400aa") in obj_base_span_prepare_code, (
+    "OBJ base-span helper no longer explicitly hides a shrinking active tail"
+)
+nmi_present_arbitrate_code = VID[
+    nmi_present_arbitrate - 0x8000:nmi_present_arbitrate_end - 0x8000
+]
+assert bytes.fromhex("ad111ff0") in nmi_present_arbitrate_code, (
+    "NMI presentation arbiter lost its no-tile fast path"
+)
+assert bytes.fromhex("af220141c901") in nmi_present_arbitrate_code and bytes.fromhex(
+    "af300141"
+) in nmi_present_arbitrate_code, "NMI presentation arbiter lost scheduler arm/debt policy"
+assert nmi_present_arbitrate_code.count(bytes.fromhex("af2a014138ef2b0141")) == 2, (
+    "NMI presentation arbiter no longer mirrors both scheduler deadline tests"
+)
+assert bytes.fromhex("20bca7e220eb2220c7e9") in nmi_present_arbitrate_code, (
+    "heavy-wake arbiter no longer publishes the quiescent live camera phase"
+)
+assert bytes.fromhex("2220cde96b") in nmi_present_arbitrate_code, (
+    "NMI presentation arbiter lost compact gameplay publication"
+)
+assert bytes.fromhex("ad8971c901f009c903f005a9028d8971") in obj_present_step_code, (
+    "OBJ step no longer preserves full/base-delta due states or marks camera-only DMA"
+)
+assert bytes.fromhex("c903") in obj_present_nmi_code and bytes.fromhex(
+    "2080cc"
+) in obj_present_nmi_code and bytes.fromhex("2000cc") in obj_present_nmi_code, (
+    "NMI OBJ publisher no longer distinguishes base-delta and camera-only DMA"
+)
+assert VID[0x0441:0x046B] == bytes.fromhex(
+    "2200c8e922a0cbe9" + "ea" * 34
+), "foreground OAM path no longer commits and waits for NMI-owned publication"
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
     bg_test - palette_test_end
 ), "palette manifest consumer overlapped the fixed BG consumer"
@@ -1098,9 +1358,9 @@ assert bytes.fromhex("9f00ed7e") not in VID[
 assert bytes.fromhex("9f00ed7e") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
 ], "lazy queue installer no longer places the promoter at private $7E:ED00"
-assert bytes.fromhex("e06e02") in VID[
+assert bytes.fromhex("e08602") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
-], "lazy queue installer lost its pinned 622-byte copy bound"
+], "lazy queue installer lost its pinned 646-byte copy bound"
 assert bytes.fromhex("9f00f17f") not in VID, (
     "queue code must never overwrite live emulated 68000 RAM at $7F:F100"
 )
@@ -1195,9 +1455,9 @@ assert capture_vscroll_bytes == bytes.fromhex(
 ), "vertical-scroll capture lost center-column selection, exact -1/+8 offset, or side effects"
 assert VID.count(
     bytes((0x20, capture_bg_vscroll & 0xFF, capture_bg_vscroll >> 8))
-) == 5, (
-    "direct/queued/legacy snapshots plus the paced latest-scroll publication "
-    "must capture X1 scroll coherently"
+) == 6, (
+    "direct/queued/legacy snapshots, paced publication, and the heavy-wake "
+    "arbiter must capture X1 scroll coherently"
 )
 for helper in (
     capture_bg_upper_snapshot,
@@ -1209,7 +1469,12 @@ for helper in (
         "each direct/queued/legacy snapshot must select one coherent X1 column-map destination"
     )
 assert VID.count(bytes((0x20, bg_scroll & 0xFF, bg_scroll >> 8))) == 1, (
-    "the NMI cache-keepalive path must retain the plain accepted BG scroll helper"
+    "the shared direct-page-safe BG reapply helper must retain exactly one "
+    "call to the plain accepted BG scroll helper"
+)
+assert VID.count(bytes.fromhex("2240cde9")) == 2, (
+    "gameplay presentation and post-map-DMA rebase must each call the shared "
+    "BG register reapply helper"
 )
 assert VID.count(bytes((0x4C, bg_scroll & 0xFF, bg_scroll >> 8))) == 1, (
     "the OPT wrapper tail must publish accepted BG scroll"
@@ -1417,8 +1682,32 @@ assert VID[
     bg_scroll_map_prepare_end - 0x8000:bg_scroll_phase_publish - 0x8000
 ] == bytes(bg_scroll_phase_publish - bg_scroll_map_prepare_end)
 assert VID[
-    bg_scroll_phase_publish_end - 0x8000:queue_promote - 0x8000
-] == bytes(queue_promote - bg_scroll_phase_publish_end)
+    bg_scroll_phase_publish_end - 0x8000:obj_present_commit - 0x8000
+] == bytes(obj_present_commit - bg_scroll_phase_publish_end)
+assert VID[
+    obj_present_wait_end - 0x8000:obj_present_dma_partial - 0x8000
+] == bytes(obj_present_dma_partial - obj_present_wait_end)
+assert VID[
+    obj_present_dma_partial_end - 0x8000:obj_present_dma_base - 0x8000
+] == bytes(obj_present_dma_base - obj_present_dma_partial_end)
+assert VID[
+    obj_present_dma_base_end - 0x8000:nmi_gameplay_present - 0x8000
+] == bytes(nmi_gameplay_present - obj_present_dma_base_end)
+assert VID[
+    nmi_gameplay_present_end - 0x8000:nmi_present_before_dma - 0x8000
+] == bytes(nmi_present_before_dma - nmi_gameplay_present_end)
+assert VID[
+    nmi_present_before_dma_end - 0x8000:nmi_bg_reapply - 0x8000
+] == bytes(nmi_bg_reapply - nmi_present_before_dma_end)
+assert VID[
+    nmi_bg_reapply_end - 0x8000:obj_base_span_prepare - 0x8000
+] == bytes(obj_base_span_prepare - nmi_bg_reapply_end)
+assert VID[
+    obj_base_span_prepare_end - 0x8000:nmi_present_arbitrate - 0x8000
+] == bytes(nmi_present_arbitrate - obj_base_span_prepare_end)
+assert VID[
+    nmi_present_arbitrate_end - 0x8000:queue_promote - 0x8000
+] == bytes(queue_promote - nmi_present_arbitrate_end)
 prepared_reconstruct_code = VID[
     prepared_bg_cache_reconstruct - 0x8000:
     prepared_bg_cache_reconstruct_end - 0x8000
@@ -1465,7 +1754,7 @@ assert bytes.fromhex("a9618d0b21") in VID[
     bg_upload - 0x8000:bg_upload - 0x8000 + 0x80
 ], "BG upload no longer preserves the live title BG2 character base"
 assert queue_promote == 0xED00 and queue_promote < queue_promote_end <= 0xF000
-assert queue_promote_end - queue_promote == 0x026E, (
+assert queue_promote_end - queue_promote == 0x0286, (
     "pinned lazy-installer size no longer matches the queue promoter"
 )
 assert bytes.fromhex("2200c4e9") in VID[

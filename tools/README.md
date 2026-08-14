@@ -180,7 +180,9 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   X1 fallback) with every intervening 60 Hz BG1HOFS change,
   rejects holds, reversals, oversized/accumulated motion, and residual background
   mismatch, and explicitly accounts for same-frame physical-map coordinate
-  rebases. It is focused stutter evidence, not aligned-MAME, fresh-boot,
+  rebases. Current-schema captures also reconstruct every eligible absolute map
+  basis as `slot4*32 + paired_phase - paired_raw_column4`; any cumulative/modal
+  drift is red even if adjacent motion looks smooth. It is focused stutter evidence, not aligned-MAME, fresh-boot,
   gameplay, or performance acceptance.
 
 ## Recovery profiling and architecture labs
@@ -215,7 +217,26 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   zero-length flag-ordering bug that crossed BW-RAM mirrors at the first breakable wall.
 - **`trace_wall_context.py`** [S] — Mesen 2.1.1 real-controller first-wall replay with scheduler-
   context write hooks. It records the renderer manifest, every initialized task stack/floor, and
-  suspicious saved-SP high-byte writes. This is focused crash/context evidence, not a stage soak.
+  suspicious saved-SP high-byte writes, plus player X/Y/action/input and presented BG1 H/V at
+  every phase boundary. It writes no runtime memory by default. The explicit
+  `--refresh-video-mirror` checkpoint lab verifies and installs the selected ROM's
+  `$7F:8000-$AFFF` renderer code, while `--migrate-map-basis` derives the current absolute basis from the accepted
+  source-column-4 slot, its paired raw X, and the unwrapped phase; it records the old/new paired
+  phase and displayed-basis bytes. Initial/final 64 KiB game-work snapshots make
+  purported same-tick oracle identity auditable. Any such run is cross-ROM diagnostic evidence
+  only, never fresh-current acceptance or a stage soak.
+- **`trace_fresh_bg_tile_dma_deadline.py`** [S] — fresh-movie native-record verifier and passive
+  two-frame DMA path trace. It can check one physical owner/VRAM record at an exact movie frame,
+  or retain owner publication, helper/direct/publish, `MDMAEN`, pending flag, `HVBJOY`, and
+  `OPVCT` events around a selected boundary. It diagnosed the VBlank-high/`OPVCT=$0000` line-0
+  race without storing a full playback transcript. It performs no runtime memory writes and is
+  focused diagnostic evidence, not framebuffer or playthrough acceptance.
+- **`trace_snes_bg_dma_input.py`** [S] — checkpointed lossless framebuffer and renderer-DMA
+  trace. In addition to BG upload/chunk hooks, it records the NMI presentation arbiter,
+  BG cursor step, OBJ publisher/base DMA, the 16-bit frame request/ACK pair, and writes to
+  OAM due/valid/once-per-NMI state. This is the focused regression harness for presentation
+  deadlocks such as an ACK of `$0100` being misread as zero in 8-bit mode; it remains
+  checkpoint diagnostic evidence rather than fresh-power acceptance.
 - **`trace_playtest_actions.py`** [S] — exact-Mesen real-controller action-schedule diagnostic for
   crate/attack/encounter reproduction. It records player animation/action state, tick/render/halt,
   stack floors, BG1 H/V plus packed/X1-001 scroll state, screenshots, and checkpoints.
@@ -225,7 +246,7 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
 - **`validate_vertical_scroll_bridge.py`** [S] — isolated Nexen real-65816/PPU lab for the shipped
   vertical-scroll capture and apply helpers. It covers Stage 1 wrap-to-zero, general motion,
   byte wrap, MAME-derived Stage 2 per-column patterns, sparse-to-full map seeding,
-  isolated-gap and modal map changes, raw-phase unwrapping, actual BG1 H/V
+  isolated-gap and paired absolute map changes, raw-phase unwrapping, actual BG1 H/V
   register publication, and the exact-title zero guard. Its scroll shadow is synthetic; it is not gameplay, cold boot,
   stability, or performance evidence.
 - **`validate_obj_cache_vram.py`** [S] — paused-checkpoint oracle for every persistent OBJ-cache

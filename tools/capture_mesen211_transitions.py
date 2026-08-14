@@ -168,8 +168,24 @@ def snapshot(m: McpSession) -> dict[str, Any]:
     staged_bg_map = bytes(
         m.read_memory("snesWorkRam", 0x9000, 0x1000)
     )
+    hardware_oam = bytes(m.read_memory("snesSpriteRam", 0, 0x220))
+    presentation_oam = bytes(
+        m.read_memory("snesWorkRam", 0x6F60, 0x220)
+    )
+    obj_meta = bytes(m.read_memory("snesWorkRam", 0x7180, 0x10))
+    obj_world_count = le16(obj_meta[6:8])
+    obj_world_list = bytes(
+        m.read_memory("snesWorkRam", 0x6D40, min(obj_world_count, 128) * 4)
+    )
+    obj_published = bytes(m.read_memory("snesWorkRam", 0x7190, 5))
+    obj_dma_detail = bytes(m.read_memory("snesWorkRam", 0x7195, 6))
+    obj_base_span_detail = bytes(m.read_memory("snesWorkRam", 0x71A0, 4))
+    bg_reverse_owner_slot2 = le16(
+        bytes(m.read_memory("snesWorkRam", 0xD004, 2))
+    )
     return {
         "frame": int(state.get("frameCount", 0)),
+        "bg_reverse_owner_slot2": bg_reverse_owner_slot2,
         "snes_pc": (
             ((int(snes_cpu.get("k", 0)) & 0xFF) << 16)
             | (int(snes_cpu.get("pc", 0)) & 0xFFFF)
@@ -264,6 +280,42 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "displayed_column_map": bytes(
             m.read_memory("snesWorkRam", 0x72F0, 16)
         ).hex(),
+        # The playfield tilemap and world-space OAM are presented from separate
+        # immutable images.  Retain both hardware OAM and the WRAM image plus
+        # its compact world-X manifest so the temporal gate can prove that
+        # player/crate/enemy motion tracks the 60 Hz camera while HUD OAM does
+        # not move.  This closes the former BG-only crop blind spot.
+        "hardware_oam": hardware_oam.hex(),
+        "hardware_oam_sha256": hashlib.sha256(hardware_oam).hexdigest(),
+        "presentation_oam": presentation_oam.hex(),
+        "presentation_oam_sha256": hashlib.sha256(
+            presentation_oam
+        ).hexdigest(),
+        "obj_cache_scrollx": obj_meta[0],
+        "obj_queue_scrollx": obj_meta[1],
+        "obj_queue2_scrollx": obj_meta[2],
+        "obj_base_scrollx": obj_meta[3],
+        "obj_present_valid": obj_meta[4],
+        "obj_applied_comp": obj_meta[5],
+        "obj_world_count": obj_world_count,
+        "obj_step_changed": obj_meta[8],
+        "obj_dma_pending": obj_meta[9],
+        "obj_base_sequence": le16(obj_meta[10:12]),
+        "obj_last_dma_line": le16(obj_meta[12:14]),
+        "obj_dma_skips": le16(obj_meta[14:16]),
+        "obj_world_list": obj_world_list.hex(),
+        "obj_published_sequence": le16(obj_published[0:2]),
+        "obj_published_base_scrollx": obj_published[2],
+        "obj_published_comp": obj_published[3],
+        "obj_published_valid": obj_published[4],
+        "obj_world_first": le16(obj_dma_detail[0:2]),
+        "obj_world_span": le16(obj_dma_detail[2:4]),
+        "obj_partial_dmas": le16(obj_dma_detail[4:6]),
+        "obj_last_skip_line": int(
+            m.read_memory("snesWorkRam", 0x719D, 1)[0]
+        ),
+        "obj_active_low_span": le16(obj_base_span_detail[0:2]),
+        "obj_base_low_span": le16(obj_base_span_detail[2:4]),
         "bg_column_kind": le16(
             m.read_memory("snesWorkRam", 0x8996, 2)
         ),
@@ -450,6 +502,7 @@ def main() -> int:
             ] if args.mirror_live_scroll else [])
         ),
         "input": "controller idle",
+        "obj_temporal_capture": True,
     }
     print(json.dumps({"event": "provenance", **provenance}, sort_keys=True))
 

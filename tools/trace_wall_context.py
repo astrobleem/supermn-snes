@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Trace the first scheduler-context corruption near stage 1's breakable wall.
+"""Trace scheduler, player, and BG1 state near stage 1's breakable wall.
 
 This is a checkpointed Mesen diagnostic.  It drives only real port-0 controller
 input, watches the 16 saved task-stack cells at ``$F0000A-$F00049``, and records
-every SA-1 write to that table.  It does not write game, gate, scheduler, or
-renderer memory, and it is not production-performance evidence.
+every SA-1 write to that table.  Boundary samples also retain the player record
+and presented BG1 scroll so collision/visual registration cannot be inferred
+from a screenshot alone.  By default it writes no runtime memory.  The explicit
+``--refresh-video-mirror`` and ``--migrate-map-basis`` lab options upgrade the
+serialized renderer code/provenance from an old-hash checkpoint and record each
+intervention; that route is cross-ROM diagnostic evidence, never current-hash
+acceptance or performance evidence.
 """
 
 from __future__ import annotations
@@ -38,6 +43,9 @@ CONTEXT_ALIAS_END = 0x006049
 FLOOR_START = 0xC10882
 BUTTON_ATTACK_RIGHT = McpSession.BTN_B | McpSession.BTN_RIGHT
 BUTTON_RIGHT = McpSession.BTN_RIGHT
+VIDEO_FILE_BASE = 0x298000
+VIDEO_WRAM_OFFSET = 0x18000
+VIDEO_WRAM_LENGTH = 0x3000
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +58,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iterations", type=int, default=12)
     parser.add_argument("--attack-frames", type=int, default=6)
     parser.add_argument("--walk-frames", type=int, default=30)
+    parser.add_argument(
+        "--refresh-video-mirror",
+        action="store_true",
+        help=(
+            "checkpoint lab only: replace serialized $7F:8000-$AFFF with "
+            "the selected ROM's renderer mirror"
+        ),
+    )
+    parser.add_argument(
+        "--migrate-map-basis",
+        action="store_true",
+        help=(
+            "checkpoint lab only: derive the absolute displayed-map basis from "
+            "accepted slot 4, paired raw column-4 X, and current unwrapped phase"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -120,6 +144,8 @@ def context_snapshot(m: McpSession, floors: list[int], label: str) -> dict[str, 
         if value
     ]
     state = m.get_state()
+    player_raw = bytes(m.read_memory("snesMemory", 0x4012B4, 0x36))
+    ppu_layer = m.get_ppu_state()["layers"][0]
     manifest_raw = bytes(
         m.read_memory("snesMemory", 0x410132, 0x2C)
     )
@@ -144,6 +170,19 @@ def context_snapshot(m: McpSession, floors: list[int], label: str) -> dict[str, 
         "task_mask": int.from_bytes(
             m.read_memory("snesMemory", 0x400002, 2), "big"
         ),
+        "player": {
+            "health": int.from_bytes(player_raw[0x00:0x02], "big"),
+            "input": player_raw[0x0A],
+            "previous_input": player_raw[0x0B],
+            "flags": player_raw[0x2A],
+            "action": player_raw[0x2B],
+            "y": int.from_bytes(player_raw[0x2C:0x2E], "big"),
+            "x": int.from_bytes(player_raw[0x30:0x32], "big"),
+        },
+        "bg1": {
+            "hscroll": int(ppu_layer["hscroll"]),
+            "vscroll": int(ppu_layer["vscroll"]),
+        },
         "raw": raw.hex(),
         "values": values,
         "initialized": initialized,
@@ -184,6 +223,54 @@ def wait_for_file(path: Path, timeout: float = 30.0) -> None:
     raise TimeoutError(f"timed out waiting for {path}")
 
 
+def read_game_work(m: McpSession) -> bytes:
+    return b"".join(
+        bytes(m.read_memory("snesMemory", 0x400000 + offset, 0x4000))
+        for offset in range(0, 0x10000, 0x4000)
+    )
+
+
+def migrate_map_basis(m: McpSession) -> dict[str, Any]:
+    """Upgrade an old checkpoint to the current absolute map-basis contract."""
+
+    slot4 = bytes(m.read_memory("snesMemory", 0x7E89F4, 1))[0]
+    raw_column4 = bytes(m.read_memory("snesMemory", 0x7E8995, 1))[0]
+    unwrapped_phase = bytes(m.read_memory("snesMemory", 0x7E72B2, 1))[0]
+    old_paired_phase = bytes(m.read_memory("snesMemory", 0x7E7180, 1))[0]
+    old_displayed_basis = bytes(m.read_memory("snesMemory", 0x7E72B7, 1))[0]
+    absolute_basis = (
+        slot4 * 32 + unwrapped_phase - raw_column4
+    ) & 0xFF
+
+    writes = [
+        {
+            "address": "7E:7180",
+            "purpose": "phase paired with accepted immutable image",
+            "old": old_paired_phase,
+            "new": unwrapped_phase,
+        },
+        {
+            "address": "7E:72B7",
+            "purpose": "absolute basis represented by serialized displayed map",
+            "old": old_displayed_basis,
+            "new": absolute_basis,
+        },
+    ]
+    m.write_memory("snesMemory", 0x7E7180, bytes([unwrapped_phase]).hex())
+    m.write_memory("snesMemory", 0x7E72B7, bytes([absolute_basis]).hex())
+    return {
+        "authority": "cross-ROM renderer-provenance migration only",
+        "formula": "slot4*32 + unwrapped_phase - raw_column4 (mod 256)",
+        "inputs": {
+            "slot4": slot4,
+            "raw_column4": raw_column4,
+            "unwrapped_phase": unwrapped_phase,
+        },
+        "absolute_basis": absolute_basis,
+        "writes": writes,
+    }
+
+
 def main() -> int:
     args = parse_args()
     if min(args.iterations, args.attack_frames, args.walk_frames) <= 0:
@@ -205,7 +292,8 @@ def main() -> int:
     result: dict[str, Any] = {
         "scope": (
             "checkpointed Mesen saved-task-context diagnostic; real port-0 "
-            "input; no runtime memory writes; not performance evidence"
+            "input; runtime writes only when an explicit renderer code/provenance "
+            "migration is requested; not performance evidence"
         ),
         "project_commit": git_value("rev-parse", "HEAD"),
         "project_status": git_value("status", "--short").splitlines(),
@@ -239,6 +327,49 @@ def main() -> int:
         m.pause()
         m.load_state(state_path)
         m.pause()
+        if args.refresh_video_mirror:
+            mirror = rom.read_bytes()[
+                VIDEO_FILE_BASE:VIDEO_FILE_BASE + VIDEO_WRAM_LENGTH
+            ]
+            if len(mirror) != VIDEO_WRAM_LENGTH:
+                raise RuntimeError("selected ROM does not contain the video mirror")
+            for offset in range(0, VIDEO_WRAM_LENGTH, 0x1000):
+                m.write_memory(
+                    "snesWorkRam",
+                    VIDEO_WRAM_OFFSET + offset,
+                    mirror[offset:offset + 0x1000].hex(),
+                )
+            observed = bytes(
+                m.read_memory("snesWorkRam", VIDEO_WRAM_OFFSET, VIDEO_WRAM_LENGTH)
+            )
+            if observed != mirror:
+                raise RuntimeError("selected-ROM video mirror refresh did not verify")
+            result["video_mirror_refresh"] = {
+                "authority": "cross-ROM checkpoint renderer-code migration only",
+                "region": "$7F:8000-$AFFF",
+                "length": VIDEO_WRAM_LENGTH,
+                "sha256": hashlib.sha256(mirror).hexdigest(),
+            }
+            result["runtime_memory_writes"].append(
+                {
+                    "region": "$7F:8000-$AFFF",
+                    "purpose": "selected-ROM renderer mirror refresh",
+                    "length": VIDEO_WRAM_LENGTH,
+                }
+            )
+        if args.migrate_map_basis:
+            result["map_basis_migration"] = migrate_map_basis(m)
+            result["runtime_memory_writes"].extend(
+                result["map_basis_migration"]["writes"]
+            )
+        initial_work = read_game_work(m)
+        initial_work_path = output / "initial.work.bin"
+        initial_work_path.write_bytes(initial_work)
+        result["initial_work"] = {
+            "path": str(initial_work_path),
+            "sha256": hashlib.sha256(initial_work).hexdigest(),
+            "bytes": len(initial_work),
+        }
         floor_raw = bytes(
             m.read_memory("snesMemory", FLOOR_START, 16 * 4)
         )
@@ -332,6 +463,14 @@ def main() -> int:
         m.remove_hook(register_hook)
         result["final"] = context_snapshot(m, floors, "final")
         result["screenshot"] = take_screenshot(m, output / "final.png")
+        final_work = read_game_work(m)
+        final_work_path = output / "final.work.bin"
+        final_work_path.write_bytes(final_work)
+        result["final_work"] = {
+            "path": str(final_work_path),
+            "sha256": hashlib.sha256(final_work).hexdigest(),
+            "bytes": len(final_work),
+        }
         final_state = output / "final.mss"
         result["state_response"] = m.save_state(final_state)
         wait_for_file(final_state)

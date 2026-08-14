@@ -105,9 +105,13 @@ def main() -> int:
     require(
         VIDEO,
         "bg_upload:\n"
-        "    sep #$20\n"
-        "    lda #$01\n"
-        "bg_upload_commit:       ; every completed staging map has exactly one PPU authority",
+        "    jsl.l $E9C180        ; retain the active gameplay Mode 1/2 policy during DMA wait\n"
+        ".a8                     ; the helper returns A8; keep Poppy's immediate widths honest\n"
+        "bg_upload_commit:       ; every completed staging map has exactly one PPU authority\n"
+        "    nop\n"
+        "    nop\n"
+        "    nop\n"
+        "    lda #$01",
         "single staging/display map authority",
     )
     assert "bg_upload_conserve_sparse" not in VIDEO, (

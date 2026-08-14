@@ -119,7 +119,7 @@ BG_DISPLAYED_MAP_SCROLLX=$72B7 ; continuous physical basis, seeded from source c
 BG_DISPLAYED_MAP_VALID=$72B8 ; $A5 only after a completed exact-map tilemap DMA
 BG_MAP_COMMIT_PENDING=$72B9 ; $A5 only while bg_upload's 4 KiB descriptor is pending
 BG_LATEST_SCROLL_RAW=$72BA ; center-column byte before modulo-32 unwrapping
-BG_MAP_PENDING_BASIS=$72BB ; modal physical basis paired with pending tilemap
+BG_MAP_PENDING_BASIS=$72BB ; absolute physical basis paired with pending tilemap
 BG_MAP_PENDING_VALID=$72BC ; $A5 only when pending basis metadata is exact
 BG_COLUMN_Y_DIRECT=$72C0    ; source-column Y bytes paired with the direct cache
 BG_COLUMN_Y_PRIMARY=$72D0   ; source-column Y bytes paired with queue 1
@@ -130,7 +130,32 @@ BG_C0BC_TOKEN=$7492       ; token paired with the accepted direct BG image
 RQ_C0BC_TOKEN=$7494       ; token paired with the primary queued image
 RQ2_C0BC_TOKEN=$7496      ; token paired with the secondary queued image
 BG_C0BC_APPLIED=$7498     ; C0BC token represented by the resident direct tilemap
-RENDER_QUEUE_CODE_BYTES=$026E ; build guard proves this matches the final promoter span
+OBJ_WORLD_LIST=$6D40      ; up to 128 four-byte OAM-X descriptors (offset, hi index/mask)
+OBJ_PRESENT_OAM=$6F60    ; immutable 544-byte OAM image adjusted only by NMI
+OBJ_CACHE_SCROLLX=$7180  ; unwrapped camera phase paired with the direct OBJ manifest
+RQ_OBJ_SCROLLX=$7181     ; same phase paired with primary compressed queue storage
+RQ2_OBJ_SCROLLX=$7182    ; same phase paired with secondary compressed queue storage
+OBJ_BASE_SCROLLX=$7183   ; camera phase represented by OBJ_PRESENT_OAM's base image
+OBJ_PRESENT_VALID=$7184  ; $A5 only after the complete presentation image/list is ready
+OBJ_APPLIED_COMP=$7185   ; signed camera compensation already applied to presentation OAM
+OBJ_WORLD_COUNT=$7186    ; number of four-byte descriptors in OBJ_WORLD_LIST
+OBJ_STEP_CHANGED=$7188   ; private helper result: nonzero when OAM X changed
+OBJ_DMA_PENDING=$7189    ; $80 constructing, $01 due; foreground waits for NMI to clear
+OBJ_BASE_SEQUENCE=$718A  ; producer candidate sequence paired with the presentation image
+OBJ_LAST_DMA_LINE=$718C  ; diagnostic: low-byte V counter of last presentation DMA
+OBJ_DMA_SKIPS=$718E      ; diagnostic: late-vblank presentation attempts retained for retry
+OBJ_PUBLISHED_SEQUENCE=$7190 ; base generation currently owned by hardware OAM
+OBJ_PUBLISHED_BASE_SCROLLX=$7192 ; camera phase paired with hardware OAM's base
+OBJ_PUBLISHED_COMP=$7193 ; compensation represented by hardware OAM
+OBJ_PUBLISHED_VALID=$7194 ; $A5 after the first complete channel-6 publication
+OBJ_WORLD_FIRST=$7195   ; first low-OAM byte covered by a camera-only DMA
+OBJ_WORLD_SPAN=$7197    ; contiguous low-OAM byte span through the final world entry
+OBJ_PARTIAL_DMAS=$7199  ; diagnostic count of compact camera-only OAM publications
+OBJ_PRESENTED_THIS_NMI=$719B ; $A5 when DMA service already advanced BG/OBJ this vblank
+OBJ_LAST_SKIP_LINE=$719D ; low OPVCT byte for a budget miss; $FF means outside VBlank
+OBJ_ACTIVE_LOW_SPAN=$71A0 ; low-OAM bytes occupied by the currently published base
+OBJ_BASE_LOW_SPAN=$71A2 ; union of old/new active low-OAM bytes for a base delta
+RENDER_QUEUE_CODE_BYTES=$0286 ; build guard proves this matches the final promoter span
 OBJ_HASH_CODE=$5000    ; 1024 authoritative code words in retired snapshot WRAM
 OBJ_HASH_SLOT=$5800    ; parallel physical-slot words; complete table ends at $6000
 RQ2_SEQ=$B000           ; secondary compact-only slot occupies production-unused
@@ -146,9 +171,10 @@ RQ2_OBJ=$B420           ; $0300 bytes
 RQ2_BG_LIST=$B720       ; incremental list below $0100 bytes
 RQ2_BG_VALUES=$B820     ; corresponding pairs below $0200 bytes; ends before $BC00
 ; $7E:5000-$74FF formerly held an abandoned double-buffer snapshot design.
-; The widened OBJ hash owns $5000-$5FFF; title staging uses $6000-$6D3F, and
-; $72A0-$737F now holds the exact per-column-Y/Mode-2 bridge.  The remaining
-; space stays private renderer scratch and must not alias queue payloads.
+; The widened OBJ hash owns $5000-$5FFF; title staging uses $6000-$6D3F;
+; $6D40-$719B is the immutable OAM presentation image/manifest/provenance; and
+; $72A0-$737F holds the exact per-column-Y/Mode-2 bridge.  The remaining space
+; stays private renderer scratch and must not alias queue payloads.
 STAGING_CGRAM=$8000
 TITLE_TEXT_META=$89BE ; palette dirty bit 15 = overloaded title composition uses BG2
 TITLE_FONT_MARK=$89DC ; $A55B after coherent BG2 font/map VRAM has been initialized
@@ -788,22 +814,44 @@ obj_upload:
     nop
     nop
 obj_upload_oam:
-    ; OAM (always refreshed: positions/attributes are live even when tile pixels are cached)
-    stz OAMADDL
-    stz $2103
-    stz DMAP0            ; mode 0
-    lda #$04
-    sta BBAD0
-    stz A1T0L
-    lda #$86
-    sta A1T0H            ; src $8600
-    lda #$7E
-    sta A1B0
-    lda #$20
-    sta DAS0L
-    lda #$02
-    sta DAS0H            ; 544 bytes
-    jsr dma0_blank_pulse ; blank only across this OAM DMA
+    ; Commit one immutable base image plus a compact list of playfield-object
+    ; X fields.  NMI is the sole OAM publisher: this avoids racing foreground
+    ; channel-0 descriptors and lets the crate/player track BG1's 60 Hz camera
+    ; cursor without moving the screen-fixed top and bottom HUD rows.
+    jsl.l $E9C800
+    jsl.l $E9CBA0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
     nop
     nop
     lda #$02
@@ -1143,7 +1191,7 @@ bg_upload_commit:       ; every completed staging map has exactly one PPU author
     stz DAS0L
     lda #$10
     sta DAS0H            ; 4096 bytes
-    jsl.l $E9C600        ; pair modal map basis and one-shot commit marker
+    jsl.l $E9C600        ; pair absolute map basis and one-shot commit marker
     nop
     nop                  ; retain the old six-byte arm's downstream addresses
     jsr dma0_blank_pulse ; blank only across this tilemap DMA
@@ -1645,15 +1693,15 @@ bg_tile_run_dma_chunks:
 .a16
 btr_chunk_loop:
     lda $D6
-    cmp #$1601
+    cmp #$1501
     bcc btr_final_chunk
     sec
-    sbc #$1600
+    sbc #$1500
     pha
     sep #$20
 .a8
     stz DAS0L
-    lda #$16             ; 5.5 KiB: retain a full-record margin before visible scanline 0
+    lda #$15             ; 5.25 KiB: retain two 128-byte records after BG/OBJ presentation
     sta DAS0H
     jsr dma0_blank_pulse
     rep #$20
@@ -1674,8 +1722,9 @@ btr_final_chunk:
 bg_tile_run_dma_chunks_end:
 
 ; Service a foreground-published PPU DMA only after the scheduler wake has run
-; at its established leading-edge position.  Controller sampling follows the
-; DMA but still completes before NMI return and the next wake decision.  A
+; at its established leading-edge position.
+; Controller sampling follows the DMA but still completes before NMI return
+; and the next wake decision.  A
 ; A multi-KiB transfer consumes most of VBlank; running it before
 ; pacing_try_wake shifted the SA-1 release deep into VBlank and eventually
 ; destroyed the task-ordering contract.  Small CGRAM/OAM transfers are different:
@@ -1716,6 +1765,12 @@ spd_line_ok:
     lda OPVCT            ; vertical bit 8 (reject lines 256-261)
     and #$01
     bne spd_done
+    ; The original wake->service timing sample above is load-bearing for the
+    ; first large publication.  Once gameplay owns the PPU, present its camera
+    ; and OAM now—after that exact qualification but before the large DMA can
+    ; consume the remaining VBlank.  The tail sees the marker and does not
+    ; advance the 60 Hz cursor twice in one NMI.
+    jsl.l $E9CD20        ; conditional game presentation + once-per-NMI marker
     ; Clear the publication before starting DMA.  MDMAEN halts this CPU, so
     ; foreground code cannot observe the clear until the transfer and handler
     ; finish.  A VBlank edge during a long DMA can, however, vector a nested
@@ -1725,17 +1780,25 @@ spd_line_ok:
     lda #$01
     sta MDMAEN
     jsl.l $E9C340        ; commit a pending BG-map basis inside this same NMI
+    ; Camera/OAM were deliberately presented before this optional transfer so
+    ; even a large tile DMA cannot starve world-sprite cadence.  A tilemap DMA
+    ; may have installed a new physical basis, so re-express the unchanged
+    ; presented cursor through that basis before the scanout begins.
+    jsl.l $E9CD40
 spd_done:
     rts
+.org $8A7F             ; retain checkpoint/caller ABI for dma0_blank_pulse_extended
 service_pending_dma0_end:
 
 ; Continue a renderer's consecutive sub-1 KiB transfers in the VBlank that
 ; serviced its first descriptor.  The common OBJ native record is 128 bytes;
 ; rejecting every transfer at line 252 made a cache refill issue only one or two
 ; records per VBlank and stretched a 7.8 KiB burst across ten video frames.
-; Size tiers retain a full scanline of safety before visible line 0:
-;   <=255 bytes through line 259, <=511 through 257, <=767 through 256,
-;   <=1023 through 253.  Larger descriptors always publish for a fresh NMI.
+; Size tiers retain a full scanline of safety before visible line 0.  Direct
+; service is permitted only on the low V-counter page (lines 225-255): the old
+; line-256+ tiny tiers could publish cache ownership and then have Mesen reject
+; the late VRAM write, leaving a persistent Mode-7 record in a valid game slot.
+; Larger descriptors and every high-page descriptor publish for a fresh NMI.
 .a8
 .i16
 dma0_blank_pulse_extended:
@@ -1753,6 +1816,13 @@ dma0_blank_pulse_extended:
     and #$01
     bne dma0_high_page
 
+    ; HVBJOY can remain VBlank-high for the line-0 boundary.  Do not confuse
+    ; that low-page transition with lines 225-255: visible-line VRAM writes are
+    ; rejected even though the preceding status read still advertised VBlank.
+    txa
+    cmp #$E1
+    bcc dma0_publish
+
     ; Lines 225-255.  High-byte tiers 0-2 all fit from line 255; the
     ; 768-1023-byte tier needs two more scanlines of margin.
     lda DAS0H
@@ -1764,25 +1834,8 @@ dma0_blank_pulse_extended:
     bra dma0_direct
 
 dma0_high_page:
-    lda DAS0H
-    beq dma0_high_tiny
-    cmp #$01
-    beq dma0_high_511
-    cmp #$02
-    bne dma0_publish
-    txa
-    cmp #$01             ; 512-767 bytes: line 256 only
-    bcs dma0_publish
-    bra dma0_direct
-dma0_high_511:
-    txa
-    cmp #$02             ; 256-511 bytes: lines 256-257
-    bcs dma0_publish
-    bra dma0_direct
-dma0_high_tiny:
-    txa
-    cmp #$04             ; <=255 bytes: lines 256-259
-    bcs dma0_publish
+    bra dma0_publish      ; line 256+: defer; VRAM acceptance is no longer safe
+.org $8ACB               ; retain the pinned direct/publish ABI and checkpoint seam
 dma0_direct:
     lda #$01
     sta MDMAEN
@@ -2146,10 +2199,10 @@ nmi_pacing_wram:
     lda $41012A
     inc a
     sta $41012A          ; one shared-window epoch increment per real SNES vblank
-    jsr pacing_try_wake
+    jsr nmi_present_then_wake
     jsr service_pending_dma0
-    jsr pacing_sample_joy
-    jsr nmi_video_keepalive
+    jsr nmi_present_then_sample
+    jsr nmi_video_keepalive ; boot/game presentation runs only after wake and tile service
     lda $3302            ; leave Bus-A latched on IRAM, not a ROM fetch
     pld                   ; restore the interrupted foreground Direct Page
     plb
@@ -2232,25 +2285,59 @@ irq_pacing_wram:
 .i16
 nmi_video_keepalive:
     jsr boot_mode7_tick
+    lda $7E719B
+    cmp #$A5
+    bne nvk_not_presented
+    lda #$00
+    sta $7E719B
+    rts
+nvk_not_presented:
+    lda #$00
+    sta $7E719B          ; defensive clear before a tail-owned presentation
     lda $3302            ; no completed game frame: boot/Mode-7 owns the PPU
     beq nvk_done
-    ; bg_hscroll_full uses $D0 as arithmetic scratch.  This wrapper runs
-    ; asynchronously and can interrupt vid_frame while $D0 owns a renderer
-    ; loop/hash value, so preserve the word explicitly around the register-only
-    ; scroll tail.  The NMI prologue already protects A/X/Y but not DP memory.
-    rep #$20
-    lda $D0
-    pha
-    sep #$20
-    jsl.l $E9C200
-    rep #$20
-    jsr bg_scroll        ; current accepted cache: HOFS + guarded VOFS only
-    pla
-    sta $D0
-    sep #$20
+    jsl.l $E9CD00        ; one shared gameplay camera/OAM presentation helper
 nvk_done:
     rts
 nmi_video_keepalive_end:
+
+; Gameplay camera/OAM publication must precede wake/snapshot work, which can
+; consume the rest of VBlank.  The first coherent base still uses one complete
+; OAM DMA; later bases and camera steps use bounded active spans, so this
+; leading call no longer repeats a 544-byte transfer every renderer frame.
+; The historical three-byte call site and wake->tile-service adjacency remain
+; fixed because this wrapper tail-calls the original helper.
+.org $8FB0
+.a8
+.i16
+nmi_present_then_wake:
+    lda $7E7184
+    cmp #$A5
+    bne nptw_wake
+    jsl.l $E9CF00       ; arbitrate compact presentation versus queued tile DMA
+nptw_wake:
+    jmp pacing_try_wake
+nmi_present_then_wake_end:
+
+; Preserve the NMI handler's fixed three-byte call site and every downstream
+; WRAM address while moving gameplay presentation ahead of controller sampling.
+; The DMA service must remain immediately adjacent to pacing_try_wake because
+; its initial large publication depends on that exact leading-edge sample.
+; Its internal early path sets OBJ_PRESENTED_THIS_NMI; the common guard below
+; then becomes a no-op before tail-calling the historical controller reader.
+.org $8FD0
+.a8
+.i16
+nmi_present_then_sample:
+    lda $1F11
+    beq npts_present
+    lda #$A5
+    sta $7E719B          ; keep BG/OBJ together when tile DMA consumed this VBlank
+    jmp pacing_sample_joy
+npts_present:
+    jsl.l $E9CD20
+    jmp pacing_sample_joy
+nmi_present_then_sample_end:
 
 ; Split a normal three-pixel 30 Hz target into two then one pixels on the two
 ; 60 Hz video frames.  The signed eight-bit delta chooses the shortest route
@@ -4852,7 +4939,7 @@ btr_shift:
     ; A producer-prepared transition can coalesce tens of KiB into one native
     ; run.  A single DMA of that size outlives VBlank and Mesen correctly
     ; rejects the visible-period tail, leaving noisy pattern data.  Transfer
-    ; full 5.75 KiB chunks on separate NMI edges.  DMA0 advances A1T0 and VMADD
+    ; full 5.25 KiB chunks on separate NMI edges.  DMA0 advances A1T0 and VMADD
     ; automatically; only the remaining byte count must survive the NMI, so
     ; keep it on the protected 5A22 stack rather than in clobberable DP scratch.
     jmp bg_tile_run_dma_chunks
@@ -6529,6 +6616,31 @@ cbuf_token_primary:
     lda $D0
     sta $7E7494
 cbuf_token_done:
+    ; pacing_try_wake publishes the unwrapped common camera phase before any
+    ; direct/queued capture reaches this helper.  Pair that phase with the OBJ
+    ; manifest as well as the BG controls so a later renderer can compensate
+    ; stale world-space OAM without guessing across the X1 two-slot gap.
+    sep #$20
+.a8
+    lda $7E74D0
+    beq cbuf_obj_scroll_done
+    cmp #$01
+    beq cbuf_obj_scroll_direct
+    cmp #$02
+    beq cbuf_obj_scroll_primary
+    lda $7E72B2
+    sta $7E7182
+    bra cbuf_obj_scroll_done
+cbuf_obj_scroll_direct:
+    lda $7E72B2
+    sta $7E7180
+    bra cbuf_obj_scroll_done
+cbuf_obj_scroll_primary:
+    lda $7E72B2
+    sta $7E7181
+cbuf_obj_scroll_done:
+    rep #$20
+.a16
     lda $D2
     tay                  ; return kind while restoring caller scratch
     pla
@@ -7218,10 +7330,11 @@ bg_hscroll_full:
     rtl
 bg_hscroll_full_end:
 
-; Publish the modal physical-column basis prepared for this exact tilemap only
+; Publish the absolute physical-column basis prepared for this exact tilemap only
 ; after its DMA completes.  One X1 source column can detach across the two-slot
-; gap while the other thirteen populated columns do not rotate; anchoring HOFS
-; to that one column caused false 64-pixel rebases and visible panel jumps.
+; gap while the other thirteen populated columns do not rotate.  The preparer
+; therefore pairs one captured column's slot and raw coordinate with the camera
+; phase captured for the same immutable image; no cumulative map delta survives.
 .org $C340
 .a16
 .i16
@@ -7410,12 +7523,13 @@ bch_legacy:
     rts
 bg_compute_hscroll_logic_end:
 
-; Pair the staged exact tilemap with a physical-map basis before DMA begins.
-; X1 can move one source column across its deliberately unused two-slot gap
-; without rotating the rest of the map.  The only stable global displacement
-; is therefore the modal modulo-16 slot delta across all sixteen columns.
-; This runs in the foreground upload path; the NMI commit below only installs
-; the already-computed byte and copies the accepted map.
+; Pair the staged exact tilemap with an absolute physical-map basis before DMA
+; begins.  The accepted source-column map at $89F0, raw column-4 coordinate at
+; $8995, and unwrapped phase at $7180 were captured with the same immutable
+; image.  Thus slot4*32 + phase - raw is an absolute basis that cancels both an
+; isolated gap crossing and a whole-layout gap rotation.  The rejected modal
+; accumulator could retain a false +64 across later Stage-1 maps.  This runs in
+; the foreground upload path; NMI installs only the already-computed byte.
 .org $C600
 .a8
 .i16
@@ -7455,7 +7569,7 @@ bsmp_exact:
 .a8
     lda $7E72B8
     cmp #$A5
-    beq bsmp_modal
+    bra bsmp_seed        ; exact maps never inherit a cumulative modal error
 bsmp_seed:
     lda $7E89F4          ; first exact map: source column 4 is the camera anchor
     asl a
@@ -7467,9 +7581,9 @@ bsmp_seed:
     lda $7E72B3
     cmp #$A5
     bne bsmp_seed_valid
-    lda $7E72B2          ; express the slot anchor in the unwrapped phase domain
+    lda $7E7180          ; phase captured with this accepted immutable image
     sec
-    sbc $7E72BA
+    sbc $7E8995          ; raw column-4 coordinate from that same image
     clc
     adc $7E72BB
     sta $7E72BB
@@ -7865,6 +7979,798 @@ pbcr_next:
     rtl
 prepared_bg_cache_reconstruct_end:
 
+; =============================================================================
+; Every-video-frame OBJ camera presentation.
+;
+; The X1 foreground plane contains both screen-fixed HUD records and world-space
+; objects such as Superman, enemies, and the Stage-1 crate.  BG1 now follows the
+; 30 Hz arcade camera with bounded one/two-pixel steps on each 60 Hz SNES frame;
+; leaving OAM at the slower renderer cadence made those objects hold for several
+; frames and then jump 3-6 pixels against the smoothly moving playfield.
+;
+; Foreground commit copies the complete OAM image to private presentation WRAM
+; and builds a compact list of X fields whose SNES Y lies in the playfield
+; ($18-$C7).  That deliberately excludes the wrapped/top scoreboard and bottom
+; CREDIT/status rows.  NMI applies only the change in camera compensation since
+; its preceding publication, then uses private DMA channel 6 to publish all 544
+; coherent OAM bytes.  Channel 0 remains exclusively owned by the established
+; foreground PPU descriptor protocol.
+; =============================================================================
+.org $C800
+.a8
+.i16
+obj_present_commit:
+    php
+    phb
+    rep #$30
+.a16
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+
+    sep #$20
+.a8
+    lda #$80
+    sta $7E7189          ; NMI lock: image/list/compensation are not coherent yet
+    lda #$00
+    sta $7E7184          ; NMI must retain the preceding coherent OAM while copying
+    rep #$30
+.a16
+    lda #$021F           ; 544-byte low/high OAM image
+    ldx #$8600
+    ldy #$6F60
+    mvn $7E,$7E          ; also establishes DBR=$7E for the compact scan below
+
+    stz $D0              ; active OAM entry index
+    stz $D2              ; four-byte world-list cursor
+    stz $D4              ; low-OAM byte offset
+opc_scan:
+    lda $D0
+    cmp $E2
+    bcs opc_scan_done
+    ldx $D4
+    sep #$20
+.a8
+    lda $6F61,x          ; SNES OAM Y from the immutable presentation image
+    cmp #$18             ; top HUD/score rows remain fixed to the screen
+    bcc opc_next
+    cmp #$C8             ; bottom CREDIT/status rows remain fixed too
+    bcs opc_next
+    rep #$20
+.a16
+    ldx $D2
+    lda $D4
+    sta $6D40,x          ; low-table X byte offset (entry * 4)
+    lda $D0
+    lsr a
+    lsr a
+    sep #$20
+.a8
+    sta $6D42,x          ; high-table byte index (entry / 4)
+    rep #$20
+.a16
+    lda $D0
+    and #$0003
+    asl a
+    tay                  ; X-high bit position = (entry & 3) * 2
+    lda #$0001
+opc_mask_shift:
+    cpy #$0000
+    beq opc_mask_ready
+    asl a
+    dey
+    bra opc_mask_shift
+opc_mask_ready:
+    sep #$20
+.a8
+    sta $6D43,x
+    rep #$20
+.a16
+    lda $D2
+    clc
+    adc #$0004
+    sta $D2
+opc_next:
+    rep #$20
+.a16
+    inc $D0
+    lda $D4
+    clc
+    adc #$0004
+    sta $D4
+    bra opc_scan
+
+opc_scan_done:
+    ; Active entries are packed from OAM slot zero through $E2-1.  Retain the
+    ; union of the preceding and new active spans so a shrinking list also
+    ; publishes the newly hidden tail.  Invisible bytes above both maxima are
+    ; irrelevant; the complete packed high table is still sent every time.
+    jsl.l $E9CE00        ; publish old/new active-span union outside this tight island
+
+    lda $D2
+    lsr a
+    lsr a
+    sta $7186            ; four bytes per world-list entry
+    beq opc_no_world_span
+    lda $6D40
+    sta $7195            ; first descriptor is lowest because the scan is ordered
+    lda $D2
+    sec
+    sbc #$0004
+    tax
+    lda $6D40,x          ; last low-OAM byte offset
+    sec
+    sbc $7195
+    clc
+    adc #$0004
+    sta $7197            ; include all four bytes of the final OAM entry
+    bra opc_world_span_done
+opc_no_world_span:
+    stz $7195
+    stz $7197
+opc_world_span_done:
+    lda $89B8
+    sta $718A            ; exact candidate sequence represented by this base
+    sep #$20
+.a8
+    lda $7180
+    sta $7183
+    stz $7185            ; copied OAM is the uncompensated candidate base
+    lda #$A5
+    sta $7184            ; publish only after image, list, count, and phase agree
+    jsr obj_present_step ; align a queued/stale candidate before its first DMA
+    sep #$20
+.a8
+    lda $7194
+    cmp #$A5
+    beq opc_delta_due
+    lda #$01             ; first hardware base requires all 544 bytes
+    bra opc_publish_due
+opc_delta_due:
+    lda #$03             ; later bases use active low span + complete high table
+opc_publish_due:
+    sta $7189            ; coherent image is now due at the next safe NMI
+
+    rep #$30
+.a16
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plb
+    plp
+    rtl
+obj_present_commit_end:
+
+; Apply the shortest signed change from the compensation already represented
+; by OBJ_PRESENT_OAM to (base camera - currently presented camera).  The list
+; stores both the low-table offset and exact packed high-table bit, so crossing
+; X=$000/$100/$1FF toggles the ninth bit without rebuilding attributes/tiles.
+.org $C900
+.a8
+.i16
+obj_present_step:
+    php
+    phb
+    rep #$30
+.a16
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    sep #$20
+.a8
+    lda #$00
+    sta $7E7188
+    lda $7E7184
+    cmp #$A5
+    beq ops_valid
+    jmp ops_restore8
+ops_valid:
+    lda $7E72B3
+    cmp #$A5
+    beq ops_scroll_valid
+    jmp ops_restore8
+ops_scroll_valid:
+    lda $7E7183
+    sec
+    sbc $7E72B4          ; desired signed compensation, modulo one byte
+    sta $D0
+    sec
+    sbc $7E7185          ; incremental change from the current presentation
+    bne ops_changed
+    jmp ops_restore8
+ops_changed:
+    bmi ops_negative
+    sta $D2              ; positive X increment
+    bra ops_begin
+ops_negative:
+    eor #$FF
+    inc a
+    sta $D2              ; positive magnitude for the subtract loop
+
+ops_begin:
+    lda #$7E
+    pha
+    plb
+    rep #$20
+.a16
+    lda $7186
+    sta $D4              ; remaining world entries
+    beq ops_publish
+    ldy #$0000           ; four-byte world-list cursor
+    sep #$20
+.a8
+    lda $D0
+    sec
+    sbc $7185
+    bmi ops_subtract
+
+ops_add_loop:
+    rep #$20
+.a16
+    lda $6D40,y
+    tax
+    sep #$20
+.a8
+    lda $6F60,x
+    clc
+    adc $D2
+    sta $6F60,x
+    bcc ops_add_no_wrap
+    lda $6D42,y
+    tax
+    lda $7160,x
+    eor $6D43,y          ; toggle the packed ninth-X bit on low-byte carry
+    sta $7160,x
+ops_add_no_wrap:
+    rep #$20
+.a16
+    tya
+    clc
+    adc #$0004
+    tay
+    dec $D4
+    bne ops_add_loop
+    bra ops_publish
+
+ops_subtract:
+    rep #$20
+.a16
+ops_sub_loop:
+    lda $6D40,y
+    tax
+    sep #$20
+.a8
+    lda $6F60,x
+    sec
+    sbc $D2
+    sta $6F60,x
+    bcs ops_sub_no_wrap
+    lda $6D42,y
+    tax
+    lda $7160,x
+    eor $6D43,y          ; toggle the packed ninth-X bit on low-byte borrow
+    sta $7160,x
+ops_sub_no_wrap:
+    rep #$20
+.a16
+    tya
+    clc
+    adc #$0004
+    tay
+    dec $D4
+    bne ops_sub_loop
+
+ops_publish:
+    sep #$20
+.a8
+    lda $D0
+    sta $7185
+    lda #$01
+    sta $7188
+    lda $7189
+    cmp #$01
+    beq ops_restore8     ; a newly committed base still requires the full 544 bytes
+    cmp #$03
+    beq ops_restore8     ; preserve a compact renderer-base union through alignment
+    lda #$02
+    sta $7189            ; camera-only change can use the compact low/high publication
+ops_restore8:
+    rep #$30
+.a16
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plb
+    plp
+    rts
+obj_present_step_end:
+
+; NMI is the sole hardware-OAM publisher.  A new foreground image is mandatory;
+; an ordinary camera step is attempted only while enough of this vblank remains.
+; The count-tier cutoff retains increasingly conservative CPU margin for the
+; compact X loop before the fixed 544-byte channel-6 DMA.
+.org $CA80
+.a8
+.i16
+obj_present_nmi:
+    php
+    rep #$30
+.a16
+    pha
+    phx
+    sep #$20
+.a8
+    lda $7E7184
+    cmp #$A5
+    beq opn_valid
+    jmp opn_restore
+opn_valid:
+    lda $7E7189
+    cmp #$80
+    bne opn_not_locked
+    jmp opn_restore      ; foreground is still constructing the immutable image
+opn_not_locked:
+    cmp #$00
+    bne opn_due
+    lda $7E72B3
+    cmp #$A5
+    beq opn_scroll_valid
+    jmp opn_restore
+opn_scroll_valid:
+    lda $7E7183
+    sec
+    sbc $7E72B4
+    cmp $7E7185
+    bne opn_due
+    jmp opn_restore
+opn_due:
+    lda HVBJOY
+    bmi opn_vblank
+    lda #$FF
+    sta $7E719D
+    jmp opn_late
+opn_vblank:
+    lda STAT78
+    lda SLHV
+    lda OPVCT
+    tax
+    lda OPVCT
+    and #$01
+    bne opn_late_line
+    lda $7E7189
+    cmp #$01
+    beq opn_full_budget
+    txa
+    cmp #$FC             ; compact world span + 32 high bytes fit later in vblank
+    bcc opn_time_ok
+    bra opn_late_line
+opn_full_budget:
+    lda $7E7186
+    cmp #$21
+    bcc opn_small
+    cmp #$41
+    bcc opn_medium
+    txa
+    cmp #$E6             ; 65-128 objects require an early-vblank entry
+    bcs opn_late_line
+    bra opn_time_ok
+opn_medium:
+    txa
+    cmp #$EE             ; 33-64 objects retain additional compact-loop margin
+    bcs opn_late_line
+    bra opn_time_ok
+opn_small:
+    txa
+    cmp #$F6             ; <=32 objects plus 544-byte DMA fit through line 245
+    bcs opn_late_line
+opn_late_skip:
+    bra opn_time_ok
+
+opn_late_line:
+    txa
+    sta $7E719D
+opn_late:
+    rep #$20
+.a16
+    lda $7E718E
+    inc a
+    sta $7E718E
+    jmp opn_restore
+
+opn_time_ok:
+.a8
+    txa
+    sta $7E718C
+    jsr obj_present_step
+
+    lda $7E7189
+    cmp #$01
+    beq opn_full_dma
+    cmp #$03
+    beq opn_base_dma
+    jsr obj_present_dma_partial
+    bra opn_publish_metadata
+opn_base_dma:
+    jsr obj_present_dma_base
+    bra opn_publish_metadata
+opn_full_dma:
+.a8
+    stz OAMADDL
+    stz OAMADDH
+    stz $4360            ; private DMA channel 6, mode 0
+    lda #$04
+    sta $4361            ; B-bus OAMDATA
+    lda #$60
+    sta $4362
+    lda #$6F
+    sta $4363
+    lda #$7E
+    sta $4364
+    lda #$20
+    sta $4365
+    lda #$02
+    sta $4366            ; complete 544-byte low/high OAM image
+    lda #$40
+    sta MDMAEN
+opn_publish_metadata:
+.a8
+    rep #$20
+.a16
+    lda $7E718A
+    sta $7E7190
+    sep #$20
+.a8
+    lda $7E7183
+    sta $7E7192
+    lda $7E7185
+    sta $7E7193
+    lda #$A5
+    sta $7E7194          ; publish hardware provenance before releasing foreground
+    lda #$00
+    sta $7E7189          ; legal long clear: release only after hardware OAM owns it
+    bra opn_restore
+opn_restore:
+    rep #$30
+.a16
+    plx
+    pla
+    plp
+    rtl
+obj_present_nmi_end:
+
+; Foreground completion cannot acknowledge an OBJ image before it reaches the
+; PPU.  Commit publishes the due byte only after the complete image is coherent;
+; this helper merely waits for the next safe NMI to clear it after DMA.
+.org $CBA0
+.a8
+.i16
+obj_present_wait:
+    php
+    sep #$20
+.a8
+opw_loop:
+    lda $7E7189
+    bne opw_loop
+    plp
+    rtl
+obj_present_wait_end:
+
+; Ordinary 60 Hz camera steps alter only world-object X.  Publish the ordered
+; low-OAM span from the first through final world entry, then the complete
+; 32-byte packed high table.  Full foreground commits continue through the
+; 544-byte path above so HUD tiles/attributes and newly hidden entries remain
+; coherent.  This smaller tail publication fits after an occasional tile DMA
+; that made the old full-image retry visibly hold for one frame.
+.org $CC00
+.a8
+.i16
+obj_present_dma_partial:
+    php
+    rep #$20
+.a16
+    pha
+    lda $7E7197
+    beq opd_restore
+
+    lda $7E7195
+    lsr a               ; OAMADD is a word address; metadata is a byte offset
+    sep #$20
+.a8
+    sta OAMADDL
+    stz OAMADDH
+    stz $4360
+    lda #$04
+    sta $4361
+    rep #$20
+.a16
+    lda $7E7195
+    clc
+    adc #$6F60
+    sta $4362
+    sep #$20
+.a8
+    lda #$7E
+    sta $4364
+    rep #$20
+.a16
+    lda $7E7197
+    sta $4365
+    sep #$20
+.a8
+    lda #$40
+    sta MDMAEN
+
+    stz OAMADDL
+    lda #$01
+    sta OAMADDH          ; packed ninth-X/size table begins at OAM word $100
+    rep #$20
+.a16
+    lda #$7160
+    sta $4362
+    lda #$0020
+    sta $4365
+    sep #$20
+.a8
+    lda #$40
+    sta MDMAEN
+    rep #$20
+.a16
+    lda $7E7199
+    inc a
+    sta $7E7199
+opd_restore:
+    pla
+    plp
+    rts
+obj_present_dma_partial_end:
+
+; A renderer base can change HUD and world entries, but active OAM slots are
+; packed from zero.  Publish the union of the old/new active low-table spans
+; followed by the complete packed high table.  This safely hides a shrinking
+; tail while avoiding a 544-byte leading-edge transfer on every renderer frame.
+.org $CC80
+.a8
+.i16
+obj_present_dma_base:
+    php
+    rep #$20
+.a16
+    pha
+    lda $7E71A2
+    beq opb_high_table
+
+    sep #$20
+.a8
+    stz OAMADDL
+    stz OAMADDH
+    stz $4360
+    lda #$04
+    sta $4361
+    lda #$60
+    sta $4362
+    lda #$6F
+    sta $4363
+    lda #$7E
+    sta $4364
+    rep #$20
+.a16
+    lda $7E71A2
+    sta $4365
+    sep #$20
+.a8
+    lda #$40
+    sta MDMAEN
+
+opb_high_table:
+    sep #$20
+.a8
+    stz OAMADDL
+    lda #$01
+    sta OAMADDH
+    rep #$20
+.a16
+    lda #$7160
+    sta $4362
+    lda #$0020
+    sta $4365
+    sep #$20
+.a8
+    lda #$40
+    sta MDMAEN
+    rep #$20
+.a16
+    lda $7E7199
+    inc a
+    sta $7E7199
+    pla
+    plp
+    rts
+obj_present_dma_base_end:
+
+; Shared gameplay presentation for the DMA-service leading path and the
+; ordinary NMI tail.  The NMI prologue protects A/X/Y but not renderer direct-
+; page scratch, so preserve $D0 around the BG arithmetic and let the OBJ helper
+; preserve its own compact-loop scratch.
+.org $CD00
+.a8
+.i16
+nmi_gameplay_present:
+    php
+    sep #$20
+.a8
+    jsl.l $E9C200
+    jsl.l $E9CD40
+    jsl.l $E9CA80
+    plp
+    rtl
+nmi_gameplay_present_end:
+
+.org $CD20
+.a8
+.i16
+nmi_present_before_dma:
+    lda $7E719B
+    bmi npbd_done        ; the only armed value is $A5; save two bytes for full counters
+    ; FRAME_REQ/ACK are 16-bit sequences.  Reading only ACK's low byte made
+    ; $0100 look like the power-on value and deadlocked an OAM base publication:
+    ; foreground waited on due=3 while every NMI skipped BG/OBJ presentation.
+    ; Suppress gameplay presentation only while both complete counters are the
+    ; true all-zero boot value.  At 16-bit wrap a new request releases the gate.
+    lda $3300
+    ora $3301
+    ora $3302
+    ora $3303
+    beq npbd_done
+    jsl.l $E9CD00
+    lda #$A5
+    sta $7E719B
+npbd_done:
+    rtl
+nmi_present_before_dma_end:
+
+.org $CD40
+.a8
+.i16
+nmi_bg_reapply:
+    php
+    rep #$20
+.a16
+    lda $D0
+    pha
+    sep #$20
+.a8
+    jsr bg_scroll
+    rep #$20
+.a16
+    pla
+    sta $D0
+    plp
+    rtl
+nmi_bg_reapply_end:
+
+; Prepare the compact base-publication span from obj_present_commit's active
+; entry count in direct-page $D0.  Kept out of the fixed $C800-$C8FF commit
+; island so the guarded $C900 presentation-step ABI cannot be overwritten.
+.org $CE00
+.a16
+.i16
+obj_base_span_prepare:
+    php
+    rep #$20
+.a16
+    lda $D0
+    asl a
+    asl a
+    sta $D6              ; new active low-OAM byte span
+    cmp $7E71A0
+    bcs obsp_new_is_max
+    lda $7E71A0
+    bra obsp_union_ready
+obsp_new_is_max:
+    lda $D6
+obsp_union_ready:
+    sta $7E71A2          ; old/new union used for this base publication
+    lda $D6
+    sta $7E71A0          ; persistent active span for the following commit
+    ldx $D6
+obsp_hide_inactive:
+    cpx $7E71A2
+    bcs obsp_done
+    sep #$20
+.a8
+    lda #$F0
+    sta $6F61,x          ; explicitly hide the shrinking active tail
+    rep #$20
+.a16
+    txa
+    clc
+    adc #$0004
+    tax
+    bra obsp_hide_inactive
+obsp_done:
+    plp
+    rtl
+obj_base_span_prepare_end:
+
+; A pending large tile transfer and the scheduler wake share the same VBlank
+; budget.  Mirror pacing_try_wake's due test: if this NMI will perform the
+; expensive snapshot/wake, publish only compact BG/OAM first and leave the
+; tile for the following light NMI; otherwise preserve tile-DMA priority.
+; With no queued tile transfer, every gameplay NMI presents normally.
+.org $CF00
+.a8
+.i16
+nmi_present_arbitrate:
+    ; Test the wake deadline before the tile queue.  A due wake is what makes
+    ; a new quiescent camera sample available; sampling only when a tile was
+    ; already pending produced an inconsistent 2/2/hold cadence whenever the
+    ; queue happened to be empty at this leading edge.
+    lda $410122
+    cmp #$01
+    bne npa_not_due
+    lda $410130
+    beq npa_two_frame_deadline
+    lda $41012A
+    sec
+    sbc $41012B
+    cmp #$01
+    bcc npa_not_due
+    bra npa_heavy_present
+npa_two_frame_deadline:
+    lda $41012A
+    sec
+    sbc $41012B
+    cmp #$02
+    bcs npa_heavy_present
+npa_not_due:
+    lda $1F11
+    beq npa_present
+    bra npa_done
+npa_heavy_present:
+    ; pacing_try_wake captures this same quiescent source a few instructions
+    ; later.  Publish its phase before presenting on a heavy wake NMI so BG1
+    ; and world OAM do not hold the preceding target for one extra video frame.
+    rep #$20
+.a16
+    jsr capture_bg_vscroll
+    sep #$20
+.a8
+    xba
+    jsl.l $E9C720
+npa_present:
+    jsl.l $E9CD20
+npa_done:
+    rtl
+nmi_present_arbitrate_end:
+
 ; The first primary capture lazily copies this island to the identical private
 ; $7E:ED00 offset after production pacing has armed and while the SA-1 sleeps.
 ; Bank $7F is deliberately never used: it is the game's entire emulated 68000
@@ -7917,6 +8823,13 @@ rqp_have_entry:
     beq rqp_primary_copy
     jmp rqp_secondary_copy
 rqp_primary_copy:
+
+    sep #$20
+.a8
+    lda $7E7181
+    sta $7E7180
+    rep #$20
+.a16
 
     lda $7ED180
     sta $7E89B8
@@ -8034,6 +8947,12 @@ rqp_bg_done:
     jmp rqp_publish
 
 rqp_secondary_copy:
+    sep #$20
+.a8
+    lda $7E7182
+    sta $7E7180
+    rep #$20
+.a16
     lda $7EB000
     sta $7E89B8
     lda $7EB002

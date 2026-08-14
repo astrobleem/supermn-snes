@@ -43,6 +43,11 @@ BUTTONS = {
 }
 
 EXEC_HOOKS = {
+    "nmi_present_arbitrate": 0xE9CF00,
+    "nmi_present_before_dma": 0xE9CD20,
+    "bg_scroll_present_step": 0xE9C200,
+    "obj_present_nmi": 0xE9CA80,
+    "obj_present_dma_base": 0xE9CC80,
     "vid_bg_heavy": 0x7F847E,
     "vid_bg_incremental": 0x7FA680,
     "bg_cache_reclaim": 0x7FA899,
@@ -65,6 +70,10 @@ EXEC_HOOKS = {
 }
 
 WRITE_HOOKS = {
+    "presented_scrollx_write": 0x7E72B4,
+    "obj_present_valid_write": 0x7E7184,
+    "obj_dma_pending_write": 0x7E7189,
+    "obj_presented_this_nmi_write": 0x7E719B,
     "dma0_size_low_write": 0x4305,
     "dma0_size_high_write": 0x4306,
     "dma_enable_write": 0x420B,
@@ -207,6 +216,9 @@ def main() -> int:
         if args.refresh_video_wram:
             video_wram_migration = campaign.refresh_video_wram(m, rom)
         initial = capture.snapshot(m)
+        initial["frame_request"] = m.read_u16(0x003300)
+        initial["frame_ack"] = m.read_u16(0x003302)
+        initial["published_frame_request"] = m.read_u16(0x7E1F1E)
         initial["render_queue1_state"] = m.read_u16(0x7E89D2)
         initial["render_queue2_state"] = m.read_u16(0x7E89D6)
         initial_screenshot = capture.take_screenshot(m, output / "initial.png")
@@ -225,6 +237,9 @@ def main() -> int:
         for handle in handles:
             m.remove_hook(handle)
         final = capture.snapshot(m)
+        final["frame_request"] = m.read_u16(0x003300)
+        final["frame_ack"] = m.read_u16(0x003302)
+        final["published_frame_request"] = m.read_u16(0x7E1F1E)
         final["render_queue1_state"] = m.read_u16(0x7E89D2)
         final["render_queue2_state"] = m.read_u16(0x7E89D6)
         final_screenshot = capture.take_screenshot(m, output / "final.png")

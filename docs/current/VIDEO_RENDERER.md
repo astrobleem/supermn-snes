@@ -11,7 +11,7 @@ were true only before pixels first rendered. For current acceptance state, use
 > title/gameplay/HUD output, but renderer conservation, attack-animation tiles,
 > organic Stage 2 behavior, and aligned MAME pixels remain open.
 
-## Current focused correction: every-frame scroll integration (August 13, 2026)
+## Current focused correction: every-frame BG/OBJ integration (August 13–14, 2026)
 
 Preserved `50bbed41…` produces the right Stage-1 wall/floor but does not move it
 at source cadence. In the retained exact-hash frame-5,871 suffix, live X1 column
@@ -27,7 +27,7 @@ silently skipping the intervening held frames. Reanalysis over every consecutive
 video frame exposes the user-visible `hold, +3` cadence: 48 holds and 49
 three-pixel jumps.
 
-Current `21abe04c…` retains the 60 Hz presentation cursor at `$72B4` but makes
+Preserved `21abe04c…` retains the 60 Hz presentation cursor at `$72B4` but makes
 the camera and displayed-map authorities explicit. `$72B2` is now the common
 modulo-32 camera phase: a raw source-column jump across the X1 two-slot gap is
 reduced to the real -3-pixel motion. Before each exact tilemap DMA, the foreground
@@ -55,7 +55,7 @@ full gameplay map, producing a persistent 64-pixel black band after Start. Those
 negative runs are retained under their hash-prefixed directories in
 `/home/chad/supermn-snes-artifacts/active/`; none is a handoff ROM.
 
-The current focused real-65816/PPU bridge is green 16/16, including the exact
+Its focused real-65816/PPU bridge is green 16/16, including the exact
 sparse title-to-gameplay map, an isolated column crossing the gap, a real
 thirteen-column rotation, and a raw -67 jump unwrapped to -3. The exact-hash
 fresh-power gate retains 601 consecutive post-Start frames 5,512–6,112 / ticks
@@ -65,6 +65,76 @@ holds/reversals/oversized steps, and zero mismatch at all 15 displayed-map
 changes. Sol manually reviewed the full contact sheet and former rebase points.
 Evidence is under
 `/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`.
+
+Preserved `382b76a4…` extends the same cursor to world-space OAM. X1's foreground
+plane mixes fixed top/bottom HUD records with player, crate, pillar, enemy, and
+other world records. A renderer-only OAM upload therefore made those objects
+hold and jump against the integrated BG. Foreground commit now copies one
+immutable 544-byte OAM image, records only playfield-world X fields, and retains
+the union of old/new active spans. NMI applies the cursor delta and publishes a
+compact active low-table span plus the complete high table; fixed HUD records do
+not move. A base-delta pending state is never downgraded by camera alignment, so
+a shrinking list cannot leave stale objects visible.
+
+The wake deadline is evaluated before tile-queue priority. Every due wake samples
+the quiescent X1 camera before presentation; the rejected tile-first ordering
+alternated between early and late source publication and produced a measurable
+2/2/hold cadence. The current exact-hash fresh temporal gate measures 153 exact
+-3 source changes as 152 one-pixel and 153 two-pixel moves with no holds,
+reversals, oversized steps, or BG discontinuities. Its OBJ gate is green across
+599 post-warmup frames and 358 same-base transitions with zero violations. The
+focused real-65816/PPU bridge is green 21/21. Evidence is under
+`/home/chad/supermn-snes-artifacts/active/382b76a4-build-diagnostics-v1/` and
+`/home/chad/supermn-snes-artifacts/active/382b76a4-fresh-poststart600-v1/`.
+
+Rejected `60481722…` attempted to correct the later human-reported
+fence/black-column failure by removing the exact-layout `+64` crop. That
+diagnosis used a resized 384-pixel X1 image rather than the canonical
+`(64,1)-(320,225)` crop. Correct registration shows the predecessor background
+was aligned and `60481722…` moved it 64 pixels in the opposite direction.
+
+The actual failure was a stale modal displayed-map basis. Chad's checkpoint
+serialized `$A0`, but the immutable image's source-column-4 slot, paired raw X,
+and unwrapped phase prove absolute basis `$60`. Exact HScroll therefore remains
+`64 + signed8($60-$66) = $3A` (58). Current source prepares
+`slot4*32 + phase - raw4 (mod 256)` for every exact image and installs it only
+after the paired map DMA. The bridge is green 22/22, including absolute zero,
+isolated gap crossings, whole rotations, and the `$A0->$60/$66/$3A` fence case.
+
+Rejected `36d664e6…` first carried this math but exposed an independent NMI
+deadlock. ACK `$0100` was read in A8 as low byte zero, so the presentation gate
+mistook a live renderer for boot, skipped BG/OAM forever, and left foreground
+waiting on OAM due `3`. Its fresh 601-frame temporal gate is red: 303 held
+moving-camera transitions and no PPU motion for 456 pixels of source motion.
+
+Rejected `893d467b…` tests the complete request/ACK readiness state. In the exact
+red checkpoint, the first NMI clears due `3`; ACK, render generations, and OAM
+publication resume. The supplied fence state requires two explicitly logged
+old-hash provenance bytes, then eight attack/right phases keep Superman at world
+X 224 and HScroll 58 with no halt or invalid task context. Sol manually reviewed
+the canonical X1/SNES side-by-side: fence, wall, windows, doorway, and floor are
+aligned and the gross vertical black band is absent. Evidence is under
+`/home/chad/supermn-snes-artifacts/active/893d467b-frame-counter-fix-v1/`.
+The checkpoint is not an aligned MAME oracle: its tick-3718 work image differs
+from canonical MAME in 2,291 bytes, including player health and position.
+
+The fresh `893d467b…` gate exposed a persistent native-record failure after that
+recovery. Slot 2 published code `$19AE` but kept 127 bytes of Mode-7 data. A
+passive two-frame trace proves the exact sequence was owner publication, tile
+DMA helper, direct path, `MDMAEN=$01`, and return with the destination unchanged.
+For that transfer `HVBJOY=$C2` still reported VBlank while `OPVCT=$0000`: the
+status and counter straddled the line-0 boundary. The low-page path lacked a
+minimum-line check and mistook line 0 for lines 225-255. Rejected `b92ac14f…`
+retired the line-256+ tiers but did not address this low-page race.
+
+Current `f25a0e68…` permits low-page direct DMA only at `OPVCT >= $E1`; lower
+lines and every high-page descriptor publish for the next NMI. Packer guards
+pin the helper seams, the low-page floor, the high-page publish branch, and its
+inert retired tier. At exact fresh frame 5,250, slot 2 matches its ROM record
+128/128 bytes. The current organic coin/Start movie then retains 601 consecutive
+clear post-Start frames 5,704-6,304; its every-frame temporal gate is green with
+302 PPU steps, 151 source steps, and no wrong registration or discontinuity.
+Sol reviewed the contact sheet and representative frames 100/300/600.
 
 This does not make the renderer fast or prove later stages. Aligned MAME pixels,
 formal MAME-frame conservation, organic Stage 2 and later coverage, performance,
@@ -94,9 +164,18 @@ to `$026E`; the packer checks both the new span and its `$E9:C400` call.
 The initial cache-only proof restored the scene but exposed black tile chunks.
 Its prepared graphics list contains 178 consecutive 128-byte records; the old
 `$1700` chunk size consumed the VBlank window and corrupted record tails at
-physical slots 46 and 138. `bg_tile_run_dma_chunks` now uses `$1600`, retaining
-a full-record margin, and both DMA wait paths reset the OPVCT phase with
-`STAT78`. A phase reset alone was tested and rejected as insufficient.
+physical slots 46 and 138. Preserved `50bbed41…` reduced that to `$1600`, and
+both DMA wait paths reset the OPVCT phase with `STAT78`. A phase reset alone was
+tested and rejected as insufficient.
+
+The later every-frame OBJ publisher added bounded NMI work before the tile DMA.
+Rejected `dde99419…` proved that `$1600` no longer retained its two-record margin:
+fresh checkpoints found corrupt records 43/44, 87/88, 131/132, and 175/176 at
+every 44-record boundary. Preserved `382b76a4…` introduced `$1500`, exactly 42
+complete records, and current `f25a0e68…` retains it. All former boundary records
+are exact in the predecessor's fresh 601-frame gate, and
+the manually reviewed contact sheet contains no missing/partial tiles or vertical
+bands.
 
 Actual assembled-helper execution also caught and rejected an initial
 `$EF:E800` table reference: the table is SA-1 `$9E:E800` at file `$2F6800`, so

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import tempfile
+import inspect
 from pathlib import Path
 
 from PIL import Image
@@ -25,6 +26,9 @@ class FakeMemory:
 
 
 def main() -> int:
+    main_source = inspect.getsource(gate.main)
+    assert "advance_to(m, args.title_frame)" in main_source
+    assert "m.run_frames(args.title_frame)" not in main_source
     assert gate.parse_milestone_frames("1,1250,1500", 5500) == [1, 1250, 1500]
     for invalid in ("", "1,1", "2,1", "1,nope", "1,5500"):
         try:

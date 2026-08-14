@@ -290,6 +290,10 @@ def main() -> int:
     map_commit = symbol_address(args.symbols, "bg_scroll_map_commit")
     map_prepare = symbol_address(args.symbols, "bg_scroll_map_prepare")
     phase_publish = symbol_address(args.symbols, "bg_scroll_phase_publish")
+    obj_commit = symbol_address(args.symbols, "obj_present_commit")
+    obj_step = symbol_address(args.symbols, "obj_present_step")
+    obj_dma_partial = symbol_address(args.symbols, "obj_present_dma_partial")
+    obj_dma_base = symbol_address(args.symbols, "obj_present_dma_base")
     return_spin = capture_end + 1
     configure_runtime()
 
@@ -318,6 +322,34 @@ def main() -> int:
         observed = bytes(m.read_memory("snesPrgRom", spin_offset, 2))
         if observed != bytes.fromhex("80fe"):
             raise RuntimeError(f"failed to install helper spin at file ${spin_offset:06X}")
+        partial_wrapper = 0xE9CBB0
+        partial_wrapper_offset = rom_file_offset(partial_wrapper)
+        partial_wrapper_code = bytes.fromhex("e220a9808d0021") + bytes(
+            (0x20, obj_dma_partial & 0xFF, (obj_dma_partial >> 8) & 0xFF, 0x60)
+        )
+        if bytes(
+            m.read_memory(
+                "snesPrgRom", partial_wrapper_offset, len(partial_wrapper_code)
+            )
+        ) != bytes(len(partial_wrapper_code)):
+            raise RuntimeError("compact-OBJ forced-blank wrapper seam is no longer zero")
+        m.write_memory(
+            "snesPrgRom", partial_wrapper_offset, partial_wrapper_code.hex()
+        )
+        base_wrapper = 0xE9CBE0
+        base_wrapper_offset = rom_file_offset(base_wrapper)
+        base_wrapper_code = bytes.fromhex("e220a9808d0021") + bytes(
+            (0x20, obj_dma_base & 0xFF, (obj_dma_base >> 8) & 0xFF, 0x60)
+        )
+        if bytes(
+            m.read_memory(
+                "snesPrgRom", base_wrapper_offset, len(base_wrapper_code)
+            )
+        ) != bytes(len(base_wrapper_code)):
+            raise RuntimeError("base-delta OBJ forced-blank wrapper seam is no longer zero")
+        m.write_memory(
+            "snesPrgRom", base_wrapper_offset, base_wrapper_code.hex()
+        )
 
         cases = (
             ("stage1-wrap", 0x23, {4: 0xF9}, 0x2300),
@@ -428,8 +460,10 @@ def main() -> int:
         applied_map = bytes([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 0])
         m.write_memory("snesWorkRam", 0x72F0, displayed_map.hex())
         m.write_memory("snesWorkRam", 0x89F0, applied_map.hex())
+        m.write_memory("snesWorkRam", 0x8994, "0080")
         m.write_memory("snesWorkRam", 0x8996, "003f")
         m.write_memory("snesWorkRam", 0x72B2, "00a500400000a500800000")
+        m.write_memory("snesWorkRam", 0x7180, "00")
         run_rtl_helper(m, map_prepare, return_spin, m8=True)
         prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
         run_rtl_helper(m, map_commit, return_spin, m8=True)
@@ -460,8 +494,9 @@ def main() -> int:
         )
 
         # One source column can cross the two-slot gap without rotating the
-        # other populated columns.  The modal delta is zero, so the displayed
-        # basis and integrated fallback must remain unchanged.
+        # other populated columns.  The immutable image's slot/raw/phase tuple
+        # reconstructs the same absolute basis, so the displayed origin and
+        # integrated fallback remain unchanged.
         displayed_map = bytes(
             [8, 9, 10, 11, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 0, 0]
         )
@@ -470,10 +505,12 @@ def main() -> int:
         )
         m.write_memory("snesWorkRam", 0x72F0, displayed_map.hex())
         m.write_memory("snesWorkRam", 0x89F0, applied_map.hex())
+        m.write_memory("snesWorkRam", 0x8994, "00c0")
         m.write_memory("snesWorkRam", 0x8996, "3f00")
         m.write_memory("snesWorkRam", 0x72B3, "a5")
         m.write_memory("snesWorkRam", 0x72B5, "5b00")
         m.write_memory("snesWorkRam", 0x72B7, "c0a500000000")
+        m.write_memory("snesWorkRam", 0x7180, "00")
         run_rtl_helper(m, map_prepare, return_spin, m8=True)
         prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
         run_rtl_helper(m, map_commit, return_spin, m8=True)
@@ -507,8 +544,9 @@ def main() -> int:
         )
 
         # When thirteen populated columns rotate left by one physical slot,
-        # the same modal policy must commit exactly -32 pixels even though one
-        # detached column reports -96 and the two empty columns report zero.
+        # the new image's paired slot/raw/phase tuple reconstructs an absolute
+        # basis exactly -32 pixels from the predecessor.  Detached and empty
+        # columns cannot bias that result.
         displayed_map = bytes(
             [14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0]
         )
@@ -517,10 +555,12 @@ def main() -> int:
         )
         m.write_memory("snesWorkRam", 0x72F0, displayed_map.hex())
         m.write_memory("snesWorkRam", 0x89F0, applied_map.hex())
+        m.write_memory("snesWorkRam", 0x8994, "0080")
         m.write_memory("snesWorkRam", 0x8996, "3f00")
         m.write_memory("snesWorkRam", 0x72B3, "a5")
         m.write_memory("snesWorkRam", 0x72B5, "5b00")
         m.write_memory("snesWorkRam", 0x72B7, "c0a500000000")
+        m.write_memory("snesWorkRam", 0x7180, "00")
         run_rtl_helper(m, map_prepare, return_spin, m8=True)
         prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
         run_rtl_helper(m, map_commit, return_spin, m8=True)
@@ -529,7 +569,7 @@ def main() -> int:
         rows.append(
             {
                 "kind": "map-commit",
-                "name": "modal-populated-rotation-commits-one-slot",
+                "name": "paired-absolute-rotation-commits-one-slot",
                 "old_basis": 0xC0,
                 "expected_basis": 0xA0,
                 "observed_basis": committed[2],
@@ -596,6 +636,53 @@ def main() -> int:
                 "expected_hscroll": expected_hscroll,
                 "observed_hscroll": int(layer["hscroll"]),
                 "pass": int(layer["hscroll"]) == expected_hscroll,
+            }
+        )
+
+        # Exact regression from Chad's fence save state.  Its accumulated
+        # displayed basis had drifted to A0, while the immutable image's paired
+        # source-column-4 slot/raw/phase tuple proves the absolute basis is:
+        #   $01*32 + $66 - $26 = $60
+        # The centered result is then $40 + $60 - $66 = $3A.  A modal update
+        # against the same map would preserve stale A0 and expose a 64px band.
+        fence_map = bytes(
+            [0x0B, 0x0E, 0x0F, 0x00, 0x01, 0x02, 0x03, 0x04,
+             0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x07, 0x00]
+        )
+        m.write_memory("snesWorkRam", 0x72F0, fence_map.hex())
+        m.write_memory("snesWorkRam", 0x89F0, fence_map.hex())
+        m.write_memory("snesWorkRam", 0x8994, "0026")
+        m.write_memory("snesWorkRam", 0x8996, "003f")
+        m.write_memory("snesWorkRam", 0x72B2, "66a566")
+        m.write_memory("snesWorkRam", 0x72B7, "a0a5")
+        m.write_memory("snesWorkRam", 0x72B5, "cb00")
+        m.write_memory("snesWorkRam", 0x7180, "66")
+        run_rtl_helper(m, map_prepare, return_spin, m8=True)
+        prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        run_rtl_helper(m, map_commit, return_spin, m8=True)
+        run_helper(m, apply_scroll, return_spin)
+        layer = m.get_ppu_state()["layers"][0]
+        expected_hscroll = 0x3A
+        rows.append(
+            {
+                "kind": "apply-displayed-map-scroll",
+                "name": "fence-map-origin-does-not-double-add-crop",
+                "stale_displayed_map_scrollx": 0xA0,
+                "expected_displayed_map_scrollx": 0x60,
+                "observed_displayed_map_scrollx": int(
+                    m.read_memory("snesWorkRam", 0x72B7, 1)[0]
+                ),
+                "presented_scrollx": 0x66,
+                "regressed_hscroll": 0x7A,
+                "prepared_pending_basis": prepared.hex(),
+                "expected_hscroll": expected_hscroll,
+                "observed_hscroll": int(layer["hscroll"]),
+                "pass": (
+                    prepared[0] == 0xA5
+                    and prepared[2:4] == bytes((0x60, 0xA5))
+                    and int(m.read_memory("snesWorkRam", 0x72B7, 1)[0]) == 0x60
+                    and int(layer["hscroll"]) == expected_hscroll
+                ),
             }
         )
 
@@ -715,6 +802,210 @@ def main() -> int:
             }
         )
 
+        # BG1 is presented at 60 Hz while the foreground renderer can publish
+        # a new base OAM image less often.  Exercise the production immutable
+        # presentation buffer and compact world-object list directly.  The
+        # middle two records are playfield objects; the top score and bottom
+        # credit records must remain screen-fixed.  Both world records cross
+        # the packed ninth-X boundary so this also proves carry and borrow.
+        staged_oam = bytearray(0x220)
+        staged_oam[0x00:0x10] = bytes.fromhex(
+            "44081122"  # fixed top HUD: X=$044, Y=$08
+            "ff402233"  # world: X=$0FF, Y=$40
+            "00703344"  # world: X=$100, Y=$70 (high bit below)
+            "99d04455"  # fixed bottom HUD: X=$099, Y=$D0
+        )
+        staged_oam[0x200] = 0x10
+        m.write_memory("snesWorkRam", 0x8600, staged_oam.hex())
+        m.write_memory("snesWorkRam", 0x00E2, "0400")
+        m.write_memory("snesWorkRam", 0x7180, "20")
+        m.write_memory("snesWorkRam", 0x7183, "00" * 12)
+        m.write_memory("snesWorkRam", 0x72B3, "a51e")
+        m.write_memory("snesWorkRam", 0x89B8, "3412")
+        commit_state = run_rtl_helper(m, obj_commit, return_spin, m8=True)
+        committed_oam = bytes(m.read_memory("snesWorkRam", 0x6F60, 0x220))
+        committed_meta = bytes(m.read_memory("snesWorkRam", 0x7183, 12))
+        committed_list = bytes(m.read_memory("snesWorkRam", 0x6D40, 8))
+        commit_pass = (
+            committed_oam[0x00] == 0x44
+            and committed_oam[0x04] == 0x01
+            and committed_oam[0x08] == 0x02
+            and committed_oam[0x0C] == 0x99
+            and committed_oam[0x200] == 0x14
+            and committed_list == bytes.fromhex("0400000408000010")
+            and committed_meta[0:6] == bytes.fromhex("20a502020001")
+            and committed_meta[6] == 1
+            and committed_meta[7:9] == bytes.fromhex("3412")
+            and int(commit_state["x"]) & 0xFFFF == 0x1234
+            and int(commit_state["y"]) & 0xFFFF == 0x5678
+            and int(commit_state["sp"]) & 0xFFFF == 0x1FEF
+        )
+        rows.append(
+            {
+                "kind": "obj-presentation",
+                "name": "commit-compensates-world-and-fixes-hud",
+                "base_scrollx": 0x20,
+                "presented_scrollx": 0x1E,
+                "expected_compensation": 2,
+                "observed_world_x_low": [committed_oam[4], committed_oam[8]],
+                "observed_fixed_x_low": [committed_oam[0], committed_oam[12]],
+                "observed_high_table": committed_oam[0x200],
+                "world_list": committed_list.hex(),
+                "metadata": committed_meta.hex(),
+                "pass": commit_pass,
+            }
+        )
+
+        m.write_memory("snesWorkRam", 0x72B4, "22")
+        step_state = run_helper(m, obj_step, return_spin)
+        stepped_oam = bytes(m.read_memory("snesWorkRam", 0x6F60, 0x220))
+        stepped_meta = bytes(m.read_memory("snesWorkRam", 0x7183, 12))
+        step_pass = (
+            stepped_oam[0x00] == 0x44
+            and stepped_oam[0x04] == 0xFD
+            and stepped_oam[0x08] == 0xFE
+            and stepped_oam[0x0C] == 0x99
+            and stepped_oam[0x200] == 0x00
+            and stepped_meta[2] == 0xFE
+            and stepped_meta[5] == 1
+            and int(step_state["x"]) & 0xFFFF == 0x1234
+            and int(step_state["y"]) & 0xFFFF == 0x5678
+            and int(step_state["sp"]) & 0xFFFF == 0x1FF0
+        )
+        rows.append(
+            {
+                "kind": "obj-presentation",
+                "name": "step-borrows-world-and-fixes-hud",
+                "base_scrollx": 0x20,
+                "presented_scrollx": 0x22,
+                "expected_compensation": -2,
+                "observed_world_x_low": [stepped_oam[4], stepped_oam[8]],
+                "observed_fixed_x_low": [stepped_oam[0], stepped_oam[12]],
+                "observed_high_table": stepped_oam[0x200],
+                "metadata": stepped_meta.hex(),
+                "pass": step_pass,
+            }
+        )
+
+        # A camera-only step must avoid republishing all 544 OAM bytes.  Seed
+        # hardware OAM with the uncompensated image, advance the presentation
+        # through another packed-X carry, and execute the production compact
+        # publisher.  Only the ordered world low span and complete 32-byte high
+        # table may change; top/bottom HUD entries stay byte-identical.
+        m.write_memory("snesSpriteRam", 0, staged_oam.hex())
+        seeded_hardware = bytes(m.read_memory("snesSpriteRam", 0, 0x220))
+        m.write_memory("snesWorkRam", 0x7189, "00")
+        m.write_memory("snesWorkRam", 0x72B4, "1c")
+        run_helper(m, obj_step, return_spin)
+        camera_oam = bytes(m.read_memory("snesWorkRam", 0x6F60, 0x220))
+        camera_pending = int(m.read_memory("snesWorkRam", 0x7189, 1)[0])
+        partial_before = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x7199, 2), "little"
+        )
+        run_helper(m, partial_wrapper, return_spin)
+        hardware_oam = bytes(m.read_memory("snesSpriteRam", 0, 0x220))
+        partial_after = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x7199, 2), "little"
+        )
+        world_span = bytes(m.read_memory("snesWorkRam", 0x7195, 4))
+        partial_pass = (
+            camera_pending == 2
+            and world_span == bytes.fromhex("04000800")
+            and camera_oam[0x04:0x0C] != seeded_hardware[0x04:0x0C]
+            and hardware_oam[0x00:0x04] == seeded_hardware[0x00:0x04]
+            and hardware_oam[0x04:0x0C] == camera_oam[0x04:0x0C]
+            and hardware_oam[0x0C:0x10] == seeded_hardware[0x0C:0x10]
+            and hardware_oam[0x200:0x220] == camera_oam[0x200:0x220]
+            and partial_after == ((partial_before + 1) & 0xFFFF)
+        )
+        rows.append(
+            {
+                "kind": "obj-presentation",
+                "name": "camera-step-publishes-compact-world-span-only",
+                "expected_pending": 2,
+                "observed_pending": camera_pending,
+                "world_span": world_span.hex(),
+                "seeded_world_x_low": [seeded_hardware[4], seeded_hardware[8]],
+                "presentation_world_x_low": [camera_oam[4], camera_oam[8]],
+                "observed_world_x_low": [hardware_oam[4], hardware_oam[8]],
+                "observed_fixed_x_low": [hardware_oam[0], hardware_oam[12]],
+                "observed_high_table": hardware_oam[0x200],
+                "presentation_high_table": camera_oam[0x200],
+                "partial_dma_before": partial_before,
+                "partial_dma_after": partial_after,
+                "pass": partial_pass,
+            }
+        )
+
+        # Base commit calls the alignment step before NMI publishes its
+        # active-span union.  That step must not downgrade pending=3 to the
+        # narrower world-only camera DMA: doing so leaves a shrinking packed
+        # OAM tail visible as a detached pillar/crate-shaped artifact.
+        m.write_memory("snesWorkRam", 0x7189, "03")
+        m.write_memory("snesWorkRam", 0x72B4, "1b")
+        run_helper(m, obj_step, return_spin)
+        base_delta_pending = int(m.read_memory("snesWorkRam", 0x7189, 1)[0])
+        base_delta_oam = bytes(m.read_memory("snesWorkRam", 0x6F60, 0x220))
+        base_delta_preserved_pass = (
+            base_delta_pending == 3
+            and base_delta_oam[0x04:0x0C] != camera_oam[0x04:0x0C]
+        )
+        rows.append(
+            {
+                "kind": "obj-presentation",
+                "name": "alignment-preserves-renderer-base-delta-publication",
+                "expected_pending": 3,
+                "observed_pending": base_delta_pending,
+                "before_world_x_low": [camera_oam[4], camera_oam[8]],
+                "after_world_x_low": [base_delta_oam[4], base_delta_oam[8]],
+                "pass": base_delta_preserved_pass,
+            }
+        )
+
+        # A subsequent renderer base publishes the packed active low-OAM
+        # union (including HUD) plus the complete high table.  Bytes above the
+        # retained active span must remain untouched, proving that the new
+        # base path is genuinely compact rather than another 544-byte DMA.
+        base_image = bytearray(camera_oam)
+        base_image[0x00:0x10] = bytes.fromhex(
+            "12081122664022337770334488d04455"
+        )
+        base_image[0x200] = 0x55
+        seeded_base_hardware = bytearray(staged_oam)
+        seeded_base_hardware[0x10:0x14] = bytes.fromhex("aabbccdd")
+        m.write_memory("snesWorkRam", 0x6F60, base_image.hex())
+        m.write_memory("snesSpriteRam", 0, seeded_base_hardware.hex())
+        m.write_memory("snesWorkRam", 0x71A2, "1000")
+        base_before = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x7199, 2), "little"
+        )
+        run_helper(m, base_wrapper, return_spin)
+        base_hardware = bytes(m.read_memory("snesSpriteRam", 0, 0x220))
+        base_after = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x7199, 2), "little"
+        )
+        base_pass = (
+            base_hardware[0x00:0x10] == base_image[0x00:0x10]
+            and base_hardware[0x10:0x14] == seeded_base_hardware[0x10:0x14]
+            and base_hardware[0x200:0x220] == base_image[0x200:0x220]
+            and base_after == ((base_before + 1) & 0xFFFF)
+        )
+        rows.append(
+            {
+                "kind": "obj-presentation",
+                "name": "renderer-base-publishes-active-union-not-full-oam",
+                "active_union_span": 0x10,
+                "expected_low_prefix": base_image[0x00:0x10].hex(),
+                "observed_low_prefix": base_hardware[0x00:0x10].hex(),
+                "preserved_byte_above_span": base_hardware[0x10:0x14].hex(),
+                "expected_preserved_byte_above_span": seeded_base_hardware[0x10:0x14].hex(),
+                "observed_high_table": base_hardware[0x200:0x220].hex(),
+                "base_dma_before": base_before,
+                "base_dma_after": base_after,
+                "pass": base_pass,
+            }
+        )
+
     report = {
         "scope": (
             "isolated real-65816/PPU vertical-scroll bridge lab; synthetic "
@@ -736,6 +1027,10 @@ def main() -> int:
             "map_prepare": f"{map_prepare:06X}",
             "map_commit": f"{map_commit:06X}",
             "phase_publish": f"{phase_publish:06X}",
+            "obj_commit": f"{obj_commit:06X}",
+            "obj_step": f"{obj_step:06X}",
+            "obj_dma_partial": f"{obj_dma_partial:06X}",
+            "obj_dma_base": f"{obj_dma_base:06X}",
             "return_spin": f"{return_spin:06X}",
         },
         "rows": rows,

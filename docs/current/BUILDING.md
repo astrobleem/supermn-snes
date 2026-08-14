@@ -26,11 +26,11 @@ stat -c '%s' build/interp.sfc
 sha256sum build/interp.sfc
 ```
 
-At the latest August 12 engineering checkpoint, an ordinary build of current
-source is the unpromoted step-cap-extension line `11aefd2c…`; exact-v7 successor
-is `162b757c…`. Preserved predecessor `4eb9a408…`, the `a976…` ordinary
-playtest candidate, and VTIME diagnostics retain separate evidence scopes in
-[STATUS.md](STATUS.md).
+At the August 14 engineering checkpoint, an ordinary build of current source is
+the bounded human-test candidate `f25a0e68…`. The reviewed convenience copy is
+`build/Superman-Arcade-Edition-f25a0e68-test.sfc`; it is not a playable or
+release claim. Its exact hash, validation scope, rejected predecessors, and
+remaining blockers are recorded in [STATUS.md](STATUS.md).
 
 The normal ROM must be 4,194,304 bytes. Its hash depends on the exact source revision
 and private audio inputs; compare a release candidate only with the hash in

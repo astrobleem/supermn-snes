@@ -235,20 +235,23 @@ and incorrect physical-map coordinate rebases.
 
 This stricter contract reclassifies rejected `3a5f3694…` red. Its former gate
 looked only at the 49 source-change frames and called each three-pixel move green;
-the missing intervening coverage contains 48 held presentations. Current
-`21abe04c…` is exact-hash fresh-power green over 601 consecutive post-Start
-frames: 152 exact -3-pixel published source steps, 151 one-pixel plus 152
-two-pixel registrations, no holds/reversals/oversized steps, and no background
-discontinuities. All 15 displayed-map changes have zero residual pixel mismatch.
-The report and manually reviewed contact sheet are under
-`/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`.
-This result remains acceptance-`unknown`; it does not replace aligned MAME
-pixels, formal MAME-frame conservation, later stages, performance, hardware, or
-human combat/audio review.
+the missing intervening coverage contains 48 held presentations. Rejected
+`36d664e6…` proves the gate also catches liveness hidden by valid static images:
+its 601-frame run reports 303 held moving-camera transitions, zero presented
+motion for 456 pixels of source motion, and a frozen gameplay image. Current
+`f25a0e68…` completes its fresh consecutive gate across frames 5,704-6,304 with
+302 PPU steps, 151 source steps, and no temporal failure. The report must also require immutable presentation OAM, hardware
+OAM, compact world descriptors, fixed HUD bytes, hidden inactive slots, and
+world-X motion inverse to the presented camera delta. A focused or green report
+remains acceptance-`unknown`; it does not replace aligned MAME pixels, formal
+MAME-frame conservation, later stages, performance, hardware, or human
+combat/audio review.
 
 Nexen's 256x239 capture is normalized to the top 256x224 active display used by
-Mesen. A green player/input/health oracle must never be reported as visually
-green without the separate aligned-pixel and temporal gates.
+Mesen. X1/MAME's 384x240 image is registered by the canonical crop
+`(64,1)-(320,225)`; resizing the full 384-pixel image is invalid and caused the
+rejected `60481722…` diagnosis. A green player/input/health oracle must never be
+reported as visually green without the separate aligned-pixel and temporal gates.
 
 For root-cause diagnosis of a reported input-triggered visual failure, a retained
 same-emulator checkpoint may be continued with
@@ -330,13 +333,28 @@ build is not viable without a bounded cold-boot liveness smoke. The retained
 This proves exit from loading only; it is not a fresh gameplay campaign or visual
 acceptance.
 
-Current `21abe04c…` retains that vertical bridge and adds unwrapped modulo-32
-camera publication plus consensus-guarded physical-map basis commits. Its
-exact-hash focused bridge is green 16/16 under
-`/home/chad/supermn-snes-artifacts/active/21abe04c-build-diagnostics-v1/`.
-The bounded fresh-power framebuffer and temporal gates are both green under
-`/home/chad/supermn-snes-artifacts/active/21abe04c-fresh-neutral-poststart600-v1/`;
-they remain bounded renderer evidence, not aggregate gameplay acceptance.
+Current `f25a0e68…` retains that vertical bridge, unwrapped modulo-32 camera
+publication, absolute physical-map basis commits, and the compact world-OAM
+presentation contract. Its exact-hash focused bridge is green 22/22 under
+`/home/chad/supermn-snes-artifacts/active/f25a0e68-line0-dma-fix-v1/`.
+The exact rejected ACK=`$0100` state additionally proves that the 16-bit
+frame-ready gate clears pending OAM and resumes renderer publication. The
+supplied fence checkpoint's X1/SNES landmark comparison is horizontally aligned.
+Its 64 KiB work state is not MAME tick-3718 aligned (2,291 differing bytes), so
+that comparison is renderer-only cross-hash evidence and software X1 is not a
+MAME oracle.
+
+The current fresh gate starts the recorder at exact frame 5,500 using checked
+`advance_to` chunks; a single large Mesen `run_frames` call can return early and
+must not establish an input boundary. Organic coin/Start consumes one credit,
+and replay retains all post-Start frames 5,704-6,304. Machine evaluation is
+clear with zero graphics, blank-field, repeated-tile, or vertical-band failures.
+The same 601 authenticated images pass temporal continuity with 302 PPU steps,
+151 source steps, and no wrong registration/discontinuity. Before this longer
+gate, the exact frame-5,250 probe requires slot 2 owner `$19AE` and all 128 native
+record bytes to match; current `f25a0e68…` is green. Sol reviewed the contact
+sheet and frames 100/300/600. This remains bounded diagnostic evidence, not
+aligned MAME-frame conservation or full-playthrough acceptance.
 
 Legacy Mesen writes screenshots through global filenames. Parallel capture
 processes can therefore copy one another's PNGs even when their emulator states
