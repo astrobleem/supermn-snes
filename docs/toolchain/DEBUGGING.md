@@ -108,6 +108,16 @@ any other `$400000,x` fast-path READ whose An can be ROM.
 
 ## 2. Poppy assembler gotchas (65816, `.pasm`)
 
+The host's `/home/chad/poppy` remains old upstream `fa44a809…`. Chad's corrected
+fork at [astrobleem/poppy](https://github.com/astrobleem/poppy), `main`
+`0d84bf5d…` on 2026-08-15, contains five commits beyond that checkout and directly
+addresses #376, #377, #379, and #380. Superman deliberately adopted that pinned
+fork for the `d01db972…` lineage using checkout
+`/home/chad/poppy-astrobleem-0d84bf5d` and CLI DLL SHA-256 `771916f2…993a`.
+The corrected compiler exposed real latent overlap and illegal-addressing defects;
+the source and pack guards were repaired before the bounded exact-hash run. The
+hazards below remain required regression guards even with the fixes.
+
 1. **`.org` overlap is SILENT — last org wins per byte, no error.** A section that grows
    past the next `.org` gets truncated/overwritten without warning. This produced our
    worst bug (a handler chain grew past `$F601`; the `.org $F602` section assembled over

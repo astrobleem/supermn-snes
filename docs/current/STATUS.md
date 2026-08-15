@@ -1,6 +1,6 @@
 # Authoritative Superman project status
 
-Last evidence review: August 14, 2026.
+Last evidence review: August 15, 2026.
 
 This is the only authoritative project-status summary. Dated reports under
 `docs/history/` retain the evidence and failed experiments behind it, but their
@@ -12,10 +12,121 @@ The port is an **interactive technical-demo response candidate**. It has **no
 promoted human-test ROM** and is **not playable, release-ready, or shippable**.
 
 The current ordinary `build/interp.sfc`, SHA-256
+`d01db972b1c764a5969d40bb84649d2db7df7c92a03c3b3eb5407f0ad9f73b28`, is an
+**unpromoted, renderer-red response candidate**. It is pinned at
+`/home/chad/supermn-snes-artifacts/active/d01db972-fixed-poppy-camera-mailbox-v1/rom/`
+and is not a handoff or human-test ROM.
+
+This is the first deliberate build made with Chad's corrected Poppy fork,
+`astrobleem/poppy` commit `0d84bf5d…`; the exact CLI DLL hashes to
+`771916f2…993a`. The corrected assembler rejected real latent source defects that
+old upstream accepted: `.org` overwrites and illegal long-address forms. The
+source and pack guards now repair those defects. Fixed-fork assembly was clean,
+bank audit was green, and the retained MAME semantic gates are 160/160 optest and
+782/782 opsweep. These are static/semantic results, not renderer acceptance.
+
+The exact-hash fresh gate retained 602 consecutive post-Start frames, fresh video
+frames 5,723-6,324, after organic credit and Start. It records no runtime memory
+writes. Sol opened the centered boot logo, title, credit prompt, the first flagged
+frame, gameplay frames 100/300/444/600, and the complete contact sheet. The wall
+and floor remain structurally continuous, but the result is red:
+
+- four BG pattern records are visibly truncated at physical slots 42, 84, 126,
+  and 168, exactly the final record at every 42-record `$1500` DMA boundary;
+- five camera transitions are held, and the internal OBJ gate records repeated
+  one-frame camera/OAM disagreement while the sole presentation buffer is marked
+  constructing (`valid=0`, pending `$80`);
+- aligned MAME pixels, facing/animation order, attack, fence behavior, later
+  stages, performance, audio, hardware, and human acceptance remain unchecked.
+
+The BG cause is confirmed without another boot replay. An intervened reload of
+the retained relative-frame-41 checkpoint changed only the WRAM mirror's chunk
+constant from `$1500` to `$1400`; 80 frames later all four records matched their
+expected hashes exactly, halt remained zero, and Sol opened the intact resulting
+frame. Current source contains that `$1400` correction and matching pack guard,
+but **no successor ROM has been built**. Therefore `d01db972…` remains the current
+ordinary ROM and the lab is diagnostic evidence only. The next renderer work is
+to retain a last-published OAM path while a new candidate is constructed, then
+build once and rerun bounded exact-hash gates. No full gameplay replay was started.
+
+Exact evidence is under
+`/home/chad/supermn-snes-artifacts/active/d01db972-fixed-poppy-camera-mailbox-v1/`,
+especially `fresh-poststart-601-v2/`, `fresh-poststart-601-v2/obj-forensic-v1/`,
+and `fresh-poststart-601-v2/bg-chunk-1400-lab-v3/`.
+
+## Retained August 14 renderer evidence
+
+The detailed `c14c0184…` and predecessor narrative below is retained for
+provenance. Any use of “current” in that retained subsection is superseded by the
+August 15 checkpoint above.
+
+The candidate repairs a deterministic cold-boot stack corruption in rejected
+`927a2879...`. `bg_offset_table_init` jumped to hard-coded `$E9:EC73`, 27 bytes
+before the assembled `bg_offset_table_build_canonical` at `$E9:EC8E`. Execution
+entered the middle of `bg_column_occupied`, ran unmatched `PLY/PLX/PLP/RTS`, and
+permanently skipped `boot_screen_init`. The source now targets the symbol and the
+packer derives and asserts the assembled long-jump bytes. Exact-hash tracing sees
+`boot_screen_init` at frame 14, five boot DMA publications, Mode 7, brightness 15,
+layers `$11`, and no forced blank. Sol opened boot frames 1,250 and 1,500: the SA-1
+logo is centered, not clipped against the left edge.
+
+An authenticated fresh-power movie then reaches title, accepts an organic credit
+and Start, and retains 601/601 consecutive post-Start frames 5,705-6,305 (ticks
+277-577) with halt zero. The movie has a real port-1 controller and 6,305/6,305
+controller rows. The strict zero-grace visual report correctly marks the normal
+entry fade at relative frames 0-86; authenticated offline reanalysis is structurally
+clear for frames 100-600. Sol opened the contact sheet, title, credit, frames
+100/200/296/304/305/500/600, and the later 457-490 interval. The wall, floor,
+column, HUD, and sprites remain whole, without the reproduced screen-spanning
+black void.
+
+Motion acceptance is nevertheless **red**. The exact fresh temporal reducer sees
+459 pixels of source motion but only 438 pixels of PPU motion, with 77 held PPU
+transitions while the source camera moves. Scene-generation coherence also fails:
+published OAM reaches age 16 against a maximum of four. At the first main failure,
+source motion begins at frame 6,001, a 16-record OBJ-pattern batch becomes due at
+6,003, drains 7+7+2 records, and the first moving OAM base is not published until
+6,009; the displayed background therefore holds for seven frames while Superman's
+animation advances. This is a real visible-latency failure, not a missing-background
+failure. Root-cause artifacts are under the current candidate directory; no full
+gameplay campaign was started.
+
+The exact structural root was destructive incremental column relocation. The old
+path cleared both the old and new physical 32-pixel tilemap slots, updated the
+source-to-slot lookup, then asked the source-code cache to repopulate the new slot.
+Unchanged cells were cache hits, so no tilemap words were rewritten; each layout
+transition permanently removed another 112-word slot. The current path copies the
+complete four-tile-column by 32-row slot before clearing the old slot. Its runtime
+fixture also proves the source retained, destination identical, and all unrelated
+4 KiB tilemap bytes unchanged.
+
+The old pause/step temporal report for `72838eca...` is retained as red but is not a
+natural-cadence oracle: its acquisition could pause before the same PPU frame's NMI
+finished and then advance through two presentations. A separate uninterrupted trace
+proved a real NMI ownership defect. Merely pending DMA0 work could suppress the
+presenter, and the OBJ-pattern batch deliberately suppressed it on additional
+VBlanks. `f8ab5339...` removed the pending-descriptor proxy but retained missing
+presentation frames; `ebdd33c5...` moved presentation too late and produced duplicate
+BG/OBJ publications on 15 frames. Both are rejected evidence.
+
+Predecessor `927a2879...` publishes at the leading edge of a batch-due NMI, sets the
+once-per-NMI marker there, and then tail-calls the historical wake path. The
+fail-closed uninterrupted reducer is component-green across exact consecutive PPU
+frames 6,012-6,088: one BG step and one OBJ publication on each of 77 frames, no
+missing or duplicate ranges, 54 cursor writes, and maximum successive cursor delta
+two pixels. Sol coalesced the lossless delta-frame GIF and reviewed all 65 retained
+framebuffers plus initial/final PNGs; the wall, floor, HUD, column, and Superman stay
+present without a black vertical bar or palette corruption. This is a migrated
+cross-ROM checkpoint diagnostic. It does not establish correct MAME motion,
+fresh-power behavior, aligned pixels, state equivalence, later-stage behavior,
+performance, or full playback. Those gates remain unknown, and no full gameplay
+campaign was started.
+
+The immediately preceding ordinary ROM,
 `f25a0e684180cd0d1998f85569deae05cef0e8e89ab0f0188134f32f388ab835`, is
-unverified handoff output and is rejected as a human-test candidate. Live testing
-found the SA-1 boot logo shifted/clipped against the far left edge and Superman's
-walking presentation visibly opposite the requested motion. The former
+rejected as a human-test candidate. Live testing found the SA-1 boot logo
+shifted/clipped against the far left edge and Superman's walking presentation
+visibly opposite the requested motion. The former
 `build/Superman-Arcade-Edition-f25a0e68-test.sfc` convenience copy has been
 demoted to rejected evidence. Historical and diagnostic output is preserved under
 `/home/chad/supermn-snes-artifacts/`; the exact rejection record is
@@ -28,6 +139,21 @@ title/credit/Start, left/right walking, attack motion, scroll continuity, fence
 collision/break/passage, aligned full-composite MAME/SNES frames, intervening-frame
 conservation, and recorded Sol artifact review. Missing, narrow, `unknown`, red,
 cross-hash, or mutated evidence blocks promotion.
+
+Renderer recovery is now governed by
+[`RENDERER_CONSOLIDATION.md`](RENDERER_CONSOLIDATION.md). The current design has
+separate acquisition, BG, OBJ, tile-DMA, motion, and boot-owner tokens rather than
+one atomic displayed-scene generation. The rejected boot regression demonstrates
+that weakness: gameplay BG presentation can write `BG1HOFS` while the boot marker
+still grants Mode-7 ownership, shifting only the logo while boot OBJ text stays
+centered. Boot/gameplay ownership and a single complete-scene commit are required
+architectural invariants. The retained rejected-hash run also proves BG/OAM
+cross-generation motion: at tick 476 BG follows live camera 103 while hardware
+OAM still owns sequence 457/base camera 160 and is translated 57 pixels without
+new pose or animation data. The response candidate restricts BG motion to the last
+complete hardware-OAM base. The current bounded uninterrupted cadence component is
+green, but queue latency, MAME facing, animation order, and fresh exact-hash coverage
+remain open.
 
 The physical-map correction now uses an absolute basis paired with each
 immutable exact image:
@@ -81,7 +207,8 @@ remain continuous without a black vertical seam. Evidence is under
 That report did not machine-gate boot-logo geometry, walking direction, facing, or
 animation order. Its machine `clear` therefore remains a narrow background/cache
 result, not a whole-ROM visual result. Chad's subsequent live boot screenshot and
-walking observation reject `f25a0e68…`; no successor has been built yet.
+walking observation reject `f25a0e68…`; the current response candidate does not
+inherit any of that ROM's exact-hash acceptance evidence.
 
 Chad's supplied old-hash fence checkpoint remains focused cross-ROM diagnostic
 evidence. Current renderer code and the two logged provenance bytes produce

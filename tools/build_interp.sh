@@ -4,7 +4,10 @@
 set -euo pipefail
 export DOTNET_ROOT=/home/chad/.dotnet10
 export PATH="$DOTNET_ROOT:$PATH"
-POPPY=/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll
+POPPY=${POPPY_DLL:-/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll}
+[ -f "$POPPY" ] || { echo "Poppy DLL not found: $POPPY" >&2; exit 1; }
+echo "Poppy DLL: $POPPY"
+sha256sum "$POPPY"
 cd "$(dirname "$0")/.."
 dotnet "$POPPY" -t snes -I . -o src/interp.bin -s src/interp.sym src/interp.pasm
 # video subsystem + TAD sound module. Poppy has no .include, so concatenate: video.pasm (supervisor)

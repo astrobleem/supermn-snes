@@ -345,10 +345,15 @@ def main() -> int:
         )
         handles[queue_control_handle] = "queue_control_write"
         m.drain_notifications(timeout=0.05)
-        m.tool(
-            "set_input",
-            {"port": 0, "buttons": args.input_buttons, "hold": True},
-        )
+        # Neutral is already the emulator's reset/default controller state.
+        # Do not send Nexen's persistent ``hold`` form in that case: legacy
+        # Mesen's MCP ``set_input`` contract requires an explicit frame count
+        # and otherwise rejects the profile before the checkpoint can run.
+        if args.input_buttons:
+            m.tool(
+                "set_input",
+                {"port": 0, "buttons": args.input_buttons, "hold": True},
+            )
         remaining = args.frames
         while remaining:
             count = min(args.chunk_frames, remaining)

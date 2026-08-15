@@ -27,6 +27,10 @@ VMADDL=$2116
 VMADDH=$2117
 VMDATAL=$2118
 VMDATAH=$2119
+WMDATA=$2180
+WMADDL=$2181
+WMADDM=$2182
+WMADDH=$2183
 M7SEL=$211A
 M7A=$211B
 M7B=$211C
@@ -51,6 +55,13 @@ A1T0H=$4303
 A1B0=$4304
 DAS0L=$4305
 DAS0H=$4306
+DMAP5=$4350
+BBAD5=$4351
+A1T5L=$4352
+A1T5H=$4353
+A1B5=$4354
+DAS5L=$4355
+DAS5H=$4356
 SHADOW_PAL=$2000
 SHADOW_D0=$3000
 SHADOW_COD=$4000
@@ -80,6 +91,9 @@ BG_USED_BITMAP=$2E00     ; transient live-tilemap slot bitmap (192 bytes)
 BG_OFFSET_TABLE=$7500    ; 512 words: arcade cell byte offset -> SNES TL map byte offset
 BG_FREE_COUNT=$89C2      ; number of entries currently available in BG_FREE_LIST
 BG_REVERSE_CODE=$D000    ; 192 words: physical BG slot -> active cached code (0 = free)
+OBJ_RECORD_CODE_CACHE=$4800 ; prior-frame packed-record code by OAM index (128 words)
+OBJ_RECORD_TILE_CACHE=$4900 ; matching persistent physical OBJ tile by OAM index
+OBJ_REVERSE_CODE=$4A00    ; physical OBJ slot -> last uploaded 14-bit arcade code
 BG_REVERSE_MARK=$89D0    ; $B7C5 after bg_hclr reserved blank physical slot zero
 RENDER_QUEUE_STATE=$89D2 ; 0 empty, 1 complete, 2 NMI/foreground owns queue storage
 RENDER_QUEUE_DROPS=$89D4 ; deadline reached both still-full queue entries
@@ -115,17 +129,27 @@ BG_LATEST_SCROLLX=$72B2     ; coherent 30 Hz center-column target, independent o
 BG_LATEST_SCROLL_VALID=$72B3 ; $A5 after the first paced source-scroll publication
 BG_PRESENTED_SCROLLX=$72B4  ; 60 Hz cursor: advances at most two pixels per NMI
 BG_PRESENTED_HOFS=$72B5     ; 10-bit fallback/debug coordinate; exact maps derive H from map+camera
-BG_DISPLAYED_MAP_SCROLLX=$72B7 ; continuous physical basis, seeded from source column 4
+BG_DISPLAYED_MAP_SCROLLX=$72B7 ; low-byte mirror of the exact nine-bit basis
 BG_DISPLAYED_MAP_VALID=$72B8 ; $A5 only after a completed exact-map tilemap DMA
 BG_MAP_COMMIT_PENDING=$72B9 ; $A5 only while bg_upload's 4 KiB descriptor is pending
 BG_LATEST_SCROLL_RAW=$72BA ; center-column byte before modulo-32 unwrapping
-BG_MAP_PENDING_BASIS=$72BB ; absolute physical basis paired with pending tilemap
+BG_MAP_PENDING_BASIS=$72BB ; low-byte mirror of the pending nine-bit basis
 BG_MAP_PENDING_VALID=$72BC ; $A5 only when pending basis metadata is exact
 BG_COLUMN_Y_DIRECT=$72C0    ; source-column Y bytes paired with the direct cache
 BG_COLUMN_Y_PRIMARY=$72D0   ; source-column Y bytes paired with queue 1
 BG_COLUMN_Y_SECONDARY=$72E0 ; source-column Y bytes paired with queue 2
 BG_COLUMN_MAP_DISPLAYED=$72F0 ; source->physical slots paired with displayed VRAM map
 BG_OPT_TABLE=$7300          ; 32 H words + 32 V words, DMAed to VRAM word $7800
+BG_OPT_CANDIDATE=$7380      ; next complete table; compared before touching VRAM
+OBJ_TILE_BATCH_INDEX=$74A0  ; next queued native OBJ record owned by NMI
+OBJ_TILE_BATCH_DUE=$74A2    ; word marker $A55A while queue storage is NMI-owned
+OBJ_TILE_BATCH_LAST_LINE=$74A4 ; diagnostic low OPVCT byte for the latest record
+OBJ_TILE_BATCH_COUNT=$74A6  ; completed batch count
+BG_OPT_TABLE_VALID=$74AA    ; word marker $A55A only after the VRAM DMA completed
+OBJ_PREFETCH_VALID=$74AC    ; $A55B=group DMA, $A55A=record DMA, $5AA5=ROM fallback
+OBJ_PREFETCH_GROUP_META=$74AE ; low=first eight-slot group, high=complete group count
+OBJ_PREFETCH_STAGE=$C000    ; private $7E:C000-$CBFF; up to three exact OBJ groups
+BG_COLUMN_MAP_CANDIDATE=$74B0 ; accepted exact map normalized around source column 4
 BG_C0BC_TOKEN=$7492       ; token paired with the accepted direct BG image
 RQ_C0BC_TOKEN=$7494       ; token paired with the primary queued image
 RQ2_C0BC_TOKEN=$7496      ; token paired with the secondary queued image
@@ -155,7 +179,14 @@ OBJ_PRESENTED_THIS_NMI=$719B ; $A5 when DMA service already advanced BG/OBJ this
 OBJ_LAST_SKIP_LINE=$719D ; low OPVCT byte for a budget miss; $FF means outside VBlank
 OBJ_ACTIVE_LOW_SPAN=$71A0 ; low-OAM bytes occupied by the currently published base
 OBJ_BASE_LOW_SPAN=$71A2 ; union of old/new active low-OAM bytes for a base delta
-RENDER_QUEUE_CODE_BYTES=$0286 ; build guard proves this matches the final promoter span
+BG_DISPLAYED_MAP_BASIS16=$71A4 ; normalized-map origin modulo 512 pixels
+BG_PENDING_MAP_BASIS16=$71A6 ; origin owned by the pending tilemap DMA
+BG_LATEST_SCROLLX16=$71A8 ; unwrapped 9-bit live camera phase
+BG_PRESENTED_SCROLLX16=$71AA ; 9-bit 60 Hz camera paired with visible BG/OAM
+BG_DIRECT_SCROLLX16=$71AC ; phase paired with the direct immutable packet
+RQ_SCROLLX16=$71AE       ; phase paired with primary queue storage
+RQ2_SCROLLX16=$71B0      ; phase paired with secondary queue storage
+RENDER_QUEUE_CODE_BYTES=$02E6 ; build guard proves this matches the final promoter span
 OBJ_HASH_CODE=$5000    ; 1024 authoritative code words in retired snapshot WRAM
 OBJ_HASH_SLOT=$5800    ; parallel physical-slot words; complete table ends at $6000
 RQ2_SEQ=$B000           ; secondary compact-only slot occupies production-unused
@@ -173,8 +204,10 @@ RQ2_BG_VALUES=$B820     ; corresponding pairs below $0200 bytes; ends before $BC
 ; $7E:5000-$74FF formerly held an abandoned double-buffer snapshot design.
 ; The widened OBJ hash owns $5000-$5FFF; title staging uses $6000-$6D3F;
 ; $6D40-$719B is the immutable OAM presentation image/manifest/provenance; and
-; $72A0-$737F holds the exact per-column-Y/Mode-2 bridge.  The remaining space
-; stays private renderer scratch and must not alias queue payloads.
+; $72A0-$737F holds the applied per-column-Y/Mode-2 bridge. $7380-$73FF is its
+; candidate table and $74A0-$74AB owns bounded NMI tile-batch/cache markers.
+; $7E:C000-$CBFF is the bounded OBJ pre-VBlank staging window.  The remaining
+; space stays private renderer scratch and must not alias queue payloads.
 STAGING_CGRAM=$8000
 TITLE_TEXT_META=$89BE ; palette dirty bit 15 = overloaded title composition uses BG2
 TITLE_FONT_MARK=$89DC ; $A55B after coherent BG2 font/map VRAM has been initialized
@@ -338,10 +371,7 @@ vid_frame:
     ; across it made fast SA-1 pacing produce an almost permanently black screen.
     ; Each upload routine now brackets only its actual DMA with forced blank via
     ; dma0_blank_pulse.  Nine NOP bytes preserve every downstream pinned address.
-    nop
-    nop
-    nop
-    nop
+    jsl.l obj_prefetch_begin|$E90000
     nop
     nop
     nop
@@ -1649,10 +1679,12 @@ rc_l:
     ;     was the DataTable segment-offset skew in tad_glue.pasm (see DATA_SEGMENT_SKEW). ---
     rep #$30             ; 16-bit A/X (guaranteed, independent of plp/vid_init) for the long stores
     lda #$0000
+renderer_mailboxes_init:
     sta $410122          ; pacing snapshot arm = inactive until the organic production gate
     sta $41012A          ; vblank epoch + last-release epoch = 0
     sta $41012C          ; cadence marker + 5A22-ready byte = 0
     sta $410130          ; bounded catch-up debt = 0
+    sta $410162          ; early camera raw byte + valid marker = 0
     ldx #$001e
 tad_bssclr:
     sta $7e1f00,x        ; TAD BSS + private supervisor state $1F00..$1F1F -> 0
@@ -1693,15 +1725,15 @@ bg_tile_run_dma_chunks:
 .a16
 btr_chunk_loop:
     lda $D6
-    cmp #$1501
+    cmp #$1401
     bcc btr_final_chunk
     sec
-    sbc #$1500
+    sbc #$1400
     pha
     sep #$20
 .a8
     stz DAS0L
-    lda #$15             ; 5.25 KiB: retain two 128-byte records after BG/OBJ presentation
+    lda #$14             ; 5 KiB: retain four 128-byte records after BG/OBJ presentation
     sta DAS0H
     jsr dma0_blank_pulse
     rep #$20
@@ -1776,6 +1808,12 @@ spd_line_ok:
     ; finish.  A VBlank edge during a long DMA can, however, vector a nested
     ; NMI immediately when DMA releases the CPU; clearing first prevents that
     ; NMI from replaying the same descriptor recursively until stack overflow.
+    ; VMADDR is a shared write-only PPU latch, not part of channel 0's retained
+    ; descriptor.  A due OBJ-pattern batch may have changed it while this 4 KiB
+    ; BG-map publication waited for a safe leading edge.  Restore the map's
+    ; word-$0000 target from its exact ownership marker before starting DMA0;
+    ; otherwise map words overwrite live OBJ patterns with striped garbage.
+    jsl.l dma0_restore_map_vmaddr|$E90000
     stz $1F11
     lda #$01
     sta MDMAEN
@@ -1894,53 +1932,16 @@ boot_mode7_tick_end:
 ; OAM byte 2 is tile bits 0-7 and attribute bit 0 is tile bit 8.  obj_T maps
 ; physical slot s to T=2*(s&7)+32*(s>>3), so the inverse below is:
 ;   s = ((T & $01E0) >> 2) | ((T & $000E) >> 1)
-; The protected old-only slots deliberately remain outside both the rebuilt
-; hash and free list for this reclamation.  A later high-water pass releases
-; them after replacement OAM has become the displayed image.
+; The fixed island tail-calls the extended helper below.  Every protected slot
+; with authenticated reverse ownership is retained in the rebuilt hash as well
+; as excluded from the free list.  Merely quarantining old-only displayed slots
+; orphaned their reusable codes: later frames allocated duplicate slots and
+; repeatedly re-uploaded the same common HUD/player records.
 .org $8B40
 .a16
 .i16
 obj_cache_protect_displayed:
-    rep #$30
-    lda $7E89B2          ; active entries in the currently displayed OAM image
-    cmp #$0080
-    bcc ocpd_count_ready
-    lda #$0080           ; defensive clamp for checkpoint/corruption recovery
-ocpd_count_ready:
-    asl a
-    asl a
-    sta $D4              ; OAM low-table byte limit
-    ldx #$0000
-ocpd_loop:
-    cpx $D4
-    beq ocpd_done
-    stx $D6              ; no absolute-long,Y encoding: retain the OAM cursor
-    lda $7E8602,x        ; tile low byte + attribute byte
-    and #$01FF
-    sta $D0
-    and #$000E
-    lsr a
-    sta $D2
-    lda $D0
-    and #$01E0
-    lsr a
-    lsr a
-    ora $D2
-    tax
-    sep #$20
-.a8
-    lda #$01
-    sta $7E2E00,x        ; quarantine the displayed physical slot
-    rep #$20
-.a16
-    ldx $D6
-    inx
-    inx
-    inx
-    inx
-    bra ocpd_loop
-ocpd_done:
-    rts
+    jml.l obj_cache_protect_displayed_extended|$E90000
 obj_cache_protect_displayed_end:
 
 ; Advance the one-shot identity-matrix zoom. Matrix entries are eight bytes
@@ -2092,9 +2093,12 @@ ptw_try_queue2:
     jsl.l $E9B140
     bra ptw_snapshot_busy
 ptw_queue_full:
-    lda $7E89D4
-    inc a
-    sta $7E89D4          ; explicit overflow evidence; candidate stays unacked
+    jsl.l $E9EA40        ; replace only a dependency-free latest clean packet
+    nop
+    nop
+    nop
+    nop
+    nop
     bra ptw_snapshot_busy
 ptw_snapshot_direct:
     jsr pacing_snapshot_direct
@@ -2285,6 +2289,8 @@ irq_pacing_wram:
 .i16
 nmi_video_keepalive:
     jsr boot_mode7_tick
+    lda $1F1B
+    bmi nvk_done         ; boot/Mode-7 still owns every BG1 presentation register
     lda $7E719B
     cmp #$A5
     bne nvk_not_presented
@@ -2311,6 +2317,15 @@ nmi_video_keepalive_end:
 .a8
 .i16
 nmi_present_then_wake:
+    rep #$20
+.a16
+    lda $7E74A2
+    cmp #$A55A
+    sep #$20
+.a8
+    bne nptw_no_batch
+    jml.l $E9D160       ; service safe OBJ records, present, then tail-call wake
+nptw_no_batch:
     lda $7E7184
     cmp #$A5
     bne nptw_wake
@@ -2323,20 +2338,33 @@ nmi_present_then_wake_end:
 ; WRAM address while moving gameplay presentation ahead of controller sampling.
 ; The DMA service must remain immediately adjacent to pacing_try_wake because
 ; its initial large publication depends on that exact leading-edge sample.
-; Its internal early path sets OBJ_PRESENTED_THIS_NMI; the common guard below
-; then becomes a no-op before tail-calling the historical controller reader.
+; The actual DMA consumer and OBJ-pattern batch set OBJ_PRESENTED_THIS_NMI when
+; they consume this VBlank.  A merely pending DMA0 descriptor is not evidence
+; that either happened: large tilemaps can wait many frames for a safe entry.
+; Always consult the marker through nmi_present_before_dma, so an unserviced
+; pending descriptor cannot freeze BG/OBJ presentation.
 .org $8FD0
 .a8
 .i16
 nmi_present_then_sample:
-    lda $1F11
-    beq npts_present
-    lda #$A5
-    sta $7E719B          ; keep BG/OBJ together when tile DMA consumed this VBlank
+    jsl.l nmi_obj_tile_batch_dispatch|$E90000
+                         ; bounded channel-5 OBJ-pattern batch after the wake decision
+    jsl.l $E9CD20       ; marker, not pending state, owns the once-per-NMI decision
     jmp pacing_sample_joy
-npts_present:
-    jsl.l $E9CD20
-    jmp pacing_sample_joy
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop                  ; retain the fixed $8FE9 sound-island seam
 nmi_present_then_sample_end:
 
 ; Split a normal three-pixel 30 Hz target into two then one pixels on the two
@@ -2760,7 +2788,7 @@ obj_cache_prepare:
     nop                  ; JSR+NOP is the replaced four-byte long load
     cmp #$A55A
     beq obj_cache_ready
-    jsr obj_hclr
+    jsr obj_hclr_cached
     lda #$FFFF           ; force the first OBJ tile upload even if random WRAM mimics count zero
     sta $7E8988
     lda #$A55A
@@ -2770,7 +2798,7 @@ obj_cache_ready:
 
 obj_cache_restart:
     rep #$30
-    jsr obj_hclr         ; a full stale cache cannot map this frame coherently
+    jsr obj_hclr_cached  ; invalidate record-position accelerators with the slot map
     lda #$FFFF           ; slot meanings changed; the rebuilt staging must be uploaded
     sta $7E8988
     lda #$A55A
@@ -3133,6 +3161,10 @@ spp_generation_done:
 spp_paced_done:
     rts
 
+; Retired inline copy of snapshot_dma_plane.  It grew through $A00F and the
+; later $A000 OBJ helper silently overwrote its tail under old Poppy builds.
+; The live helper is pinned at $F200 below the boot-screen code.
+.if 0
 ; Copy one 1024-byte plane within physical BW-RAM bank 1.  SA-1 DMA cannot
 ; transfer BW-RAM directly to BW-RAM, so four synchronous 256-byte chunks pass
 ; through IRAM $0100-$01FF.  $0200 is immediately after this helper's staging
@@ -3204,6 +3236,7 @@ sdp_chunk:
     rep #$20
 .a16
     rts
+.endif
 
 ; Clear the widened authoritative OBJ hash.  Its 1,024 code buckets and parallel
 ; slot words occupy $7E:5000-$5FFF, reclaimed from the abandoned snapshot
@@ -3251,13 +3284,17 @@ obj_slot_fast_full_reset_ext:
     sta $7E89CA
     lda $7E89C6
     sta $7E89CC
-    jsr obj_hclr
+    jsr obj_hclr_cached
     lda #$FFFF
     sta $7E8988
     lda #$A55A
     sta $7E8980
     lda #$0000
     sta $7E89CE
+    lda $7E89BA
+    bpl osfre_discard_fast
+    pla                  ; packed path has the record-position cache's return too
+osfre_discard_fast:
     pla                  ; discard obj_slot_fast's JSR return, retain saved P
     jmp vof_pal_cache_ready
 
@@ -3604,6 +3641,27 @@ bcrc_reverse_clear:
     rts
 bg_cache_reset_counts_end:
 
+; Any wholesale OBJ hash reset can reassign physical tile slots.  Clear the
+; record-position code keys first; a zero key is always a miss because visible
+; code zero is rejected before lookup.  The cached tile words then need no
+; separate clear.  This lives in the ordinary $7F renderer mirror so every
+; existing same-bank JSR remains contention-free.
+.org $A2B2
+.a16
+.i16
+obj_hclr_cached:
+    rep #$30
+    lda #$0000
+    ldx #$0000
+ohcc_loop:
+    sta $7E4800,x
+    inx
+    inx
+    cpx #$0100
+    bne ohcc_loop
+    jmp obj_hclr
+obj_hclr_cached_end:
+
 ; A complete 5A22 capture atomically accepts the current producer touch set.
 ; Call with A=0 in the same WRAM execution bank; the JSR+NOP replaces the old
 ; four-byte `sta $410140` at each packed acceptance seam without moving code.
@@ -3785,7 +3843,7 @@ vof_hi_clear:
     inx
     cpx #$0020
     bne vof_hi_clear
-    jsr obj_fast_prepare
+    jsr obj_fast_prepare_prefetched
     stz $E0              ; compact-list byte cursor
     stz $E2              ; compact OAM entry count
     stz $E6              ; palette-slot count
@@ -4063,6 +4121,17 @@ ohf_dynamic_loop:
     rts
 vid_obj_fast_end:
 
+; The current frame's early plan always clears/publishes this private word
+; before the later OAM pass.  Keeping the hot test in low WRAM lets this entire
+; mirror-local dispatcher fit the nine-byte seam before $A600.
+obj_fast_prepare_prefetched:
+    lda $1F20
+    beq ofpp_fallback
+    rts
+ofpp_fallback:
+    jmp obj_fast_prepare
+obj_fast_prepare_prefetched_end:
+
 ; Conditional direct-snapshot transfers.  These run only while pacing_try_wake
 ; owns arm=$0003 and the SA-1 is asleep, with channel 7 already configured for
 ; $41 -> $7E WRAM-port DMA.  Persistent caches make unchanged palette/BG planes
@@ -4281,6 +4350,57 @@ bic_coordinates:
 bic_overflow:
     sec
     rts
+bg_incremental_core_end:
+
+; The packed manifest preserves stable record order across adjacent scenes.
+; Reuse the physical tile resolved for the same OAM index when its 14-bit code
+; is unchanged.  Full hash/reclamation resets clear the code keys above, and
+; the existing same-frame last-code shortcut still wins for adjacent repeats.
+.org $A760
+.a16
+.i16
+obj_slot_record_cached:
+    rep #$30
+    lda $C4
+    cmp $F8
+    beq osrc_done
+    sta $F8
+    lda $E2
+    asl a
+    tax
+    lda $7E4800,x
+    cmp $C4
+    bne osrc_miss
+    lda $7E4900,x
+    sta $E4
+    rts
+osrc_miss:
+    jsr obj_slot_fast
+    lda $E2
+    asl a
+    tax
+    lda $C4
+    sta $7E4800,x
+    lda $E4
+    sta $7E4900,x
+osrc_done:
+    rts
+obj_slot_record_cached_end:
+
+; A defensive OBJ upload-queue overflow restarts the renderer by discarding its
+; nested lookup frames.  Packed records add the cache helper between the lookup
+; and renderer, so unwind that one additional return when bit 15 identifies the
+; packed manifest.  Entry is by JSR from obj_tile_queue's fixed-size failure arm.
+obj_queue_restart_cached:
+    pla                  ; this helper's return
+    pla                  ; obj_tile_queue's return
+    pla                  ; obj_slot/obj_slot_fast's return
+    lda $7E89BA
+    bpl oqrc_restart
+    pla                  ; obj_slot_record_cached's packed-only return
+oqrc_restart:
+    jmp obj_cache_restart
+obj_queue_restart_cached_end:
 
 ; X1-001 exposes independent vertical scroll for each 32-pixel column, while
 ; the SNES BG1 register is global. Stage 2 uses several simultaneous values, so
@@ -4939,7 +5059,7 @@ btr_shift:
     ; A producer-prepared transition can coalesce tens of KiB into one native
     ; run.  A single DMA of that size outlives VBlank and Mesen correctly
     ; rejects the visible-period tail, leaving noisy pattern data.  Transfer
-    ; full 5.25 KiB chunks on separate NMI edges.  DMA0 advances A1T0 and VMADD
+    ; full 5 KiB chunks on separate NMI edges.  DMA0 advances A1T0 and VMADD
     ; automatically; only the remaining byte count must survive the NMI, so
     ; keep it on the protected 5A22 stack rather than in clobberable DP scratch.
     jmp bg_tile_run_dma_chunks
@@ -4973,9 +5093,9 @@ obj_tile_queue:
     sta $7E89CA
     lda $7E89C6
     sta $7E89CC
-    pla                  ; discard obj_tile_queue's and obj_slot's JSR returns
-    pla                  ; while retaining the renderer's saved status frame
-    jmp obj_cache_restart ; defensive: restart coherently instead of overrunning scratch
+    jsr obj_queue_restart_cached
+    nop
+    nop                  ; fixed-size arm; helper never returns
 otq_capacity:
     sep #$20
 .a8
@@ -4991,8 +5111,8 @@ otq_capacity:
     lda $7E89C6
     inc a
     sta $7E89C6
-    jsr obj_T            ; obj_slot must still return the top-left OAM tile in E4
-    rts
+    jml.l obj_tile_queue_publish_reverse|$E90000
+                         ; tail helper records ownership, then obj_T returns to caller
 
 obj_cache_full:
     rep #$30
@@ -5007,30 +5127,50 @@ obj_cache_full:
     jmp obj_cache_restart
 
 obj_upload_queued:
-    rep #$30
-    ldy #$0000
-ouq_loop:
-    tya
-    cmp $7E89C6
-    beq ouq_done
-    tax
-    sep #$20
-.a8
-    lda $7E2D00,x
-    rep #$20
-.a16
-    and #$00FF
-    sta $D8
-    tya
-    asl a
-    tax
-    lda $7E2F00,x
-    sta $C4
-    phy
-    jsr obj_tile_dma_direct
-    ply
-    iny
-    bra ouq_loop
+    ; This caller executes from the $7F renderer mirror, while the extended
+    ; helper lives beyond that mirror in ROM.  A bank-local JMP lands in
+    ; unrelated $7F:D5C0 WRAM and wedges the 5A22; cross both seams explicitly.
+    jml.l obj_upload_queued_extended|$E90000
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+.org $AC99              ; preserve checkpoint/caller addresses below the retired loop
 ouq_done:
     lda $DE
     sta $7E8988          ; retain the existing cache-count telemetry
@@ -5284,7 +5424,7 @@ ocp_reclaim:
 ; lookup avoids a long-lived tombstone tax after this rare transition.
 obj_cache_reclaim_fast:
     rep #$30
-    jsr obj_hclr
+    jsr obj_hclr_cached
     ldy #$0000
 ocr_rehash_loop:
     tya
@@ -5428,10 +5568,12 @@ vop_palette_ready:
     lda $F6
     and #$3FFF
     sta $C4
-    cmp $F8
-    beq vop_slot_ready
-    sta $F8
-    jsr obj_slot_fast
+    jsr obj_slot_record_cached
+    nop
+    nop
+    nop
+    nop
+    nop                  ; retain vop_slot_ready and every downstream seam
 vop_slot_ready:
     jsr obj_oam_fast
     inc $E2
@@ -6094,7 +6236,8 @@ bg_write_cell_end:
 
 .org $B780
 bg_column_map_update:
-    rep #$30
+    jml.l $E9EA93        ; canonical/incremental implementation in the free ROM island
+    nop                  ; retain bcmu_map_compare and every pinned fallback address
     ; The 16 captured physical slots are the complete placement contract.
     ; Stage 3 can change its upper-position mask while retaining the exact
     ; same slot map (for example $C03F -> $C07E).  Treating that kind-only
@@ -6159,9 +6302,16 @@ bg_column_map_update_end:
 ; Table index is the source byte offset (2*(column*32+offset)); value is the
 ; top-left byte offset in the split two-nametable SNES map.
 bg_offset_table_build:
-    rep #$30
-    lda $7E8996
-    sta $7E89DE
+    jml.l bg_offset_table_build_canonical|$E90000
+                         ; normalize exact maps before entering the established table builder;
+                         ; keep the bank explicit but resolve the moving helper symbolically
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+                         ; retain botb_copy_map and all downstream fixed addresses
     ldx #$0000
 botb_copy_map:
     lda $7E89E0,x
@@ -6171,10 +6321,11 @@ botb_copy_map:
     cpx #$0010
     bne botb_copy_map
 
+botb_duplicate_prepare:
     ; Cache whether two source columns share one physical slot.  Testing only
     ; when the layout changes keeps ordinary dirty-frame dispatch constant
     ; time while allowing bg_column_map_update to preserve X1 source order.
-    stz $7E89DA
+    jsr clear_bg_duplicate_flag_long
     lda $7E8996
     cmp #$FFFE
     bcs botb_duplicate_done
@@ -6183,7 +6334,7 @@ botb_duplicate_outer:
     ldx $D2
     sep #$20
 .a8
-    lda $7E89E0,x
+    lda $7E89F0,x
     sta $D0
     rep #$20
 .a16
@@ -6193,7 +6344,7 @@ botb_duplicate_inner:
     beq botb_duplicate_next
     sep #$20
 .a8
-    lda $7E89E0,x
+    lda $7E89F0,x
     cmp $D0
     beq botb_duplicate_found8
     rep #$20
@@ -6203,9 +6354,23 @@ botb_duplicate_inner:
 botb_duplicate_found8:
     rep #$20
 .a16
+    ; Reused slots are hazardous only when both source columns contain live
+    ; cells.  Exact X1 layouts legitimately leave multiple empty control
+    ; columns mapped to slot zero.
+    stx $D4
+    ldx $D2
+    jsr bg_column_occupied
+    bcc botb_duplicate_inactive
+    ldx $D4
+    jsr bg_column_occupied
+    bcc botb_duplicate_inactive
     lda #$0001
     sta $7E89DA
     bra botb_duplicate_done
+botb_duplicate_inactive:
+    ldx $D4
+    inx
+    bra botb_duplicate_inner
 botb_duplicate_next:
     inc $D2
     lda $D2
@@ -6223,7 +6388,7 @@ botb_column:
     tyx
     sep #$20
 .a8
-    lda $7E89E0,x        ; coherent floor(true X / 32), including the ninth bit
+    lda $7E89F0,x        ; canonical physical slot represented by this WRAM tilemap
     rep #$20
 .a16
     and #$00FF
@@ -6641,6 +6806,27 @@ cbuf_obj_scroll_primary:
 cbuf_obj_scroll_done:
     rep #$20
 .a16
+    ; The byte mirrors above remain sufficient for compact OBJ compensation,
+    ; but BG registration must retain which half of the 512-pixel tilemap the
+    ; immutable packet belongs to.  Keep the full phase in parallel queue
+    ; metadata; selector zero is the retired snapshot path and has no consumer.
+    lda $7E74D0
+    beq cbuf_scroll16_done
+    cmp #$0001
+    beq cbuf_scroll16_direct
+    cmp #$0002
+    beq cbuf_scroll16_primary
+    lda $7E71A8
+    sta $7E71B0
+    bra cbuf_scroll16_done
+cbuf_scroll16_direct:
+    lda $7E71A8
+    sta $7E71AC
+    bra cbuf_scroll16_done
+cbuf_scroll16_primary:
+    lda $7E71A8
+    sta $7E71AE
+cbuf_scroll16_done:
     lda $D2
     tay                  ; return kind while restoring caller scratch
     pla
@@ -6726,7 +6912,8 @@ bcmu_same_layout:
     bne bcmu_same_clear_token
     jmp bcmu_c0bc_prepare
 bcmu_same_clear_token:
-    stz $7E7498
+    lda #$0000
+    sta.l $7E7498
 bcmu_same_generation:
     ; A newly copied prepared image is back in logical source-column order even
     ; when the physical layout itself did not change.  Rearrange it only after
@@ -6839,7 +7026,7 @@ pbmr_direct_exact:
     sta $7E7498          ; resident tilemap now represents this accepted token
     lda #$9000
     sta $D0
-    lda #$3606
+    lda #$89F0          ; canonical source->slot map represented by BG_OFFSET_TABLE
     sta $D4
     lda #$9000
     sta $D8
@@ -6880,16 +7067,19 @@ pbmr_nonidentity8:
     rep #$20
 .a16
 
-    stz $7E7488          ; row byte offset within one 32x32 nametable
+    lda #$0000
+    sta.l $7E7488        ; row byte offset within one 32x32 nametable
 pbmr_row_loop:
-    stz $7E748A          ; word byte offset within the 128-byte joined row
+    lda #$0000
+    sta.l $7E748A        ; word byte offset within the 128-byte joined row
 pbmr_row_copy:
+    lda.l $7E748A
+    tax
     lda $7E7488
     clc
     adc $7E748A
     tay
     lda [$D8],y
-    ldx $7E748A
     sta $7E7400,x
     lda #$0000
     sta [$D0],y
@@ -6901,18 +7091,19 @@ pbmr_row_copy:
     adc #$0800
     tay
     lda [$D8],y
-    ldx $7E748A
     sta $7E7440,x
     lda #$0000
     sta [$D0],y
 
-    inc $7E748A
-    inc $7E748A
-    lda $7E748A
+    lda.l $7E748A
+    inc a
+    inc a
+    sta.l $7E748A
     cmp #$0040
     bne pbmr_row_copy
 
-    stz $7E748C          ; source column 0..15
+    lda #$0000
+    sta.l $7E748C        ; source column 0..15
 pbmr_column_loop:
     lda $7E748C
     asl a
@@ -6928,7 +7119,8 @@ pbmr_column_loop:
     lda $7E7406,x
     sta $7E7486
 
-    ldy $7E748C
+    lda.l $7E748C
+    tay
     sep #$20
 .a8
     lda [$D4],y
@@ -6978,8 +7170,9 @@ pbmr_quad3:
     sta [$D0],y
 
 pbmr_column_next:
-    inc $7E748C
-    lda $7E748C
+    lda.l $7E748C
+    inc a
+    sta.l $7E748C
     cmp #$0010
     beq pbmr_columns_done
     jmp pbmr_column_loop
@@ -7138,7 +7331,7 @@ bou_source_occupied:
     ldx $D8
     sep #$20
 .a8
-    lda $89E0,x
+    lda $89F0,x         ; vertical phase follows the canonical resident tilemap slot
     rep #$20
 .a16
     and #$00FF
@@ -7186,7 +7379,7 @@ bou_source_next:
     lda #$0000
     ldx #$0000
 bou_h_clear:
-    sta $7300,x
+    sta $7380,x
     inx
     inx
     cpx #$0040
@@ -7219,16 +7412,22 @@ bou_v_loop:
     and #$00FF
     ora #$2000           ; vertical offset enabled for BG1 only
     ldx $D8
-    sta $7340,x
+    sta $73C0,x
     inc $D8
     inc $D8
     lda $D8
     cmp #$0040
     bne bou_v_loop
 
-    ; Publish the hidden BG3 offset map, then select Mode 2.  The established
-    ; DMA helper waits until this complete 128-byte descriptor has run, so a
-    ; later renderer DMA cannot overwrite it before publication.
+    ; Compare the complete candidate before touching VRAM.  Static scrolling
+    ; ordinarily produces an identical table, so do not spend a VBlank and a
+    ; foreground wait republishing the same 128 bytes.
+    jsr bg_opt_table_changed
+    bcc bou_select_mode2
+
+    ; Publish the changed hidden BG3 offset map, then select Mode 2.  The
+    ; established DMA helper waits until the complete descriptor has run, so
+    ; the validity marker cannot get ahead of VRAM.
     sep #$20
 .a8
     lda #$00
@@ -7258,6 +7457,13 @@ bou_v_loop:
     sta DAS0L
     stz DAS0H
     jsr dma0_blank_pulse
+    rep #$20
+.a16
+    lda #$A55A
+    sta $7E74AA
+    sep #$20
+.a8
+bou_select_mode2:
     lda #$02
     sta BGMODE
 
@@ -7331,10 +7537,10 @@ bg_hscroll_full:
 bg_hscroll_full_end:
 
 ; Publish the absolute physical-column basis prepared for this exact tilemap only
-; after its DMA completes.  One X1 source column can detach across the two-slot
-; gap while the other thirteen populated columns do not rotate.  The preparer
-; therefore pairs one captured column's slot and raw coordinate with the camera
-; phase captured for the same immutable image; no cumulative map delta survives.
+; after its DMA completes.  The normalized 16-slot map can rotate by eight
+; 32-pixel slots.  Its origin is therefore nine bits: retaining only the old
+; low byte aliases +256 to zero and exposes the two deliberately unused slots.
+; The legacy low-byte mirror remains for diagnostics and old-state inspection.
 .org $C340
 .a16
 .i16
@@ -7342,6 +7548,8 @@ bg_scroll_map_commit:
     php
     rep #$30
     lda $D0
+    pha
+    lda $D2
     pha
     phx
     sep #$20
@@ -7356,36 +7564,29 @@ bg_scroll_map_commit:
     bne bsmc_invalidate
     lda #$00
     sta $7E72BC
-    lda $7E72B8
-    cmp #$A5
-    bne bsmc_install
-    lda $7E72B3
-    cmp #$A5
-    bne bsmc_install
-    lda $7E72BB
-    sec
-    sbc $7E72B7
-    beq bsmc_install
-    bpl bsmc_positive
     rep #$20
 .a16
-    ora #$FF00           ; sign-extend the modulo-256 coarse camera delta
-    bra bsmc_add
-bsmc_positive:
-.a8
-    rep #$20
-.a16
-    and #$00FF
-bsmc_add:
-    clc
-    adc $7E72B5
-    and #$03FF
-    sta $7E72B5
-bsmc_install:
+    lda $7E71A6
+    and #$01FF
+    sta $7E71A4          ; full normalized-map origin becomes authoritative
+    sta $D0
     sep #$20
 .a8
-    lda $7E72BB
-    sta $7E72B7
+    sta $7E72B7          ; retain the historical low-byte mirror
+    rep #$20
+.a16
+    lda $7E71AA
+    and #$01FF
+    sta $D2
+    lda $D0
+    sec
+    sbc $D2
+    clc
+    adc #$0040
+    and #$01FF
+    sta $7E72B5          ; exact integrated/debug coordinate, not a byte delta
+    sep #$20
+.a8
     lda #$A5
     sta $7E72B8
     rep #$20
@@ -7405,10 +7606,19 @@ bsmc_invalidate:
     lda #$00             ; keep the invalidation in WRAM regardless of caller DBR
     sta $7E72B8
     sta $7E72BC
+    rep #$20
+.a16
+    lda #$0000
+    sta $7E71A4
+    sta $7E71A6
+    sep #$20
+.a8
 bsmc_restore8:
     rep #$20
 .a16
     plx
+    pla
+    sta $D2
     pla
     sta $D0
     plp
@@ -7416,15 +7626,15 @@ bsmc_restore8:
 bg_scroll_map_commit_end:
 
 ; Return the BG1 horizontal coordinate in A16.  Exact layouts place source
-; columns according to the coarse camera paired with the tilemap actually in
-; VRAM ($72B7).  A newer presented camera must be expressed relative to that
+; columns according to the nine-bit basis paired with the tilemap actually in
+; VRAM ($71A4).  A newer presented camera must be expressed relative to that
 ; displayed map, making those two values the sole visible-coordinate authority:
 ;
-;   H = 64 + signed8(displayed_map_coarse - presented)
+;   H = 64 + displayed_basis9 - presented_phase9 (mod 512)
 ;
-; Do not trust the accumulated $72B5 coordinate once displayed-map authority
-; is valid.  If it drifts by four 32-pixel slots, the map's two deliberately
-; unused physical columns become a visible 64-pixel black band.
+; A one-byte basis is insufficient: normalized map rotations of eight slots
+; differ by 256 pixels but have the same low byte.  That alias was the direct
+; cause of the screen-spanning black bands in rejected 860cca6d....
 ; Legacy/irregular maps retain their established full-position arithmetic.
 .a16
 .i16
@@ -7453,19 +7663,20 @@ bg_compute_hscroll_logic:
     lda $7E72B8
     cmp #$A5
     bne bch_integrated_fallback
-    lda $7E72B7
-    sec
-    sbc $7E72B4
     rep #$20
 .a16
-    and #$00FF
-    cmp #$0080
-    bcc bch_exact_delta_ready
-    ora #$FF00
-bch_exact_delta_ready:
+    lda $7E71A4
+    and #$01FF
+    sta $D0
+    lda $7E71AA
+    and #$01FF
+    sta $D2
+    lda $D0
+    sec
+    sbc $D2
     clc
     adc #$0040
-    and #$03FF
+    and #$01FF
     rts
 bch_integrated_fallback:
     rep #$20
@@ -7525,11 +7736,13 @@ bg_compute_hscroll_logic_end:
 
 ; Pair the staged exact tilemap with an absolute physical-map basis before DMA
 ; begins.  The accepted source-column map at $89F0, raw column-4 coordinate at
-; $8995, and unwrapped phase at $7180 were captured with the same immutable
-; image.  Thus slot4*32 + phase - raw is an absolute basis that cancels both an
-; isolated gap crossing and a whole-layout gap rotation.  The rejected modal
-; accumulator could retain a false +64 across later Stage-1 maps.  This runs in
-; the foreground upload path; NMI installs only the already-computed byte.
+; $8995/$8996, and the full phase at $71AC were captured with the same immutable
+; image.  The true raw coordinate combines the low byte with source column 4's
+; bit in the exact upper-position mask.  Keeping both operands at nine bits is
+; essential: rejected 92134860... widened only the destination while feeding
+; it byte phases, moving the map/presentation between opposite 256-pixel halves
+; and exposing the two unused physical columns.  NMI installs the result only
+; after the matching tilemap DMA completes.
 .org $C600
 .a8
 .i16
@@ -7567,107 +7780,46 @@ bg_scroll_map_prepare:
 bsmp_exact:
     sep #$20
 .a8
-    lda $7E72B8
-    cmp #$A5
-    bra bsmp_seed        ; exact maps never inherit a cumulative modal error
-bsmp_seed:
     lda $7E89F4          ; first exact map: source column 4 is the camera anchor
+    rep #$20
+.a16
+    and #$00FF
     asl a
     asl a
     asl a
     asl a
     asl a
-    sta $7E72BB
-    lda $7E72B3
-    cmp #$A5
-    bne bsmp_seed_valid
-    lda $7E7180          ; phase captured with this accepted immutable image
-    sec
-    sbc $7E8995          ; raw column-4 coordinate from that same image
+    sta $D0
+    lda $7E71AC          ; full phase captured with this immutable direct packet
+    and #$01FF
     clc
-    adc $7E72BB
-    sta $7E72BB
-bsmp_seed_valid:
+    adc $D0
+    sta $D0
+    sep #$20
 .a8
+    lda $7E8995          ; raw column-4 coordinate from that same image
+    rep #$20
+.a16
+    and #$00FF
+    sta $D2
+    lda $7E8996          ; source-column-4 true-X high bit is mask bit 4
+    and #$0010
+    beq bsmp_raw_ready
+    lda $D2
+    ora #$0100
+    sta $D2
+bsmp_raw_ready:
+    lda $D0
+    sec
+    sbc $D2
+    and #$01FF
+    sta $7E71A6
+    sep #$20
+.a8
+    sta $7E72BB          ; retain the historical low-byte mirror
     lda #$A5
     sta $7E72BC
     bra bsmp_restore
-
-bsmp_modal:
-    rep #$20
-.a16
-    stz $D0              ; outer source-column index
-    stz $D6              ; best modulo-16 delta
-    stz $D8              ; best occurrence count
-bsmp_outer:
-    ldx $D0
-    sep #$20
-.a8
-    lda $7E89F0,x
-    sec
-    sbc $7E72F0,x
-    and #$0F
-    sta $D2              ; candidate delta
-    lda #$00
-    sta $DA              ; candidate occurrence count
-    rep #$20
-.a16
-    stz $D4              ; inner source-column index
-bsmp_inner:
-    ldx $D4
-    sep #$20
-.a8
-    lda $7E89F0,x
-    sec
-    sbc $7E72F0,x
-    and #$0F
-    cmp $D2
-    bne bsmp_no_count
-    inc $DA
-bsmp_no_count:
-    rep #$20
-.a16
-    inc $D4
-    lda $D4
-    cmp #$0010
-    bcc bsmp_inner
-    sep #$20
-.a8
-    lda $DA
-    cmp $D8
-    bcc bsmp_next
-    beq bsmp_next         ; first strict maximum wins deterministic ties
-    sta $D8
-    lda $D2
-    sta $D6
-bsmp_next:
-    rep #$20
-.a16
-    inc $D0
-    lda $D0
-    cmp #$0010
-    bcc bsmp_outer
-
-    sep #$20
-.a8
-    lda $D8
-    cmp #$09             ; sparse/unrelated maps have no trustworthy rotation
-    bcs bsmp_modal_ready
-    jmp bsmp_seed
-bsmp_modal_ready:
-.a8
-    lda $D6
-    and #$07              ; slot delta * 32, modulo the stored low byte
-    asl a
-    asl a
-    asl a
-    asl a
-    asl a
-    clc
-    adc $7E72B7
-    sta $7E72BB
-    lda #$A5
-    sta $7E72BC
 bsmp_restore:
     rep #$20
 .a16
@@ -7697,35 +7849,39 @@ bg_scroll_map_prepare_end:
 .a8
 .i16
 bg_scroll_phase_publish:
-    sta $7E72BA
-    lda $7E72B3
-    cmp #$A5
-    bne bspp_first
-    lda $7E72BA
-    sec
-    sbc $7E72B2
-    and #$1F
-    cmp #$10
-    bcc bspp_delta_ready
-    ora #$E0             ; sign-extend the modulo-32 negative half
-bspp_delta_ready:
-.a8
-    clc
-    adc $7E72B2
-    sta $7E72B2
-    rtl
-bspp_first:
-.a8
-    lda $7E72BA
-    sta $7E72B2
-    sta $7E72B4
-    jsl.l $E9C1A0
-    sep #$20
-.a8
-    lda #$A5
-    sta $7E72B3
-    rtl
+    jml.l $E9CF50
 bg_scroll_phase_publish_end:
+
+; Return carry clear only when both the applied-VRAM marker and all 64 words
+; match.  On change, copy the complete candidate to the channel-0 source before
+; returning carry set; the caller marks it valid only after DMA completion.
+.org $C760
+.a16
+.i16
+bg_opt_table_changed:
+    rep #$30
+    lda $7E74AA
+    cmp #$A55A
+    bne botc_copy
+    ldx #$0000
+botc_compare:
+    lda $7E7380,x
+    cmp $7E7300,x
+    bne botc_copy
+    inx
+    inx
+    cpx #$0080
+    bne botc_compare
+    clc
+    rts
+botc_copy:
+    lda #$007F
+    ldx #$7380
+    ldy #$7300
+    mvn $7E,$7E
+    sec
+    rts
+bg_opt_table_changed_end:
 
 ; Seed the integrated presentation coordinate from the accepted map before the
 ; valid marker becomes visible.  This is a one-time initialization; ordinary
@@ -7777,80 +7933,17 @@ bspi_store:
 bg_scroll_present_init_end:
 
 ; Advance both representations once per NMI.  The byte cursor follows the
-; shortest signed route to the latest camera target.  The integrated 10-bit
-; HOFS moves in the opposite direction by the same bounded one/two-pixel step.
+; shortest signed route to the camera owned by hardware OAM's complete base
+; scene.  It must not follow BG_LATEST_SCROLLX: that live value can be nineteen
+; game ticks newer than the published OAM, translating an old Superman pose
+; against a new camera and producing the reported glide/moonwalk.  The
+; integrated 10-bit HOFS moves in the opposite direction by the same bounded
+; one/two-pixel step.
 .org $C200
 .a16
 .i16
 bg_scroll_present_step:
-    php
-    rep #$30
-    lda $D0
-    pha
-    sep #$20
-.a8
-    lda $7E72B3
-    cmp #$A5
-    bne bspr_restore8
-    lda $7E72B2
-    sec
-    sbc $7E72B4
-    beq bspr_restore8
-    bmi bspr_negative
-    cmp #$02
-    bcc bspr_positive_ready
-    lda #$02
-bspr_positive_ready:
-    rep #$20
-.a16
-    and #$00FF
-    sta $D0
-    sep #$20
-.a8
-    clc
-    adc $7E72B4
-    sta $7E72B4
-    rep #$20
-.a16
-    lda $7E72B5
-    sec
-    sbc $D0
-    bra bspr_store_h
-bspr_negative:
-.a8
-    eor #$FF
-    inc a
-    cmp #$02
-    bcc bspr_negative_ready
-    lda #$02
-bspr_negative_ready:
-.a8
-    rep #$20
-.a16
-    and #$00FF
-    sta $D0
-    sep #$20
-.a8
-    lda $7E72B4
-    sec
-    sbc $D0
-    sta $7E72B4
-    rep #$20
-.a16
-    lda $7E72B5
-    clc
-    adc $D0
-bspr_store_h:
-    and #$03FF
-    sta $7E72B5
-bspr_restore:
-    pla
-    sta $D0
-    plp
-    rtl
-bspr_restore8:
-    rep #$20
-    bra bspr_restore
+    jml.l $E9CD60
 bg_scroll_present_step_end:
 
 ; A producer-prepared ($FFFE) queue entry carries an exact logical tilemap,
@@ -8637,22 +8730,22 @@ nmi_gameplay_present_end:
 .a8
 .i16
 nmi_present_before_dma:
+    lda $1F1B
+    bmi npbd_boot_obj
     lda $7E719B
-    bmi npbd_done        ; the only armed value is $A5; save two bytes for full counters
-    ; FRAME_REQ/ACK are 16-bit sequences.  Reading only ACK's low byte made
-    ; $0100 look like the power-on value and deadlocked an OAM base publication:
-    ; foreground waited on due=3 while every NMI skipped BG/OBJ presentation.
-    ; Suppress gameplay presentation only while both complete counters are the
-    ; true all-zero boot value.  At 16-bit wrap a new request releases the gate.
-    lda $3300
-    ora $3301
-    ora $3302
-    ora $3303
-    beq npbd_done
+    bmi npbd_done        ; the only armed value is $A5
     jsl.l $E9CD00
     lda #$A5
     sta $7E719B
 npbd_done:
+    rtl
+npbd_boot_obj:
+    ; The first gameplay worker commits a complete immutable OAM image and
+    ; waits for NMI before its final PPU flush can retire temporary Mode-7
+    ; ownership.  Blocking that DMA behind the boot marker deadlocks both
+    ; sides.  Service OBJ only: gameplay BG scroll/register writes remain
+    ; forbidden until ppu_dma_flush_ack_finish clears bit7 of $1F1B.
+    jsl.l $E9CA80
     rtl
 nmi_present_before_dma_end:
 
@@ -8675,6 +8768,97 @@ nmi_bg_reapply:
     plp
     rtl
 nmi_bg_reapply_end:
+
+.org $CD60
+.a16
+.i16
+bg_scroll_present_step_full:
+    php
+    rep #$30
+    lda $D0
+    pha
+    sep #$20
+.a8
+    lda $7E72B3
+    cmp #$A5
+    bne bsprf_early_restore8
+    lda $7E7194
+    cmp #$A5
+    bne bsprf_early_restore8
+    lda $7E72B2          ; coherent live target; old/new OAM bases compensate to this phase
+    sec
+    sbc $7E72B4
+    beq bsprf_early_restore8
+bsprf_step_due:
+    bmi bsprf_negative
+    cmp #$02
+    bcc bsprf_positive_ready
+    lda #$02
+bsprf_positive_ready:
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0
+    sep #$20
+.a8
+    clc
+    adc $7E72B4
+    sta $7E72B4
+    rep #$20
+.a16
+    lda $7E71AA
+    clc
+    adc $D0
+    and #$01FF
+    sta $7E71AA
+    lda $7E72B5
+    sec
+    sbc $D0
+    bra bsprf_store_h
+bsprf_early_restore8:
+    rep #$20
+.a16
+    jmp bsprf_restore
+bsprf_negative:
+.a8
+    eor #$FF
+    inc a
+    cmp #$02
+    bcc bsprf_negative_ready
+    lda #$02
+bsprf_negative_ready:
+    rep #$20
+.a16
+    and #$00FF
+    sta $D0
+    sep #$20
+.a8
+    lda $7E72B4
+    sec
+    sbc $D0
+    sta $7E72B4
+    rep #$20
+.a16
+    lda $7E71AA
+    sec
+    sbc $D0
+    and #$01FF
+    sta $7E71AA
+    lda $7E72B5
+    clc
+    adc $D0
+bsprf_store_h:
+    and #$03FF
+    sta $7E72B5
+bsprf_restore:
+    pla
+    sta $D0
+    plp
+    rtl
+bsprf_restore8:
+    rep #$20
+    bra bsprf_restore
+bg_scroll_present_step_full_end:
 
 ; Prepare the compact base-publication span from obj_present_commit's active
 ; entry count in direct-page $D0.  Kept out of the fixed $C800-$C8FF commit
@@ -8702,7 +8886,8 @@ obsp_union_ready:
     sta $7E71A0          ; persistent active span for the following commit
     ldx $D6
 obsp_hide_inactive:
-    cpx $7E71A2
+    txa
+    cmp.l $7E71A2
     bcs obsp_done
     sep #$20
 .a8
@@ -8733,7 +8918,7 @@ nmi_present_arbitrate:
     ; a new quiescent camera sample available; sampling only when a tile was
     ; already pending produced an inconsistent 2/2/hold cadence whenever the
     ; queue happened to be empty at this leading edge.
-    lda $410122
+    jml.l nmi_camera_mailbox_intake|$E90000
     cmp #$01
     bne npa_not_due
     lda $410130
@@ -8771,6 +8956,2042 @@ npa_done:
     rtl
 nmi_present_arbitrate_end:
 
+; Keep the live and presented camera phases in their native 512-pixel domain.
+; The raw X1 byte can jump across the two-slot gap, so retain only its signed
+; modulo-32 movement; apply that same delta to the nine-bit word and mirror its
+; low byte for compact OBJ compensation.  bg_scroll_present_step advances the
+; presented word by the same one/two-pixel decision as its byte mirror.
+.org $CF50
+.a8
+.i16
+bg_scroll_phase_publish_full:
+    sta $7E72BA
+    php
+    rep #$30
+.a16
+    lda $D0
+    pha
+    sep #$20
+.a8
+    lda $7E72B3
+    cmp #$A5
+    bne bsppf_first
+    lda $7E72BA
+    sec
+    sbc $7E72B2
+    and #$1F
+    cmp #$10
+    bcc bsppf_delta_ready
+    ora #$E0             ; sign-extend the modulo-32 negative half
+bsppf_delta_ready:
+    rep #$20
+.a16
+    and #$00FF
+    cmp #$0080
+    bcc bsppf_delta16_ready
+    ora #$FF00
+bsppf_delta16_ready:
+    sta $D0
+    lda $7E71A8
+    clc
+    adc $D0
+    and #$01FF
+    sta $7E71A8
+    sep #$20
+.a8
+    sta $7E72B2
+    bra bsppf_restore8
+bsppf_first:
+    lda $7E72BA
+    sta $7E72B2
+    sta $7E72B4
+    rep #$20
+.a16
+    and #$00FF
+    sta $7E71A8
+    sta $7E71AA
+    jsl.l $E9C1A0
+    sep #$20
+.a8
+    lda #$A5
+    sta $7E72B3
+bsppf_restore8:
+    rep #$20
+.a16
+    pla
+    sta $D0
+    plp
+    rtl
+bg_scroll_phase_publish_full_end:
+
+; Drain newly allocated native OBJ records with private DMA channel 5.  The
+; foreground renderer publishes a complete slot/code list and waits in WRAM;
+; NMI owns that immutable list until this routine clears the word marker.  Each
+; record remains two exact 64-byte transfers because the SNES OBJ grid separates
+; its bottom pair by sixteen tile numbers.  Recheck the latched V counter before
+; every record and retain ownership for the next NMI once line 252 is reached.
+; The leading-edge wrapper presents coherent BG/old-OAM motion first, then
+; services this batch before wake work. Displayed-slot reverse ownership keeps
+; every old OAM tile quarantined, so the batch rewrites only non-displayed
+; slots. OBJ_PRESENTED_THIS_NMI keeps later paths from publishing twice.
+.org $D000
+.a8
+.i16
+nmi_obj_tile_batch:
+    php
+    rep #$30
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+    lda $D8
+    pha
+    lda $DA
+    pha
+
+    lda $7E74A2
+    cmp #$A55A
+    beq notb_due
+    jmp notb_restore
+notb_due:
+notb_next:
+    lda $7E74A0
+    cmp $7E89C6
+    bcc notb_record_due
+    jmp notb_complete
+notb_record_due:
+
+    sep #$20
+.a8
+    lda HVBJOY
+    bmi notb_vblank
+    jmp notb_restore
+notb_vblank:
+    lda STAT78
+    lda SLHV
+    lda OPVCT
+    sta $7E74A4
+    cmp #$FC             ; a complete 128-byte record still fits through line 251
+    bcc notb_low_page
+    jmp notb_restore
+notb_low_page:
+    lda OPVCT
+    and #$01
+    beq notb_time_safe
+    jmp notb_restore     ; lines 256-261 are never safe for VRAM publication
+notb_time_safe:
+
+    rep #$20
+.a16
+    lda $7E74A0
+    tax
+    sep #$20
+.a8
+    lda $7E2D00,x
+    rep #$20
+.a16
+    and #$00FF
+    sta $D8              ; physical cache slot
+
+    txa
+    asl a
+    tax
+    lda $7E2F00,x
+    sta $D0              ; native code * 128 -> $D2:$D0
+    stz $D2
+    ldy #$0007
+notb_source_shift:
+    asl $D0
+    rol $D2
+    dey
+    bne notb_source_shift
+    lda $D2
+    clc
+    adc #$00C9
+    sta $D2
+
+    lda $D8              ; T = 2*(slot&7) + 32*(slot>>3)
+    and #$0007
+    asl a
+    sta $D4
+    lda $D8
+    and #$0078
+    asl a
+    asl a
+    ora $D4
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$4000
+    sta $D4              ; TL/TR VRAM word destination
+
+    sep #$20
+.a8
+    lda #$80
+    sta VMAIN
+    lda $D4
+    sta VMADDL
+    lda $D5
+    sta VMADDH
+    lda #$01
+    sta DMAP5
+    lda #$18
+    sta BBAD5
+    lda $D0
+    sta A1T5L
+    lda $D1
+    sta A1T5H
+    lda $D2
+    sta A1B5
+    lda #$40
+    sta DAS5L
+    stz DAS5H
+    lda #$20
+    sta MDMAEN
+
+    rep #$20
+.a16
+    lda $D0
+    clc
+    adc #$0040
+    sta $D0
+    lda $D4
+    clc
+    adc #$0100
+    sta $D4
+    sep #$20
+.a8
+    lda $D4
+    sta VMADDL
+    lda $D5
+    sta VMADDH
+    lda $D0
+    sta A1T5L
+    lda $D1
+    sta A1T5H
+    lda #$40
+    sta DAS5L
+    stz DAS5H
+    lda #$20
+    sta MDMAEN
+
+    rep #$20
+.a16
+    lda $7E74A0
+    inc a
+    sta $7E74A0
+    jmp notb_next
+
+notb_complete:
+    lda #$0000
+    sta $7E74A2          ; publish completion after the final DMA has returned
+    lda $7E74A6
+    inc a
+    sta $7E74A6
+notb_restore:
+    rep #$30
+    pla
+    sta $DA
+    pla
+    sta $D8
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plp
+    rtl
+nmi_obj_tile_batch_end:
+
+; The fixed $7F:8FB0 wrapper has only four free bytes before its adjacent
+; sampler. A batch-due branch therefore enters this ROM helper with A8. Present
+; coherent camera/old-OAM motion first, drain safe non-displayed OBJ records,
+; then resume the historical WRAM wake path without adding a return frame.
+.org $D160
+.a8
+.i16
+nmi_batch_present_then_wake:
+    jsl.l nmi_batch_present_arbitrate|$E90000
+                         ; a due tile batch must never suppress camera presentation
+    jsl.l nmi_obj_tile_batch_dispatch|$E90000
+    jml.l $7F8E00
+nmi_batch_present_then_wake_end:
+
+; Build the current immutable OBJ code/slot plan before BG construction.  The
+; foreground used to discover first-use patterns only after the multi-frame BG
+; path, serializing the two costs and freezing the completed scene for another
+; two or three VBlanks.  This bounded pass publishes one immutable queue early;
+; NMI may drain it while BG is built, but final OAM publication still waits for
+; completion through obj_upload_queued_extended.
+;
+; Capacity is checked conservatively before the first allocation.  If even one
+; physical slot per manifest record would not fit, prefetch declines without
+; publishing a queue and the established full-reset renderer handles the frame.
+; That keeps the old displayed OAM protected from a speculative cache reset.
+.org $D480
+.a16
+.i16
+obj_prefetch_begin:
+    php
+    rep #$30
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+    lda $D8
+    pha
+    lda $DA
+    pha
+
+    lda #$0000
+    sta $1F20
+    sta $7E74AC
+    jsr obj_fast_prepare
+
+    ; Available physical slots = never-used tail + reclaimed free stack.
+    lda #$0080
+    sec
+    sbc $DE
+    clc
+    adc $7E89CE
+    sta $D0
+
+    lda $7E89BA
+    bne opb_manifest_nonempty
+    jmp opb_publish
+opb_manifest_nonempty:
+    cmp #$8000           ; packed-empty is a complete zero-record manifest
+    bne opb_manifest_has_records
+    jmp opb_publish
+opb_manifest_has_records:
+    bcs opb_packed_capacity ; preceding CMP proves nonempty bit-15 manifests are > $8000
+    lsr a                ; legacy manifest has one two-byte offset per record
+    cmp $D0
+    bcc opb_legacy_begin
+    beq opb_legacy_begin
+    jmp opb_decline
+
+opb_packed_capacity:
+    and #$7FFF
+    sta $D2
+    lda $D0              ; six bytes per packed record
+    asl a
+    sta $D4
+    asl a
+    clc
+    adc $D4
+    cmp $D2
+    bcs opb_packed_begin
+    jmp opb_decline
+opb_packed_begin:
+    stz $E0
+    stz $E2              ; valid packed-record index, matching vid_obj_packed
+opb_packed_loop:
+    ldx $E0
+    lda $7EBC02,x
+    xba
+    cmp #$FFFF
+    beq opb_packed_next
+    and #$3FFF
+    beq opb_packed_next
+    sta $C4
+    jsr obj_slot_fast
+    ; Populate the existing record-position accelerator so the later OAM pass
+    ; consumes this exact mapping without repeating an open-addressing lookup.
+    lda $E2
+    asl a
+    tax
+    lda $C4
+    sta $7E4800,x
+    lda $E4
+    sta $7E4900,x
+    inc $E2
+opb_packed_next:
+    lda $E0
+    clc
+    adc #$0006
+    sta $E0
+    ora #$8000
+    cmp $7E89BA
+    bne opb_packed_loop
+    bra opb_publish
+
+opb_legacy_begin:
+    stz $E0
+opb_legacy_loop:
+    ldx $E0
+    lda $7EBC00,x
+    tax
+    lda $7E4000,x
+    xba
+    cmp #$FFFF
+    beq opb_legacy_next
+    and #$3FFF
+    beq opb_legacy_next
+    sta $C4
+    jsr obj_slot_fast
+opb_legacy_next:
+    inc $E0
+    inc $E0
+    lda $E0
+    cmp $7E89BA
+    bne opb_legacy_loop
+
+opb_publish:
+    lda #$0000
+    sta $7E74A0
+    lda #$A55A
+    sta $1F20
+    lda $7E89C6
+    beq opb_publish_rom_source
+    cmp #$0011
+    bcs opb_publish_rom_source
+    jsr obj_prefetch_stage_groups_try
+    bcc opb_publish_record_stage
+    lda #$A55B
+    sta $7E74AC          ; complete physical groups can use one bounded NMI DMA
+    bra opb_publish_due
+opb_publish_record_stage:
+    jsr obj_prefetch_stage_records
+    lda #$A55A
+    sta $7E74AC          ; publish staging only after all bytes are copied to WRAM
+    bra opb_publish_due
+opb_publish_rom_source:
+    lda #$5AA5
+    sta $7E74AC          ; large queues retain the established exact ROM path
+    lda $7E89C6
+    beq opb_restore
+opb_publish_due:
+    lda #$A55A
+    sta $7E74A2          ; publish NMI ownership last
+    bra opb_restore
+
+opb_decline:
+    lda #$0000
+    sta $7E89C6
+    sta $7E74A0
+    sta $7E74A2
+opb_restore:
+    pla
+    sta $DA
+    pla
+    sta $D8
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plp
+    rtl
+obj_prefetch_begin_end:
+
+; Finish the queue in either ownership mode.  A prefetched queue retains the
+; producer's index and due marker; the legacy path initializes them here.  In
+; both cases the marker is retired only after NMI has made every tile resident.
+.org $D5C0
+.a16
+.i16
+obj_upload_queued_extended:
+    rep #$30
+    lda $1F20
+    bne ouqe_wait
+    lda #$0000
+    sta $7E74A0
+    lda $7E89C6
+    beq ouqe_done
+    lda #$A55A
+    sta $7E74A2
+ouqe_wait:
+    lda $7E74A2
+    cmp #$A55A
+    beq ouqe_wait
+ouqe_done:
+    lda #$0000
+    sta $1F20
+    sta $7E74AC
+    jml.l ouq_done|$7F0000
+obj_upload_queued_extended_end:
+
+; Route prefetched records through a WRAM source without moving the established
+; $D000 ROM-source batch.  Both workers retain the same queue index/due words,
+; VBlank checks, physical slots, and two exact 64-byte OBJ-grid transfers.
+.org $D600
+.a8
+.i16
+nmi_obj_tile_batch_dispatch:
+    php
+    rep #$20
+.a16
+    lda $7E74AC
+    cmp #$A55B
+    beq notbd_group
+    cmp #$A55A
+    beq notbd_staged
+    plp
+    jml.l nmi_obj_tile_batch|$E90000
+notbd_group:
+    plp
+    jml.l nmi_obj_tile_batch_group|$E90000
+notbd_staged:
+    plp
+    jml.l nmi_obj_tile_batch_staged|$E90000
+nmi_obj_tile_batch_dispatch_end:
+
+.org $D640
+.a8
+.i16
+nmi_obj_tile_batch_staged:
+    php
+    rep #$30
+.a16
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+    lda $D8
+    pha
+    lda $DA
+    pha
+
+    lda $7E74A2
+    cmp #$A55A
+    beq notbs_due
+    jmp notbs_restore
+notbs_due:
+notbs_next:
+    lda $7E74A0
+    cmp $7E89C6
+    bcc notbs_record_due
+    jmp notbs_complete
+notbs_record_due:
+    sep #$20
+.a8
+    lda HVBJOY
+    bmi notbs_vblank
+    jmp notbs_restore
+notbs_vblank:
+    lda STAT78
+    lda SLHV
+    lda OPVCT
+    sta $7E74A4
+    cmp #$FC
+    bcc notbs_low_page
+    jmp notbs_restore
+notbs_low_page:
+    lda OPVCT
+    and #$01
+    beq notbs_time_safe
+    jmp notbs_restore
+notbs_time_safe:
+    rep #$20
+.a16
+    lda $7E74A0
+    tax
+    sep #$20
+.a8
+    lda $7E2D00,x
+    rep #$20
+.a16
+    and #$00FF
+    sta $D8              ; physical cache slot
+
+    lda $7E74A0          ; staged record index * 128
+    sta $D0
+    stz $D2
+    ldy #$0007
+notbs_stage_shift:
+    asl $D0
+    rol $D2
+    dey
+    bne notbs_stage_shift
+    lda $D0
+    clc
+    adc #OBJ_PREFETCH_STAGE
+    sta $D0
+    lda #$007E
+    sta $D2
+
+    lda $D8              ; T = 2*(slot&7) + 32*(slot>>3)
+    and #$0007
+    asl a
+    sta $D4
+    lda $D8
+    and #$0078
+    asl a
+    asl a
+    ora $D4
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$4000
+    sta $D4
+
+    sep #$20
+.a8
+    lda #$80
+    sta VMAIN
+    lda $D4
+    sta VMADDL
+    lda $D5
+    sta VMADDH
+    lda #$01
+    sta DMAP5
+    lda #$18
+    sta BBAD5
+    lda $D0
+    sta A1T5L
+    lda $D1
+    sta A1T5H
+    lda $D2
+    sta A1B5
+    lda #$40
+    sta DAS5L
+    stz DAS5H
+    lda #$20
+    sta MDMAEN
+
+    rep #$20
+.a16
+    lda $D0
+    clc
+    adc #$0040
+    sta $D0
+    lda $D4
+    clc
+    adc #$0100
+    sta $D4
+    sep #$20
+.a8
+    lda $D4
+    sta VMADDL
+    lda $D5
+    sta VMADDH
+    lda $D0
+    sta A1T5L
+    lda $D1
+    sta A1T5H
+    lda #$40
+    sta DAS5L
+    stz DAS5H
+    lda #$20
+    sta MDMAEN
+
+    rep #$20
+.a16
+    lda $7E74A0
+    inc a
+    sta $7E74A0
+    jmp notbs_next
+
+notbs_complete:
+    lda #$0000
+    sta $7E74A2
+    lda $7E74A6
+    inc a
+    sta $7E74A6
+notbs_restore:
+    rep #$30
+    pla
+    sta $DA
+    pla
+    sta $D8
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plp
+    rtl
+nmi_obj_tile_batch_staged_end:
+
+; Copy a bounded dependency burst out of ROM before VBlank.  This does not
+; predict, decode, or alter a tile: queue record N is copied byte-exact to
+; $7E:C000+N*128.  NMI still writes its top and bottom halves to the established
+; OBJ grid.  Larger queues retain the guarded direct-ROM worker.
+.org $D800
+.a16
+.i16
+obj_prefetch_stage_records:
+    php
+    rep #$30
+    stz $D0              ; queue record index
+opsr_next:
+    lda $D0
+    sta $D4
+    stz $D6
+    ldy #$0007
+opsr_dest_shift:
+    asl $D4
+    rol $D6
+    dey
+    bne opsr_dest_shift
+    lda $D4
+    clc
+    adc #OBJ_PREFETCH_STAGE
+    sta $D4
+
+    lda $D0
+    asl a
+    tax
+    lda $7E2F00,x        ; exact queued native code
+    sta $D8
+    stz $DA
+    ldy #$0007
+opsr_source_shift:
+    asl $D8
+    rol $DA
+    dey
+    bne opsr_source_shift
+    lda $DA
+    clc
+    adc #$00C9
+    sta $DA
+
+    sep #$20
+.a8
+    lda $D4
+    sta WMADDL
+    lda $D5
+    sta WMADDM
+    stz WMADDH           ; $7E:C000 is WRAM-port address $00:C000
+    stz DMAP5
+    lda #$80
+    sta BBAD5            ; general DMA destination $2180 (WMDATA)
+    lda $D8
+    sta A1T5L
+    lda $D9
+    sta A1T5H
+    lda $DA
+    sta A1B5
+    lda #$80
+    sta DAS5L
+    stz DAS5H
+    lda #$20
+    sta MDMAEN
+
+    rep #$20
+.a16
+    inc $D0
+    lda $D0
+    cmp $7E89C6
+    bne opsr_next
+    plp
+    rts
+obj_prefetch_stage_records_end:
+
+; A descending contiguous free-list burst can use group DMA only when the queue
+; itself exactly covers one or two aligned eight-slot OBJ groups.  Widening a
+; partial-edge queue is forbidden: da1fa538 widened queued slots 72..66 to
+; groups 64..79 and overwrote still-displayed Superman slots 73..79.  NMI
+; publishes exactly one 1 KiB queued group per VBlank so camera/OAM presentation
+; keeps its 60 Hz slot.  Missing owners, partial groups, or irregular queues
+; fail closed to the staged record-at-a-time worker.
+.org $D900
+.a8
+.i16
+nmi_obj_tile_batch_group:
+    php
+    rep #$30
+.a16
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+    lda $D6
+    pha
+
+    lda $7E74A2
+    cmp #$A55A
+    beq notbg_due
+    jmp notbg_restore
+notbg_due:
+    sep #$20
+.a8
+    lda HVBJOY
+    bmi notbg_vblank
+    jmp notbg_restore
+notbg_vblank:
+    lda STAT78
+    lda SLHV
+    lda OPVCT
+    sta $7E74A4
+    cmp #$F4             ; one KiB from line 243 finishes before the unsafe high page
+    bcc notbg_low_page
+    jmp notbg_restore
+notbg_low_page:
+    lda OPVCT
+    and #$01
+    beq notbg_time_safe
+    jmp notbg_restore
+notbg_time_safe:
+    rep #$20
+.a16
+    lda $7E74A0          ; completed physical-group count within this staged burst
+    sta $D0
+    lda $7E74AE
+    xba
+    and #$00FF           ; total staged physical-group count
+    cmp $D0
+    bne notbg_group_due
+    jmp notbg_complete
+notbg_group_due:
+    lda $7E74AE
+    and #$00FF
+    clc
+    adc $D0              ; physical group = first group + completed group count
+    xba                  ; physical group * $0100
+    asl a                ; physical group * $0200 VRAM words
+    clc
+    adc #$4000
+    sta $D4
+
+    lda $D0
+    xba                  ; completed group count * $0100
+    asl a
+    asl a                ; completed group count * $0400 staging bytes
+    clc
+    adc #OBJ_PREFETCH_STAGE
+    sta $D2
+    lda #$0400
+    sta $D6
+
+    sep #$20
+.a8
+    lda #$80
+    sta VMAIN
+    lda $D4
+    sta VMADDL
+    lda $D5
+    sta VMADDH
+    lda #$01
+    sta DMAP5
+    lda #$18
+    sta BBAD5
+    lda $D2
+    sta A1T5L
+    lda $D3
+    sta A1T5H
+    lda #$7E
+    sta A1B5
+    lda $D6
+    sta DAS5L
+    lda $D7
+    sta DAS5H
+    lda #$20
+    sta MDMAEN
+
+    lda STAT78
+    lda SLHV
+    lda OPVCT
+    sta $7E74A4          ; retain the actual post-DMA line for the fail-closed report
+    rep #$20
+.a16
+    lda $7E74A0
+    inc a
+    sta $7E74A0
+    sta $D0
+    lda $7E74AE
+    xba
+    and #$00FF
+    cmp $D0
+    bne notbg_restore
+notbg_complete:
+    lda $7E89C6
+    sta $7E74A0          ; expose record completion only after the final group
+    lda #$0000
+    sta $7E74A2
+    lda $7E74A6
+    inc a
+    sta $7E74A6
+notbg_restore:
+    rep #$30
+    pla
+    sta $D6
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plp
+    rtl
+nmi_obj_tile_batch_group_end:
+
+; Restore the only deferred channel-0 destination whose write-only PPU address
+; can coexist with an NMI-owned OBJ-pattern batch.  BG_MAP_COMMIT_PENDING is
+; published with the exact 4 KiB $7E:9000 descriptor and cleared only after the
+; same-NMI map-basis commit, so it is stronger authority than source/size guesses.
+; This ROM helper is called from the live $7F WRAM mirror's DMA service tail.
+.org $DA10
+.a8
+.i16
+dma0_restore_map_vmaddr:
+    lda $7E72B9
+    cmp #$A5
+    bne drmvt_done
+    stz VMADDL
+    stz VMADDH
+drmvt_done:
+    rtl
+dma0_restore_map_vmaddr_end:
+
+; Consume a producer-published camera before the ordinary arbiter tests the
+; wake deadline.  The valid marker is cleared first so a nested or following
+; NMI cannot present the same target twice.  Fall through semantically by
+; reloading the arm byte and resuming immediately after the displaced LDA.
+.org $DA20
+.a8
+.i16
+nmi_camera_mailbox_intake:
+    lda $410163
+    cmp #$A5
+    bne ncmi_resume
+    lda #$00
+    sta.l $410163
+    lda $410162
+    jsl.l $E9C720
+ncmi_resume:
+    lda $410122
+    jml.l $E9CF04
+nmi_camera_mailbox_intake_end:
+
+; A due OBJ-pattern batch cannot use nmi_present_arbitrate's light-NMI choice
+; to suppress presentation: doing so creates a visible one-frame camera hold.
+; Mirror its heavy-wake qualification so the newest quiescent camera is still
+; captured, then always publish the compact camera/OAM step before one bounded
+; physical-group DMA.
+.org $DA40
+.a8
+.i16
+nmi_batch_present_arbitrate:
+    jml.l nmi_batch_camera_mailbox_intake|$E90000
+    cmp #$01
+    bne nbpa_present
+    lda $410130
+    beq nbpa_two_frame_deadline
+    lda $41012A
+    sec
+    sbc $41012B
+    cmp #$01
+    bcc nbpa_present
+    bra nbpa_heavy_present
+nbpa_two_frame_deadline:
+    lda $41012A
+    sec
+    sbc $41012B
+    cmp #$02
+    bcc nbpa_present
+nbpa_heavy_present:
+    rep #$20
+.a16
+    jsr capture_bg_vscroll
+    sep #$20
+.a8
+    xba
+    jsl.l $E9C720
+nbpa_present:
+    jsl.l $E9CD20
+    rtl
+nmi_batch_present_arbitrate_end:
+
+; Batch presenter counterpart to nmi_camera_mailbox_intake.  It resumes at
+; $DA44, immediately after the displaced four-byte scheduler-arm load.
+.org $DA80
+.a8
+.i16
+nmi_batch_camera_mailbox_intake:
+    lda $410163
+    cmp #$A5
+    bne nbcmi_resume
+    lda #$00
+    sta.l $410163
+    lda $410162
+    jsl.l $E9C720
+nbcmi_resume:
+    lda $410122
+    jml.l $E9DA44
+nmi_batch_camera_mailbox_intake_end:
+
+; 5A22 reset continuation for the size-neutral $00:FC00 stub.  Keeping this
+; setup in a guarded video-bank seam prevents the old bank-$00 bootstrap from
+; overlapping op_addsubq_g@$FD00.  It preserves the established SA-1 reset,
+; shared-memory enable, and native-mode transition order exactly.
+.org $DAA0
+.a8
+.i16
+cpu5a22_boot_extended:
+    sep #$20
+    lda #$FF
+    sta $2229
+    lda #$80
+    sta $2226
+    lda #$00
+    sta $2228
+    lda #$00
+    sta $2203
+    lda #$80
+    sta $2204
+    lda #$20
+    sta $2200
+    stz $2200
+    clc
+    xce
+    rep #$30
+    jml.l $E9800B       ; preserve the established wrapper and explicit ROM bank
+cpu5a22_boot_extended_end:
+
+; Size-neutral target for the old `stz $7E89DA` site.  STZ has no long form;
+; keeping the caller at three bytes also preserves the pinned $B900 seam.
+.org $DAD0
+.a16
+.i16
+clear_bg_duplicate_flag_long:
+    lda #$0000
+    sta.l $7E89DA
+    rts
+clear_bg_duplicate_flag_long_end:
+
+.org $DB00
+.a16
+.i16
+obj_prefetch_stage_groups_try:
+    rep #$30
+    lda $7E89C6
+    bne opsg_have_queue
+    jmp opsg_fail
+opsg_have_queue:
+    sta $E0              ; queue record count
+    sep #$20
+.a8
+    lda $7E2D00
+    rep #$20
+.a16
+    and #$00FF
+    sta $E2              ; highest slot; free stack emits this burst descending
+    sta $E4              ; next exact expected slot
+    ldx #$0000
+opsg_order_loop:
+    sep #$20
+.a8
+    lda $7E2D00,x
+    rep #$20
+.a16
+    and #$00FF
+    cmp $E4
+    beq opsg_order_valid
+    jmp opsg_fail
+opsg_order_valid:
+    dec $E4
+    inx
+    cpx $E0
+    bne opsg_order_loop
+    inc $E4              ; lowest queued slot
+
+    ; The queue must own every slot touched by group DMA.  Contiguity alone is
+    ; insufficient because rounding partial endpoints out to group boundaries
+    ; can include slots still named by hardware OAM.
+    lda $E0
+    and #$0007
+    beq opsg_count_aligned
+    jmp opsg_fail
+opsg_count_aligned:
+    lda $E4
+    and #$0007
+    beq opsg_low_aligned
+    jmp opsg_fail
+opsg_low_aligned:
+    lda $E2
+    and #$0007
+    cmp #$0007
+    beq opsg_high_aligned
+    jmp opsg_fail
+opsg_high_aligned:
+
+    lda $E4
+    lsr a
+    lsr a
+    lsr a
+    sta $E6              ; first complete eight-slot group
+    lda $E2
+    lsr a
+    lsr a
+    lsr a
+    sta $F0              ; final complete eight-slot group
+    sec
+    sbc $E6
+    inc a
+    cmp #$0004
+    bcc opsg_group_count_valid
+    jmp opsg_fail        ; at most three groups fit $7E:C000-$CBFF
+opsg_group_count_valid:
+    sta $F2              ; group count
+
+    lda $E6
+    asl a
+    asl a
+    asl a
+    sta $E8              ; first physical slot in the covered span
+    lda $F0
+    inc a
+    asl a
+    asl a
+    asl a
+    sta $EA              ; exclusive physical-slot limit
+opsg_owner_loop:
+    lda $E8
+    asl a
+    tax
+    lda $7E4A00,x
+    and #$3FFF
+    bne opsg_owner_valid
+    jmp opsg_fail        ; never rewrite an unowned retained/displayed slot
+opsg_owner_valid:
+    inc $E8
+    lda $E8
+    cmp $EA
+    bne opsg_owner_loop
+
+    lda $F2
+    xba
+    ora $E6
+    sta $7E74AE          ; publish metadata while the NMI due word is still clear
+    lda #OBJ_PREFETCH_STAGE
+    sta $DA              ; sequential VRAM-order staging cursor
+    lda $E6
+    sta $E0              ; current group
+opsg_group_loop:
+    lda $E0
+    asl a
+    asl a
+    asl a
+    sta $E4              ; first slot in current group
+    clc
+    adc #$0008
+    sta $E8              ; exclusive group slot limit
+    stz $EC              ; top 64-byte half
+    jsr obj_prefetch_stage_group_half
+    lda #$0040
+    sta $EC              ; bottom 64-byte half
+    jsr obj_prefetch_stage_group_half
+    lda $E0
+    cmp $F0
+    beq opsg_success
+    inc $E0
+    bra opsg_group_loop
+opsg_success:
+    sec
+    rts
+opsg_fail:
+    clc
+    rts
+
+obj_prefetch_stage_group_half:
+    lda $E4
+    sta $EA              ; current physical slot
+opsg_half_slot_loop:
+    lda $EA
+    asl a
+    tax
+    lda $7E4A00,x
+    and #$3FFF
+    sta $D0
+    stz $D2
+    ldy #$0007
+opsg_half_source_shift:
+    asl $D0
+    rol $D2
+    dey
+    bne opsg_half_source_shift
+    lda $D0
+    clc
+    adc $EC
+    sta $D0
+    bcc opsg_half_source_ready
+    inc $D2
+opsg_half_source_ready:
+    lda $D2
+    clc
+    adc #$00C9
+    sta $D2
+
+    sep #$20
+.a8
+    lda $DA
+    sta WMADDL
+    lda $DB
+    sta WMADDM
+    stz WMADDH
+    stz DMAP5
+    lda #$80
+    sta BBAD5
+    lda $D0
+    sta A1T5L
+    lda $D1
+    sta A1T5H
+    lda $D2
+    sta A1B5
+    lda #$40
+    sta DAS5L
+    stz DAS5H
+    lda #$20
+    sta MDMAEN
+    rep #$20
+.a16
+    lda $DA
+    clc
+    adc #$0040
+    sta $DA
+    inc $EA
+    lda $EA
+    cmp $E8
+    bne opsg_half_slot_loop
+    rts
+obj_prefetch_stage_groups_try_end:
+
+; Select the whole-layout rotation shared by a strict majority of populated
+; X1 source columns.  One source can legitimately move to a different physical
+; slot when the Stage-1 gap crosses it, so source column 4 is not a stable
+; anchor.  Empty sources are excluded: their duplicate-slot bytes carry no
+; pixels and may disagree arbitrarily.  Ambiguous or one-column layouts fail
+; closed to the established full-map path.
+;
+; Returns carry set and A=rotation (raw-applied mod 16) on a strict populated
+; majority.  Carry clear means the caller must use the full rebuild.  D0-D8/DA
+; are renderer scratch and intentionally clobbered; X/Y and P are preserved by
+; bg_column_occupied as required by the loops below.
+.org $D180
+.a16
+.i16
+bg_column_rotation_select:
+    rep #$30
+    stz $D8              ; populated-source bit mask
+    stz $D4              ; populated-source count
+    lda #$0001
+    sta $DA              ; current source bit
+    ldx #$0000
+bcrs_occupied_loop:
+    jsr bg_column_occupied
+    bcc bcrs_occupied_next
+    lda $D8
+    ora $DA
+    sta $D8
+    inc $D4
+bcrs_occupied_next:
+    asl $DA
+    inx
+    cpx #$0010
+    bne bcrs_occupied_loop
+    lda $D4
+    cmp #$0002           ; one live source cannot distinguish motion from rotation
+    bcs bcrs_have_population
+    jmp bcrs_fail
+bcrs_have_population:
+
+    ; Boyer-Moore yields the only possible strict-majority rotation without a
+    ; persistent histogram.  The second pass below proves that it is a real
+    ; majority before the fast path may trust it.
+    stz $D0              ; candidate rotation
+    stz $D2              ; candidate vote balance
+    lda #$0001
+    sta $DA
+    ldx #$0000
+bcrs_candidate_loop:
+    lda $D8
+    bit $DA
+    beq bcrs_candidate_next
+    sep #$20
+.a8
+    lda $7E89E0,x
+    sec
+    sbc $7E89F0,x
+    and #$0F
+    rep #$20
+.a16
+    and #$00FF
+    sta $D6
+    lda $D2
+    beq bcrs_candidate_replace
+    lda $D6
+    cmp $D0
+    beq bcrs_candidate_match
+    dec $D2
+    bra bcrs_candidate_next
+bcrs_candidate_replace:
+    lda $D6
+    sta $D0
+    lda #$0001
+    sta $D2
+    bra bcrs_candidate_next
+bcrs_candidate_match:
+    inc $D2
+bcrs_candidate_next:
+    asl $DA
+    inx
+    cpx #$0010
+    bne bcrs_candidate_loop
+
+    stz $D6              ; verified support for the selected rotation
+    lda #$0001
+    sta $DA
+    ldx #$0000
+bcrs_verify_loop:
+    lda $D8
+    bit $DA
+    beq bcrs_verify_next
+    sep #$20
+.a8
+    lda $7E89E0,x
+    sec
+    sbc $7E89F0,x
+    and #$0F
+    rep #$20
+.a16
+    and #$00FF
+    cmp $D0
+    bne bcrs_verify_next
+    inc $D6
+bcrs_verify_next:
+    asl $DA
+    inx
+    cpx #$0010
+    bne bcrs_verify_loop
+    lda $D6
+    asl a
+    cmp $D4
+    bcc bcrs_fail
+    beq bcrs_fail        ; ties are geometry-ambiguous and must rebuild fully
+    lda $D0
+    and #$000F
+    sec
+    rts
+bcrs_fail:
+    clc
+    rts
+bg_column_rotation_select_end:
+
+; Move one complete 32-pixel physical BG slot without asking the source-code
+; cache to rediscover unchanged cells.  A canonical column relocation changes
+; only geometry: all four SNES tile columns across all 32 tilemap rows must
+; already exist at the old slot and must be present at the new slot before the
+; old slot is cleared.  F4=old slot, F6=new slot; both are proven exclusive by
+; bg_column_map_update_fast before this helper is called.
+.org $D240
+.a16
+.i16
+bcmf_move_slot:
+    rep #$30
+    lda $F4
+    and #$000F
+    cmp #$0008
+    bcc bmvs_old_left
+    sec
+    sbc #$0008
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$0800
+    bra bmvs_old_ready
+bmvs_old_left:
+    asl a
+    asl a
+    asl a
+bmvs_old_ready:
+    sta $D2
+
+    lda $F6
+    and #$000F
+    cmp #$0008
+    bcc bmvs_new_left
+    sec
+    sbc #$0008
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$0800
+    bra bmvs_new_ready
+bmvs_new_left:
+    asl a
+    asl a
+    asl a
+bmvs_new_ready:
+    sta $D4
+    ldy #$0020
+bmvs_row:
+    ldx $D2
+    lda $7E9000,x
+    ldx $D4
+    sta $7E9000,x
+    ldx $D2
+    lda $7E9002,x
+    ldx $D4
+    sta $7E9002,x
+    ldx $D2
+    lda $7E9004,x
+    ldx $D4
+    sta $7E9004,x
+    ldx $D2
+    lda $7E9006,x
+    ldx $D4
+    sta $7E9006,x
+    lda $D2
+    clc
+    adc #$0040
+    sta $D2
+    lda $D4
+    clc
+    adc #$0040
+    sta $D4
+    dey
+    bne bmvs_row
+    rts
+bcmf_move_slot_end:
+
+; Preserve the code ownership of every physical OBJ slot named by the OAM
+; image that is still on screen.  obj_cache_preflight has already cleared the
+; used-slot bitmap and obj_queue_prepare has cleared the retained-pair count.
+; The first reference to a slot marks it and, when its reverse key is valid,
+; appends the exact code/slot pair for obj_cache_reclaim_fast to rehash.
+;
+; Duplicate OAM references are ignored.  A missing reverse key retains the old
+; conservative quarantine behavior.  The hard bound is unreachable for a
+; clamped 128-entry OAM image, but a corrupt checkpoint fails closed by marking
+; the slot used and publishing diagnostic reason 3 instead of overflowing the
+; retained-pair buffers.
+.org $D300
+.a16
+.i16
+obj_cache_protect_displayed_extended:
+    rep #$30
+    lda $7E89B2          ; active entries in the currently displayed OAM image
+    cmp #$0080
+    bcc ocpde_count_ready
+    lda #$0080
+ocpde_count_ready:
+    asl a
+    asl a
+    sta $D4              ; OAM low-table byte limit
+    ldx #$0000
+ocpde_loop:
+    cpx $D4
+    bne ocpde_entry
+    jmp ocpde_done
+ocpde_entry:
+    stx $D6              ; retain OAM cursor while X becomes a physical slot
+    lda $7E8602,x        ; tile low byte + attribute byte
+    and #$01FF
+    sta $D0
+    and #$000E
+    lsr a
+    sta $D2
+    lda $D0
+    and #$01E0
+    lsr a
+    lsr a
+    ora $D2
+    tax
+    sep #$20
+.a8
+    lda $7E2E00,x
+    beq ocpde_new_slot
+    jmp ocpde_next8      ; this physical slot was already retained
+ocpde_new_slot:
+    lda #$01
+    sta $7E2E00,x        ; quarantine before trusting any reverse metadata
+    rep #$20
+.a16
+    txa
+    and #$00FF
+    sta $D0              ; retained physical slot
+    asl a
+    tax
+    lda $7E4A00,x
+    and #$3FFF
+    bne ocpde_reverse_valid
+    jmp ocpde_next16     ; safe old-checkpoint fallback: quarantine without rehash
+ocpde_reverse_valid:
+    sta $C4
+    lda $7E89C6
+    cmp #$0080
+    bcs ocpde_overflow
+    ldy #$0000
+ocpde_code_scan:
+    tya
+    cmp $7E89C6
+    beq ocpde_hash_begin
+    asl a
+    tax
+    lda $7E2F00,x
+    cmp $C4
+    bne ocpde_code_next
+    jmp ocpde_next16     ; multiple displayed slots can share one old code
+ocpde_code_next:
+    iny
+    bra ocpde_code_scan
+
+    ; If the current hash owns the same code in a different physical slot,
+    ; quarantine that slot too.  The later manifest scan will then skip its
+    ; duplicate pair and the displayed owner remains the one rebuilt mapping.
+ocpde_hash_begin:
+    lda $C4
+    asl a
+    clc
+    adc $C4
+    and #$03FF
+    asl a
+    sta $D8
+ocpde_hash_probe:
+    ldx $D8
+    lda $7E5000,x
+    beq ocpde_append
+    cmp $C4
+    beq ocpde_hash_owner
+    inx
+    inx
+    txa
+    and #$07FF
+    sta $D8
+    bra ocpde_hash_probe
+ocpde_hash_owner:
+    lda $7E5800,x
+    and #$00FF
+    tax
+    sep #$20
+.a8
+    lda #$01
+    sta $7E2E00,x
+    rep #$20
+.a16
+ocpde_append:
+    lda $7E89C6
+    tax
+    sep #$20
+.a8
+    lda $D0
+    sta $7E2D00,x
+    rep #$20
+.a16
+    txa
+    asl a
+    tax
+    lda $C4
+    sta $7E2F00,x
+    lda $7E89C6
+    inc a
+    sta $7E89C6
+    bra ocpde_next16
+ocpde_overflow:
+    lda #$0003
+    sta $7E89C8
+    lda $7E89C6
+    sta $7E89CC
+    bra ocpde_next16
+ocpde_next8:
+    rep #$20
+.a16
+ocpde_next16:
+    ldx $D6
+    inx
+    inx
+    inx
+    inx
+    jmp ocpde_loop
+ocpde_done:
+    rts
+obj_cache_protect_displayed_extended_end:
+
+; obj_tile_queue's fixed-size tail jumps here after publishing a new pair.
+; Record physical-slot ownership before returning the established obj_T result
+; to obj_slot_fast's caller.  JML+RTS intentionally reuses the original JSR
+; return frame, so no tightly packed caller address moves.
+obj_tile_queue_publish_reverse:
+    rep #$30
+    lda $D8
+    and #$00FF
+    asl a
+    tax
+    lda $C4
+    and #$3FFF
+    sta $7E4A00,x
+    jml.l obj_T|$E90000
+obj_tile_queue_publish_reverse_end:
+
+; Both compressed slots normally retain a strict sequential delta chain.  The
+; overwhelmingly common scrolling case is different: producer BG_LEN is zero
+; for the incoming packet and both retained packets, so their BG dependency is
+; identical to the already-canonical raw planes.  Packed OBJ/control data are
+; complete, and forcing palette dirty below makes the replacement palette
+; complete too.  In that one proven-safe shape, keep the newest slot current
+; instead of dropping every later animation packet while the worker is busy.
+;
+; NMI is the only caller and the SA-1 is asleep under arm=$0003.  State 2 claims
+; the chosen storage before capture.  If foreground promotion already owns a
+; slot, its non-1 state falls through to the ordinary drop counter.
+.org $EA40
+.a16
+.i16
+render_queue_replace_latest_clean:
+    rep #$30
+    lda $7E89D2
+    cmp #$0001
+    bne rqrlc_drop
+    lda $7E89D6
+    cmp #$0001
+    bne rqrlc_drop
+    lda $41013A
+    bne rqrlc_drop
+    lda $7ED184
+    bne rqrlc_drop
+    lda $7EB004
+    bne rqrlc_drop
+
+    ; A clean manifest does not carry palette bytes.  Replacement can skip an
+    ; accepted queued predecessor, so make the newest packet self-contained.
+    lda $41013C
+    ora #$0001
+    sta $41013C
+
+    lda $7EB000
+    sec
+    sbc $7ED180
+    bit #$8000
+    bne rqrlc_primary_newer
+    jsl.l $E9B140
+    rtl
+rqrlc_primary_newer:
+    jsl.l $E9B000
+    rtl
+rqrlc_drop:
+    lda $7E89D4
+    inc a
+    sta $7E89D4
+    rtl
+render_queue_replace_latest_clean_end:
+
+; Normalize exact X1 column maps around the strict-majority rotation of all
+; populated sources.  A whole-layout 32-pixel rotation is camera motion, not
+; new tilemap geometry; keeping the canonical WRAM map lets the 60 Hz H-scroll
+; cursor express that motion without a 392-cell rebuild.  The Stage-1 gap moves
+; one populated source at a time, including source 4 itself.
+; When that shape is unique and the producer list has room, clear only its old
+; and new 32-pixel slots, retarget its 32 source cells, and append those cells
+; to the ordinary incremental renderer.  Every ambiguous/overlapping case
+; retains the established full-rebuild fallback at $B7CA.
+.org $EA93
+.a16
+.i16
+bg_column_map_update_fast:
+    rep #$30
+    lda $7E8996
+    cmp #$FFFE
+    bcc bcmf_kind_valid
+    jmp bcmf_full
+bcmf_kind_valid:
+    lda $7E89DE
+    cmp #$FFFE
+    bcc bcmf_applied_valid
+    jmp bcmf_full
+bcmf_applied_valid:
+
+    jsr bg_column_rotation_select
+    bcs bcmf_rotation_ready
+    jmp bcmf_full
+bcmf_rotation_ready:
+    sta $D6              ; dominant raw-to-applied whole-layout rotation
+    stz $D4              ; number of canonical source-slot changes
+    ldx #$0000
+bcmf_normalize_loop:
+    sep #$20
+.a8
+    lda $7E89E0,x
+    sec
+    sbc $D6
+    and #$0F
+    sta $7E74B0,x
+    cmp $7E89F0,x
+    beq bcmf_normalize_next8
+    ; Empty X1 sources carry no pixels, so their duplicated physical-slot byte
+    ; can rotate without requiring tilemap work.  Counting those metadata
+    ; changes made the common Stage-1 gap crossing look like two or three live
+    ; columns and forced a 392-cell rebuild roughly every ten game ticks.
+    ; Count only changed populated sources; the complete normalized map is
+    ; still published below after the one live retarget is coherent.
+    jsr bg_column_occupied
+    bcc bcmf_normalize_next8
+    rep #$20
+.a16
+    txa
+    sta $F2              ; the sole changed source when count finishes at one
+    inc $D4
+    bra bcmf_normalize_next
+bcmf_normalize_next8:
+    rep #$20
+.a16
+bcmf_normalize_next:
+    inx
+    cpx #$0010
+    bne bcmf_normalize_loop
+    lda $D4
+    bne bcmf_changed
+    ; The only changes were empty duplicate columns.  No VRAM cell moved, but
+    ; accepting the full normalized map prevents those harmless differences
+    ; from being rediscovered on every later frame.
+    jsr bcmf_publish_map
+    lda $7E8996
+    sta $7E89DE
+    jmp bcmf_same
+bcmf_changed:
+    cmp #$0001
+    beq bcmf_one_change
+    jmp bcmf_full
+bcmf_one_change:
+
+    lda $7E89BC
+    cmp #$FFFE
+    bcc bcmf_list_valid
+    jmp bcmf_full
+bcmf_list_valid:
+    cmp #$03C1           ; appending 32 words must remain within the $0400-byte list
+    bcc bcmf_list_has_room
+    jmp bcmf_full
+bcmf_list_has_room:
+
+bcmf_no_active_overlap:
+    ldx $F2
+    sep #$20
+.a8
+    lda $7E89F0,x
+    rep #$20
+.a16
+    and #$000F
+    sta $F4              ; old canonical physical slot
+    ldx $F2
+    sep #$20
+.a8
+    lda $7E74B0,x
+    rep #$20
+.a16
+    and #$000F
+    sta $F6              ; new canonical physical slot
+
+    ; Neither end of the move may be owned by another populated source.
+    stz $D0
+bcmf_collision_loop:
+    lda $D0
+    cmp #$0010
+    beq bcmf_incremental
+    cmp $F2
+    beq bcmf_collision_next
+    tax
+    jsr bg_column_occupied
+    bcc bcmf_collision_next
+    ldx $D0
+    sep #$20
+.a8
+    lda $7E74B0,x
+    rep #$20
+.a16
+    and #$000F
+    cmp $F4
+    bne bcmf_collision_check_new
+    jmp bcmf_full
+bcmf_collision_check_new:
+    cmp $F6
+    bne bcmf_collision_next
+    jmp bcmf_full
+bcmf_collision_next:
+    inc $D0
+    bra bcmf_collision_loop
+
+bcmf_incremental:
+    jsr bcmf_move_slot
+    lda $F4
+    jsr bcmf_clear_slot
+    jsr bcmf_update_column
+
+    ; Publish every normalized byte, including empty duplicate sources, only
+    ; after the live source's table and tilemap slots are coherent.
+    jsr bcmf_publish_map
+    lda $7E8996
+    sta $7E89DE
+    lda #$0001
+    sta $7E89DA          ; potential duplicates are checked for live occupancy on demand
+
+    lda $F2
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    sta $D8              ; first raw byte offset in the changed source column
+    lda.l $7E89BC
+    tax
+    ldy #$0000
+bcmf_append_loop:
+    tya
+    clc
+    adc $D8
+    sta $7E8C00,x
+    inx
+    inx
+    iny
+    iny
+    cpy #$0040
+    bne bcmf_append_loop
+    txa
+    sta.l $7E89BC
+    lda #$0001
+    sta $7E8990
+    jml.l $E9BC80        ; preserve token/prepared consumer invalidation
+
+bcmf_same:
+    jml.l $E9BC80
+bcmf_full:
+    jml.l $E9B7CA
+
+; Copy all sixteen byte entries as eight words.  The candidate and applied
+; arrays are both private foreground metadata at this point.
+bcmf_publish_map:
+    ldx #$0000
+bcmf_publish_map_loop:
+    lda $7E74B0,x
+    sta $7E89F0,x
+    inx
+    inx
+    cpx #$0010
+    bne bcmf_publish_map_loop
+    rts
+
+; A physical slot is four SNES tile columns across all 32 map rows.
+bcmf_clear_slot:
+    and #$000F
+    cmp #$0008
+    bcc bcmf_clear_left
+    sec
+    sbc #$0008
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$0800
+    bra bcmf_clear_base
+bcmf_clear_left:
+    asl a
+    asl a
+    asl a
+bcmf_clear_base:
+    tax
+    ldy #$0020
+    lda #$0000
+bcmf_clear_row:
+    sta $7E9000,x
+    sta $7E9002,x
+    sta $7E9004,x
+    sta $7E9006,x
+    txa
+    clc
+    adc #$0040
+    tax
+    lda #$0000
+    dey
+    bne bcmf_clear_row
+    rts
+
+; Rebuild the 32 lookup words belonging to the one canonical source move.
+bcmf_update_column:
+    lda $F2
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    sta $D8              ; table byte base for this source column
+    lda $F6
+    and #$000F
+    cmp #$0008
+    bcc bcmf_update_left
+    sec
+    sbc #$0008
+    asl a
+    asl a
+    asl a
+    clc
+    adc #$0800
+    bra bcmf_update_base
+bcmf_update_left:
+    asl a
+    asl a
+    asl a
+bcmf_update_base:
+    sta $D6              ; physical slot's top-left map byte offset
+    stz $D0
+bcmf_update_loop:
+    lda $D0
+    and #$001E
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    sta $D2              ; (cell & ~1) * 64: each 16px X1 row spans two SNES rows
+    lda $D0
+    and #$0001
+    asl a
+    asl a
+    clc
+    adc $D2
+    clc
+    adc $D6
+    sta $D4
+    lda $D0
+    asl a
+    clc
+    adc $D8              ; D0 is cell ordinal; table is word-indexed
+    tax
+    lda $D4
+    sta $7E7500,x
+    inc $D0
+    lda $D0
+    cmp #$0020
+    bne bcmf_update_loop
+    rts
+bg_column_map_update_fast_end:
+
+; X=source column 0..15. Carry set when any of its 32 raw cells is nonempty.
+bg_column_occupied:
+    php
+    rep #$30
+    phx
+    phy
+    txa
+    and #$00FF
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    asl a
+    tax
+    ldy #$0020
+bco_scan:
+    lda $7E2000,x
+    and #$FF3F
+    bne bco_found
+    inx
+    inx
+    dey
+    bne bco_scan
+    ply
+    plx
+    plp
+    clc
+    rts
+bco_found:
+    ply
+    plx
+    plp
+    sec
+    rts
+bg_column_occupied_end:
+
+; Cold boot and true geometry transitions build a canonical lookup.  The
+; established table/duplicate body remains byte-pinned at $B8xx and returns
+; through its original RTS to either vid_init or bg_column_map_update.
+.a16
+.i16
+bg_offset_table_build_canonical:
+    rep #$30
+    lda $7E8996
+    sta $7E89DE
+    cmp #$FFFE
+    bcs botc_legacy
+    ldx #$0000
+botc_exact_loop:
+    sep #$20
+.a8
+    lda $7E89E0,x
+    sec
+    sbc $7E89E4
+    clc
+    adc #$04
+    and #$0F
+    sta $7E89F0,x
+    rep #$20
+.a16
+    inx
+    cpx #$0010
+    bne botc_exact_loop
+    jmp botb_duplicate_prepare
+botc_legacy:
+    ldx #$0000
+botc_legacy_loop:
+    sep #$20
+.a8
+    txa
+    sta $7E89F0,x
+    rep #$20
+.a16
+    inx
+    cpx #$0010
+    bne botc_legacy_loop
+    jmp botb_duplicate_prepare
+bg_offset_table_build_canonical_end:
+
 ; The first primary capture lazily copies this island to the identical private
 ; $7E:ED00 offset after production pacing has armed and while the SA-1 sleeps.
 ; Bank $7F is deliberately never used: it is the game's entire emulated 68000
@@ -8784,6 +11005,7 @@ nmi_present_arbitrate_end:
 render_queue_promote:
     phb
     rep #$30
+    stz $DC              ; nonzero only when two dependency-free clean packets collapse
     lda $7E89D2
     cmp #$0001
     beq rqp_primary_valid
@@ -8795,8 +11017,27 @@ rqp_primary_valid:
     lda $7E89D6
     cmp #$0001
     bne rqp_choose_primary
-    ; Both slots are complete.  Their candidate sequences are at most a few
-    ; ticks apart; a signed modular delta chooses the older entry across wrap.
+    ; BG-dirty packets remain a strict delta chain.  Two BG-clean packets may
+    ; collapse only when their palette dependency shape also agrees: both
+    ; clean, or both carrying a complete palette.  Then choose the newer packet
+    ; and discard the redundant older one.  Every other pair keeps the original
+    ; oldest-first modular order.
+    lda $7ED184
+    bne rqp_choose_oldest
+    lda $7EB004
+    bne rqp_choose_oldest
+    lda $7ED186
+    eor $7EB006
+    and #$0001
+    bne rqp_choose_oldest
+    inc $DC
+    lda $7EB000
+    sec
+    sbc $7ED180
+    bit #$8000
+    bne rqp_choose_primary
+    bra rqp_choose_secondary
+rqp_choose_oldest:
     lda $7EB000
     sec
     sbc $7ED180
@@ -8813,6 +11054,12 @@ rqp_choose_secondary:
     lda #$0002
     sta $7E89D6
 rqp_have_entry:
+    lda $DC
+    beq rqp_one_claimed
+    lda #$0002
+    sta $7E89D2
+    sta $7E89D6          ; NMI cannot refill the redundant slot before release
+rqp_one_claimed:
 
     lda $7E899A
     and #$FFFE
@@ -8830,6 +11077,9 @@ rqp_primary_copy:
     sta $7E7180
     rep #$20
 .a16
+    lda $7E71AE
+    and #$01FF
+    sta $7E71AC
 
     lda $7ED180
     sta $7E89B8
@@ -8953,6 +11203,9 @@ rqp_secondary_copy:
     sta $7E7180
     rep #$20
 .a16
+    lda $7E71B0
+    and #$01FF
+    sta $7E71AC
     lda $7EB000
     sta $7E89B8
     lda $7EB002
@@ -9045,6 +11298,12 @@ rqp_publish_primary:
 rqp_publish_req:
     sta $1F1E            ; worker observes the queued request after this RTL
     lda #$0000
+    ldx $DC
+    beq rqp_release_one
+    sta $7E89D2
+    sta $7E89D6
+    bra rqp_finish       ; both BG-clean packets collapsed into the selected latest
+rqp_release_one:
     ldx $D8
     bne rqp_release_secondary
     sta $7E89D2
@@ -9235,4 +11494,76 @@ boot_dma0:
     sta MDMAEN
     rts
 boot_screen_init_end:
+
+; Copy one 1024-byte plane within physical BW-RAM bank 1.  SA-1 DMA cannot
+; transfer BW-RAM directly to BW-RAM, so four synchronous 256-byte chunks pass
+; through IRAM $0100-$01FF.  Relocated intact from the overlapping $9F8F tail;
+; snapshot_publish's same-bank JSR follows the symbol to this guarded island.
+.org $F200
+.a16
+.i16
+snapshot_dma_plane:
+    rep #$30
+    sta $90
+    stx $92
+    lda #$0004
+    sta $94
+sdp_chunk:
+    sep #$20
+.a8
+    lda #$20
+    sta $220B
+
+    lda #$81
+    sta $2230
+    lda $90
+    sta $2232
+    lda $91
+    sta $2233
+    lda #$01
+    sta $2234
+    stz $2238
+    lda #$01
+    sta $2239
+    stz $2235
+    lda #$01
+    sta $2236
+
+    lda #$86
+    sta $2230
+    stz $2232
+    lda #$01
+    sta $2233
+    stz $2234
+    stz $2238
+    lda #$01
+    sta $2239
+    lda $92
+    sta $2235
+    lda $93
+    sta $2236
+    lda #$01
+    sta $2237
+
+    rep #$20
+.a16
+    lda $90
+    clc
+    adc #$0100
+    sta $90
+    lda $92
+    clc
+    adc #$0100
+    sta $92
+    dec $94
+    bne sdp_chunk
+    sep #$20
+.a8
+    lda #$20
+    sta $220B
+    stz $2230
+    rep #$20
+.a16
+    rts
+snapshot_dma_plane_end:
 video_image_end:

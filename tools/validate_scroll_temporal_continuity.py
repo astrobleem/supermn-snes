@@ -391,9 +391,32 @@ def main() -> int:
     }
     basis_checks: list[dict[str, Any]] = []
     basis_violations: list[dict[str, Any]] = []
+    coordinate_checks: list[dict[str, Any]] = []
+    coordinate_violations: list[dict[str, Any]] = []
     basis_schema_present = all(
         basis_required_keys <= row.keys() for row in captures
     )
+    basis16_schema_present = all(
+        "displayed_map_basis16" in row for row in captures
+    )
+    phase16_schema_present = all(
+        {"obj_cache_scrollx16", "presented_scrollx16"} <= row.keys()
+        for row in captures
+    )
+
+    def unwrap_sequence(key: str) -> list[int]:
+        values: list[int] = []
+        for row in captures:
+            low = int(row[key]) & 0xFF
+            if not values:
+                values.append(low)
+                continue
+            delta = ((low - (values[-1] & 0xFF) + 0x80) & 0xFF) - 0x80
+            values.append((values[-1] + delta) & 0x1FF)
+        return values
+
+    reconstructed_packet_phase = unwrap_sequence("obj_cache_scrollx")
+    reconstructed_presented_phase = unwrap_sequence("presented_scrollx")
     if basis_schema_present:
         for index, row in enumerate(captures):
             if int(row["displayed_map_valid"]) != 0xA5:
@@ -424,10 +447,25 @@ def main() -> int:
                 )
                 continue
             slot4 = column_map[4]
-            phase = int(row["obj_cache_scrollx"]) & 0xFF
+            phase = (
+                int(row["obj_cache_scrollx16"]) & 0x1FF
+                if phase16_schema_present
+                else reconstructed_packet_phase[index]
+            )
             raw_column4 = (int(row["scroll_packed"]) >> 8) & 0xFF
-            expected_basis = (slot4 * 32 + phase - raw_column4) & 0xFF
-            observed_basis = int(row["displayed_map_scrollx"]) & 0xFF
+            if basis16_schema_present:
+                raw_column4 |= ((int(row["bg_column_kind"]) >> 4) & 1) << 8
+            basis_mask = 0x1FF if basis16_schema_present else 0xFF
+            expected_basis = (
+                slot4 * 32 + phase - raw_column4
+            ) & basis_mask
+            observed_basis = int(
+                row[
+                    "displayed_map_basis16"
+                    if basis16_schema_present
+                    else "displayed_map_scrollx"
+                ]
+            ) & basis_mask
             check = {
                 "capture_index": index,
                 "frame": row["frame"],
@@ -436,10 +474,37 @@ def main() -> int:
                 "paired_raw_column4": raw_column4,
                 "expected_basis": expected_basis,
                 "observed_basis": observed_basis,
+                "basis_bits": 9 if basis16_schema_present else 8,
             }
             basis_checks.append(check)
             if observed_basis != expected_basis:
                 basis_violations.append({**check, "kind": "absolute-basis"})
+    if basis16_schema_present:
+        for index, row in enumerate(captures):
+            if int(row.get("displayed_map_valid", 0)) != 0xA5:
+                continue
+            presented_phase = (
+                int(row["presented_scrollx16"]) & 0x1FF
+                if phase16_schema_present
+                else reconstructed_presented_phase[index]
+            )
+            basis = int(row["displayed_map_basis16"]) & 0x1FF
+            expected_hscroll = (0x40 + basis - presented_phase) & 0x1FF
+            observed_hscroll = int(row["bg1_hscroll"]) & 0x1FF
+            check = {
+                "capture_index": index,
+                "frame": row["frame"],
+                "displayed_basis": basis,
+                "presented_phase": presented_phase,
+                "expected_hscroll": expected_hscroll,
+                "observed_hscroll": observed_hscroll,
+                "phase_source": "captured9" if phase16_schema_present else "sequence-unwrapped8",
+            }
+            coordinate_checks.append(check)
+            if observed_hscroll != expected_hscroll:
+                coordinate_violations.append(
+                    {**check, "kind": "displayed-coordinate"}
+                )
     if basis_schema_present and not basis_checks:
         failures.append(
             "absolute map-basis schema was present but no displayed/accepted exact-map frame was eligible"
@@ -448,6 +513,10 @@ def main() -> int:
         failures.append(
             f"{len(basis_violations)} absolute physical-map basis violations"
         )
+    if coordinate_violations:
+        failures.append(
+            f"{len(coordinate_violations)} nine-bit displayed-coordinate violations"
+        )
 
     # New captures explicitly retain the immutable presentation OAM, hardware
     # OAM, and compact world-object list.  Enforce the cross-layer temporal
@@ -455,10 +524,6 @@ def main() -> int:
     # evidence readable.  A BG-only crop can no longer certify player/crate
     # cadence: on every unchanged base sequence, each world X must move by the
     # inverse presented-camera delta and every non-world/HUD OAM field must hold.
-    obj_required = bool(
-        source.get("obj_temporal_capture", False)
-        or source.get("provenance", {}).get("obj_temporal_capture", False)
-    )
     obj_required_keys = {
         "hardware_oam",
         "hardware_oam_sha256",
@@ -481,6 +546,15 @@ def main() -> int:
         "obj_partial_dmas",
         "presented_scrollx",
     }
+    # Fail closed whenever the capture actually contains the complete OBJ
+    # schema, including historical captures made before the explicit feature
+    # advertisement was added.  Otherwise an omitted top-level flag can
+    # silently turn a full-composite temporal capture back into a BG-only gate.
+    obj_required = bool(
+        source.get("obj_temporal_capture", False)
+        or source.get("provenance", {}).get("obj_temporal_capture", False)
+        or all(obj_required_keys <= row.keys() for row in captures)
+    )
     obj_violations: list[dict[str, Any]] = []
     obj_rows: list[dict[str, Any] | None] = []
     obj_valid_frames = 0
@@ -756,10 +830,28 @@ def main() -> int:
         "wrong_registrations": wrong_registrations,
         "absolute_map_basis": {
             "schema_present": basis_schema_present,
-            "formula": "slot4*32 + paired_phase - paired_raw_column4 (mod 256)",
+            "basis_bits": 9 if basis16_schema_present else 8,
+            "formula": (
+                "slot4*32 + paired_phase9 - paired_raw_column4_9 (mod 512)"
+                if basis16_schema_present
+                else "slot4*32 + paired_phase - paired_raw_column4 (mod 256)"
+            ),
+            "phase_source": (
+                "captured9" if phase16_schema_present else "sequence-unwrapped8"
+            ),
             "checked_frames": len(basis_checks),
             "violation_count": len(basis_violations),
             "violations": basis_violations[:64],
+        },
+        "displayed_coordinate": {
+            "schema_present": basis16_schema_present,
+            "formula": "64 + displayed_basis9 - presented_phase9 (mod 512)",
+            "phase_source": (
+                "captured9" if phase16_schema_present else "sequence-unwrapped8"
+            ),
+            "checked_frames": len(coordinate_checks),
+            "violation_count": len(coordinate_violations),
+            "violations": coordinate_violations[:64],
         },
         "obj_temporal": {
             "required": obj_required,

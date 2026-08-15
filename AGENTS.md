@@ -88,6 +88,12 @@ overwrite them casually.
 - .NET 10: `/home/chad/.dotnet10` — Nexen, Poppy, Peony, Pansy.
 - Poppy:
   `/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll`.
+  This installed checkout is old upstream `fa44a809…`. Chad's corrected fork is
+  `https://github.com/astrobleem/poppy`; its `main` was `0d84bf5d…` on 2026-08-15
+  and contains the fixes for issues #376, #377, #379, and #380. Do not switch
+  assemblers in the middle of an exact-ROM-hash campaign: pin the compiler
+  commit/DLL hash, rebuild intentionally, and rerun ROM-pack plus bounded
+  exact-hash gates.
 - Peony:
   `/home/chad/peony/src/Peony.Cli/bin/Release/net10.0/Peony.Cli.dll`.
 - Pansy source: `/home/chad/pansy`.
@@ -165,13 +171,16 @@ and interaction regressions remained.
 
 ## Assembly and layout hazards
 
-- Poppy silently permits `.org` overlap; later sections overwrite earlier bytes.
-  Audit every seam and keep ROM-pack assertions green.
+- The currently installed upstream Poppy silently permits `.org` overlap; later
+  sections overwrite earlier bytes. The corrected `astrobleem/poppy` fork rejects
+  overlap, but seam audits and ROM-pack assertions remain mandatory defense in
+  depth until a pinned fork build reproduces this project.
 - Do not insert code casually into the middle of `interp.pasm`; long branches can wrap
   silently and bank `$00` is tightly packed. Prefer escape banks or size-neutral
   stubs.
-- Poppy mode inference can reset at labels after returns. Add explicit `.a8`/`.a16`
-  and `.i16`, then byte-audit immediates.
+- The installed upstream Poppy mode/layout pass can disagree with code generation
+  around labels, `REP`/`SEP`, expressions, and macros. The corrected fork repairs
+  the reported cases; retain explicit `.a8`/`.a16` and `.i16` plus byte audits.
 - Use explicit long-bank calls/jumps across escape banks. Search all `.pasm` files for
   hardcoded addresses after relocating an interpreter label.
 - MC68000 work RAM is big-endian. Preserve CCR/X, stack residue, return conventions,

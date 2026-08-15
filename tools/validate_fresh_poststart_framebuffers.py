@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +34,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, "/home/chad/Mesen2/python")
 
 import capture_mesen211_transitions as capture  # noqa: E402
-from capture_snes_input_framebuffers import advance_one  # noqa: E402
+from capture_snes_input_framebuffers import (  # noqa: E402
+    advance_one,
+    advance_recording_with_input,
+)
 from compare_snes_framebuffers import PLAYFIELD_BOX, repetition_metrics  # noqa: E402
 from gameplay_acceptance_contract import unknown_diagnostic_gate  # noqa: E402
 import mesen_mcp.session as _session  # noqa: E402
@@ -45,7 +49,12 @@ from mesen_mcp import McpSession  # noqa: E402
 DEFAULT_EMULATOR = ROOT / "tools" / "mesen211_mcp_controller.sh"
 BG_GRAPHICS_FILE_BASE = 0x090000
 VERTICAL_BLACK_COLUMN_RATIO = 0.98
-MAX_VERTICAL_BLACK_RUN = 47
+BACKGROUND_FIELD_BOX = (0, 24, 256, 192)
+# A missing physical BG slot is 32 pixels wide.  Stage 1 also has legitimate
+# nine-pixel black interiors inside its gold architectural columns, so measure
+# the upper BG field (not the independently drawn floor) and allow those motifs
+# while still failing before a complete slot can disappear.
+MAX_VERTICAL_BLACK_RUN = 16
 
 
 def parse_args() -> argparse.Namespace:
@@ -106,12 +115,93 @@ def parse_milestone_frames(raw: str, title_frame: int) -> list[int]:
     return values
 
 
+def renderer_readiness_failures(
+    row: dict[str, Any], *, require_gameplay_mode: bool = False
+) -> list[dict[str, Any]]:
+    """Fail closed when a claimed gameplay/title boundary is still boot-dead."""
+
+    failures: list[dict[str, Any]] = []
+    if require_gameplay_mode and row.get("bg_mode") != 2:
+        failures.append(
+            {
+                "kind": "gameplay_bg_mode_not_active",
+                "value": row.get("bg_mode"),
+            }
+        )
+    if row["render_complete"] == 0:
+        failures.append({"kind": "gameplay_render_not_live"})
+    if row["boot_activity"] & 0x80:
+        failures.append(
+            {"kind": "boot_owner_not_retired", "value": row["boot_activity"]}
+        )
+    if row["obj_published_valid"] != 0xA5:
+        failures.append(
+            {
+                "kind": "gameplay_oam_not_published",
+                "value": row["obj_published_valid"],
+            }
+        )
+    return failures
+
+
 def credits(m: McpSession) -> int:
     return int.from_bytes(m.read_memory("snesMemory", 0x401C62, 2), "big")
 
 
 def frame_count(m: McpSession) -> int:
     return int(m.get_state().get("frameCount", 0))
+
+
+def setup_snapshot(m: McpSession, output: Path, phase: str) -> dict[str, Any]:
+    """Retain enough setup state to classify a pre-Start failure."""
+    row = capture.snapshot(m)
+    row["phase"] = phase
+    row["input_mailbox"] = bytes(
+        m.read_memory("snesMemory", 0x410000, 4)
+    ).hex()
+    row["screenshot"] = capture.take_screenshot(
+        m, output / f"setup-{phase}.png"
+    )
+    row["checkpoint"] = capture.save_checkpoint(
+        m, output / f"setup-{phase}.mss"
+    )
+    return row
+
+
+def require_controller_safe_emulator(emulator: Path) -> Path:
+    """Reject launchers that can silently record a movie with no controller."""
+    resolved = emulator.resolve()
+    required = DEFAULT_EMULATOR.resolve()
+    if resolved != required:
+        raise ValueError(
+            "organic input validation requires the controller-safe launcher "
+            f"{required}; direct Mesen can inherit port 1 = None"
+        )
+    return resolved
+
+
+def movie_input_contract(movie: Path) -> dict[str, Any]:
+    """Authenticate that a completed Mesen movie actually contains port-1 input."""
+    with zipfile.ZipFile(movie) as archive:
+        settings = archive.read("GameSettings.txt").decode("utf-8")
+        rows = archive.read("Input.txt").decode("utf-8").splitlines()
+    controller_setting = "snes.port1.type SnesController" in settings.splitlines()
+    controller_rows = sum(row.count("|") >= 2 for row in rows)
+    select_rows = sum("S" in row.split("|")[2] for row in rows if row.count("|") >= 2)
+    start_rows = sum("T" in row.split("|")[2] for row in rows if row.count("|") >= 2)
+    return {
+        "port1_controller": controller_setting,
+        "input_rows": len(rows),
+        "controller_rows": controller_rows,
+        "select_rows": select_rows,
+        "start_rows": start_rows,
+        "green": (
+            controller_setting
+            and bool(rows)
+            and controller_rows == len(rows)
+            and select_rows > 0
+        ),
+    }
 
 
 def bg_graphics_check(m: McpSession, rom_bytes: bytes) -> dict[str, Any]:
@@ -157,16 +247,17 @@ def bg_graphics_check(m: McpSession, rom_bytes: bytes) -> dict[str, Any]:
 def image_metrics(path: Path) -> dict[str, Any]:
     image = Image.open(path).convert("RGB")
     playfield = image.crop(PLAYFIELD_BOX)
+    background = image.crop(BACKGROUND_FIELD_BOX)
     pixels = list(playfield.getdata())
     black = sum(pixel == (0, 0, 0) for pixel in pixels)
     black_columns = []
-    for x in range(playfield.width):
+    for x in range(background.width):
         column_black = sum(
-            playfield.getpixel((x, y)) == (0, 0, 0)
-            for y in range(playfield.height)
+            background.getpixel((x, y)) == (0, 0, 0)
+            for y in range(background.height)
         )
         black_columns.append(
-            column_black / playfield.height >= VERTICAL_BLACK_COLUMN_RATIO
+            column_black / background.height >= VERTICAL_BLACK_COLUMN_RATIO
         )
     max_vertical_black_run = 0
     current_vertical_black_run = 0
@@ -184,6 +275,7 @@ def image_metrics(path: Path) -> dict[str, Any]:
         "playfield_unique_colors": len(set(pixels)),
         "max_vertical_black_run": max_vertical_black_run,
         "vertical_black_column_ratio": VERTICAL_BLACK_COLUMN_RATIO,
+        "vertical_black_measurement_box": list(BACKGROUND_FIELD_BOX),
         "dominant_tile_ratio": repetition["dominant_tile_ratio"],
         "unique_tiles": repetition["unique_tiles"],
     }
@@ -249,6 +341,18 @@ def evaluate_rows(
         if row["halt"] != 0:
             failures.append(
                 {"relative_frame": row["relative_frame"], "kind": "interpreter_halt"}
+            )
+        # These are readiness invariants, not fade/transition pixels.  A visual
+        # grace period must never turn a renderer that has completed no frame,
+        # retained boot/title ownership, or published no gameplay OAM into a clear
+        # result.  The a933d9d5 regression otherwise survived until the first
+        # screenshot heuristic at relative frame 100 while its worker was in a
+        # permanent boot-owner/OAM circular wait from frame zero.
+        for readiness_failure in renderer_readiness_failures(
+            row, require_gameplay_mode=True
+        ):
+            failures.append(
+                {"relative_frame": row["relative_frame"], **readiness_failure}
             )
         if row["relative_frame"] >= visual_grace_frames:
             metrics = row["image_metrics"]
@@ -333,6 +437,10 @@ def main() -> int:
     for path in (args.rom, args.emulator):
         if not path.is_file():
             raise FileNotFoundError(path)
+    try:
+        emulator = require_controller_safe_emulator(args.emulator)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     rom = args.rom.resolve()
     if rom.stat().st_size != 0x400000:
         raise SystemExit("expected a 4 MiB production ROM")
@@ -346,7 +454,7 @@ def main() -> int:
 
     with McpSession(
         rom=rom,
-        mesen=args.emulator.resolve(),
+        mesen=emulator,
         cwd=ROOT,
         port=args.record_port,
         boot_wait=6.0,
@@ -363,11 +471,49 @@ def main() -> int:
         advance_to(m, args.title_frame)
         title_frame = frame_count(m)
         title_credits = credits(m)
-        coin_response = m.set_input(McpSession.BTN_SELECT, args.coin_frames)
-        m.pause()
-        release_coin_response = m.set_input(0, 1)
-        m.pause()
+        title_snapshot = setup_snapshot(m, output, "title")
+        title_readiness = renderer_readiness_failures(title_snapshot)
+        if title_readiness:
+            stop_record_response = m.stop_movie()
+            capture.wait_for_file(movie)
+            failure = {
+                "schema": 1,
+                "result": "red",
+                "scope": "fresh-power title-boundary renderer readiness",
+                "reason": "title boundary failed renderer readiness",
+                "rom": str(rom),
+                "rom_sha256": sha256(rom),
+                "emulator": str(emulator),
+                "emulator_sha256": sha256(emulator),
+                "movie": str(movie),
+                "movie_sha256": sha256(movie),
+                "recording": {
+                    "record_response": record_response,
+                    "stop_response": stop_record_response,
+                },
+                "snapshots": [title_snapshot],
+                "first_divergence": {
+                    "phase": "title",
+                    "frame": title_frame,
+                    "expected": "boot owner retired and gameplay renderer live",
+                    "observed": title_readiness,
+                },
+                "acceptance_gate": unknown_diagnostic_gate(
+                    "fresh_title_setup",
+                    "Title readiness failed before organic input was attempted.",
+                ),
+            }
+            (output / "setup-failure.json").write_text(
+                json.dumps(failure, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            raise RuntimeError("title boundary failed renderer readiness")
+        coin_response = advance_recording_with_input(
+            m, McpSession.BTN_SELECT, args.coin_frames
+        )
+        release_coin_response = advance_recording_with_input(m, 0, 1)
         coin_end_frame = frame_count(m)
+        coin_end_snapshot = setup_snapshot(m, output, "coin-end")
         m.run_frames(args.credit_wait_frames)
         m.pause()
         waited = args.credit_wait_frames
@@ -378,11 +524,68 @@ def main() -> int:
         credit_frame = frame_count(m)
         credit_count = credits(m)
         if credit_count <= 0:
+            timeout_snapshot = setup_snapshot(m, output, "credit-timeout")
+            stop_record_response = m.stop_movie()
+            capture.wait_for_file(movie)
+            movie_contract = movie_input_contract(movie)
+            environment_failure = not movie_contract["green"]
+            failure = {
+                "schema": 1,
+                "result": "unknown",
+                "scope": "fresh-power organic coin/Start setup diagnostic",
+                "reason": (
+                    "controller-safe movie input contract failed"
+                    if environment_failure
+                    else "organic coin did not produce a credit"
+                ),
+                "rom": str(rom),
+                "rom_sha256": sha256(rom),
+                "emulator": str(emulator),
+                "emulator_sha256": sha256(emulator),
+                "movie": str(movie),
+                "movie_sha256": sha256(movie),
+                "recording": {
+                    "record_response": record_response,
+                    "coin_response": coin_response,
+                    "release_coin_response": release_coin_response,
+                    "stop_response": stop_record_response,
+                    "coin_button_mask": McpSession.BTN_SELECT,
+                    "coin_frames": args.coin_frames,
+                    "credit_wait_actual_frames": waited,
+                    "credit_wait_ceiling": args.credit_wait_ceiling,
+                    "movie_input_contract": movie_contract,
+                },
+                "snapshots": [
+                    title_snapshot,
+                    coin_end_snapshot,
+                    timeout_snapshot,
+                ],
+                "first_divergence": {
+                    "phase": (
+                        "validation-environment"
+                        if environment_failure
+                        else "credit-timeout"
+                    ),
+                    "frame": credit_frame,
+                    "expected": "credits > 0",
+                    "observed": credit_count,
+                },
+                "acceptance_gate": unknown_diagnostic_gate(
+                    "fresh_poststart_setup",
+                    "Post-Start framebuffer coverage was not reached.",
+                ),
+            }
+            (output / "setup-failure.json").write_text(
+                json.dumps(failure, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            if environment_failure:
+                raise RuntimeError("controller-safe movie input contract failed")
             raise RuntimeError("organic coin did not produce a credit")
-        start_response = m.set_input(McpSession.BTN_START, args.start_frames)
-        m.pause()
-        release_start_response = m.set_input(0, 1)
-        m.pause()
+        start_response = advance_recording_with_input(
+            m, McpSession.BTN_START, args.start_frames
+        )
+        release_start_response = advance_recording_with_input(m, 0, 1)
         poststart_frame = frame_count(m)
         poststart_credits = credits(m)
         if poststart_credits >= credit_count:
@@ -394,6 +597,12 @@ def main() -> int:
         record_end_frame = frame_count(m)
         stop_record_response = m.stop_movie()
     capture.wait_for_file(movie)
+    movie_contract = movie_input_contract(movie)
+    if not movie_contract["green"] or movie_contract["start_rows"] <= 0:
+        raise RuntimeError(
+            "recorded movie omitted required port-1 Select/Start input: "
+            f"{movie_contract}"
+        )
     if record_end_frame - poststart_frame != args.poststart_frames:
         raise RuntimeError("recording did not retain the requested post-Start span")
 
@@ -413,7 +622,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     with McpSession(
         rom=rom,
-        mesen=args.emulator.resolve(),
+        mesen=emulator,
         cwd=ROOT,
         port=args.playback_port,
         boot_wait=6.0,
@@ -518,8 +727,8 @@ def main() -> int:
         ),
         "rom": str(rom),
         "rom_sha256": rom_sha256,
-        "emulator": str(args.emulator.resolve()),
-        "emulator_sha256": sha256(args.emulator),
+        "emulator": str(emulator),
+        "emulator_sha256": sha256(emulator),
         "movie": str(movie),
         "movie_sha256": sha256(movie),
         "movie_start": "StartWithoutSaveData",
@@ -536,6 +745,8 @@ def main() -> int:
             "credit_count_before_start": credit_count,
             "credit_count_after_start": poststart_credits,
             "credit_wait_actual_frames": waited,
+            "movie_input_contract": movie_contract,
+            "setup_snapshots": [title_snapshot, coin_end_snapshot],
             "phases": phases,
         },
         "playback": {

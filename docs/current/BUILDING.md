@@ -20,15 +20,18 @@ From the repository root:
 
 ```sh
 python3 tools/prepare_roms.py /path/to/superman.zip
-bash tools/build_interp.sh
+POPPY_DLL=/home/chad/poppy-astrobleem-0d84bf5d/src/Poppy.CLI/bin/Release/net10.0/poppy.dll \
+  bash tools/build_interp.sh
 python3 tools/audit_banks.py
 stat -c '%s' build/interp.sfc
 sha256sum build/interp.sfc
 ```
 
-At the August 14 engineering checkpoint, an ordinary build of current source is
-rejected hash `f25a0e68…`. It has a clipped/left-shifted SA-1 boot logo and wrong
-walking presentation. `build/interp.sfc` is always unverified and must never be
+At the August 15 engineering checkpoint, the ordinary built ROM is renderer-red
+hash `d01db972…`. Current source additionally contains a checkpoint-proven BG DMA
+chunk correction that has not yet been assembled into a successor ROM. The build
+script prints the selected Poppy path and DLL hash; use the pinned corrected fork
+above for this lineage. `build/interp.sfc` is always unverified and must never be
 renamed or handed off as a test candidate. Its exact evidence scope and remaining
 blockers are recorded in [STATUS.md](STATUS.md).
 
@@ -73,7 +76,7 @@ expecting the current audio blob.
 > | Repo | Clone |
 > |---|---|
 > | umbrella / suite | https://github.com/TheAnsarya/game-garden |
-> | **Poppy** — 65816 assembler | https://github.com/TheAnsarya/poppy |
+> | **Poppy** — 65816 assembler | corrected fork: https://github.com/astrobleem/poppy (upstream: https://github.com/TheAnsarya/poppy) |
 > | **Peony** — 68K disassembler | https://github.com/TheAnsarya/peony |
 > | **Pansy** — `.pansy` symbol format/tool | https://github.com/TheAnsarya/pansy |
 
@@ -81,7 +84,7 @@ expecting the current audio blob.
 |---|---|---|---|---|
 | **.NET 8** runtime | `/home/chad/.dotnet8` | 8.x | runs the legacy Mesen build / Python client environment | install SDK 8 |
 | **.NET 10** runtime/SDK | `/home/chad/.dotnet10` | 10.x | runs/builds Nexen and the Game Garden suite | install SDK 10 |
-| **Poppy** (65816 assembler) [Game Garden] | `/home/chad/poppy` → `src/Poppy.CLI/bin/Release/net10.0/poppy.dll` | source build | assembles `interp.pasm`/`video.pasm`; emits `.pansy` symbols; SNES target, `.sa1_enabled` | clone `TheAnsarya/poppy`, `dotnet build -c Release` (.NET 10) |
+| **Poppy** (65816 assembler) [Game Garden] | pinned corrected checkout `/home/chad/poppy-astrobleem-0d84bf5d` → `src/Poppy.CLI/bin/Release/net10.0/poppy.dll`; old upstream remains `/home/chad/poppy` | corrected fork commit `0d84bf5d…`, DLL SHA-256 `771916f2…993a`; old upstream `fa44a809…` is retained only for historical reproduction | assembles `interp.pasm`/`video.pasm`; emits `.pansy` symbols; SNES target, `.sa1_enabled` | clone `astrobleem/poppy`, pin the commit and DLL hash, then `dotnet build -c Release` (.NET 10); pass `POPPY_DLL=...` explicitly |
 | **Peony** (68K disassembler) [Game Garden] | `/home/chad/peony` | source build, .NET 10 | recursive-descent disassembly (G1 coverage) | clone `TheAnsarya/peony`, `dotnet build Peony.Cli` — single-threaded, slow on big output |
 | **Nexen** (SNES emulator, primary oracle) | `/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen` | recovery branch `6365acc39` on upstream `mcp-server` `ed2e70e94` | real-PPU + SA-1 cycle/debug oracle; R5 adds exact hook-event cycle stamps | clone `astrobleem/Mesen2`, branch `mcp-server`, then build/publish with .NET 10 |
 | **Mesen2** (legacy compatibility checkout) | `/home/chad/Mesen2/bin/linux-x64/Release/Mesen` | source build | older MCP-compatible PPU oracle used by historical scripts | build Mesen2 from source (linux-x64 Release) |
@@ -133,8 +136,10 @@ export SUPERMN_SCRATCH=<scratch-dir-with-flytick/>
 python3 tools/flyval.py 7000
 ```
 
-`tools/build_interp.sh` hardcodes: `DOTNET_ROOT=/home/chad/.dotnet10`, the Poppy dll path, and
-`cd "$(dirname "$0")/.."`. `tools/build_interp_rom.py` reads `data/superman_m68k.bin`,
+`tools/build_interp.sh` sets `DOTNET_ROOT=/home/chad/.dotnet10`, accepts a
+`POPPY_DLL` override (defaulting to the historical `/home/chad/poppy` DLL), prints
+the selected assembler path/hash, and runs from the repository root.
+`tools/build_interp_rom.py` reads `data/superman_m68k.bin`,
 `tools/mame-trace/gfx1.bin`, `src/interp.bin`, `src/video.bin` (relative paths — OK if you keep
 the repo layout). Python harnesses are historically mixed: current recovery cycle tools launch the
 healthy-volume Nexen path above, older cycle/lockstep tools may still hardcode `/home/chad/Nexen`,

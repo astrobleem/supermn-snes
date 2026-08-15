@@ -1,12 +1,74 @@
 # Superman release blockers
 
-There is no promoted human-test ROM. Rejected bounded renderer/scroll build
-`f25a0e68…` is not playable or shippable. This file
+There is no promoted human-test ROM. Current ordinary response candidate
+`d01db972…` is renderer-red and is not playable or shippable; rejected bounded renderer/scroll build
+`f25a0e68…` remains negative evidence. This file
 lists what must change or be proven before either label can return. The preserved
 `a9765fbf…` timing evidence line is a 66-byte, hash-guarded patch of preserved `5c7e…`, limited to two terminal
 native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
 common virtual-IRQ clock. `build/interp-current-5c7e-before-vtime-esc9.sfc`
 retains the exact predecessor.
+
+The renderer is being consolidated under
+[`RENDERER_CONSOLIDATION.md`](RENDERER_CONSOLIDATION.md). Before another ROM can
+be considered for human testing, boot Mode-7 ownership must exclude every
+gameplay presentation write, and BG map/patterns, palette, OAM, scroll, and
+world-object motion must publish as one complete scene generation. The first
+walking replay did not establish MAME alignment, but the retained 601-frame run
+does prove an internal presentation cause: BG camera 103 was combined with an
+OAM base at camera 160/sequence 457 and only its X fields were translated. The
+source fail-safe now targets the last hardware-OAM base instead of live future
+camera state; queue latency, MAME facing, and animation order remain open.
+
+The August 15 exact-hash gate for `d01db972…` retained 602 consecutive
+post-Start frames and is red. Its first persistent visual corruption is four
+truncated BG pattern records at slots 42/84/126/168: the last record of every
+`$1500`-byte prepared-BG DMA exceeds the real VBlank budget after mandatory
+BG/OAM presentation. A same-ROM, intervened frame-41 lab proves `$1400` fixes all
+four hashes with halt zero; current source contains that change, but no successor
+ROM exists yet. Separately, the single OBJ presentation buffer is locked across
+NMI during candidate construction. BG advances first while OAM remains at the
+prior camera for one frame. A retained last-published OAM path is required before
+the next bounded build/replay. The `d01db972…` run remains regression evidence and
+does not transfer exact-hash acceptance to a successor.
+
+Predecessor `72838eca…` closes one reproduced structural failure only. A physical
+column move formerly cleared the destination before unchanged cached cells could
+rewrite it, permanently losing one 112-word tilemap slot per transition. The
+replacement copies the complete 4-by-32 SNES-tile slot to its new physical
+location before clearing the old slot. The real-core bridge is green 30/30, and a
+bounded 261-frame continuation from an inspector-proven clean predecessor keeps
+all 1,568 intended nonzero tilemap words. Sol reviewed the former failure region
+and the later same-ROM tail; the progressive black void is absent.
+
+The pause/step acquisition behind that 261-frame report is retained as red but can
+cross two presentations between serialized states, so it cannot establish natural
+cadence. An uninterrupted trace instead confirmed that NMI presentation ownership
+was wrong: DMA merely being pending and OBJ-pattern batches both suppressed BG/OBJ
+publication. Rejected `f8ab5339…` removed the pending-DMA proxy but still missed
+frames. Rejected `ebdd33c5…` presented from inside the late batch and duplicated BG
+and OBJ publication on 15 frames.
+
+Predecessor `927a2879…` routes batch-due NMIs through one leading-edge presenter before
+the historical wake. Its isolated real-core bridge is green 30/30. Its fail-closed
+uninterrupted cadence reducer is component-green for all 77 exact consecutive PPU
+frames 6,012-6,088: exactly one BG and OBJ publication per frame, no duplicate or
+missing ranges, and no cursor delta over two pixels. Sol reviewed a coalesced
+contact sheet containing all 65 retained lossless framebuffer records; the complete
+wall/floor/HUD/column/player composite remains present and no black vertical bar is
+visible. The source recorder remains red only because this short cross-ROM window
+did not execute its independently required BG-chunk hook; the cadence reducer
+authenticates that source and reports its narrower component separately.
+
+Current `c14c0184…` adds the symbolic boot-target repair and has authenticated
+exact-hash fresh power, centered boot geometry, title, organic credit/Start, and
+601 consecutive post-Start frames. Its background is structurally clear after the
+normal fade, but its temporal and scene-coherence gates are red: 77 PPU holds occur
+while the source camera moves, published OAM reaches age 16, and the first moving
+scene waits seven frames for a 16-record OBJ-pattern batch. That bounded failure is
+the immediate blocker. Aligned MAME composite pixels, facing/animation order,
+fence behavior, later stages, performance, and full playback remain unknown. No
+full gameplay campaign has been started for `c14c0184…`.
 
 ## Playable-demo gate
 
@@ -118,7 +180,7 @@ slot 2 owned `$19AE` but retained 127 bytes of Mode-7 data. Passive tracing prov
 that `HVBJOY=$C2` remained VBlank-high at `OPVCT=$0000`; the low-page helper
 mistook line 0 for lines 225-255, took direct DMA, and returned after Mesen
 rejected the VRAM write. Rejected `b92ac14f…` disabled only line-256+ direct DMA
-and stayed red. Current `f25a0e68…` rejects all low-page lines below 225 as well.
+and stayed red. Rejected `f25a0e68…` rejects all low-page lines below 225 as well.
 Its exact frame-5,250 slot matches 128/128 bytes, and its exact-title organic
 coin/Start run retains 601 clear post-Start framebuffers 5,704-6,304. The temporal
 gate is green (302 PPU steps, 151 source steps, no discontinuity), and Sol reviewed
@@ -147,11 +209,14 @@ background discontinuities because Poppy silently encoded the impossible long
 `STZ` marker clear as a bank-relative store. Current source uses a legal explicit
 long store and pack-time guards pin same-NMI commit/clear ownership.
 
-This closes only the reproduced bounded Stage-1 black-band and cadence
-regressions; it does not promote `f25a0e68…`. Aligned exact-MAME pixels, formal MAME-frame conservation, later
-stages/organic Stage 2, renderer throughput, current performance, hardware, and
-human combat/audio acceptance remain open. No full long gameplay replay has
-been started for `f25a0e68…`.
+That work closed only the reproduced bounded Stage-1 black-band and cadence
+regressions; it did not promote `f25a0e68…`. Predecessor `72838eca…` separately
+closes the reproduced destructive physical-slot loss under bounded checkpoint
+coverage. Current `927a2879…` adds the narrow uninterrupted once-per-NMI cadence
+repair described above. Aligned exact-MAME pixels, formal MAME-frame conservation,
+fresh exact-hash coverage, later stages/organic Stage 2, renderer throughput,
+current performance, hardware, and human combat/audio acceptance remain open. No
+full long gameplay replay has been started for any of these hashes.
 
 Promotion of a successor still requires this one
 ROM identity and one exact tick range to pass the machine-enforced state oracle,

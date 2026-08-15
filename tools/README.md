@@ -30,6 +30,22 @@ workflow. Legend:
 - **`test_promote_human_test_rom.py`** [G] — pure regression tests proving that a
   complete exact-hash manifest passes while a missing scenario, mismatched ROM,
   `unknown` walk result, false facing check, or missing artifact fails closed.
+- **`validate_boot_presentation.py`** [G] — compares settled boot captures with
+  approved logo geometry/pixels, requires loading text in the sequence, and
+  rejects clipped/shifted logos or unexpected nonblack pixels. Its report is a
+  visual component gate only; fresh-power lineage and exact-ROM authentication
+  remain separate mandatory promotion evidence.
+- **`test_boot_presentation.py`** [G] — proves that the boot component gate
+  accepts an approved frame and rejects both the far-left logo regression and
+  an otherwise isolated corrupt pixel.
+- **`validate_scene_generation_coherence.py`** [G] — consumes consecutive fresh
+  framebuffer metadata and rejects a BG camera moving away from the unchanged
+  complete hardware-OAM base, OAM generations older than the configured game-
+  tick limit, or camera steps above two pixels. It does not replace aligned MAME
+  facing/animation/composite validation.
+- **`test_scene_generation_coherence.py`** [G] — proves that coherent convergence
+  passes while the rejected newer-camera/older-OAM pattern fails with explicit
+  mismatch ranges.
 
 ## Tracing & coverage (gate G1)
 - **`mame-trace/trace68k.lua`** [G] — headless 68K PC+disasm trace
@@ -146,10 +162,15 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
 - **`capture_snes_input_framebuffers.py` / `capture_snes_direct_framebuffers.py`**
   [S] — checkpoint captures under real controller input. Movie replay in the
   first verifies each retained framebuffer is the next actual video frame and
-  supports periodic states plus explicit cross-ROM video/cache migrations.
+  supports periodic states plus explicit cross-ROM video/cache migrations. A
+  recording resumes the same held mask from each exact paused boundary when the
+  controller API returns short, and anchors timing after CurrentState recording
+  setup. A final one-frame/two-frame overshoot remains in the movie while exact
+  replay stops at the requested boundary. Non-neutral captures fail setup unless the game mailbox actually observes
+  input; button rows in the movie alone are insufficient.
   Legacy Mesen's direct-controller request can advance zero, one, or two actual
-  video frames, so the second is sampling-only and records each observed delta;
-  it must never claim consecutive coverage. Its coherent-idle stop retains two
+  video frames, so the second fails unless each retained step advances exactly one
+  and fails if commanded input never reaches the game mailbox. Its coherent-idle stop retains two
   additional samples by default so screenshot latency cannot expose the pre-DMA
   image. Both record interventions and are diagnostic acquisition, never
   gameplay acceptance.
@@ -174,6 +195,9 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   `StartWithoutSaveData` movie with organic coin and Start input. It retains
   fresh loading, actual title/credit milestones, every actual post-Start video frame,
   periodic states and BG graphics checks, and a mandatory-review contact sheet.
+  Zero completed gameplay renders, an unretired boot owner, or missing hardware
+  gameplay-OAM publication are machine-red immediately at post-Start frame zero;
+  the visual fade grace cannot suppress those readiness failures.
   Blank/repeated playfields, persistent vertical black bands, hidden BG1,
   absent BG ownership, partial tile DMA,
   nonconsecutive frames, and interpreter halts are machine-red after the default
@@ -184,6 +208,18 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   movie, contact sheet, every retained PNG hash, and every recomputed framebuffer
   metric before reapplying the visual gate with a new grace threshold. It performs
   no emulator replay or runtime writes and cannot issue gameplay acceptance.
+- **`adapt_fresh_poststart_capture.py`** [S] — fail-closed recovery adapter for
+  the narrow case where organic fresh movie recording completed but the original
+  validator failed before retaining its suffix. It accepts only a hash-authenticated
+  `StartWithoutSaveData` movie replay with no state, no runtime writes, step-one
+  consecutive coverage, authenticated PNGs, and initialized OBJ queue metadata;
+  it then emits the ordinary structural/temporal reducer schema and contact sheet.
+  It cannot turn a checkpoint or partial capture into fresh evidence.
+- **`diagnose_bg_chunk_budget.py`** [S] — intervened same-ROM checkpoint lab for
+  the `d01db972…` prepared-BG VBlank overrun. It changes only the WRAM renderer
+  mirror's chunk immediates, advances a bounded suffix, and hashes the four
+  records truncated at the old `$1500` boundaries. Its report always records the
+  mutation and is never fresh or acceptance evidence.
 - **`analyze_snes_framebuffer_flashes.py`** [S] — repeated-tile/flash heuristic
   over a consecutive capture. `--skip-frames` is allowed only for a disclosed
   acquisition artifact such as a serialized pre-vblank image; a clear result is
@@ -214,7 +250,10 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   BG1 H/V offsets, accepted/latest/raw/live X1-001 scroll state, integrated
   presented HOFS, displayed/pending map origin and full column maps, map-commit
   markers, DMA0 descriptor,
-  halt/tick/render state, and a JSON manifest. For an
+  halt/tick/render state, bounded OBJ upload-queue/cache telemetry, and a JSON
+  manifest. Queue contents are decoded only after the renderer's `$A55A` cache
+  marker is valid; random power-on WRAM is retained as raw/unavailable metadata,
+  while an initialized count above 128 fails closed. For an
   explicitly checkpointed cross-version renderer lab, `--refresh-video-mirror` replaces and
   verifies saved `$7F:8000-$AFFF` from the selected ROM and records that intervention in
   provenance; it requires `--state`. The default fresh-power path performs no memory write. This
@@ -251,6 +290,19 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   OAM due/valid/once-per-NMI state. This is the focused regression harness for presentation
   deadlocks such as an ACK of `$0100` being misread as zero in 8-bit mode; it remains
   checkpoint diagnostic evidence rather than fresh-power acceptance.
+- **`capture_snes_input_framebuffers.py --early-obj-batch-lab` /
+  `--obj-batch-first-lab`** [S] — explicit runtime-only checkpoint interventions
+  that change the batch-due helper to `present -> batch -> wake` or
+  `batch -> present -> wake`. They distinguish wake/snapshot starvation from the
+  safe per-VBlank tile limit without changing the ROM file; record/playback
+  mutations are verified in the intervention ledger. Results are diagnostic-only
+  and cannot certify an ordinary ROM.
+- **`analyze_uninterrupted_presenter_trace.py`** [S] — fail-closed reducer for one uninterrupted
+  `trace_snes_bg_dma_input.py` hook stream. It authenticates the source files, excludes the
+  serialized starting partial PPU frame, requires consecutive coverage, and rejects any
+  complete frame without exactly one BG step and one OBJ publication, duplicate cursor writes,
+  or a cursor delta over two pixels. Its result is a cadence component only, never gameplay,
+  aligned-pixel, fresh-power, performance, or full-composite acceptance.
 - **`trace_playtest_actions.py`** [S] — exact-Mesen real-controller action-schedule diagnostic for
   crate/attack/encounter reproduction. It records player animation/action state, tick/render/halt,
   stack floors, BG1 H/V plus packed/X1-001 scroll state, screenshots, and checkpoints.

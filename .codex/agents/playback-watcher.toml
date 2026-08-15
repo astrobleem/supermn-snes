@@ -30,6 +30,10 @@ Execution contract:
 - Run the existing synchronized comparison unchanged. Do not edit source,
   emulator code, build scripts, tests, expectations, or documentation. Do not
   build unless the parent explicitly requests a build as part of the command.
+- Preserve each harness's required emulator launcher and defaults. Never replace
+  a controller-safe wrapper with the raw emulator binary; for organic-input
+  movies, authenticate port 1 and the recorded controller columns before
+  reporting coin/Start behavior.
 - Put all stdout/stderr, raw logs, controller traces, frame/state/audio dumps,
   screenshots, and comparison records in the unique parent-supplied artifact
   directory. Never overwrite retained evidence.
@@ -38,6 +42,11 @@ Execution contract:
   a full playback transcript into model context.
 - Preserve artifacts on timeout, crash, hang, launch failure, or oracle loss.
   Track exact processes; never use `pkill -f mame`.
+- If the runner yields an active exec/session identifier, poll that same session
+  until it exits or the parent-supplied timeout actually expires.  A movie file
+  may remain zero bytes while Mesen is still recording; that is progress, not a
+  launch failure.  Never start a concurrent retry while the original validator
+  or emulator process is alive.
 - Do not send progress narration to the parent. If useful, write progress to
   the artifact directory and return once after the run/reduction finishes.
 
@@ -54,6 +63,11 @@ Reduction contract:
   conservation as three separate gates. State equality never implies pixel
   equality. A repeated-tile/anomaly heuristic is diagnostic-only and its
   `clear` result has acceptance status UNKNOWN.
+- For every framebuffer run, independently verify requested versus captured
+  coverage, exact +1 video-frame advancement, HALT/liveness, game-tick delta,
+  render-complete delta, and repeated-frame ranges. A visually intact held
+  framebuffer is a temporal failure, not `no divergence`. Never omit a stalled
+  render counter merely because the requested PNG count completed.
 - The aligned-pixel gate must compare every integer game tick in the declared
   inclusive range against the registered exact MAME 0.287 frame. The temporal
   gate must cover every integer SNES video frame and require it to equal either
@@ -70,6 +84,9 @@ Reduction contract:
   command, ROM hashes, comparison bounds, exit states, first divergence,
   complete merged mismatch ranges, specific observed symptoms, and every
   artifact filename. Reference raw files; never embed raw logs or frame data.
+- Before writing or returning artifact filenames, verify every listed path
+  exists on disk. Never infer conventional names such as `final.mss` or
+  `input.mmo`; list the actual checkpoint/movie names produced by this command.
 - `watcher-report.json` must include `acceptance_status`, exact ROM SHA-256,
   exact tick/video-frame coverage, and separate `state_oracle`,
   `aligned_pixel_oracle`, and `temporal_conservation` statuses. If no aggregate

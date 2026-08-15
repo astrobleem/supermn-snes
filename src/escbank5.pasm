@@ -15356,12 +15356,12 @@ lhp_epoch_ready:
     sta $220B            ; discard a stale inter-CPU request before quiescing
     sta $220A            ; enable S-CPU -> SA-1 IRQ as the masked-WAI wake source
     rep #$20
-    ; Build the renderer manifest while the completed arcade shadow is stable,
-    ; but before publishing arm=1.  NMI is always live, so doing this after the
-    ; arm store would let the 5A22 claim a half-built manifest at a deadline.
-    ; The fixed bank-$9E helper preserves P/A/X/Y/DBR and uses only the private
-    ; $41:0200-$1EFF workspace.
-    jsl.l $9EDC00
+    ; Publish the completed shadow's raw camera byte before the manifest build.
+    ; The leading NMI can arrive while the fixed bank-$9E helper is working, so
+    ; publishing only after that helper made NMI present the preceding camera
+    ; target for one extra frame.  The bank-$99 tail below writes the A5 marker
+    ; last, then enters the manifest helper without adding a return frame.
+    jsl.l $99FBC5       ; explicit bank: Poppy local-label long calls encode bank $00
     lda #$0001
     sta $410122          ; publish LAST: stable video shadow is quiescent
     sep #$20
@@ -15441,6 +15441,26 @@ lh_0818_vtime_native:
     jsl.l $99FB00
     jml.l lh_0818_after_gateway
 lh_0818_vtime_gateway_end:
+
+; Producer half of the leading-NMI camera mailbox.  $99:FBC5 is the first byte
+; after lh_0818_vtime_gateway: its final JML occupies $FBC1-$FBC4, including
+; the $00 destination bank byte at $FBC4.  Keep the exact seam guarded by the
+; ROM packer and Poppy's overlap rejection.  The raw byte is published first;
+; marker $A5 makes the pair visible atomically to the 5A22 NMI consumers.
+.org $FBC5
+.a16
+.i16
+pacing_camera_mailbox_publish:
+    sep #$20
+.a8
+    lda.l $413489
+    sta.l $410162
+    lda #$A5
+    sta.l $410163
+    rep #$20
+.a16
+    jml.l $9EDC00
+pacing_camera_mailbox_publish_end:
 
 ; The old $011778 handoff interpreted exactly one BSR before bhp_bank_ext
 ; entered hle_12b6c.  The direct native link must retain that single $AC

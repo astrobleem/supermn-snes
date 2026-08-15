@@ -3637,7 +3637,7 @@ op_clrb_an:            ; clr.b (An) : [An]=0 (work RAM only); Z=1 ; PC+=2
     lda $00,x
     tax
     sep #$20
-    stz $400000,x
+    jsr clear_work_byte
     rep #$20
 cba_noff:
     lda #$0001
@@ -6022,7 +6022,7 @@ op_clrb_d16:           ; clr.b (d16,An) : [An+d16]=0; Z=1 ; PC+=4
     adc $52
     tax
     sep #$20
-    stz $400000,x
+    jsr clear_work_byte
     rep #$20
     lda #$0001
     sta $60
@@ -6047,9 +6047,9 @@ op_clrw_anp:           ; clr.w (An)+ : [An]=0 (work RAM only); An+=2; Z=1 ; PC+=
     phx                ; save An slot
     tax                ; X = work-RAM offset
     sep #$20
-    stz $400000,x
+    jsr clear_work_byte
     inx
-    stz $400000,x
+    jsr clear_work_byte
     rep #$20
     plx                ; restore An slot
 caw_noff:
@@ -6079,9 +6079,9 @@ op_clrw_pre:           ; clr.w -(An) : An-=2; [An]=0; Z=1 ; PC+=2
     sta $00,x
     tax
     sep #$20
-    stz $400000,x
+    jsr clear_work_byte
     inx
-    stz $400000,x
+    jsr clear_work_byte
     rep #$20
     lda #$0001
     sta $60
@@ -10234,7 +10234,7 @@ trap_to:
     sta $3C
     tax
     sep #$20
-    stz $400000,x        ; PC 31-24 = 0
+    jsr clear_work_byte  ; PC 31-24 = 0, legal bank-long store
     inx
     lda $52
     sta $400000,x        ; PC 23-16
@@ -11511,6 +11511,11 @@ bbe_ext2_miss:
 
 .org $D372
 _25110_t1:
+; The complete implementation was relocated to bank $97 in 2026-07.  Older
+; Poppy builds still emitted this unreachable corpse and silently let the
+; later $E000/$E200 sections overwrite it.  With overlap rejection enabled,
+; omit the dead bytes explicitly while retaining the historical seam symbol.
+.if 0
     lda #$001E
     sta $1C
     lda $34
@@ -15621,6 +15626,7 @@ _25110_t281:
     adc #$0004
     sta $3C
     jmp inext
+.endif
 
 .org $E000
 ; op_mw_d16d16_v2 — MOVE.W (d16,An),(d16,An) with a ROM-AWARE source read. The original
@@ -19717,32 +19723,13 @@ rce_03:
 
 ; ---- 5A22 bootstrap (Phase A2) ----
 ; cpu5a22_boot runs on the 5A22 (its reset vector points here, via the LoROM mirror at
-; $00:FC00 = file $7C00). It does NOT run the interpreter -- it brings up the SA-1 to run
-; the interpreter (CRV=$8000 = the interp reset, reached by the SA-1 at $00:8000 = file $0
-; mirror), enabling the shared BW-RAM/IRAM, then halts (A2: no video; A3 gives the 5A22 a
-; video shim instead of stp). Runs 8-bit emulation (5A22 reset default); sep #$20 keeps
-; Poppy emitting 8-bit immediates.
+; $00:FC00 = file $7C00).  The setup body now lives in the video bank: the old inline
+; body made this section flow through $FD21 and silently overwrite the first 34 bytes
+; of op_addsubq_g@$FD00.  Keep only a reset-vector stub here, allowing the bank-$00
+; interpreter helpers below to end before the guarded $FD00 section.
 .org $FC00
 cpu5a22_boot:
-    sep #$20
-    lda #$FF
-    sta $2229            ; SIWP: 5A22 IRAM writes enabled
-    lda #$80
-    sta $2226            ; SBWE: BW-RAM writes enabled (both CPUs)
-    lda #$00
-    sta $2228            ; BWPA: no BW-RAM write protect
-    lda #$00
-    sta $2203            ; CRV low  ($8000)
-    lda #$80
-    sta $2204            ; CRV high ($8000 = the interp reset entry)
-    lda #$20
-    sta $2200            ; assert SA-1 reset (explicit edge)
-    stz $2200            ; release -> SA-1 runs the interpreter from $00:8000
-    clc
-    xce                  ; 5A22 -> native mode for the 16-bit video code
-    rep #$30
-    jml CPU5A22_VIDEO    ; A3: 5A22 becomes the video supervisor (reads $41 shadow, drives
-                         ; the PPU on each SA-1 frame signal). Never returns.
+    jml.l $E9DAA0
 
 ; op_jmp_idx / op_jsr_idx — indexed/PC-relative control transfers the specific handlers
 ; miss: JMP/JSR (d8,An,Xn) $4EF0-7/$4EB0-7, (d16,PC) $4EFA, (d8,PC,Xn) $4EFB/$4EBB.
@@ -20166,3 +20153,20 @@ trap1_dispatch:
 trap1_dispatch_miss:
     jmp inext
 trap1_dispatch_end:
+
+; STZ has no long or long-X encoding.  Seven cold interpreter paths used the
+; old Poppy truncation of `stz $400000,x`, which wrote bank-$00 IRAM instead
+; of emulated work RAM.  Keep their three-byte layout stable with a near call;
+; this helper preserves native A/P and performs the intended bank-long store.
+.org $D3C0
+.a8
+.i16
+clear_work_byte:
+    php
+    pha
+    lda #$00
+    sta.l $400000,x
+    pla
+    plp
+    rts
+clear_work_byte_end:

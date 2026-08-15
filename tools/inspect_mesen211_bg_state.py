@@ -166,13 +166,26 @@ def main() -> int:
 
     map_words = words(tilemap)
     offsets = words(table)
-    column_map = bytes.fromhex(boundary["bg_column_map"])
+    # Current exact-layout builds keep the captured raw X1 rotation at $89E0
+    # and the normalized/applied physical lookup at $89F0.  The offset table
+    # must match the latter; older snapshots without the explicit field retain
+    # the historical raw-map fallback.
+    column_map = bytes.fromhex(
+        boundary.get("bg_column_map_applied", boundary["bg_column_map"])
+    )
     expected_offsets = expected_offsets_for_layout(
         boundary["bg_column_kind"], column_map
     )
     layout_table_matches = offsets == expected_offsets
     raw_words = words(raw_codes)
     raw_color_words = words(raw_colors)
+    occupied_cells_by_source_column = [
+        sum(
+            arcade_code(raw_words[column * 32 + row]) != 0
+            for row in range(32)
+        )
+        for column in range(16)
+    ]
     reverse = words(reverse_codes)
     rom_bytes = args.rom.read_bytes()
     occupied = 0
@@ -318,6 +331,7 @@ def main() -> int:
         "boundary": boundary,
         "source_cells": len(raw_words),
         "occupied_cells": occupied,
+        "occupied_cells_by_source_column": occupied_cells_by_source_column,
         "shadowed_occupied_cells": shadowed_occupied,
         "final_occupied_targets": len(final_target_claim),
         "unique_codes": len(occupied_codes),

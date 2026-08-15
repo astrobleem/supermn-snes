@@ -294,6 +294,9 @@ def main() -> int:
     obj_step = symbol_address(args.symbols, "obj_present_step")
     obj_dma_partial = symbol_address(args.symbols, "obj_present_dma_partial")
     obj_dma_base = symbol_address(args.symbols, "obj_present_dma_base")
+    column_rotation = symbol_address(args.symbols, "bg_column_rotation_select")
+    column_move = symbol_address(args.symbols, "bcmf_move_slot")
+    column_update = symbol_address(args.symbols, "bcmf_update_column")
     return_spin = capture_end + 1
     configure_runtime()
 
@@ -349,6 +352,140 @@ def main() -> int:
             raise RuntimeError("base-delta OBJ forced-blank wrapper seam is no longer zero")
         m.write_memory(
             "snesPrgRom", base_wrapper_offset, base_wrapper_code.hex()
+        )
+
+        # Execute the production strict-majority selector against the exact
+        # retained fad4dafb gap-crossing maps.  Source 4's isolated move claims
+        # rotation 8, while 13 other populated sources prove rotation 10.
+        raw_codes = bytearray(0x400)
+        for column in range(14):
+            raw_codes[column * 0x40:column * 0x40 + 2] = b"\x01\x00"
+        m.write_memory("snesWorkRam", 0x2000, raw_codes.hex())
+        applied_gap = bytes.fromhex("0e0f00010405060708090a0b0c0d0606")
+        raw_gap = bytes.fromhex("08090a0b0c0f00010203040506070000")
+        m.write_memory("snesWorkRam", 0x89E0, raw_gap.hex())
+        m.write_memory("snesWorkRam", 0x89F0, applied_gap.hex())
+        state = run_helper(m, column_rotation, return_spin)
+        rows.append(
+            {
+                "kind": "column-rotation",
+                "name": "retained-gap-source4-outlier",
+                "source4_rotation": (raw_gap[4] - applied_gap[4]) & 0x0F,
+                "expected_rotation": 10,
+                "observed_rotation": int(state["a"]) & 0xFFFF,
+                "expected_carry": 1,
+                "observed_carry": int(state["ps"]) & 1,
+                "pass": (
+                    (int(state["a"]) & 0xFFFF) == 10
+                    and (int(state["ps"]) & 1) == 1
+                ),
+            }
+        )
+
+        # A geometry-only source move must carry its already-rendered 4x32
+        # SNES tile column to the new physical slot.  The source-code cache is
+        # unchanged and therefore cannot be relied upon to redraw it later.
+        old_slot = 3
+        new_slot = 14
+        tilemap_seed = bytearray([0x55]) * 0x1000
+        expected_tilemap = bytearray(tilemap_seed)
+        old_base = (old_slot & 7) * 8 + (0x800 if old_slot >= 8 else 0)
+        new_base = (new_slot & 7) * 8 + (0x800 if new_slot >= 8 else 0)
+        for row in range(32):
+            payload = b"".join(
+                ((0x4000 + row * 4 + word).to_bytes(2, "little"))
+                for word in range(4)
+            )
+            old_offset = old_base + row * 0x40
+            new_offset = new_base + row * 0x40
+            tilemap_seed[old_offset:old_offset + 8] = payload
+            expected_tilemap[old_offset:old_offset + 8] = payload
+            expected_tilemap[new_offset:new_offset + 8] = payload
+        m.write_memory("snesWorkRam", 0x9000, tilemap_seed.hex())
+        m.write_memory(
+            "snesWorkRam",
+            0x00F4,
+            old_slot.to_bytes(2, "little").hex()
+            + new_slot.to_bytes(2, "little").hex(),
+        )
+        run_helper(m, column_move, return_spin)
+        moved_tilemap = bytes(m.read_memory("snesWorkRam", 0x9000, 0x1000))
+        rows.append(
+            {
+                "kind": "column-slot-move",
+                "name": "geometry-move-copies-complete-4x32-slot",
+                "old_slot": old_slot,
+                "new_slot": new_slot,
+                "source_retained": all(
+                    moved_tilemap[old_base + row * 0x40:old_base + row * 0x40 + 8]
+                    == tilemap_seed[old_base + row * 0x40:old_base + row * 0x40 + 8]
+                    for row in range(32)
+                ),
+                "destination_matches_source": all(
+                    moved_tilemap[new_base + row * 0x40:new_base + row * 0x40 + 8]
+                    == tilemap_seed[old_base + row * 0x40:old_base + row * 0x40 + 8]
+                    for row in range(32)
+                ),
+                "unrelated_bytes_unchanged": moved_tilemap == bytes(expected_tilemap),
+                "pass": moved_tilemap == bytes(expected_tilemap),
+            }
+        )
+
+        # The incremental updater writes one 32-cell source column into a
+        # physical four-tile slot.  Validate every real 65816-produced word;
+        # and match the full builder's two-SNES-row stride for each 16px X1 row.
+        source_column = 5
+        physical_slot = 12
+        m.write_memory("snesWorkRam", 0x00F2, source_column.to_bytes(2, "little").hex())
+        m.write_memory("snesWorkRam", 0x00F6, physical_slot.to_bytes(2, "little").hex())
+        table_seed = bytes([0xFF]) * 0x400
+        m.write_memory("snesWorkRam", 0x7500, table_seed.hex())
+        run_helper(m, column_update, return_spin)
+        table = bytes(m.read_memory("snesWorkRam", 0x7500, 0x400))
+        observed_offsets = [
+            int.from_bytes(table[offset:offset + 2], "little")
+            for offset in range(source_column * 0x40, (source_column + 1) * 0x40, 2)
+        ]
+        expected_offsets = []
+        for row in range(32):
+            horizontal = physical_slot * 8 + (row & 1) * 4
+            vertical = (row >> 1) * 0x80
+            quadrant = (horizontal // 0x40) * 0x800
+            expected_offsets.append(quadrant + vertical + (horizontal & 0x3F))
+        untouched = table[:source_column * 0x40] + table[(source_column + 1) * 0x40:]
+        rows.append(
+            {
+                "kind": "column-offset-table",
+                "name": "incremental-column-all-32-row-offsets",
+                "source_column": source_column,
+                "physical_slot": physical_slot,
+                "expected_offsets": expected_offsets,
+                "observed_offsets": observed_offsets,
+                "untouched_bytes_remain_seeded": untouched == bytes([0xFF]) * len(untouched),
+                "pass": (
+                    observed_offsets == expected_offsets
+                    and untouched == bytes([0xFF]) * len(untouched)
+                ),
+            }
+        )
+
+        # Two populated columns with different deltas have no strict majority;
+        # the helper must fail closed so the caller takes the full-map path.
+        raw_codes = bytearray(0x400)
+        for column in range(2):
+            raw_codes[column * 0x40:column * 0x40 + 2] = b"\x01\x00"
+        m.write_memory("snesWorkRam", 0x2000, raw_codes.hex())
+        m.write_memory("snesWorkRam", 0x89E0, bytes(range(16)).hex())
+        m.write_memory("snesWorkRam", 0x89F0, bytes(16).hex())
+        state = run_helper(m, column_rotation, return_spin)
+        rows.append(
+            {
+                "kind": "column-rotation",
+                "name": "ambiguous-live-layout-fails-closed",
+                "expected_carry": 0,
+                "observed_carry": int(state["ps"]) & 1,
+                "pass": (int(state["ps"]) & 1) == 0,
+            }
         )
 
         cases = (
@@ -464,10 +601,17 @@ def main() -> int:
         m.write_memory("snesWorkRam", 0x8996, "003f")
         m.write_memory("snesWorkRam", 0x72B2, "00a500400000a500800000")
         m.write_memory("snesWorkRam", 0x7180, "00")
+        m.write_memory("snesWorkRam", 0x71A8, "000000000000")
         run_rtl_helper(m, map_prepare, return_spin, m8=True)
         prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        prepared_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A6, 2), "little"
+        )
         run_rtl_helper(m, map_commit, return_spin, m8=True)
         committed = bytes(m.read_memory("snesWorkRam", 0x72B5, 8))
+        committed_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A4, 2), "little"
+        )
         copied_map = bytes(m.read_memory("snesWorkRam", 0x72F0, 16))
         rows.append(
             {
@@ -477,13 +621,15 @@ def main() -> int:
                 "latest_unwrapped_phase": 0,
                 "source_column4_physical_basis": 0x80,
                 "expected_basis": 0,
-                "observed_basis": committed[2],
+                "observed_basis": committed_basis16,
                 "expected_hscroll": 0x040,
                 "observed_hscroll": int.from_bytes(committed[0:2], "little"),
                 "prepared_pending_basis": prepared.hex(),
                 "displayed_map_copied": copied_map == applied_map,
                 "pass": (
                     prepared == bytes((0xA5, 0x80, 0x00, 0xA5))
+                    and prepared_basis16 == 0
+                    and committed_basis16 == 0
                     and committed[2] == 0
                     and int.from_bytes(committed[0:2], "little") == 0x040
                     and committed[4] == 0
@@ -495,8 +641,8 @@ def main() -> int:
 
         # One source column can cross the two-slot gap without rotating the
         # other populated columns.  The immutable image's slot/raw/phase tuple
-        # reconstructs the same absolute basis, so the displayed origin and
-        # integrated fallback remain unchanged.
+        # reconstructs the same absolute basis.  Commit recomputes the
+        # integrated/debug coordinate from that basis and presented phase.
         displayed_map = bytes(
             [8, 9, 10, 11, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 0, 0]
         )
@@ -510,21 +656,29 @@ def main() -> int:
         m.write_memory("snesWorkRam", 0x72B3, "a5")
         m.write_memory("snesWorkRam", 0x72B5, "5b00")
         m.write_memory("snesWorkRam", 0x72B7, "c0a500000000")
+        m.write_memory("snesWorkRam", 0x71A4, "c000")
         m.write_memory("snesWorkRam", 0x7180, "00")
+        m.write_memory("snesWorkRam", 0x71A8, "000000000000")
         run_rtl_helper(m, map_prepare, return_spin, m8=True)
         prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        prepared_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A6, 2), "little"
+        )
         run_rtl_helper(m, map_commit, return_spin, m8=True)
         committed = bytes(m.read_memory("snesWorkRam", 0x72B5, 8))
+        committed_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A4, 2), "little"
+        )
         copied_map = bytes(m.read_memory("snesWorkRam", 0x72F0, 16))
         rows.append(
             {
                 "kind": "map-commit",
                 "name": "isolated-column4-does-not-rebase-whole-map",
                 "old_basis": 0xC0,
-                "expected_basis": 0xC0,
-                "observed_basis": committed[2],
+                "expected_basis": 0x1C0,
+                "observed_basis": committed_basis16,
                 "old_integrated_hscroll": 0x05B,
-                "expected_integrated_hscroll": 0x05B,
+                "expected_integrated_hscroll": 0x000,
                 "observed_integrated_hscroll": int.from_bytes(
                     committed[0:2], "little"
                 ),
@@ -534,8 +688,10 @@ def main() -> int:
                 "displayed_map_copied": copied_map == applied_map,
                 "pass": (
                     prepared == bytes((0xA5, 0x00, 0xC0, 0xA5))
+                    and prepared_basis16 == 0x1C0
+                    and committed_basis16 == 0x1C0
                     and committed[2] == 0xC0
-                    and int.from_bytes(committed[0:2], "little") == 0x05B
+                    and int.from_bytes(committed[0:2], "little") == 0x000
                     and committed[4] == 0
                     and committed[7] == 0
                     and copied_map == applied_map
@@ -558,23 +714,32 @@ def main() -> int:
         m.write_memory("snesWorkRam", 0x8994, "0080")
         m.write_memory("snesWorkRam", 0x8996, "3f00")
         m.write_memory("snesWorkRam", 0x72B3, "a5")
+        m.write_memory("snesWorkRam", 0x72B4, "00")
         m.write_memory("snesWorkRam", 0x72B5, "5b00")
         m.write_memory("snesWorkRam", 0x72B7, "c0a500000000")
+        m.write_memory("snesWorkRam", 0x71A4, "c000")
         m.write_memory("snesWorkRam", 0x7180, "00")
+        m.write_memory("snesWorkRam", 0x71A8, "000000000000")
         run_rtl_helper(m, map_prepare, return_spin, m8=True)
         prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        prepared_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A6, 2), "little"
+        )
         run_rtl_helper(m, map_commit, return_spin, m8=True)
         committed = bytes(m.read_memory("snesWorkRam", 0x72B5, 8))
+        committed_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A4, 2), "little"
+        )
         copied_map = bytes(m.read_memory("snesWorkRam", 0x72F0, 16))
         rows.append(
             {
                 "kind": "map-commit",
                 "name": "paired-absolute-rotation-commits-one-slot",
                 "old_basis": 0xC0,
-                "expected_basis": 0xA0,
-                "observed_basis": committed[2],
+                "expected_basis": 0x0A0,
+                "observed_basis": committed_basis16,
                 "old_integrated_hscroll": 0x05B,
-                "expected_integrated_hscroll": 0x03B,
+                "expected_integrated_hscroll": 0x0E0,
                 "observed_integrated_hscroll": int.from_bytes(
                     committed[0:2], "little"
                 ),
@@ -582,8 +747,10 @@ def main() -> int:
                 "displayed_map_copied": copied_map == applied_map,
                 "pass": (
                     prepared == bytes((0xA5, 0x00, 0xA0, 0xA5))
+                    and prepared_basis16 == 0x0A0
+                    and committed_basis16 == 0x0A0
                     and committed[2] == 0xA0
-                    and int.from_bytes(committed[0:2], "little") == 0x03B
+                    and int.from_bytes(committed[0:2], "little") == 0x0E0
                     and committed[4] == 0
                     and committed[7] == 0
                     and copied_map == applied_map
@@ -594,8 +761,12 @@ def main() -> int:
         # A fixed source column's raw byte can jump -67 at the X1 gap while
         # the common phase moved -3.  The live publisher must retain -3 only.
         m.write_memory("snesWorkRam", 0x72B2, "c3a5c3000000000000")
+        m.write_memory("snesWorkRam", 0x71A8, "c301c301")
         run_rtl_helper(m, phase_publish, return_spin, a=0x0080, m8=True)
         phase_state = bytes(m.read_memory("snesWorkRam", 0x72B2, 9))
+        latest_phase16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A8, 2), "little"
+        )
         rows.append(
             {
                 "kind": "phase-publish",
@@ -606,7 +777,13 @@ def main() -> int:
                 "observed_latest": phase_state[0],
                 "expected_raw_retained": 0x80,
                 "observed_raw_retained": phase_state[8],
-                "pass": phase_state[0] == 0xC0 and phase_state[8] == 0x80,
+                "expected_latest_phase16": 0x1C0,
+                "observed_latest_phase16": latest_phase16,
+                "pass": (
+                    phase_state[0] == 0xC0
+                    and phase_state[8] == 0x80
+                    and latest_phase16 == 0x1C0
+                ),
             }
         )
 
@@ -614,9 +791,11 @@ def main() -> int:
         # presented camera.  Poison the old integrated coordinate to prove it
         # cannot expose the map's deliberately unused physical columns.
         m.write_memory("snesWorkRam", 0x8994, "477a")
-        m.write_memory("snesWorkRam", 0x8996, "003f")
+        m.write_memory("snesWorkRam", 0x8996, "3f00")
         m.write_memory("snesWorkRam", 0x72B2, "55a555")
         m.write_memory("snesWorkRam", 0x72B7, "60a5")
+        m.write_memory("snesWorkRam", 0x71A4, "6000")
+        m.write_memory("snesWorkRam", 0x71AA, "5500")
         poisoned_integrated_hscroll = 0x0CB
         m.write_memory(
             "snesWorkRam",
@@ -642,8 +821,8 @@ def main() -> int:
         # Exact regression from Chad's fence save state.  Its accumulated
         # displayed basis had drifted to A0, while the immutable image's paired
         # source-column-4 slot/raw/phase tuple proves the absolute basis is:
-        #   $01*32 + $66 - $26 = $60
-        # The centered result is then $40 + $60 - $66 = $3A.  A modal update
+        #   $01*32 + $166 - $126 = $60
+        # The centered result is then $40 + $60 - $166 = $13A.  A modal update
         # against the same map would preserve stale A0 and expose a 64px band.
         fence_map = bytes(
             [0x0B, 0x0E, 0x0F, 0x00, 0x01, 0x02, 0x03, 0x04,
@@ -652,17 +831,25 @@ def main() -> int:
         m.write_memory("snesWorkRam", 0x72F0, fence_map.hex())
         m.write_memory("snesWorkRam", 0x89F0, fence_map.hex())
         m.write_memory("snesWorkRam", 0x8994, "0026")
-        m.write_memory("snesWorkRam", 0x8996, "003f")
+        m.write_memory("snesWorkRam", 0x8996, "3f00")
         m.write_memory("snesWorkRam", 0x72B2, "66a566")
         m.write_memory("snesWorkRam", 0x72B7, "a0a5")
+        m.write_memory("snesWorkRam", 0x71A4, "a000")
+        m.write_memory("snesWorkRam", 0x71A8, "660166016601")
         m.write_memory("snesWorkRam", 0x72B5, "cb00")
         m.write_memory("snesWorkRam", 0x7180, "66")
         run_rtl_helper(m, map_prepare, return_spin, m8=True)
         prepared = bytes(m.read_memory("snesWorkRam", 0x72B9, 4))
+        prepared_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A6, 2), "little"
+        )
         run_rtl_helper(m, map_commit, return_spin, m8=True)
+        committed_basis16 = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x71A4, 2), "little"
+        )
         run_helper(m, apply_scroll, return_spin)
         layer = m.get_ppu_state()["layers"][0]
-        expected_hscroll = 0x3A
+        expected_hscroll = 0x13A
         rows.append(
             {
                 "kind": "apply-displayed-map-scroll",
@@ -673,18 +860,86 @@ def main() -> int:
                     m.read_memory("snesWorkRam", 0x72B7, 1)[0]
                 ),
                 "presented_scrollx": 0x66,
-                "regressed_hscroll": 0x7A,
+                "regressed_hscroll": 0x03A,
                 "prepared_pending_basis": prepared.hex(),
                 "expected_hscroll": expected_hscroll,
                 "observed_hscroll": int(layer["hscroll"]),
                 "pass": (
                     prepared[0] == 0xA5
                     and prepared[2:4] == bytes((0x60, 0xA5))
+                    and prepared_basis16 == 0x060
+                    and committed_basis16 == 0x060
                     and int(m.read_memory("snesWorkRam", 0x72B7, 1)[0]) == 0x60
                     and int(layer["hscroll"]) == expected_hscroll
                 ),
             }
         )
+
+        # Exact red transitions retained from rejected 92134860....  They all
+        # use source column 4 in physical slot 4, but cross different halves of
+        # the 512-pixel source/map domains.  Replaying the full tuple here makes
+        # a low-byte-only basis or presented phase fail on the real 65816/PPU.
+        exact_transition_cases = (
+            ("retained-rel152", 0x1FD, 0x07D, 0x000, 0x000, 0x040),
+            ("retained-rel238", 0x17C, 0x1FC, 0x000, 0x19D, 0x0A3),
+            ("retained-rel280", 0x13D, 0x17D, 0x040, 0x15D, 0x123),
+            ("retained-rel322", 0x0FE, 0x13E, 0x040, 0x10B, 0x175),
+        )
+        exact_map = bytes(range(16))
+        for name, packet_phase, raw_x4, expected_basis, presented_phase, expected_hscroll in exact_transition_cases:
+            m.write_memory("snesWorkRam", 0x89F0, exact_map.hex())
+            m.write_memory("snesWorkRam", 0x72F0, exact_map.hex())
+            m.write_memory(
+                "snesWorkRam",
+                0x8994,
+                bytes((0, raw_x4 & 0xFF)).hex(),
+            )
+            m.write_memory(
+                "snesWorkRam",
+                0x8996,
+                (0x0010 if raw_x4 & 0x100 else 0x0000)
+                .to_bytes(2, "little")
+                .hex(),
+            )
+            m.write_memory("snesWorkRam", 0x89BF, "00")
+            m.write_memory("snesWorkRam", 0x72B2, f"{packet_phase & 0xFF:02x}a5")
+            m.write_memory("snesWorkRam", 0x72B4, f"{presented_phase & 0xFF:02x}")
+            m.write_memory(
+                "snesWorkRam",
+                0x71A8,
+                packet_phase.to_bytes(2, "little").hex()
+                + presented_phase.to_bytes(2, "little").hex()
+                + packet_phase.to_bytes(2, "little").hex(),
+            )
+            run_rtl_helper(m, map_prepare, return_spin, m8=True)
+            pending_basis = int.from_bytes(
+                m.read_memory("snesWorkRam", 0x71A6, 2), "little"
+            )
+            run_rtl_helper(m, map_commit, return_spin, m8=True)
+            committed_basis = int.from_bytes(
+                m.read_memory("snesWorkRam", 0x71A4, 2), "little"
+            )
+            run_helper(m, apply_scroll, return_spin)
+            observed_hscroll = int(m.get_ppu_state()["layers"][0]["hscroll"])
+            rows.append(
+                {
+                    "kind": "retained-nine-bit-transition",
+                    "name": name,
+                    "packet_phase9": packet_phase,
+                    "raw_column4_x9": raw_x4,
+                    "presented_phase9": presented_phase,
+                    "expected_basis9": expected_basis,
+                    "pending_basis9": pending_basis,
+                    "committed_basis9": committed_basis,
+                    "expected_hscroll": expected_hscroll,
+                    "observed_hscroll": observed_hscroll,
+                    "pass": (
+                        pending_basis == expected_basis
+                        and committed_basis == expected_basis
+                        and observed_hscroll == expected_hscroll
+                    ),
+                }
+            )
 
         # Reproduce the supplied attract-state layout: source columns 0..13
         # are populated, 14/15 are empty overlaps of physical slots 4/7, and
@@ -708,7 +963,10 @@ def main() -> int:
         m.write_memory("snesWorkRam", 0x72C0, source_y.hex())
         m.write_memory("snesWorkRam", 0x72B2, "00a5004000")
         m.write_memory("snesWorkRam", 0x72B7, "00a5")
+        m.write_memory("snesWorkRam", 0x71A4, "0000")
+        m.write_memory("snesWorkRam", 0x71AA, "0000")
         m.write_memory("snesWorkRam", 0x89E0, physical_map.hex())
+        m.write_memory("snesWorkRam", 0x89F0, physical_map.hex())
         m.write_memory("snesWorkRam", 0x8994, "aa00003f")
         m.write_memory("snesWorkRam", 0x89BE, "0000")
         run_helper(m, apply_opt, return_spin)
@@ -1031,6 +1289,9 @@ def main() -> int:
             "obj_step": f"{obj_step:06X}",
             "obj_dma_partial": f"{obj_dma_partial:06X}",
             "obj_dma_base": f"{obj_dma_base:06X}",
+            "column_rotation": f"{column_rotation:06X}",
+            "column_move": f"{column_move:06X}",
+            "column_update": f"{column_update:06X}",
             "return_spin": f"{return_spin:06X}",
         },
         "rows": rows,

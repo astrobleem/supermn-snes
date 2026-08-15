@@ -28,6 +28,38 @@ partial, cross-hash, cross-range, mutated, unauthenticated, background-only, or
 state-only evidence cannot create a test ROM. A new ROM hash invalidates all prior
 promotion reports for the successor.
 
+The settled boot geometry/pixel component is checked with:
+
+```sh
+python3 tools/validate_boot_presentation.py \
+  --reference /path/to/approved-boot-frame.png \
+  --candidate /path/to/exact-hash-boot-frame.png \
+  --output /path/to/exact-hash-evidence/boot-presentation-component.json
+```
+
+This rejects the observed far-left/clipped-logo regression, missing sequence
+text, changed logo pixels, and pixels outside the known boot regions. It does not
+self-certify fresh power, the ROM hash, liveness, or mutation absence; those must
+come from the authenticated playback report before `cold_boot_presentation` can
+be green.
+
+The internal BG/OAM presentation-generation gate is:
+
+```sh
+python3 tools/validate_scene_generation_coherence.py \
+  --input /path/to/fresh-poststart/results.json \
+  --output /path/to/exact-hash-evidence/scene-coherence.json
+```
+
+It fails unless the published OAM compensation exactly equals
+`published base camera - presented camera (mod 256)`, when that OAM base exceeds
+the configured game-tick age, when camera steps exceed two pixels, or when
+consecutive coverage/required fields are missing. Testing the compensated
+identity is required because the 60 Hz presenter may legitimately move away
+from an unchanged 30 Hz base while translating every world OBJ by that same
+delta. A green component result still does not establish MAME facing, animation
+order, full-composite pixels, or fresh-lineage authenticity.
+
 ## Documentation and private-input tooling
 
 ```sh
@@ -150,6 +182,67 @@ complete without margin exhaustion. This is a checkpoint boundary regression;
 it is not fresh-boot or full-playthrough evidence.
 
 ## Rendering
+
+Current ordinary response candidate `c14c0184…` has exact-hash fresh boot and
+post-Start evidence but is temporal/scene-coherence red. Run the exact physical-column/PPU
+bridge with:
+
+```sh
+python3 tools/validate_vertical_scroll_bridge.py \
+  --rom build/interp.sfc \
+  --output /home/chad/supermn-snes-artifacts/active/c14c0184-symbolic-boot-target-v1/vertical-scroll-bridge-v1/results.json
+```
+
+The retained predecessor component is green 30/30. Its complete-slot fixture seeds a unique
+four-tile-column by 32-row source inside a sentinel 4 KiB tilemap and requires an
+exact destination copy, retained source, and no unrelated changes. The separate
+all-32-cell offset fixture pins `(cell & ~1) * 64`, because each 16-pixel X1 cell
+occupies two SNES tilemap rows. A green bridge is isolated-helper evidence only.
+
+The bounded checkpoint continuation at
+`/home/chad/supermn-snes-artifacts/active/72838eca-column-slot-move-v1/from-clean-fad-frame100-direct-v1/`
+retains 261 consecutive screenshots and a constant 1,568-word occupied physical
+tilemap. It is temporal-red and acceptance-unknown; see `watcher-report.json` and
+`temporal-scroll-v1.json`. The same-ROM extension first failed closed when one
+request advanced two actual video frames. Its resumed 61-frame stationary tail
+is structurally clear but cannot satisfy the minimum moving-camera coverage.
+
+For natural NMI cadence, capture one uninterrupted controller request with BG/OBJ
+presenter hooks, then reduce the disk-resident hook stream:
+
+```sh
+python3 tools/analyze_uninterrupted_presenter_trace.py \
+  --results /home/chad/supermn-snes-artifacts/active/927a2879-leading-batch-presentation-v1/from-728-frame50-uninterrupted-v1/results.json \
+  --hooks /home/chad/supermn-snes-artifacts/active/927a2879-leading-batch-presentation-v1/from-728-frame50-uninterrupted-v1/hooks.jsonl \
+  --min-video-frames 60 \
+  --output /home/chad/supermn-snes-artifacts/active/927a2879-leading-batch-presentation-v1/presenter-cadence-v1.json
+```
+
+This gate excludes the serialized starting partial PPU frame and fails unless
+coverage is consecutive, each complete PPU frame has exactly one
+`bg_scroll_present_step` and one `obj_present_nmi`, and cursor writes neither
+duplicate nor exceed two pixels. The retained current result is component-green
+for 77/77 complete PPU frames 6,012-6,088. It is migrated cross-ROM evidence, not
+fresh boot, aligned pixels, temporal-conservation acceptance, gameplay, or
+performance. The lossless GIF uses delta frames and must be coalesced before
+standalone frame review; Sol reviewed the resulting all-65-frame contact sheet at
+`from-728-frame50-uninterrupted-v1/review-frames/contact-sheet-all-65.png`.
+
+`validate_fresh_poststart_framebuffers.py` measures a vertical black run in the
+upper BG field `(0,24)-(256,192)`, excluding the independently drawn floor. It
+allows at most 16 pixels: the legitimate Stage-1 gold-column interior is nine
+pixels, while a lost physical slot is 32 pixels. The synthetic regression test
+must fail a missing BG column even when the floor survives. This gate is still
+fresh-lineage diagnostic evidence, not aligned MAME or full-composite acceptance.
+
+For `c14c0184…`, the controller-authenticated report is
+`/home/chad/supermn-snes-artifacts/active/c14c0184-symbolic-boot-target-v1/fresh-poststart-600f-v2/results.json`.
+Its zero-grace visual failures cover only the normal entry transition; use the
+hash-authenticated `reanalysis-grace100.json` for the structural frame-100 through
+frame-600 result. Acceptance still fails because `temporal-scroll.json` records
+77 held PPU transitions during source motion and
+`scene-generation-coherence.json` records OAM age up to 16. A clear structural
+reanalysis must never override either temporal failure.
 
 Choose the focused validator for the changed path:
 
@@ -282,18 +375,37 @@ For root-cause diagnosis of a reported input-triggered visual failure, a retaine
 same-emulator checkpoint may be continued with
 `tools/capture_snes_input_framebuffers.py`; it uses only real controller input,
 movie replay, and saves each verified-consecutive framebuffer plus periodic
-states. Retained or cross-hash states are diagnostic only and must never replace
-a fresh-power successor gate.
+states. Legacy Mesen may return before a timed controller request has executed
+all requested video frames, so recording reissues the same held mask from the
+exact paused boundary until the requested span is complete. The span is anchored
+after CurrentState recording setup, which can itself materialize one post-load
+frame. If the final one-frame request advances two frames, the movie retains that
+honest extra input row but replay stops at the exact requested boundary. A
+non-neutral capture is setup-red unless the game input mailbox actually
+observes a nonzero value; a controller movie containing button rows is not enough.
+Retained or cross-hash states are diagnostic only and must never replace a
+fresh-power successor gate.
 Cross-ROM renderer labs must opt into each intervention separately:
 `--refresh-video-mirror` replaces the selected ROM's 5A22 video code,
 `--reserve-bg-slot-zero-migration` verifies the new blank-slot layout, and
 `--shift-bg-slots-for-reserved-zero` moves the saved hash, reverse index, free
 list, staging/display maps, and resident VRAM tile records from slot `n` to
-`n+1`. The result is diagnostic-only and its manifest must retain the complete
+`n+1`. `--early-obj-batch-lab` changes only the emulated helper seam so a due
+OBJ-pattern batch runs before wake/snapshot work; it exists to distinguish
+late-VBlank entry from excessive tile volume and never modifies the ROM file.
+`--obj-batch-first-lab` moves the same batch ahead of the old-scene presenter to
+measure the remaining safe VBlank capacity; it has the same diagnostic-only limit.
+The result is diagnostic-only and its manifest must retain the complete
 intervention ledger. `tools/capture_snes_direct_framebuffers.py` is a focused
 sampling fallback when movie replay cannot be used. Legacy Mesen's direct
-controller request can advance zero, one, or two actual video frames; the tool
-records that delta and must never claim consecutive coverage.
+controller request can initially advance zero, one, or two actual video frames;
+the tool falls back to the frame-step primitive after a zero advance and fails
+unless every retained sample advances exactly one frame. It also fails setup when
+a claimed non-neutral input never appears in the game mailbox. Cross-ROM mirror
+refresh also fails unless the paused renderer is idle with both queues empty,
+and ordinary captures fail if `render_complete` is held for more than 32
+consecutive frame transitions. This remains checkpoint diagnostic evidence,
+not a fresh-power or aligned-pixel gate.
 When legacy Mesen cannot advance a one-frame controller request, use
 `tools/record_snes_input_framebuffers.py`: its emulator-core lossless GIF capture
 retains every rendered framebuffer during one uninterrupted controller span.
@@ -358,7 +470,7 @@ build is not viable without a bounded cold-boot liveness smoke. The retained
 This proves exit from loading only; it is not a fresh gameplay campaign or visual
 acceptance.
 
-Current `f25a0e68…` retains that vertical bridge, unwrapped modulo-32 camera
+Rejected `f25a0e68…` retains that vertical bridge, unwrapped modulo-32 camera
 publication, absolute physical-map basis commits, and the compact world-OAM
 presentation contract. Its exact-hash focused bridge is green 22/22 under
 `/home/chad/supermn-snes-artifacts/active/f25a0e68-line0-dma-fix-v1/`.
@@ -377,7 +489,7 @@ clear with zero graphics, blank-field, repeated-tile, or vertical-band failures.
 The same 601 authenticated images pass temporal continuity with 302 PPU steps,
 151 source steps, and no wrong registration/discontinuity. Before this longer
 gate, the exact frame-5,250 probe requires slot 2 owner `$19AE` and all 128 native
-record bytes to match; current `f25a0e68…` is green. Sol reviewed the contact
+record bytes to match; rejected `f25a0e68…` is green for that narrow component. Sol reviewed the contact
 sheet and frames 100/300/600. This remains bounded diagnostic evidence, not
 aligned MAME-frame conservation or full-playthrough acceptance.
 

@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, "/home/chad/Mesen2/python")
 
 import capture_mesen211_transitions as capture  # noqa: E402
+import capture_snes_direct_framebuffers as direct_capture  # noqa: E402
 from gameplay_acceptance_contract import unknown_diagnostic_gate  # noqa: E402
 import mesen_mcp.session as _session  # noqa: E402
 import replay_mame_controller_campaign as campaign  # noqa: E402
@@ -45,9 +46,18 @@ BUTTONS = {
 EXEC_HOOKS = {
     "nmi_present_arbitrate": 0xE9CF00,
     "nmi_present_before_dma": 0xE9CD20,
+    "nmi_batch_present_then_wake": 0xE9D160,
+    "nmi_obj_tile_batch_dispatch": 0xE9D600,
+    "nmi_obj_tile_batch_staged": 0xE9D640,
+    "nmi_obj_tile_batch_group": 0xE9D900,
+    "nmi_batch_present_arbitrate": 0xE9DA40,
     "bg_scroll_present_step": 0xE9C200,
     "obj_present_nmi": 0xE9CA80,
     "obj_present_dma_base": 0xE9CC80,
+    "capture_bg_vscroll": 0xE9A7BC,
+    "pacing_try_wake": 0x7F8E00,
+    "pacing_publish_input_and_scroll": 0x7F8ED0,
+    "pacing_snapshot_direct": 0x7FA300,
     "vid_bg_heavy": 0x7F847E,
     "vid_bg_incremental": 0x7FA680,
     "bg_cache_reclaim": 0x7FA899,
@@ -69,7 +79,21 @@ EXEC_HOOKS = {
     "prepared_bg_map_remap": 0xE9BD00,
 }
 
+SA1_EXEC_HOOKS = {
+    "sa1_manifest_call": 0x99FB3F,
+    "sa1_camera_mailbox_helper": 0x99FBC5,
+    "sa1_camera_mailbox_helper_tail": 0x99FBD7,
+    "sa1_manifest_build": 0x9EDC00,
+    "sa1_manifest_rtl": 0x9EDE13,
+    "sa1_camera_mailbox_helper_rtl": 0x99FBDE,
+    "sa1_manifest_resume": 0x99FB43,
+    "sa1_arm1_publish": 0x99FB46,
+    "sa1_deadline_irq_request": 0x99FB4E,
+    "sa1_pacing_wai": 0x99FB51,
+}
+
 WRITE_HOOKS = {
+    "latest_scrollx_write": 0x7E72B2,
     "presented_scrollx_write": 0x7E72B4,
     "obj_present_valid_write": 0x7E7184,
     "obj_dma_pending_write": 0x7E7189,
@@ -94,6 +118,14 @@ WRITE_HOOKS = {
     "render_queue1_high_write": 0x7E89D3,
     "render_queue2_low_write": 0x7E89D6,
     "render_queue2_high_write": 0x7E89D7,
+    "obj_tile_batch_due_low_write": 0x7E74A2,
+    "obj_tile_batch_due_high_write": 0x7E74A3,
+}
+
+SA1_WRITE_HOOKS = {
+    "sa1_pacing_arm_write": 0x410122,
+    "sa1_camera_mailbox_raw_write": 0x410162,
+    "sa1_camera_mailbox_valid_write": 0x410163,
 }
 
 WRITE_RANGE_HOOKS = {
@@ -116,6 +148,19 @@ def parse_args() -> argparse.Namespace:
         help=(
             "checkpoint diagnostic only: reapply the selected ROM's rc_copy "
             "window after loading a state from another ROM identity"
+        ),
+    )
+    parser.add_argument(
+        "--early-camera-mailbox-lab",
+        action="store_true",
+        help="checkpoint-only runtime camera-mailbox ordering intervention",
+    )
+    parser.add_argument(
+        "--early-camera-valid-mailbox-lab",
+        action="store_true",
+        help=(
+            "checkpoint-only raw-camera/A5 producer-consumer intervention; "
+            "trace the first patched producer call before accepting liveness"
         ),
     )
     return parser.parse_args()
@@ -180,6 +225,8 @@ def main() -> int:
     args = parse_args()
     if args.frames <= 0:
         raise SystemExit("--frames must be positive")
+    if args.early_camera_mailbox_lab and args.early_camera_valid_mailbox_lab:
+        raise SystemExit("select only one camera-mailbox intervention")
     for label, path in (
         ("ROM", args.rom),
         ("state", args.state),
@@ -200,6 +247,7 @@ def main() -> int:
     handles: dict[int, str] = {}
     notifications: list[dict[str, Any]] = []
     video_wram_migration: dict[str, Any] | None = None
+    runtime_memory_writes: list[dict[str, Any]] = []
 
     with McpSession(
         rom=rom,
@@ -215,6 +263,28 @@ def main() -> int:
         m.pause()
         if args.refresh_video_wram:
             video_wram_migration = campaign.refresh_video_wram(m, rom)
+            runtime_memory_writes.append(video_wram_migration)
+        if args.early_camera_mailbox_lab:
+            runtime_memory_writes.extend(direct_capture.early_camera_mailbox_lab(m))
+        if args.early_camera_valid_mailbox_lab:
+            runtime_memory_writes.extend(
+                direct_capture.early_camera_valid_mailbox_lab(m)
+            )
+        # Install hooks before any screenshot/movie operation.  Some emulator
+        # capture operations can execute to a video boundary; installing after
+        # the initial image would miss the first patched producer return, which
+        # is the exact liveness seam this diagnostic exists to authenticate.
+        for label, address in EXEC_HOOKS.items():
+            handles[m.add_exec_hook(address, cpu_type="Snes")] = label
+        for label, address in WRITE_HOOKS.items():
+            handles[m.add_write_hook(address, cpu_type="Snes")] = label
+        for label, address in SA1_EXEC_HOOKS.items():
+            handles[m.add_exec_hook(address, cpu_type="Sa1")] = label
+        for label, address in SA1_WRITE_HOOKS.items():
+            handles[m.add_write_hook(address, cpu_type="Sa1")] = label
+        for label, (start, end) in WRITE_RANGE_HOOKS.items():
+            handles[m.add_write_hook(start, end, cpu_type="Snes")] = label
+        m.drain_notifications(timeout=0.05)
         initial = capture.snapshot(m)
         initial["frame_request"] = m.read_u16(0x003300)
         initial["frame_ack"] = m.read_u16(0x003302)
@@ -222,16 +292,33 @@ def main() -> int:
         initial["render_queue1_state"] = m.read_u16(0x7E89D2)
         initial["render_queue2_state"] = m.read_u16(0x7E89D6)
         initial_screenshot = capture.take_screenshot(m, output / "initial.png")
-        for label, address in EXEC_HOOKS.items():
-            handles[m.add_exec_hook(address, cpu_type="Snes")] = label
-        for label, address in WRITE_HOOKS.items():
-            handles[m.add_write_hook(address, cpu_type="Snes")] = label
-        for label, (start, end) in WRITE_RANGE_HOOKS.items():
-            handles[m.add_write_hook(start, end, cpu_type="Snes")] = label
-        m.drain_notifications(timeout=0.05)
         record_response = m.tool("record_video", {"path": str(gif_path)})
-        input_response = m.set_input(BUTTONS[args.buttons], args.frames)
+        input_start_frame = int(m.get_state().get("frameCount", 0))
+        input_responses = [
+            {
+                "operation": "set_input",
+                "response": m.set_input(BUTTONS[args.buttons], args.frames),
+            }
+        ]
         m.pause()
+        input_after_set_frame = int(m.get_state().get("frameCount", 0))
+        input_target_frame = input_start_frame + args.frames
+        if input_after_set_frame < input_target_frame:
+            # Legacy Mesen may return from a timed input request before all
+            # requested video frames execute (including zero progress from a
+            # loaded paused state).  The held mask remains installed; advance
+            # only the exact remainder without rewriting controller state.
+            input_remainder = input_target_frame - input_after_set_frame
+            input_responses.append(
+                {
+                    "operation": "run_frames_after_partial_set_input",
+                    "requested_remainder": input_remainder,
+                    "response": m.run_frames(input_remainder),
+                }
+            )
+            m.pause()
+        input_end_frame = int(m.get_state().get("frameCount", 0))
+        input_advanced_frames = input_end_frame - input_start_frame
         stop_response = m.tool("stop_video")
         notifications.extend(m.drain_notifications(timeout=1.0))
         for handle in handles:
@@ -252,7 +339,13 @@ def main() -> int:
         "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
         encoding="utf-8",
     )
-    labels = [*EXEC_HOOKS, *WRITE_HOOKS, *WRITE_RANGE_HOOKS]
+    labels = [
+        *EXEC_HOOKS,
+        *WRITE_HOOKS,
+        *SA1_EXEC_HOOKS,
+        *SA1_WRITE_HOOKS,
+        *WRITE_RANGE_HOOKS,
+    ]
     counts = {
         label: sum(event["label"] == label for event in events)
         for label in labels
@@ -334,12 +427,11 @@ def main() -> int:
         "buttons": args.buttons,
         "button_mask": BUTTONS[args.buttons],
         "requested_input_frames": args.frames,
+        "input_start_frame": input_start_frame,
+        "input_end_frame": input_end_frame,
+        "input_advanced_frames": input_advanced_frames,
         "advanced_video_frames": advanced,
-        "runtime_memory_writes": (
-            []
-            if video_wram_migration is None
-            else [video_wram_migration]
-        ),
+        "runtime_memory_writes": runtime_memory_writes,
         "video_wram_migration": video_wram_migration,
         "initial": initial,
         "initial_screenshot": initial_screenshot,
@@ -347,7 +439,10 @@ def main() -> int:
         "final_screenshot": final_screenshot,
         "final_state": final_state,
         "record_response": record_response,
-        "input_response": input_response,
+        "input_response": {
+            "after_set_frame": input_after_set_frame,
+            "responses": input_responses,
+        },
         "stop_response": stop_response,
         "framebuffers": {
             "path": str(gif_path),
@@ -369,6 +464,7 @@ def main() -> int:
         "checks": {
             "interpreter_not_halted": int(final["halt"]) == 0,
             "video_frames_advanced": advanced > 0,
+            "input_frames_exact": input_advanced_frames == args.frames,
             "bg_chunk_path_fired": counts["bg_chunk_start"] > 0,
             "dma_enable_fired": counts["dma_enable_write"] > 0,
             "bg_upload_fired": counts["bg_upload"] > 0,

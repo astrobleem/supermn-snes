@@ -4,7 +4,9 @@
 This harness deliberately does not load a Nexen checkpoint.  Mesen and Nexen
 save states are not interchangeable evidence for emulator-specific rendering
 failures.  The coarse pass saves same-emulator checkpoints so a suspicious
-window can later be replayed frame by frame with ``--state``.
+window can later be replayed frame by frame with ``--state``. An authenticated
+StartWithoutSaveData movie can be replayed directly with ``--movie`` without a
+seed state.
 
 The capture is a rendering compatibility diagnostic, not performance evidence.
 """
@@ -39,6 +41,17 @@ VIDEO_FILE_BASE = 0x298000
 VIDEO_WRAM_OFFSET = 0x18000
 VIDEO_WRAM_LENGTH = 0x3000
 SCREENSHOT_LOCK = ROOT / "build" / ".mesen-screenshot-capture.lock"
+OBJ_CACHE_READY_MARKER = 0xA55A
+
+
+def bounded_obj_queue_count(raw_count: int, cache_marker: int) -> tuple[int, bool]:
+    """Decode queue storage only after the renderer has initialized it."""
+
+    if cache_marker != OBJ_CACHE_READY_MARKER:
+        return 0, False
+    if raw_count > 0x80:
+        raise RuntimeError(f"OBJ upload queue exceeds hardware bound: {raw_count}")
+    return raw_count, True
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,6 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mesen", type=Path, default=DEFAULT_MESEN)
     parser.add_argument("--state", type=Path)
+    parser.add_argument("--movie", type=Path)
     parser.add_argument("--port", type=int, default=8814)
     parser.add_argument("--start-frame", type=int, default=4500)
     parser.add_argument("--end-frame", type=int, default=6500)
@@ -180,6 +194,20 @@ def snapshot(m: McpSession) -> dict[str, Any]:
     obj_published = bytes(m.read_memory("snesWorkRam", 0x7190, 5))
     obj_dma_detail = bytes(m.read_memory("snesWorkRam", 0x7195, 6))
     obj_base_span_detail = bytes(m.read_memory("snesWorkRam", 0x71A0, 4))
+    pacing_shared = bytes(m.read_memory("snesMemory", 0x410122, 0x42))
+    obj_cache_marker = le16(m.read_memory("snesWorkRam", 0x8980, 2))
+    obj_queue_count_raw = le16(m.read_memory("snesWorkRam", 0x89C6, 2))
+    obj_queue_count, obj_queue_valid = bounded_obj_queue_count(
+        obj_queue_count_raw, obj_cache_marker
+    )
+    obj_queue_slots = bytes(
+        m.read_memory("snesWorkRam", 0x2D00, obj_queue_count)
+    )
+    obj_queue_codes = bytes(
+        m.read_memory("snesWorkRam", 0x2F00, obj_queue_count * 2)
+    )
+    obj_record_codes = bytes(m.read_memory("snesWorkRam", 0x4800, 0x100))
+    obj_record_tiles = bytes(m.read_memory("snesWorkRam", 0x4900, 0x100))
     bg_reverse_owner_slot2 = le16(
         bytes(m.read_memory("snesWorkRam", 0xD004, 2))
     )
@@ -194,6 +222,19 @@ def snapshot(m: McpSession) -> dict[str, Any]:
             ((int(sa1_cpu.get("k", 0)) & 0xFF) << 16)
             | (int(sa1_cpu.get("pc", 0)) & 0xFFFF)
         ),
+        "sa1_sp": int(sa1_cpu.get("sp", 0)) & 0xFFFF,
+        "sa1_ps": int(sa1_cpu.get("ps", 0)) & 0xFF,
+        "sa1_a": int(sa1_cpu.get("a", 0)) & 0xFFFF,
+        "sa1_x": int(sa1_cpu.get("x", 0)) & 0xFFFF,
+        "sa1_y": int(sa1_cpu.get("y", 0)) & 0xFFFF,
+        "sa1_stop_state": str(sa1_cpu.get("stopState", "unknown")),
+        "pacing_arm": le16(pacing_shared[0:2]),
+        "pacing_vblank_epoch": pacing_shared[0x08],
+        "pacing_last_release_epoch": pacing_shared[0x09],
+        "pacing_cadence_marker": pacing_shared[0x0A],
+        "pacing_scpu_ready": pacing_shared[0x0B],
+        "pacing_debt": pacing_shared[0x0E],
+        "camera_mailbox": pacing_shared[0x40:0x42].hex(),
         "tick": le16(m.read_memory("Sa1Memory", 0x0760, 2)),
         "halt": le16(m.read_memory("Sa1Memory", 0x004E, 2)),
         "pc68k": int.from_bytes(
@@ -206,6 +247,9 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "credits": int.from_bytes(
             m.read_memory("snesMemory", 0x401C62, 2), "big"
         ),
+        "input_mailbox": bytes(
+            m.read_memory("snesMemory", 0x410000, 4)
+        ).hex(),
         "render_complete": le16(
             m.read_memory("snesWorkRam", 0x89A2, 2)
         ),
@@ -233,6 +277,38 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "boot_activity": int(
             m.read_memory("snesWorkRam", 0x1F1B, 1)[0]
         ),
+        "obj_tile_batch": bytes(
+            m.read_memory("snesWorkRam", 0x74A0, 8)
+        ).hex(),
+        "obj_prefetch_valid": le16(
+            m.read_memory("snesWorkRam", 0x74AC, 2)
+        ),
+        "obj_cache_high_water": le16(
+            m.read_memory("snesWorkRam", 0x00DE, 2)
+        ),
+        "obj_cache_free_count": le16(
+            m.read_memory("snesWorkRam", 0x89CE, 2)
+        ),
+        "obj_cache_restart_reason": le16(
+            m.read_memory("snesWorkRam", 0x89C8, 2)
+        ),
+        "obj_cache_restart_slots": le16(
+            m.read_memory("snesWorkRam", 0x89CA, 2)
+        ),
+        "obj_cache_restart_queue": le16(
+            m.read_memory("snesWorkRam", 0x89CC, 2)
+        ),
+        "obj_manifest": le16(
+            m.read_memory("snesWorkRam", 0x89BA, 2)
+        ),
+        "obj_cache_marker": obj_cache_marker,
+        "obj_tile_queue_valid": obj_queue_valid,
+        "obj_tile_queue_count_raw": obj_queue_count_raw,
+        "obj_tile_queue_count": obj_queue_count,
+        "obj_tile_queue_slots": obj_queue_slots.hex(),
+        "obj_tile_queue_codes": obj_queue_codes.hex(),
+        "obj_record_code_cache": obj_record_codes.hex(),
+        "obj_record_tile_cache": obj_record_tiles.hex(),
         "bg_mode": int(ppu.get("bgMode", -1)),
         "bg1_hscroll": int(bg1["hscroll"]),
         "bg1_vscroll": int(bg1["vscroll"]),
@@ -258,6 +334,27 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         ),
         "presented_hofs": le16(
             m.read_memory("snesWorkRam", 0x72B5, 2)
+        ),
+        "displayed_map_basis16": le16(
+            m.read_memory("snesWorkRam", 0x71A4, 2)
+        ),
+        "pending_map_basis16": le16(
+            m.read_memory("snesWorkRam", 0x71A6, 2)
+        ),
+        "latest_scrollx16": le16(
+            m.read_memory("snesWorkRam", 0x71A8, 2)
+        ),
+        "presented_scrollx16": le16(
+            m.read_memory("snesWorkRam", 0x71AA, 2)
+        ),
+        "obj_cache_scrollx16": le16(
+            m.read_memory("snesWorkRam", 0x71AC, 2)
+        ),
+        "obj_queue_scrollx16": le16(
+            m.read_memory("snesWorkRam", 0x71AE, 2)
+        ),
+        "obj_queue2_scrollx16": le16(
+            m.read_memory("snesWorkRam", 0x71B0, 2)
         ),
         "displayed_map_scrollx": int(
             m.read_memory("snesWorkRam", 0x72B7, 1)[0]
@@ -369,6 +466,12 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "bg_column_map": bytes(
             m.read_memory("snesWorkRam", 0x89E0, 16)
         ).hex(),
+        "bg_column_map_applied": bytes(
+            m.read_memory("snesWorkRam", 0x89F0, 16)
+        ).hex(),
+        "bg_column_map_candidate": bytes(
+            m.read_memory("snesWorkRam", 0x74B0, 16)
+        ).hex(),
         "bg_column_y_direct": bytes(
             m.read_memory("snesWorkRam", 0x72C0, 16)
         ).hex(),
@@ -449,6 +552,10 @@ def main() -> int:
             raise FileNotFoundError(f"{label} not found: {path}")
     if args.state is not None and not args.state.is_file():
         raise FileNotFoundError(f"state not found: {args.state}")
+    if args.movie is not None and not args.movie.is_file():
+        raise FileNotFoundError(f"movie not found: {args.movie}")
+    if args.state is not None and args.movie is not None:
+        raise SystemExit("--state and --movie are mutually exclusive")
     if args.refresh_video_mirror and args.state is None:
         raise SystemExit("--refresh-video-mirror requires --state")
     rom = args.rom.resolve()
@@ -476,6 +583,8 @@ def main() -> int:
         "mesen_2_1_1_binary_sha256": sha256(REAL_MESEN),
         "state": str(args.state.resolve()) if args.state else None,
         "state_sha256": sha256(args.state) if args.state else None,
+        "movie": str(args.movie.resolve()) if args.movie else None,
+        "movie_sha256": sha256(args.movie) if args.movie else None,
         "frame_range": [args.start_frame, args.end_frame],
         "capture_step": args.step,
         "checkpoint_step": args.checkpoint_step,
@@ -501,7 +610,7 @@ def main() -> int:
                 }
             ] if args.mirror_live_scroll else [])
         ),
-        "input": "controller idle",
+        "input": "recorded movie" if args.movie else "controller idle",
         "obj_temporal_capture": True,
     }
     print(json.dumps({"event": "provenance", **provenance}, sort_keys=True))
@@ -517,7 +626,19 @@ def main() -> int:
         stderr_log=stderr_path,
     ) as m:
         m.pause()
-        if args.state is not None:
+        play_response = None
+        stop_movie_response = None
+        movie_state_before_stop = None
+        if args.movie is not None:
+            play_response = m.play_movie(args.movie.resolve())
+            m.pause()
+            movie_start_frame = int(m.get_state().get("frameCount", 0))
+            if movie_start_frame != 0:
+                raise RuntimeError(
+                    "movie did not begin at fresh frame zero: "
+                    f"{movie_start_frame}"
+                )
+        elif args.state is not None:
             m.load_state(args.state.resolve())
             m.pause()
         if args.refresh_video_mirror:
@@ -632,7 +753,23 @@ def main() -> int:
             m.run_frames(count)
             current = int(m.get_state().get("frameCount", 0))
 
-    result = {"provenance": provenance, "captures": rows}
+        if args.movie is not None:
+            movie_state_before_stop = m.movie_state()
+            stop_movie_response = m.stop_movie()
+
+    result = {
+        "provenance": provenance,
+        "captures": rows,
+        "movie_playback": (
+            {
+                "play_response": play_response,
+                "state_before_stop": movie_state_before_stop,
+                "stop_response": stop_movie_response,
+            }
+            if args.movie is not None
+            else None
+        ),
+    }
     result_path = output / "results.json"
     result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(

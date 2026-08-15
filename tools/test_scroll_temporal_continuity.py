@@ -42,7 +42,7 @@ def make_capture(directory: Path, *, failure: str | None) -> Path:
             displayed = tick * 3
         else:
             displayed = (frame * 3) // 2
-        ppu_position = 32 + displayed
+        ppu_position = 64 + displayed
         if failure == "coordinate_rebase" and frame >= 14:
             ppu_position -= 32
         image_path = directory / f"frame-{frame:06d}.png"
@@ -50,7 +50,21 @@ def make_capture(directory: Path, *, failure: str | None) -> Path:
         obj_base_scrollx = (0x80 - tick * 3) & 0xFF
         presented_scrollx = (0x80 - displayed) & 0xFF
         obj_comp = (obj_base_scrollx - presented_scrollx) & 0xFF
-        absolute_map_basis = 0xC0 if failure == "basis_drift" else 0x80
+        coordinate_rebase = failure == "coordinate_rebase" and frame >= 14
+        absolute_map_basis = (
+            0x180
+            if failure == "basis_high_alias"
+            else 0xC0
+            if failure == "basis_drift"
+            else 0x60
+            if coordinate_rebase
+            else 0x80
+        )
+        column_map = (
+            "0f000102030405060708090a0b0c0d0e"
+            if coordinate_rebase
+            else "000102030405060708090a0b0c0d0e0f"
+        )
         world_x = 100 if failure == "obj_hold" else 100 + obj_comp
         fixed_x = 50 + (obj_comp if failure == "obj_hud" else 0)
         presentation_oam = bytearray(0x220)
@@ -70,9 +84,10 @@ def make_capture(directory: Path, *, failure: str | None) -> Path:
                 "presented_scrollx": presented_scrollx,
                 "bg1_hscroll": ppu_position,
                 "bg_column_kind": 0,
-                "bg_column_map": "000102030405060708090a0b0c0d0e0f",
-                "displayed_column_map": "000102030405060708090a0b0c0d0e0f",
-                "displayed_map_scrollx": absolute_map_basis,
+                "bg_column_map": column_map,
+                "displayed_column_map": column_map,
+                "displayed_map_scrollx": absolute_map_basis & 0xFF,
+                "displayed_map_basis16": absolute_map_basis,
                 "displayed_map_valid": 0xA5,
                 "obj_cache_scrollx": obj_base_scrollx,
                 "scroll_packed": obj_base_scrollx << 8,
@@ -177,6 +192,24 @@ def main() -> int:
         assert any(
             "absolute physical-map basis" in failure
             for failure in basis_report["failures"]
+        )
+
+        alias_dir = temp / "basis-high-alias"
+        alias_dir.mkdir()
+        alias_output = alias_dir / "report.json"
+        alias = run(
+            make_capture(alias_dir, failure="basis_high_alias"),
+            alias_output,
+        )
+        assert alias.returncode == 1, alias.stderr or alias.stdout
+        alias_report = json.loads(alias_output.read_text())
+        assert alias_report["result"] == "red"
+        assert alias_report["absolute_map_basis"]["violation_count"] == 28
+        assert all(
+            row["expected_basis"] == 0x80
+            and row["observed_basis"] == 0x180
+            and row["basis_bits"] == 9
+            for row in alias_report["absolute_map_basis"]["violations"]
         )
 
         hold_dir = temp / "hold-jump"

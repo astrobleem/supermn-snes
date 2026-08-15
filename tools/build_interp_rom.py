@@ -49,6 +49,13 @@ assert INTERP[0x528A:0x528D] == bytes.fromhex("4c60d3"), (
 assert INTERP[0x5360:0x5372] == bytes.fromhex(
     "c9e4f2d009a5548540685c00c09d4c50e400"
 ), "the packed $01F2E4 -> $9D:C000 dispatch arm changed or overlapped $25110"
+assert interp_symbol("cpu5a22_boot") == 0xFC00
+assert INTERP[0x7C00:0x7C04] == bytes.fromhex("5ca0dae9"), (
+    "5A22 reset stub no longer reaches the guarded video-bank bootstrap"
+)
+assert interp_symbol("adsa_pc") < 0xFD00, (
+    "bank-$00 indexed/ADDA helpers again overlap op_addsubq_g@$FD00"
+)
 
 entry_ce4 = interp_symbol("entry_ce4")
 entry_ce4_after_counter = interp_symbol("entry_ce4_after_counter")
@@ -140,6 +147,8 @@ assert INTERP[0x5350:0x5360] == bytes.fromhex(
 ), "bank-$9D $00F8 return-sentinel island moved or was overwritten"
 trap1_dispatch = interp_symbol("trap1_dispatch")
 trap1_dispatch_end = interp_symbol("trap1_dispatch_end")
+clear_work_byte = interp_symbol("clear_work_byte")
+clear_work_byte_end = interp_symbol("clear_work_byte_end")
 op_movem_abs = interp_symbol("op_movem_abs")
 assert trap1_dispatch == 0xD3A1 and trap1_dispatch_end <= 0xD3BC, (
     "TRAP #1 dispatcher moved or escaped its dead-$25110 island"
@@ -150,6 +159,20 @@ assert INTERP[op_movem_abs - 0x8000 - 3:op_movem_abs - 0x8000] == bytes.fromhex(
 assert INTERP[trap1_dispatch - 0x8000:trap1_dispatch_end - 0x8000].count(
     bytes.fromhex("5c00809e")
 ) == 1, "TRAP #1 dispatcher lost its sole $9E:8000 native target"
+assert clear_work_byte == 0xD3C0 and clear_work_byte_end == 0xD3CB
+assert INTERP[
+    trap1_dispatch_end - 0x8000:clear_work_byte - 0x8000
+] == bytes(clear_work_byte - trap1_dispatch_end), (
+    "TRAP #1 dispatcher crossed the legal work-byte clear helper"
+)
+assert INTERP[
+    clear_work_byte - 0x8000:clear_work_byte_end - 0x8000
+] == bytes.fromhex("0848a9009f000040682860"), (
+    "work-byte clear helper lost A/P preservation or legal bank-long store"
+)
+assert INTERP.count(bytes.fromhex("20c0d3")) == 7, (
+    "one or more formerly truncated STZ-long sites lost the guarded helper call"
+)
 assert len(IMG) == 0x80000, len(IMG)
 assert len(GFX) == 0x200000, len(GFX)
 
@@ -522,6 +545,12 @@ boot_mode7_tick = vid_off("boot_mode7_tick")
 boot_mode7_tick_end = vid_off("boot_mode7_tick_end")
 obj_cache_protect_displayed = vid_off("obj_cache_protect_displayed")
 obj_cache_protect_displayed_end = vid_off("obj_cache_protect_displayed_end")
+obj_cache_protect_displayed_extended = vid_off(
+    "obj_cache_protect_displayed_extended"
+)
+obj_cache_protect_displayed_extended_end = vid_off(
+    "obj_cache_protect_displayed_extended_end"
+)
 boot_mode7_scale_tick = vid_off("boot_mode7_scale_tick")
 boot_mode7_scale_tick_end = vid_off("boot_mode7_scale_tick_end")
 assert bg_tile_run_dma_chunks == 0x8A00
@@ -540,12 +569,12 @@ service_pending_dma0_bytes = VID[
 bg_tile_run_dma_chunks_bytes = VID[
     bg_tile_run_dma_chunks - 0x8000:bg_tile_run_dma_chunks_end - 0x8000
 ]
-assert bytes.fromhex("c90115901938e90015") in bg_tile_run_dma_chunks_bytes, (
-    "prepared BG DMA chunks no longer retain the $1500-byte record-aligned "
+assert bytes.fromhex("c90114901938e90014") in bg_tile_run_dma_chunks_bytes, (
+    "prepared BG DMA chunks no longer retain the $1400-byte record-aligned "
     "VBlank margin required by NMI BG/OBJ presentation"
 )
-assert 0x1500 % 0x80 == 0 and 0x1500 // 0x80 == 42, (
-    "prepared BG chunk must contain exactly 42 complete 128-byte records"
+assert 0x1400 % 0x80 == 0 and 0x1400 // 0x80 == 40, (
+    "prepared BG chunk must contain exactly 40 complete 128-byte records"
 )
 assert bytes.fromhex("ad3f21ad3721ad3d21") in service_pending_dma0_bytes, (
     "pending DMA0 service no longer resets OPVCT low/high phase through "
@@ -558,9 +587,9 @@ assert service_pending_dma0_bytes.count(bytes.fromhex("2240c3e9")) == 1, (
 assert service_pending_dma0_bytes.count(bytes.fromhex("2240cde9")) == 1, (
     "pending tilemap DMA no longer reapplies scroll registers after its basis commit"
 )
-assert bytes.fromhex("2220cde99c111f") in service_pending_dma0_bytes, (
-    "qualified tile DMA no longer calls the guarded early presenter before "
-    "clearing the foreground descriptor"
+assert bytes.fromhex("2220cde92210dae99c111f") in service_pending_dma0_bytes, (
+    "qualified tile DMA no longer presents, restores the pending map target, "
+    "then clears the foreground descriptor in that order"
 )
 assert service_pending_dma0_end == dma0_blank_pulse_extended == 0x8A7F, (
     "pending DMA service lost its checkpoint/caller-stable return boundary"
@@ -610,6 +639,17 @@ assert (
     <= 0x8DD0
 )
 assert VID[
+    obj_cache_protect_displayed - 0x8000:
+    obj_cache_protect_displayed_end - 0x8000
+] == bytes(
+    (
+        0x5C,
+        obj_cache_protect_displayed_extended & 0xFF,
+        obj_cache_protect_displayed_extended >> 8,
+        0xE9,
+    )
+), "displayed-OBJ quarantine stub lost its resolved retention target"
+assert VID[
     obj_cache_protect_displayed_end - 0x8000:boot_mode7_scale_tick - 0x8000
 ] == bytes(boot_mode7_scale_tick - obj_cache_protect_displayed_end), (
     "displayed-OBJ quarantine helper grew into the boot-scale island"
@@ -643,6 +683,12 @@ pacing_publish_input_and_scroll_end = vid_off(
     "pacing_publish_input_and_scroll_end"
 )
 nmi_video_keepalive_end = vid_off("nmi_video_keepalive_end")
+renderer_mailboxes_init = vid_off("renderer_mailboxes_init")
+assert VID[
+    renderer_mailboxes_init - 0x8000:renderer_mailboxes_init - 0x8000 + 20
+] == bytes.fromhex(
+    "8f2201418f2a01418f2c01418f3001418f620141"
+), "renderer boot no longer clears pacing and early-camera mailboxes together"
 nmi_present_then_wake = vid_off("nmi_present_then_wake")
 nmi_present_then_wake_end = vid_off("nmi_present_then_wake_end")
 nmi_present_then_sample = vid_off("nmi_present_then_sample")
@@ -726,7 +772,7 @@ assert VID[0x0F69:0x0F80] == bytes(0x17), (
     "pacing IRQ/cache-scroll handler grew into an adjacent reserved island"
 )
 assert VID[0x0F80:nmi_video_keepalive_end - 0x8000] == bytes.fromhex(
-    "20008baf9b717ec9a5d007a9008f9b717e60a9008f9b717e"
+    "20008bad1b1f301eaf9b717ec9a5d007a9008f9b717e60a9008f9b717e"
     "ad0233f0042200cde960"
 ), (
     "NMI tail no longer preserves boot ownership, consumes the early-presentation "
@@ -736,10 +782,20 @@ assert nmi_present_then_wake == 0x8FB0
 assert VID[nmi_video_keepalive_end - 0x8000:nmi_present_then_wake - 0x8000] == bytes(
     nmi_present_then_wake - nmi_video_keepalive_end
 ), "NMI tail grew into the fixed leading-edge presentation wrapper"
-assert VID[
+nmi_present_then_wake_code = VID[
     nmi_present_then_wake - 0x8000:nmi_present_then_wake_end - 0x8000
-] == bytes.fromhex("af84717ec9a5d0042200cfe94c008e"), (
-    "leading-edge NMI wrapper lost its coherent-image guard, arbiter call, or wake tail-call"
+]
+assert nmi_present_then_wake_end <= nmi_present_then_sample
+assert bytes.fromhex("afa2747ec95aa5") in nmi_present_then_wake_code, (
+    "leading-edge NMI wrapper no longer reserves a due OBJ tile batch"
+)
+assert bytes.fromhex("d0045c60d1e9") in nmi_present_then_wake_code, (
+    "batch-due NMI branch no longer routes through the leading-edge presenter"
+)
+assert bytes.fromhex("af84717ec9a5") in nmi_present_then_wake_code
+assert bytes.fromhex("2200cfe9") in nmi_present_then_wake_code
+assert nmi_present_then_wake_code[-3:] == bytes.fromhex("4c008e"), (
+    "leading-edge NMI wrapper lost its pacing wake tail-call"
 )
 assert nmi_present_then_sample == 0x8FD0
 assert VID[
@@ -747,11 +803,17 @@ assert VID[
 ] == bytes(nmi_present_then_sample - nmi_present_then_wake_end), (
     "leading-edge NMI wrapper grew into the fixed post-DMA wrapper"
 )
-assert VID[
+nmi_present_then_sample_code = VID[
     nmi_present_then_sample - 0x8000:nmi_present_then_sample_end - 0x8000
-] == bytes.fromhex("ad111ff009a9a58f9b717e4c8a8e2220cde94c8a8e"), (
-    "post-DMA NMI wrapper no longer holds BG/OBJ together while tile DMA is "
-    "pending or presents before tail-calling the historical controller sampler"
+]
+assert nmi_present_then_sample_code[:4] == bytes.fromhex("2200d6e9"), (
+    "post-wake NMI wrapper no longer services the bounded OBJ-pattern batch"
+)
+assert nmi_present_then_sample_code == (
+    bytes.fromhex("2200d6e92220cde94c8a8e") + bytes([0xEA]) * 14
+), (
+    "post-DMA NMI wrapper must use the consumed-this-NMI marker, not a merely "
+    "pending DMA0 descriptor, before the historical controller sampler tail"
 )
 assert VID[nmi_present_then_sample_end - 0x8000:0x1000] == bytes(
     0x9000 - nmi_present_then_sample_end
@@ -784,10 +846,15 @@ obj_slot_legacy = vid_off("obj_slot")
 obj_upload_dispatch = vid_off("obj_upload_dispatch")
 obj_slot_fast_hash = vid_off("obj_slot_fast_hash")
 obj_slot_fast_hash_end = vid_off("obj_slot_fast_hash_end")
+obj_slot_fast_full_reset_ext = vid_off("obj_slot_fast_full_reset_ext")
 obj_hash_clear = vid_off("obj_hclr_extended")
 obj_queue_prepare_extended = vid_off("obj_queue_prepare_extended")
+obj_fast_prepare_prefetched = vid_off("obj_fast_prepare_prefetched")
+obj_fast_prepare_prefetched_end = vid_off("obj_fast_prepare_prefetched_end")
 obj_hash_helpers_end = vid_off("obj_hash_helpers_end")
 vf_tick = vid_off("vf_tick")
+vid_frame = vid_off("vid_frame")
+vid_bg = vid_off("vid_bg")
 rc_copy = vid_off("rc_copy")
 snapshot_acquire_paced = vid_off("snapshot_acquire_paced")
 render_queue_finish = vid_off("render_queue_finish")
@@ -804,7 +871,15 @@ obj_cache_next_packed = vid_off("ocp_next_packed")
 obj_render_next_packed = vid_off("vop_next")
 obj_queue_prepare_stub = vid_off("obj_queue_prepare")
 obj_tile_queue = vid_off("obj_tile_queue")
+otq_capacity = vid_off("otq_capacity")
+obj_cache_full = vid_off("obj_cache_full")
+obj_tile_queue_publish_reverse = vid_off("obj_tile_queue_publish_reverse")
+obj_tile_queue_publish_reverse_end = vid_off(
+    "obj_tile_queue_publish_reverse_end"
+)
+obj_T = vid_off("obj_T")
 obj_slot_fast_stub = vid_off("obj_slot_fast")
+obj_fast_prepare = vid_off("obj_fast_prepare")
 obj_cache_preflight = vid_off("obj_cache_preflight")
 obj_cache_reclaim_fast = vid_off("obj_cache_reclaim_fast")
 obj_cache_reclaim_fast_end = vid_off("obj_cache_reclaim_fast_end")
@@ -816,6 +891,11 @@ psd_prepared_dma = vid_off("psd_prepared_dma")
 psd_prepared_dma_end = vid_off("psd_prepared_dma_end")
 bg_incremental = vid_off("vid_bg_incremental")
 bg_incremental_end = vid_off("vid_bg_incremental_end")
+bg_incremental_core_end = vid_off("bg_incremental_core_end")
+obj_slot_record_cached = vid_off("obj_slot_record_cached")
+obj_slot_record_cached_end = vid_off("obj_slot_record_cached_end")
+obj_queue_restart_cached = vid_off("obj_queue_restart_cached")
+obj_queue_restart_cached_end = vid_off("obj_queue_restart_cached_end")
 capture_bg_vscroll = vid_off("capture_bg_vscroll")
 capture_bg_vscroll_end = vid_off("capture_bg_vscroll_end")
 capture_bg_upper_snapshot = vid_off("capture_bg_upper_snapshot")
@@ -829,6 +909,8 @@ bg_slot = vid_off("bg_slot")
 bg_tile_dma = vid_off("bg_tile_dma")
 bg_cache_reset_counts = vid_off("bg_cache_reset_counts")
 bg_cache_reset_counts_end = vid_off("bg_cache_reset_counts_end")
+obj_hclr_cached = vid_off("obj_hclr_cached")
+obj_hclr_cached_end = vid_off("obj_hclr_cached_end")
 producer_touch_reset = vid_off("producer_touch_reset")
 producer_touch_reset_end = vid_off("producer_touch_reset_end")
 bg_cache_extended = vid_off("bg_slot_extended")
@@ -862,6 +944,8 @@ bg_scroll_present_init = vid_off("bg_scroll_present_init")
 bg_scroll_present_init_end = vid_off("bg_scroll_present_init_end")
 bg_scroll_present_step = vid_off("bg_scroll_present_step")
 bg_scroll_present_step_end = vid_off("bg_scroll_present_step_end")
+bg_scroll_present_step_full = vid_off("bg_scroll_present_step_full")
+bg_scroll_present_step_full_end = vid_off("bg_scroll_present_step_full_end")
 bg_hscroll_full = vid_off("bg_hscroll_full")
 bg_hscroll_full_end = vid_off("bg_hscroll_full_end")
 bg_scroll_map_commit = vid_off("bg_scroll_map_commit")
@@ -874,6 +958,10 @@ bg_scroll_map_prepare = vid_off("bg_scroll_map_prepare")
 bg_scroll_map_prepare_end = vid_off("bg_scroll_map_prepare_end")
 bg_scroll_phase_publish = vid_off("bg_scroll_phase_publish")
 bg_scroll_phase_publish_end = vid_off("bg_scroll_phase_publish_end")
+bg_scroll_phase_publish_full = vid_off("bg_scroll_phase_publish_full")
+bg_scroll_phase_publish_full_end = vid_off("bg_scroll_phase_publish_full_end")
+bg_opt_table_changed = vid_off("bg_opt_table_changed")
+bg_opt_table_changed_end = vid_off("bg_opt_table_changed_end")
 prepared_bg_cache_reconstruct = vid_off("prepared_bg_cache_reconstruct")
 prepared_bg_cache_reconstruct_end = vid_off(
     "prepared_bg_cache_reconstruct_end"
@@ -900,6 +988,57 @@ obj_base_span_prepare = vid_off("obj_base_span_prepare")
 obj_base_span_prepare_end = vid_off("obj_base_span_prepare_end")
 nmi_present_arbitrate = vid_off("nmi_present_arbitrate")
 nmi_present_arbitrate_end = vid_off("nmi_present_arbitrate_end")
+nmi_obj_tile_batch = vid_off("nmi_obj_tile_batch")
+nmi_obj_tile_batch_end = vid_off("nmi_obj_tile_batch_end")
+nmi_batch_present_then_wake = vid_off("nmi_batch_present_then_wake")
+nmi_batch_present_then_wake_end = vid_off("nmi_batch_present_then_wake_end")
+obj_prefetch_begin = vid_off("obj_prefetch_begin")
+obj_prefetch_begin_end = vid_off("obj_prefetch_begin_end")
+obj_upload_queued_extended = vid_off("obj_upload_queued_extended")
+obj_upload_queued_extended_end = vid_off("obj_upload_queued_extended_end")
+nmi_obj_tile_batch_dispatch = vid_off("nmi_obj_tile_batch_dispatch")
+nmi_obj_tile_batch_dispatch_end = vid_off("nmi_obj_tile_batch_dispatch_end")
+nmi_obj_tile_batch_staged = vid_off("nmi_obj_tile_batch_staged")
+nmi_obj_tile_batch_staged_end = vid_off("nmi_obj_tile_batch_staged_end")
+obj_prefetch_stage_records = vid_off("obj_prefetch_stage_records")
+obj_prefetch_stage_records_end = vid_off("obj_prefetch_stage_records_end")
+nmi_obj_tile_batch_group = vid_off("nmi_obj_tile_batch_group")
+nmi_obj_tile_batch_group_end = vid_off("nmi_obj_tile_batch_group_end")
+dma0_restore_map_vmaddr = vid_off("dma0_restore_map_vmaddr")
+dma0_restore_map_vmaddr_end = vid_off("dma0_restore_map_vmaddr_end")
+nmi_camera_mailbox_intake = vid_off("nmi_camera_mailbox_intake")
+nmi_camera_mailbox_intake_end = vid_off("nmi_camera_mailbox_intake_end")
+nmi_batch_present_arbitrate = vid_off("nmi_batch_present_arbitrate")
+nmi_batch_present_arbitrate_end = vid_off("nmi_batch_present_arbitrate_end")
+nmi_batch_camera_mailbox_intake = vid_off("nmi_batch_camera_mailbox_intake")
+nmi_batch_camera_mailbox_intake_end = vid_off(
+    "nmi_batch_camera_mailbox_intake_end"
+)
+cpu5a22_boot_extended = vid_off("cpu5a22_boot_extended")
+cpu5a22_boot_extended_end = vid_off("cpu5a22_boot_extended_end")
+clear_bg_duplicate_flag_long = vid_off("clear_bg_duplicate_flag_long")
+clear_bg_duplicate_flag_long_end = vid_off("clear_bg_duplicate_flag_long_end")
+obj_prefetch_stage_groups_try = vid_off("obj_prefetch_stage_groups_try")
+obj_prefetch_stage_groups_try_end = vid_off("obj_prefetch_stage_groups_try_end")
+bg_column_rotation_select = vid_off("bg_column_rotation_select")
+bg_column_rotation_select_end = vid_off("bg_column_rotation_select_end")
+bcmf_move_slot = vid_off("bcmf_move_slot")
+bcmf_move_slot_end = vid_off("bcmf_move_slot_end")
+obj_upload_queued = vid_off("obj_upload_queued")
+ouq_done = vid_off("ouq_done")
+obj_tile_dma_direct = vid_off("obj_tile_dma_direct")
+queue_replace_latest_clean = vid_off("render_queue_replace_latest_clean")
+queue_replace_latest_clean_end = vid_off(
+    "render_queue_replace_latest_clean_end"
+)
+bg_column_map_update_fast = vid_off("bg_column_map_update_fast")
+bg_column_map_update_fast_end = vid_off("bg_column_map_update_fast_end")
+bcmf_update_column = vid_off("bcmf_update_column")
+bcmf_update_loop = vid_off("bcmf_update_loop")
+bg_column_occupied = vid_off("bg_column_occupied")
+bg_column_occupied_end = vid_off("bg_column_occupied_end")
+bg_offset_table_build_canonical = vid_off("bg_offset_table_build_canonical")
+bg_offset_table_build_canonical_end = vid_off("bg_offset_table_build_canonical_end")
 accept_bg_columns_snapshot = vid_off("accept_bg_columns_snapshot")
 accept_bg_columns_snapshot_end = vid_off("accept_bg_columns_snapshot_end")
 accept_bg_columns_direct = vid_off("accept_bg_columns_direct")
@@ -915,6 +1054,8 @@ queue_promote = vid_off("render_queue_promote")
 queue_promote_end = vid_off("render_queue_promote_end")
 boot_screen_init = vid_off("boot_screen_init")
 boot_screen_init_end = vid_off("boot_screen_init_end")
+snapshot_dma_plane = vid_off("snapshot_dma_plane")
+snapshot_dma_plane_end = vid_off("snapshot_dma_plane_end")
 video_image_end = vid_off("video_image_end")
 assert palette_test == 0xA1A0 and palette_test < palette_test_end <= bg_test == 0xA1E8
 assert (
@@ -951,13 +1092,14 @@ assert bg_compute_hscroll_logic == 0xC500
 assert VID[
     bg_compute_hscroll_logic - 0x8000:bg_compute_hscroll_logic_end - 0x8000
 ] == bytes.fromhex(
-    "e220afb3727ec9a5d045c220af96897ec9feffb032e220afb8727ec9a5d01e"
-    "afb7727e38efb4727ec22029ff00c9800090030900ff1869400029ff0360c220"
+    "e220afb3727ec9a5d048c220af96897ec9feffb035e220afb8727ec9a5d021"
+    "c220afa4717e29ff0185d0afaa717e29ff0185d2a5d038e5d21869"
+    "400029ff0160c220"
     "afb5727e29ff0360e220afb4727e8004af95897ec22029ff0085d0af96897e"
     "c9feffb029e220af95897ec22029ff0085d238e5d029ff0085d0a5d2291f00"
     "85d2a9400038e5d21865d029ff0360af96897e290100eb1869400038e5d029"
     "ff0360"
-), "BG hscroll lost displayed-map/presented-camera single authority"
+), "BG hscroll lost nine-bit displayed-map/presented-camera authority"
 assert bg_upload_mode_current == 0xC180
 assert VID[
     bg_upload_mode_current - 0x8000:bg_upload_mode_current_end - 0x8000
@@ -977,15 +1119,24 @@ bg_scroll_present_step_bytes = VID[
     bg_scroll_present_step - 0x8000:bg_scroll_present_step_end - 0x8000
 ]
 assert bg_scroll_present_step_bytes == bytes.fromhex(
-    "08c230a5d048e220afb3727ec9a5d062afb2727e38efb4727ef0573023c902"
-    "9002a902c22029ff0085d0e220186fb4727e8fb4727ec220afb5727e38e5d0"
-    "802649ff1ac9029002a902c22029ff0085d0e220afb4727e38e5d08fb4727e"
-    "c220afb5727e1865d029ff038fb5727e6885d0286bc22080f7"
-), "scroll presenter lost bounded per-NMI cursor/coordinate motion"
-assert bytes.fromhex("ceb472") not in bg_scroll_present_step_bytes, (
+    "5c60cde9"
+), "scroll presenter entry no longer reaches its guarded full implementation"
+assert bg_scroll_present_step_full == 0xCD60
+bg_scroll_present_step_full_bytes = VID[
+    bg_scroll_present_step_full - 0x8000:bg_scroll_present_step_full_end - 0x8000
+]
+assert bg_scroll_present_step_full_bytes == bytes.fromhex(
+    "08c230a5d048e220afb3727ec9a5d046af94717ec9a5d03eafb2727e38efb4"
+    "727ef0333036c9029002a902c22029ff0085d0e220186fb4727e8fb4727ec2"
+    "20afaa717e1865d029ff018faa717eafb5727e38e5d08039c2204cf6cd49ff"
+    "1ac9029002a902c22029ff0085d0e220afb4727e38e5d08fb4727ec220afaa"
+    "717e38e5d029ff018faa717eafb5727e1865d029ff038fb5727e6885d0286b"
+    "c22080f7"
+), "scroll presenter lost bounded paired byte/nine-bit per-NMI motion"
+assert bytes.fromhex("ceb472") not in bg_scroll_present_step_full_bytes, (
     "Poppy truncated forbidden long DEC of the presented-scroll cursor"
 )
-assert bytes.fromhex("49ff00") not in bg_scroll_present_step_bytes, (
+assert bytes.fromhex("49ff00") not in bg_scroll_present_step_full_bytes, (
     "Poppy inferred a 16-bit EOR immediate at the runtime-A8 negative branch"
 )
 assert (
@@ -1010,6 +1161,8 @@ assert (
     < bg_scroll_map_prepare_end
     <= bg_scroll_phase_publish
     < bg_scroll_phase_publish_end
+    <= bg_opt_table_changed
+    < bg_opt_table_changed_end
     <= obj_present_commit
     < obj_present_commit_end
     <= obj_present_step
@@ -1028,10 +1181,60 @@ assert (
     < nmi_present_before_dma_end
     <= nmi_bg_reapply
     < nmi_bg_reapply_end
+    <= bg_scroll_present_step_full
+    < bg_scroll_present_step_full_end
     <= obj_base_span_prepare
     < obj_base_span_prepare_end
     <= nmi_present_arbitrate
     < nmi_present_arbitrate_end
+    <= bg_scroll_phase_publish_full
+    < bg_scroll_phase_publish_full_end
+    <= nmi_obj_tile_batch
+    < nmi_obj_tile_batch_end
+    <= nmi_batch_present_then_wake
+    < nmi_batch_present_then_wake_end
+    <= bg_column_rotation_select
+    < bg_column_rotation_select_end
+    <= bcmf_move_slot
+    < bcmf_move_slot_end
+    <= obj_cache_protect_displayed_extended
+    < obj_cache_protect_displayed_extended_end
+    == obj_tile_queue_publish_reverse
+    < obj_tile_queue_publish_reverse_end
+    <= obj_prefetch_begin
+    < obj_prefetch_begin_end
+    <= obj_upload_queued_extended
+    < obj_upload_queued_extended_end
+    <= nmi_obj_tile_batch_dispatch
+    < nmi_obj_tile_batch_dispatch_end
+    <= nmi_obj_tile_batch_staged
+    < nmi_obj_tile_batch_staged_end
+    <= obj_prefetch_stage_records
+    < obj_prefetch_stage_records_end
+    <= nmi_obj_tile_batch_group
+    < nmi_obj_tile_batch_group_end
+    <= dma0_restore_map_vmaddr
+    < dma0_restore_map_vmaddr_end
+    <= nmi_camera_mailbox_intake
+    < nmi_camera_mailbox_intake_end
+    <= nmi_batch_present_arbitrate
+    < nmi_batch_present_arbitrate_end
+    <= nmi_batch_camera_mailbox_intake
+    < nmi_batch_camera_mailbox_intake_end
+    <= cpu5a22_boot_extended
+    < cpu5a22_boot_extended_end
+    <= clear_bg_duplicate_flag_long
+    < clear_bg_duplicate_flag_long_end
+    <= obj_prefetch_stage_groups_try
+    < obj_prefetch_stage_groups_try_end
+    <= queue_replace_latest_clean
+    < queue_replace_latest_clean_end
+    == bg_column_map_update_fast
+    < bg_column_map_update_fast_end
+    == bg_column_occupied
+    < bg_column_occupied_end
+    == bg_offset_table_build_canonical
+    < bg_offset_table_build_canonical_end
     <= queue_promote
 ), "scroll helper islands overlap or moved out of address order"
 for seam_start, seam_end, message in (
@@ -1045,7 +1248,8 @@ for seam_start, seam_end, message in (
     (prepared_bg_cache_reconstruct_end, bg_compute_hscroll_logic, "cache reconstructor crossed coordinate policy"),
     (bg_compute_hscroll_logic_end, bg_scroll_map_prepare, "coordinate policy crossed map-basis preparer"),
     (bg_scroll_map_prepare_end, bg_scroll_phase_publish, "map-basis preparer crossed phase publisher"),
-    (bg_scroll_phase_publish_end, obj_present_commit, "phase publisher crossed OBJ commit"),
+    (bg_scroll_phase_publish_end, bg_opt_table_changed, "phase publisher crossed OPT cache helper"),
+    (bg_opt_table_changed_end, obj_present_commit, "OPT cache helper crossed OBJ commit"),
     (obj_present_commit_end, obj_present_step, "OBJ commit crossed presentation step"),
     (obj_present_step_end, obj_present_nmi, "OBJ step crossed NMI publisher"),
     (obj_present_nmi_end, obj_present_wait, "OBJ NMI publisher crossed wait helper"),
@@ -1054,9 +1258,142 @@ for seam_start, seam_end, message in (
     (obj_present_dma_base_end, nmi_gameplay_present, "base-delta OBJ DMA crossed gameplay presenter"),
     (nmi_gameplay_present_end, nmi_present_before_dma, "gameplay presenter crossed early-present guard"),
     (nmi_present_before_dma_end, nmi_bg_reapply, "early-present guard crossed BG reapply helper"),
-    (nmi_bg_reapply_end, obj_base_span_prepare, "BG reapply helper crossed OBJ span preparer"),
+    (
+        nmi_bg_reapply_end,
+        bg_scroll_present_step_full,
+        "BG reapply helper crossed the full scroll presenter",
+    ),
+    (
+        bg_scroll_present_step_full_end,
+        obj_base_span_prepare,
+        "full scroll presenter crossed OBJ span preparer",
+    ),
     (obj_base_span_prepare_end, nmi_present_arbitrate, "OBJ span preparer crossed NMI arbiter"),
-    (nmi_present_arbitrate_end, queue_promote, "NMI arbiter crossed queue promoter"),
+    (
+        nmi_present_arbitrate_end,
+        bg_scroll_phase_publish_full,
+        "NMI arbiter crossed the full phase publisher",
+    ),
+    (
+        bg_scroll_phase_publish_full_end,
+        nmi_obj_tile_batch,
+        "full phase publisher crossed OBJ tile batch",
+    ),
+    (
+        nmi_obj_tile_batch_end,
+        nmi_batch_present_then_wake,
+        "OBJ tile batch crossed leading batch presenter",
+    ),
+    (
+        nmi_batch_present_then_wake_end,
+        bg_column_rotation_select,
+        "leading batch presenter crossed populated-column rotation selector",
+    ),
+    (
+        bg_column_rotation_select_end,
+        bcmf_move_slot,
+        "populated-column rotation selector crossed column mover",
+    ),
+    (
+        bcmf_move_slot_end,
+        obj_cache_protect_displayed_extended,
+        "column mover crossed displayed-OBJ retention helper",
+    ),
+    (
+        obj_cache_protect_displayed_extended_end,
+        obj_tile_queue_publish_reverse,
+        "displayed-OBJ retention crossed reverse-owner publisher",
+    ),
+    (
+        obj_tile_queue_publish_reverse_end,
+        obj_prefetch_begin,
+        "reverse-owner publisher crossed early OBJ planner",
+    ),
+    (
+        obj_prefetch_begin_end,
+        obj_upload_queued_extended,
+        "early OBJ planner crossed queue completion helper",
+    ),
+    (
+        obj_upload_queued_extended_end,
+        nmi_obj_tile_batch_dispatch,
+        "queue completion helper crossed staged-batch dispatcher",
+    ),
+    (
+        nmi_obj_tile_batch_dispatch_end,
+        nmi_obj_tile_batch_staged,
+        "staged-batch dispatcher crossed staged worker",
+    ),
+    (
+        nmi_obj_tile_batch_staged_end,
+        obj_prefetch_stage_records,
+        "staged worker crossed pre-VBlank copier",
+    ),
+    (
+        obj_prefetch_stage_records_end,
+        nmi_obj_tile_batch_group,
+        "record copier crossed complete-group NMI worker",
+    ),
+    (
+        nmi_obj_tile_batch_group_end,
+        dma0_restore_map_vmaddr,
+        "complete-group NMI worker crossed DMA0 map-target restore helper",
+    ),
+    (
+        dma0_restore_map_vmaddr_end,
+        nmi_camera_mailbox_intake,
+        "DMA0 map-target restore helper crossed camera-mailbox consumer",
+    ),
+    (
+        nmi_camera_mailbox_intake_end,
+        nmi_batch_present_arbitrate,
+        "camera-mailbox consumer crossed batch presentation arbiter",
+    ),
+    (
+        nmi_batch_present_arbitrate_end,
+        nmi_batch_camera_mailbox_intake,
+        "batch presentation arbiter crossed its camera-mailbox consumer",
+    ),
+    (
+        nmi_batch_camera_mailbox_intake_end,
+        cpu5a22_boot_extended,
+        "batch camera-mailbox consumer crossed the 5A22 boot continuation",
+    ),
+    (
+        cpu5a22_boot_extended_end,
+        clear_bg_duplicate_flag_long,
+        "5A22 boot continuation crossed the legal duplicate-flag clear helper",
+    ),
+    (
+        clear_bg_duplicate_flag_long_end,
+        obj_prefetch_stage_groups_try,
+        "duplicate-flag clear helper crossed group staging helper",
+    ),
+    (
+        obj_prefetch_stage_groups_try_end,
+        queue_replace_latest_clean,
+        "group staging helper crossed latest-clean queue helper",
+    ),
+    (
+        queue_replace_latest_clean_end,
+        bg_column_map_update_fast,
+        "latest-clean queue helper crossed canonical BG updater",
+    ),
+    (
+        bg_column_map_update_fast_end,
+        bg_column_occupied,
+        "canonical BG updater crossed occupancy helper",
+    ),
+    (
+        bg_column_occupied_end,
+        bg_offset_table_build_canonical,
+        "BG occupancy helper crossed canonical table builder",
+    ),
+    (
+        bg_offset_table_build_canonical_end,
+        queue_promote,
+        "canonical table builder crossed queue promoter",
+    ),
 ):
     assert VID[seam_start - 0x8000:seam_end - 0x8000] == bytes(
         seam_end - seam_start
@@ -1065,12 +1402,12 @@ assert bg_scroll_map_commit == 0xC340
 assert VID[
     bg_scroll_map_commit - 0x8000:bg_scroll_map_commit_end - 0x8000
 ] == bytes.fromhex(
-    "08c230a5d048dae220afb9727ec9a5d07ba9008fb9727eafbc727ec9a5d061a9008f"
-    "bc727eafb8727ec9a5d02dafb3727ec9a5d025afbb727e38efb7727ef01a1007c220"
-    "0900ff8005c22029ff00186fb5727e29ff038fb5727ee220afbb727e8fb7727ea9a5"
-    "8fb8727ec220a20000bff0897e9ff0727ee8e8e01000d0f1800ce220a9008fb8727e"
-    "8fbc727ec220fa6885d0286b"
-), "tilemap commit lost prepared absolute-basis installation or displayed-map copy"
+    "08c230a5d048a5d248dae220afb9727ec9a5d07da9008fb9727eafbc727ec9a5d054a9008f"
+    "bc727ec220afa6717e29ff018fa4717e85d0e2208fb7727ec220afaa717e29ff0185"
+    "d2a5d038e5d21869400029ff018fb5727ee220a9a58fb8727ec220a20000bff0897e"
+    "9ff0727ee8e8e01000d0f1801be220a9008fb8727e8fbc727ec220a900008fa4717e"
+    "8fa6717ee220c220fa6885d26885d0286b"
+), "tilemap commit lost nine-bit basis installation or displayed-map copy"
 assert bytes.fromhex("9cb972") not in VID[
     bg_scroll_map_commit - 0x8000:bg_scroll_map_commit_end - 0x8000
 ], "map-commit pending clear silently regressed to bank-relative STZ"
@@ -1079,21 +1416,26 @@ assert VID[
     bg_scroll_map_prepare - 0x8000:bg_scroll_map_prepare_end - 0x8000
 ] == bytes.fromhex(
     "08c230a5d048a5d248a5d448a5d648a5d848a5da48da5ae220a9a58fb9727ea900"
-    "8fbc727ec220af96897ec9feff90034cebc6e220afb8727ec9a58000aff4897e0a"
-    "0a0a0a0a8fbb727eafb3727ec9a5d012af80717e38ef95897e186fbb727e8fbb72"
-    "7ea9a58fbc727e807fc22064d064d664d8a6d0e220bff0897e38fff0727e290f85"
-    "d2a90085dac22064d4a6d4e220bff0897e38fff0727e290fc5d2d002e6dac220e6"
-    "d4a5d4c9100090e0e220a5dac5d89008f00685d8a5d285d6c220e6d0a5d0c910"
-    "0090ace220a5d8c909b0034c3dc6a5d629070a0a0a0a0a186fb7727e8fbb727ea9"
-    "a58fbc727ec2207afa6885da6885d86885d66885d46885d26885d0286b"
-), "map-basis preparer lost the immutable-image-paired absolute seed"
+    "8fbc727ec220af96897ec9feff90034c88c6e220aff4897ec22029ff000a0a0a0a0a"
+    "85d0afac717e29ff011865d085d0e220af95897ec22029ff0085d2af96897e291000"
+    "f007a5d209000185d2a5d038e5d229ff018fa6717ee2208fbb727ea9a58fbc727e8000c2207afa6885da6885d868"
+    "85d66885d46885d26885d0286b"
+), "map-basis preparer lost the immutable-image-paired nine-bit seed"
 assert bg_scroll_phase_publish == 0xC720
 assert VID[
     bg_scroll_phase_publish - 0x8000:bg_scroll_phase_publish_end - 0x8000
 ] == bytes.fromhex(
-    "8fba727eafb3727ec9a5d01bafba727e38efb2727e291fc910900209e0186fb272"
-    "7e8fb2727e6bafba727e8fb2727e8fb4727e22a0c1e9e220a9a58fb3727e6b"
-), "live horizontal publisher lost modulo-32 X1 gap unwrapping"
+    "5c50cfe9"
+), "live horizontal publisher entry lost its guarded full implementation"
+assert bg_scroll_phase_publish_full == 0xCF50
+assert VID[
+    bg_scroll_phase_publish_full - 0x8000:bg_scroll_phase_publish_full_end - 0x8000
+] == bytes.fromhex(
+    "8fba727e08c230a5d048e220afb3727ec9a5d036afba727e38efb2727e291fc9109002"
+    "09e0c22029ff00c9800090030900ff85d0afa8717e1865d029ff018fa8717ee2208f"
+    "b2727e8025afba727e8fb2727e8fb4727ec22029ff008fa8717e8faa717e22a0c1e9"
+    "e220a9a58fb3727ec2206885d0286b"
+), "live horizontal publisher lost paired byte/nine-bit modulo-32 unwrapping"
 assert (
     obj_present_commit == 0xC800
     and obj_present_step == 0xC900
@@ -1195,8 +1537,8 @@ assert VID[
 assert VID[
     nmi_present_before_dma - 0x8000:nmi_present_before_dma_end - 0x8000
 ] == bytes.fromhex(
-    "af9b717e3018ad00330d01330d02330d0333f00a2200cde9a9a58f9b717e6b"
-), "early gameplay presenter lost its once-only marker or 16-bit frame-ready guard"
+    "ad1b1f3011af9b717e300a2200cde9a9a58f9b717e6b2280cae96b"
+), "early gameplay presenter lost its boot-only OBJ release or gameplay guard"
 assert VID[
     nmi_bg_reapply - 0x8000:nmi_bg_reapply_end - 0x8000
 ] == bytes.fromhex(
@@ -1220,9 +1562,10 @@ nmi_present_arbitrate_code = VID[
 assert bytes.fromhex("ad111ff0") in nmi_present_arbitrate_code, (
     "NMI presentation arbiter lost its no-tile fast path"
 )
-assert bytes.fromhex("af220141c901") in nmi_present_arbitrate_code and bytes.fromhex(
-    "af300141"
-) in nmi_present_arbitrate_code, "NMI presentation arbiter lost scheduler arm/debt policy"
+assert nmi_present_arbitrate_code.startswith(bytes.fromhex("5c20dae9c901"))
+assert bytes.fromhex("af300141") in nmi_present_arbitrate_code, (
+    "NMI presentation arbiter lost scheduler arm/debt policy"
+)
 assert nmi_present_arbitrate_code.count(bytes.fromhex("af2a014138ef2b0141")) == 2, (
     "NMI presentation arbiter no longer mirrors both scheduler deadline tests"
 )
@@ -1268,11 +1611,24 @@ assert VID[
 ] == bytes(bg_cache_reset_counts - bg_capacity_exact_end), (
     "BG exact-capacity helper overlapped the persistent-cache reset island"
 )
-assert bg_cache_reset_counts < bg_cache_reset_counts_end <= producer_touch_reset == 0xA2D0
+assert (
+    bg_cache_reset_counts
+    < bg_cache_reset_counts_end
+    == obj_hclr_cached
+    < obj_hclr_cached_end
+    <= producer_touch_reset
+    == 0xA2D0
+)
 assert VID[
-    bg_cache_reset_counts_end - 0x8000:producer_touch_reset - 0x8000
-] == bytes(producer_touch_reset - bg_cache_reset_counts_end), (
-    "persistent BG cache reset crossed the producer-touch reset island"
+    obj_hclr_cached_end - 0x8000:producer_touch_reset - 0x8000
+] == bytes(producer_touch_reset - obj_hclr_cached_end), (
+    "persistent OBJ record-cache reset crossed the producer-touch reset island"
+)
+obj_hclr_cached_code = VID[
+    obj_hclr_cached - 0x8000:obj_hclr_cached_end - 0x8000
+]
+assert bytes.fromhex("9f00487e") in obj_hclr_cached_code, (
+    "OBJ record-cache reset no longer clears the bank-explicit code-key cache"
 )
 assert producer_touch_reset < producer_touch_reset_end <= snapshot_direct == 0xA300
 assert VID[
@@ -1284,10 +1640,23 @@ assert snapshot_direct < snapshot_direct_end <= obj_fast == 0xA400
 assert VID[snapshot_direct_end - 0x8000:obj_fast - 0x8000] == bytes(
     obj_fast - snapshot_direct_end
 ), "direct snapshot helper crossed the fast OBJ island"
-assert obj_fast < obj_fast_end <= snapshot_dma_helpers == 0xA600
-assert VID[obj_fast_end - 0x8000:snapshot_dma_helpers - 0x8000] == bytes(
-    snapshot_dma_helpers - obj_fast_end
-), "fast OBJ transform crossed the conditional snapshot-DMA helpers"
+assert (
+    obj_fast
+    < obj_fast_end
+    == obj_fast_prepare_prefetched
+    < obj_fast_prepare_prefetched_end
+    == snapshot_dma_helpers
+    == 0xA600
+)
+assert VID[
+    obj_fast_prepare_prefetched - 0x8000:
+    obj_fast_prepare_prefetched_end - 0x8000
+] == bytes(
+    (0xAD, 0x20, 0x1F, 0xF0, 0x01, 0x60, 0x4C,
+     obj_fast_prepare & 0xFF, obj_fast_prepare >> 8)
+), (
+    "fast OBJ planner dispatcher no longer fits its private-WRAM nine-byte seam"
+)
 assert obj_hclr_stub == 0x8740 and obj_slot_legacy == 0x8756
 assert VID[obj_hclr_stub - 0x8000:obj_hclr_stub - 0x8000 + 3] == bytes.fromhex(
     "4c00a0"
@@ -1306,6 +1675,9 @@ assert obj_hash_clear < obj_hash_helpers_end <= render_queue_finish == 0xA090
 assert bytes.fromhex("8a18691000aaa90000e00008") in VID[
     obj_hash_clear - 0x8000:obj_hash_helpers_end - 0x8000
 ], "unrolled OBJ hash clear no longer restores A=0 between blocks"
+assert bytes.fromhex("afba897e") in VID[
+    obj_slot_fast_full_reset_ext - 0x8000:obj_hash_helpers_end - 0x8000
+], "packed OBJ full-cache reset lost its extra cache-helper stack unwind"
 assert VID[
     obj_hash_helpers_end - 0x8000:render_queue_finish - 0x8000
 ] == bytes(render_queue_finish - obj_hash_helpers_end), (
@@ -1358,9 +1730,9 @@ assert bytes.fromhex("9f00ed7e") not in VID[
 assert bytes.fromhex("9f00ed7e") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
 ], "lazy queue installer no longer places the promoter at private $7E:ED00"
-assert bytes.fromhex("e08602") in VID[
+assert bytes.fromhex("e0e602") in VID[
     render_queue_install - 0x8000:render_queue_helpers_end - 0x8000
-], "lazy queue installer lost its pinned 646-byte copy bound"
+], "lazy queue installer lost its pinned 742-byte copy bound"
 assert bytes.fromhex("9f00f17f") not in VID, (
     "queue code must never overwrite live emulated 68000 RAM at $7F:F100"
 )
@@ -1427,6 +1799,58 @@ assert VID[
 ] == bytes.fromhex("a5e01869060085e0"), (
     "packed OBJ renderer lost its audited six-byte manifest stride"
 )
+assert (
+    bg_incremental_core_end
+    <= obj_slot_record_cached
+    == 0xA760
+    < obj_slot_record_cached_end
+    == obj_queue_restart_cached
+    < obj_queue_restart_cached_end
+    <= capture_bg_vscroll
+    == 0xA7BC
+)
+assert VID[
+    bg_incremental_core_end - 0x8000:obj_slot_record_cached - 0x8000
+] == bytes(obj_slot_record_cached - bg_incremental_core_end), (
+    "incremental BG core crossed the persistent OBJ-record cache helper"
+)
+assert VID[
+    obj_queue_restart_cached_end - 0x8000:capture_bg_vscroll - 0x8000
+] == bytes(capture_bg_vscroll - obj_queue_restart_cached_end), (
+    "packed OBJ restart helper crossed the scroll capture island"
+)
+obj_record_cache_code = VID[
+    obj_slot_record_cached - 0x8000:obj_slot_record_cached_end - 0x8000
+]
+assert bytes.fromhex("bf00487e") in obj_record_cache_code
+assert bytes.fromhex("bf00497e") in obj_record_cache_code
+obj_queue_restart_code = VID[
+    obj_queue_restart_cached - 0x8000:obj_queue_restart_cached_end - 0x8000
+]
+assert obj_queue_restart_code.count(bytes((0x68,))) == 4
+assert bytes.fromhex("afba897e") in obj_queue_restart_code
+obj_tile_queue_failure = VID[
+    obj_tile_queue - 0x8000:otq_capacity - 0x8000
+]
+assert obj_tile_queue_failure[-5:] == bytes(
+    (
+        0x20,
+        obj_queue_restart_cached & 0xFF,
+        obj_queue_restart_cached >> 8,
+        0xEA,
+        0xEA,
+    )
+), "OBJ queue overflow no longer uses the packed-aware fixed-size restart helper"
+assert VID[
+    obj_cache_full - 0x8000 - 4:obj_cache_full - 0x8000
+] == bytes(
+    (
+        0x5C,
+        obj_tile_queue_publish_reverse & 0xFF,
+        obj_tile_queue_publish_reverse >> 8,
+        0xE9,
+    )
+), "OBJ queue tail lost its physical-slot reverse-owner publication"
 assert snapshot_dma_helpers < snapshot_dma_helpers_end <= bg_incremental == 0xA680
 assert VID[snapshot_dma_helpers_end - 0x8000:bg_incremental - 0x8000] == bytes(
     bg_incremental - snapshot_dma_helpers_end
@@ -1455,9 +1879,9 @@ assert capture_vscroll_bytes == bytes.fromhex(
 ), "vertical-scroll capture lost center-column selection, exact -1/+8 offset, or side effects"
 assert VID.count(
     bytes((0x20, capture_bg_vscroll & 0xFF, capture_bg_vscroll >> 8))
-) == 6, (
-    "direct/queued/legacy snapshots, paced publication, and the heavy-wake "
-    "arbiter must capture X1 scroll coherently"
+) == 7, (
+    "direct/queued/legacy snapshots, paced publication, and both heavy-wake "
+    "arbiters must capture X1 scroll coherently"
 )
 for helper in (
     capture_bg_upper_snapshot,
@@ -1576,34 +2000,159 @@ assert (
     < bg_scroll_map_prepare_end
     <= bg_scroll_phase_publish
     < bg_scroll_phase_publish_end
+    <= bg_scroll_present_step_full
+    < bg_scroll_present_step_full_end
+    <= bg_scroll_phase_publish_full
+    < bg_scroll_phase_publish_full_end
     <= queue_promote
 )
 bg_map_update_code = VID[
     bg_column_map_update - 0x8000:bg_column_map_update_end - 0x8000
 ]
-assert bg_map_update_code[:13] == bytes.fromhex(
-    "c230a20000bfe0897edff0897e"
-), "BG layout dispatch no longer compares the physical maps first"
-assert (
-    bg_map_update_code[13] == 0xD0
-    and bg_map_update_code[15:20] == bytes.fromhex("e8e8e01000")
-    and bg_map_update_code[20] == 0xD0
-    and bg_map_update_code[22:26] == bytes.fromhex("af96897e")
-), "BG layout dispatch regained a kind-only full-rebuild path"
-assert bcmu_layout_changed == 0xB7CA
-assert bg_map_update_code[31:34] == bytes.fromhex("4c80bc"), (
-    "equal-layout BG path lost its provenance-transition redirect"
+assert bg_map_update_code[:5] == bytes.fromhex("5c93eae9ea"), (
+    "BG layout dispatch no longer reaches the canonical incremental updater"
 )
-assert bg_map_update_code[34:bcmu_layout_changed - bg_column_map_update] == bytes(
-    bcmu_layout_changed - bg_column_map_update - 34
-), "equal-layout redirect overlapped the pinned layout-change path"
+assert bcmu_layout_changed == 0xB7CA
 assert VID[
     bcmu_layout_changed - 0x8000:bg_column_map_update_end - 0x8000
 ] == bytes.fromhex(
     "200fb8af96897ec9feffb038af92747ec9bcc0f01bafbc897ec9fefff015"
-    "a20000bf00207ed00fe8e8e00004d0f380144cccbc4ce5bca901008f9089"
+    "a20000bf00207ed00fe8e8e00004d0f380144cd0bc4ce9bca901008f9089"
     "7ea9ffff8fbc897e6b"
 ), "layout-change BG path lost its split C0BC/prepared consumer dispatch"
+bg_offset_table_redirect = bytes(
+    (
+        0x5C,
+        bg_offset_table_build_canonical & 0xFF,
+        bg_offset_table_build_canonical >> 8,
+        0xE9,
+    )
+) + bytes([0xEA]) * 6
+assert VID[
+    bg_offset_table_build - 0x8000:bg_offset_table_build - 0x8000 + 10
+] == bg_offset_table_redirect, (
+    "BG offset-table builder no longer targets its resolved canonical-map helper"
+)
+assert bg_column_map_update_fast == 0xEA93
+assert bg_column_rotation_select == 0xD180
+assert bcmf_move_slot == 0xD240
+assert obj_cache_protect_displayed_extended == 0xD300
+assert (
+    obj_cache_protect_displayed_extended
+    < obj_cache_protect_displayed_extended_end
+    == obj_tile_queue_publish_reverse
+    < obj_tile_queue_publish_reverse_end
+    <= queue_replace_latest_clean
+)
+obj_display_retention_code = VID[
+    obj_cache_protect_displayed_extended - 0x8000:
+    obj_cache_protect_displayed_extended_end - 0x8000
+]
+for required in (
+    bytes.fromhex("bf004a7e"),  # physical slot -> reverse code
+    bytes.fromhex("9f002e7e"),  # displayed/current slots -> used bitmap
+    bytes.fromhex("9f002d7e"),  # retained physical slot list
+    bytes.fromhex("9f002f7e"),  # retained code list
+    bytes.fromhex("afc6897e"),  # hard-bounded retained-pair count
+):
+    assert required in obj_display_retention_code, (
+        "displayed-OBJ retention lost a bank-explicit ownership operand"
+    )
+obj_reverse_publish_code = VID[
+    obj_tile_queue_publish_reverse - 0x8000:
+    obj_tile_queue_publish_reverse_end - 0x8000
+]
+assert bytes.fromhex("9f004a7e") in obj_reverse_publish_code, (
+    "new OBJ allocations no longer publish physical-slot reverse ownership"
+)
+assert obj_reverse_publish_code[-4:] == bytes(
+    (0x5C, obj_T & 0xFF, obj_T >> 8, 0xE9)
+), "reverse-owner publisher lost its resolved obj_T tail"
+assert bg_offset_table_build_canonical_end <= queue_promote == 0xED00
+assert VID[
+    bcmf_move_slot - 0x8000:bcmf_move_slot_end - 0x8000
+] == bytes.fromhex(
+    "c230a5f4290f00c90800900d38e908000a0a0a1869000880030a0a0a85d2"
+    "a5f6290f00c90800900d38e908000a0a0a1869000880030a0a0a85d4a020"
+    "00a6d2bf00907ea6d49f00907ea6d2bf02907ea6d49f02907ea6d2bf0490"
+    "7ea6d49f04907ea6d2bf06907ea6d49f06907ea5d21869400085d2a5d418"
+    "69400085d488d0bd60"
+), "complete 4x32 BG slot mover changed or suffered a Poppy overlap"
+rotation_selector_code = VID[
+    bg_column_rotation_select - 0x8000:bg_column_rotation_select_end - 0x8000
+]
+assert rotation_selector_code == bytes.fromhex(
+    "c23064d864d4a9010085daa200002067ec9008a5d805da85d8e6d406dae8e01000d0eb"
+    "a5d4c90200b0034c36d264d064d2a9010085daa20000a5d824daf02fe220bfe0897e38"
+    "fff0897e290fc22029ff0085d6a5d2f00aa5d6c5d0f00fc6d2800da5d685d0a90100"
+    "85d28002e6d206dae8e01000d0c364d6a9010085daa20000a5d824daf018e220bfe089"
+    "7e38fff0897e290fc22029ff00c5d0d002e6d606dae8e01000d0daa5d60ac5d49009f0"
+    "07a5d0290f0038601860"
+), "populated-column majority selector changed or suffered a Poppy overlap"
+occupied_jsr = bytes((
+    0x20,
+    bg_column_occupied & 0xFF,
+    (bg_column_occupied >> 8) & 0xFF,
+))
+assert rotation_selector_code.count(occupied_jsr) == 1, (
+    "rotation selector lost its one-pass populated-source mask"
+)
+assert rotation_selector_code.count(bytes.fromhex("bfe0897e38fff0897e290f")) == 2, (
+    "rotation selector lost its two raw-minus-applied majority passes"
+)
+assert bytes.fromhex("a5d60ac5d490") in rotation_selector_code, (
+    "rotation selector lost its strict-majority fail-closed comparison"
+)
+canonical_bg_code = VID[
+    bg_column_map_update_fast - 0x8000:bg_offset_table_build_canonical_end - 0x8000
+]
+assert bytes.fromhex("9fb0747e") in canonical_bg_code, (
+    "canonical BG updater no longer writes its bank-explicit candidate map"
+)
+assert bytes.fromhex("9ff0897e") in canonical_bg_code, (
+    "canonical BG updater no longer publishes the applied source-slot map"
+)
+assert VID[
+    vid_off("bcmf_incremental") - 0x8000:
+    vid_off("bcmf_incremental") - 0x8000 + 11
+] == bytes.fromhex("2040d2a5f420d0eb200cec"), (
+    "incremental BG path no longer moves the complete slot before clearing its old home"
+)
+normalizer_code = VID[
+    vid_off("bcmf_applied_valid") - 0x8000:
+    vid_off("bcmf_changed") - 0x8000
+]
+assert normalizer_code == bytes.fromhex(
+    "2080d1b0034cb9eb85d664d4a20000e220bfe0897e38e5d6290f9fb0747edff0897ef0"
+    "0e2067ec9009c2208a85f2e6d48002c220e8e01000d0d5a5d4d00e20bdebaf96897e8f"
+    "de897e4cb5eb"
+), "canonical BG majority normalization bytes changed or overlapped"
+rotation_jsr = bytes((
+    0x20,
+    bg_column_rotation_select & 0xFF,
+    (bg_column_rotation_select >> 8) & 0xFF,
+))
+assert normalizer_code.count(rotation_jsr) == 1, (
+    "canonical BG updater lost its strict-majority rotation selector"
+)
+assert bytes.fromhex("e220bfe0897e38e5d6290f9fb0747e") in normalizer_code, (
+    "canonical BG updater no longer normalizes raw slots by the selected rotation"
+)
+assert occupied_jsr + bytes.fromhex("9009") in normalizer_code, (
+    "canonical BG updater again counts empty duplicate columns as live geometry"
+)
+assert VID[
+    vid_off("bcmf_publish_map") - 0x8000:
+    vid_off("bcmf_clear_slot") - 0x8000
+] == bytes.fromhex(
+    "a20000bfb0747e9ff0897ee8e8e01000d0f160"
+), "incremental BG updater lost its complete normalized-map publication"
+assert VID[
+    bcmf_update_loop - 0x8000:bg_column_map_update_fast_end - 0x8000
+] == bytes.fromhex(
+    "a5d0291e000a0a0a0a0a0a85d2a5d02901000a0a1865d21865d685d4"
+    "a5d00a1865d8aaa5d49f00757ee6d0a5d0c92000d0ce60"
+), "one-column BG updater lost its 0..31 cell-ordinal/word-table mapping"
 assert VID[
     bg_offset_table_build_end - 0x8000:capture_bg_upper_full - 0x8000
 ] == bytes(capture_bg_upper_full - bg_offset_table_build_end), (
@@ -1618,6 +2167,13 @@ assert bytes.fromhex("99c074") not in capture_bg_upper_code, (
 assert capture_bg_upper_code.count(bytes.fromhex("dabb9fc0747efa")) == 1, (
     "BG-column Y capture lost its X-preserving, bank-explicit long,X store"
 )
+assert capture_bg_upper_code.count(bytes.fromhex("afa8717e")) == 3, (
+    "direct/primary/secondary BG captures no longer read one coherent nine-bit phase"
+)
+for encoded_store in ("8fac717e", "8fae717e", "8fb0717e"):
+    assert capture_bg_upper_code.count(bytes.fromhex(encoded_store)) == 1, (
+        "BG capture lost a direct/primary/secondary nine-bit phase destination"
+    )
 assert VID[
     capture_bg_upper_full_end - 0x8000:accept_bg_columns_snapshot - 0x8000
 ] == bytes(accept_bg_columns_snapshot - capture_bg_upper_full_end), (
@@ -1637,7 +2193,7 @@ assert bcmu_same_layout == 0xBC80
 assert VID[
     bcmu_same_layout - 0x8000:bcmu_same_layout_end - 0x8000
 ] == bytes.fromhex(
-    "af92747ecf98747ef00bc9bcc0d0034cccbc9c9874afbc897ec9feffd008"
+    "af92747ecf98747ef00fc9bcc0d0034cd0bca900008f98747eafbc897ec9feffd008"
     "a900002200bde96bafda897ef01faf90897ef019afbc897ef013c9fffff00e"
     "a901008f90897ea9ffff8fbc897e6ba900002200bde92000bfa901008f90"
     "897ea9feff8fbc897e6ba900002200bde96b"
@@ -1670,6 +2226,25 @@ bg_opt_update_code = VID[
 assert bg_opt_update_code.count(
     bytes((0x20, bg_compute_hscroll & 0xFF, bg_compute_hscroll >> 8))
 ) == 1, "Mode-2 offset builder lost presented-map-relative H selection"
+assert bytes.fromhex("9d8073") in bg_opt_update_code, (
+    "Mode-2 builder no longer writes the private horizontal candidate"
+)
+assert bytes.fromhex("9dc073") in bg_opt_update_code, (
+    "Mode-2 builder no longer writes the private vertical candidate"
+)
+assert bytes((0x20, bg_opt_table_changed & 0xFF, bg_opt_table_changed >> 8)) in bg_opt_update_code
+assert bytes.fromhex("8faa747e") in bg_opt_update_code, (
+    "Mode-2 table validity no longer publishes after its synchronous DMA"
+)
+assert bg_opt_table_changed == 0xC760 and bg_opt_table_changed_end <= 0xC800
+bg_opt_table_changed_code = VID[
+    bg_opt_table_changed - 0x8000:bg_opt_table_changed_end - 0x8000
+]
+assert bytes.fromhex("afaa747ec95aa5") in bg_opt_table_changed_code
+assert bytes.fromhex("bf80737edf00737e") in bg_opt_table_changed_code
+assert bytes.fromhex("547e7e") in bg_opt_table_changed_code, (
+    "changed Mode-2 table no longer copies one complete WRAM candidate"
+)
 assert VID[
     prepared_bg_cache_reconstruct_end - 0x8000:bg_compute_hscroll_logic - 0x8000
 ] == bytes(bg_compute_hscroll_logic - prepared_bg_cache_reconstruct_end), (
@@ -1682,8 +2257,8 @@ assert VID[
     bg_scroll_map_prepare_end - 0x8000:bg_scroll_phase_publish - 0x8000
 ] == bytes(bg_scroll_phase_publish - bg_scroll_map_prepare_end)
 assert VID[
-    bg_scroll_phase_publish_end - 0x8000:obj_present_commit - 0x8000
-] == bytes(obj_present_commit - bg_scroll_phase_publish_end)
+    bg_opt_table_changed_end - 0x8000:obj_present_commit - 0x8000
+] == bytes(obj_present_commit - bg_opt_table_changed_end)
 assert VID[
     obj_present_wait_end - 0x8000:obj_present_dma_partial - 0x8000
 ] == bytes(obj_present_dma_partial - obj_present_wait_end)
@@ -1700,14 +2275,288 @@ assert VID[
     nmi_present_before_dma_end - 0x8000:nmi_bg_reapply - 0x8000
 ] == bytes(nmi_bg_reapply - nmi_present_before_dma_end)
 assert VID[
-    nmi_bg_reapply_end - 0x8000:obj_base_span_prepare - 0x8000
-] == bytes(obj_base_span_prepare - nmi_bg_reapply_end)
+    nmi_bg_reapply_end - 0x8000:bg_scroll_present_step_full - 0x8000
+] == bytes(bg_scroll_present_step_full - nmi_bg_reapply_end)
+assert VID[
+    bg_scroll_present_step_full_end - 0x8000:obj_base_span_prepare - 0x8000
+] == bytes(obj_base_span_prepare - bg_scroll_present_step_full_end)
 assert VID[
     obj_base_span_prepare_end - 0x8000:nmi_present_arbitrate - 0x8000
 ] == bytes(nmi_present_arbitrate - obj_base_span_prepare_end)
 assert VID[
-    nmi_present_arbitrate_end - 0x8000:queue_promote - 0x8000
-] == bytes(queue_promote - nmi_present_arbitrate_end)
+    nmi_present_arbitrate_end - 0x8000:bg_scroll_phase_publish_full - 0x8000
+] == bytes(bg_scroll_phase_publish_full - nmi_present_arbitrate_end)
+assert VID[
+    bg_scroll_phase_publish_full_end - 0x8000:nmi_obj_tile_batch - 0x8000
+] == bytes(nmi_obj_tile_batch - bg_scroll_phase_publish_full_end)
+assert VID[
+    nmi_obj_tile_batch_end - 0x8000:nmi_batch_present_then_wake - 0x8000
+] == bytes(nmi_batch_present_then_wake - nmi_obj_tile_batch_end)
+assert VID[
+    nmi_batch_present_then_wake_end - 0x8000:bg_column_rotation_select - 0x8000
+] == bytes(bg_column_rotation_select - nmi_batch_present_then_wake_end)
+assert VID[
+    bg_column_rotation_select_end - 0x8000:bcmf_move_slot - 0x8000
+] == bytes(bcmf_move_slot - bg_column_rotation_select_end)
+assert VID[
+    bcmf_move_slot_end - 0x8000:
+    obj_cache_protect_displayed_extended - 0x8000
+] == bytes(obj_cache_protect_displayed_extended - bcmf_move_slot_end)
+assert VID[
+    obj_upload_queued_extended_end - 0x8000:
+    nmi_obj_tile_batch_dispatch - 0x8000
+] == bytes(nmi_obj_tile_batch_dispatch - obj_upload_queued_extended_end)
+assert VID[
+    nmi_obj_tile_batch_dispatch_end - 0x8000:
+    nmi_obj_tile_batch_staged - 0x8000
+] == bytes(nmi_obj_tile_batch_staged - nmi_obj_tile_batch_dispatch_end)
+assert VID[
+    nmi_obj_tile_batch_staged_end - 0x8000:
+    obj_prefetch_stage_records - 0x8000
+] == bytes(obj_prefetch_stage_records - nmi_obj_tile_batch_staged_end)
+assert VID[
+    obj_prefetch_stage_records_end - 0x8000:
+    nmi_obj_tile_batch_group - 0x8000
+] == bytes(nmi_obj_tile_batch_group - obj_prefetch_stage_records_end)
+assert VID[
+    nmi_obj_tile_batch_group_end - 0x8000:
+    dma0_restore_map_vmaddr - 0x8000
+] == bytes(dma0_restore_map_vmaddr - nmi_obj_tile_batch_group_end)
+assert VID[
+    dma0_restore_map_vmaddr_end - 0x8000:
+    nmi_camera_mailbox_intake - 0x8000
+] == bytes(nmi_camera_mailbox_intake - dma0_restore_map_vmaddr_end)
+assert VID[
+    nmi_camera_mailbox_intake_end - 0x8000:
+    nmi_batch_present_arbitrate - 0x8000
+] == bytes(nmi_batch_present_arbitrate - nmi_camera_mailbox_intake_end)
+assert VID[
+    nmi_batch_present_arbitrate_end - 0x8000:
+    nmi_batch_camera_mailbox_intake - 0x8000
+] == bytes(nmi_batch_camera_mailbox_intake - nmi_batch_present_arbitrate_end)
+assert VID[
+    nmi_batch_camera_mailbox_intake_end - 0x8000:
+    cpu5a22_boot_extended - 0x8000
+] == bytes(cpu5a22_boot_extended - nmi_batch_camera_mailbox_intake_end)
+assert VID[
+    cpu5a22_boot_extended_end - 0x8000:
+    clear_bg_duplicate_flag_long - 0x8000
+] == bytes(clear_bg_duplicate_flag_long - cpu5a22_boot_extended_end)
+assert VID[
+    clear_bg_duplicate_flag_long_end - 0x8000:
+    obj_prefetch_stage_groups_try - 0x8000
+] == bytes(obj_prefetch_stage_groups_try - clear_bg_duplicate_flag_long_end)
+assert VID[
+    obj_prefetch_stage_groups_try_end - 0x8000:
+    queue_replace_latest_clean - 0x8000
+] == bytes(queue_replace_latest_clean - obj_prefetch_stage_groups_try_end)
+assert VID[
+    bg_offset_table_build_canonical_end - 0x8000:queue_promote - 0x8000
+] == bytes(queue_promote - bg_offset_table_build_canonical_end)
+
+assert obj_upload_queued == 0xAC6E and ouq_done == 0xAC99
+obj_upload_queued_code = VID[
+    obj_upload_queued - 0x8000:ouq_done - 0x8000
+]
+assert obj_upload_queued_code == bytes(
+    (
+        0x5C,
+        obj_upload_queued_extended & 0xFF,
+        obj_upload_queued_extended >> 8,
+        0xE9,
+    )
+) + bytes([0xEA]) * 39, "fixed OBJ queue finisher lost its explicit ROM-bank transfer"
+assert bytes.fromhex("20a4ac") not in obj_upload_queued_code, (
+    "foreground OBJ path regained one synchronized DMA call per record"
+)
+assert obj_tile_dma_direct == 0xACA4, (
+    "retired direct helper moved an established checkpoint/caller address"
+)
+
+assert nmi_obj_tile_batch == 0xD000 and nmi_obj_tile_batch_end <= 0xEA40
+nmi_obj_tile_batch_code = VID[
+    nmi_obj_tile_batch - 0x8000:nmi_obj_tile_batch_end - 0x8000
+]
+assert bytes.fromhex("afa2747ec95aa5") in nmi_obj_tile_batch_code
+assert bytes.fromhex("2220cde9") not in nmi_obj_tile_batch_code, (
+    "OBJ batch regained a late presentation call inside its DMA-heavy span"
+)
+assert bytes.fromhex("a9a58f9b717e") not in nmi_obj_tile_batch_code, (
+    "OBJ batch regained an unconditional already-presented marker"
+)
+assert bytes.fromhex("ad3f21ad3721ad3d21") in nmi_obj_tile_batch_code, (
+    "OBJ batch no longer resets and latches the vertical counter"
+)
+assert bytes.fromhex("c9fc") in nmi_obj_tile_batch_code
+assert nmi_obj_tile_batch_code.count(bytes.fromhex("a9208d0b42")) == 2, (
+    "OBJ batch must issue exactly the top and bottom halves on private DMA channel 5"
+)
+assert nmi_batch_present_then_wake == 0xD160
+assert VID[
+    nmi_batch_present_then_wake - 0x8000:
+    nmi_batch_present_then_wake_end - 0x8000
+] == bytes.fromhex("2240dae92200d6e95c008e7f"), (
+    "batch-due path lost presentation-first service, bounded tile work, or WRAM wake tail"
+)
+assert bytes.fromhex("8d5043") in nmi_obj_tile_batch_code
+assert bytes.fromhex("8d5143") in nmi_obj_tile_batch_code
+assert bytes.fromhex("8fa2747e") in nmi_obj_tile_batch_code, (
+    "OBJ batch lost its long completion publication"
+)
+assert obj_prefetch_begin == 0xD480
+obj_prefetch_code = VID[
+    obj_prefetch_begin - 0x8000:obj_prefetch_begin_end - 0x8000
+]
+assert bytes.fromhex("8fac747e") in obj_prefetch_code, (
+    "early OBJ planner lost its immutable-queue ownership marker"
+)
+assert bytes.fromhex("c90080d0034c4cd5b0") in obj_prefetch_code, (
+    "packed OBJ manifest classification no longer uses the unsigned result of CMP #$8000"
+)
+assert bytes.fromhex("8fa0747e") in obj_prefetch_code
+assert bytes.fromhex("a95aa58fa2747e") in obj_prefetch_code
+assert obj_upload_queued_extended == 0xD5C0
+obj_upload_queued_extended_code = VID[
+    obj_upload_queued_extended - 0x8000:
+    obj_upload_queued_extended_end - 0x8000
+]
+assert bytes.fromhex("ad201fd0") in obj_upload_queued_extended_code
+assert bytes.fromhex("8fac747e") in obj_upload_queued_extended_code
+assert bytes((0x5C, ouq_done & 0xFF, ouq_done >> 8, 0x7F)) in (
+    obj_upload_queued_extended_code
+), "ROM OBJ queue helper no longer returns explicitly to the WRAM mirror"
+assert nmi_obj_tile_batch_dispatch == 0xD600
+dispatch_code = VID[
+    nmi_obj_tile_batch_dispatch - 0x8000:
+    nmi_obj_tile_batch_dispatch_end - 0x8000
+]
+assert bytes.fromhex("c95aa5") in dispatch_code
+assert bytes.fromhex("afac747ec95ba5") in dispatch_code
+assert bytes((0x5C, nmi_obj_tile_batch & 0xFF, nmi_obj_tile_batch >> 8, 0xE9)) in dispatch_code
+assert bytes((
+    0x5C,
+    nmi_obj_tile_batch_staged & 0xFF,
+    nmi_obj_tile_batch_staged >> 8,
+    0xE9,
+)) in dispatch_code
+assert bytes((
+    0x5C,
+    nmi_obj_tile_batch_group & 0xFF,
+    nmi_obj_tile_batch_group >> 8,
+    0xE9,
+)) in dispatch_code
+assert nmi_obj_tile_batch_staged == 0xD640
+staged_batch_code = VID[
+    nmi_obj_tile_batch_staged - 0x8000:
+    nmi_obj_tile_batch_staged_end - 0x8000
+]
+assert bytes.fromhex("a97e0085d2") in staged_batch_code, (
+    "staged OBJ batch lost its explicit WRAM source bank"
+)
+assert staged_batch_code.count(bytes.fromhex("a9208d0b42")) == 2, (
+    "staged OBJ batch must retain the exact two-half physical OBJ layout"
+)
+assert bytes.fromhex("8fa2747e") in staged_batch_code
+assert obj_prefetch_stage_records == 0xD800
+stage_records_code = VID[
+    obj_prefetch_stage_records - 0x8000:
+    obj_prefetch_stage_records_end - 0x8000
+]
+for required in (
+    bytes.fromhex("8d8121"),  # WMADDL
+    bytes.fromhex("8d8221"),  # WMADDM
+    bytes.fromhex("9c8321"),  # WMADDH = bank-$7E WRAM address high bit zero
+    bytes.fromhex("a9808d5143"),  # WMDATA B-bus destination
+    bytes.fromhex("a9808d5543"),  # exact 128-byte native record
+    bytes.fromhex("a9208d0b42"),  # channel-5 DMA trigger
+):
+    assert required in stage_records_code
+assert nmi_obj_tile_batch_group == 0xD900
+group_batch_code = VID[
+    nmi_obj_tile_batch_group - 0x8000:
+    nmi_obj_tile_batch_group_end - 0x8000
+]
+for required in (
+    bytes.fromhex("afae747e"),  # complete-group metadata
+    bytes.fromhex("c9f4"),  # one-group start must leave a fail-closed VBlank margin
+    bytes.fromhex("a9000485d6"),  # exactly one 1 KiB group per NMI
+    bytes.fromhex("a5d28d5243a5d38d5343"),  # indexed $7E:C000 staging source
+    bytes.fromhex("a97e8d5443"),
+    bytes.fromhex("a9208d0b42"),
+    bytes.fromhex("afc6897e8fa0747e"),  # all queue records complete atomically
+    bytes.fromhex("8fa2747e"),
+):
+    assert required in group_batch_code
+assert group_batch_code.count(bytes.fromhex("a9208d0b42")) == 1
+assert dma0_restore_map_vmaddr == 0xDA10
+dma0_restore_map_vmaddr_code = VID[
+    dma0_restore_map_vmaddr - 0x8000:
+    dma0_restore_map_vmaddr_end - 0x8000
+]
+assert dma0_restore_map_vmaddr_code == bytes.fromhex(
+    "afb9727ec9a5d0069c16219c17216b"
+), "pending BG-map DMA lost its exact ownership-gated VMADDR=$0000 restore"
+assert nmi_camera_mailbox_intake == 0xDA20
+assert VID[
+    nmi_camera_mailbox_intake - 0x8000:
+    nmi_camera_mailbox_intake_end - 0x8000
+] == bytes.fromhex(
+    "af630141c9a5d00ea9008f630141af6201412220c7e9af2201415c04cfe9"
+), "ordinary NMI lost its valid-last early-camera mailbox consumer"
+assert nmi_batch_present_arbitrate == 0xDA40
+batch_present_arbiter_code = VID[
+    nmi_batch_present_arbitrate - 0x8000:
+    nmi_batch_present_arbitrate_end - 0x8000
+]
+assert batch_present_arbiter_code.startswith(bytes.fromhex("5c80dae9c901"))
+assert bytes.fromhex("2220c7e9") in batch_present_arbiter_code
+assert bytes.fromhex("2220cde96b") in batch_present_arbiter_code, (
+    "due OBJ batches no longer guarantee compact camera/OAM presentation"
+)
+assert nmi_batch_camera_mailbox_intake == 0xDA80
+assert VID[
+    nmi_batch_camera_mailbox_intake - 0x8000:
+    nmi_batch_camera_mailbox_intake_end - 0x8000
+] == bytes.fromhex(
+    "af630141c9a5d00ea9008f630141af6201412220c7e9af2201415c44dae9"
+), "batch NMI lost its valid-last early-camera mailbox consumer"
+assert cpu5a22_boot_extended == 0xDAA0
+assert VID[
+    cpu5a22_boot_extended - 0x8000:cpu5a22_boot_extended_end - 0x8000
+] == bytes.fromhex(
+    "e220a9ff8d2922a9808d2622a9008d2822a9008d0322a9808d0422"
+    "a9208d00229c002218fbc2305c0b80e9"
+), "5A22 boot continuation lost its reset/shared-memory/native-mode contract"
+assert clear_bg_duplicate_flag_long == 0xDAD0
+assert VID[
+    clear_bg_duplicate_flag_long - 0x8000:
+    clear_bg_duplicate_flag_long_end - 0x8000
+] == bytes.fromhex("a900008fda897e60"), (
+    "BG duplicate flag clear helper lost its legal long store"
+)
+assert obj_prefetch_stage_groups_try == 0xDB00
+group_stage_code = VID[
+    obj_prefetch_stage_groups_try - 0x8000:
+    obj_prefetch_stage_groups_try_end - 0x8000
+]
+for required in (
+    bytes.fromhex("bf004a7e"),  # every covered physical slot has reverse ownership
+    bytes.fromhex("8fae747e"),  # first group + group count
+    bytes.fromhex("8d8121"),
+    bytes.fromhex("8d8221"),
+    bytes.fromhex("9c8321"),
+    bytes.fromhex("a9808d5143"),
+    bytes.fromhex("a9408d5543"),
+    bytes.fromhex("a9208d0b42"),
+):
+    assert required in group_stage_code
+vid_frame_code = VID[vid_frame - 0x8000:vid_frame - 0x8000 + 64]
+prefetch_call = bytes((0x22, obj_prefetch_begin & 0xFF, obj_prefetch_begin >> 8, 0xE9))
+bg_call = bytes((0x20, vid_bg & 0xFF, vid_bg >> 8))
+assert prefetch_call in vid_frame_code and bg_call in vid_frame_code
+assert vid_frame_code.index(prefetch_call) < vid_frame_code.index(bg_call), (
+    "complete-scene renderer no longer publishes its OBJ plan before BG construction"
+)
 prepared_reconstruct_code = VID[
     prepared_bg_cache_reconstruct - 0x8000:
     prepared_bg_cache_reconstruct_end - 0x8000
@@ -1753,13 +2602,38 @@ assert VID[
 assert bytes.fromhex("a9618d0b21") in VID[
     bg_upload - 0x8000:bg_upload - 0x8000 + 0x80
 ], "BG upload no longer preserves the live title BG2 character base"
+assert (
+    queue_replace_latest_clean == 0xEA40
+    and queue_replace_latest_clean < queue_replace_latest_clean_end <= queue_promote
+)
+queue_replace_latest_clean_code = VID[
+    queue_replace_latest_clean - 0x8000:
+    queue_replace_latest_clean_end - 0x8000
+]
+assert bytes.fromhex("af3a0141") in queue_replace_latest_clean_code, (
+    "latest-clean replacement lost incoming BG dependency guard"
+)
+assert bytes.fromhex("2200b0e9") in queue_replace_latest_clean_code
+assert bytes.fromhex("2240b1e9") in queue_replace_latest_clean_code
+assert bytes.fromhex("8fd4897e") in queue_replace_latest_clean_code, (
+    "latest-clean replacement lost explicit unsafe-shape drop evidence"
+)
 assert queue_promote == 0xED00 and queue_promote < queue_promote_end <= 0xF000
-assert queue_promote_end - queue_promote == 0x0286, (
+assert queue_promote_end - queue_promote == 0x02E6, (
     "pinned lazy-installer size no longer matches the queue promoter"
 )
 assert bytes.fromhex("2200c4e9") in VID[
     queue_promote - 0x8000:queue_promote_end - 0x8000
 ], "prepared queue promotion lost canonical raw-cache reconstruction"
+queue_promote_code = VID[
+    queue_promote - 0x8000:queue_promote_end - 0x8000
+]
+assert queue_promote_code.count(bytes.fromhex("afae717e29ff018fac717e")) == 1, (
+    "primary queue promotion lost its paired nine-bit phase"
+)
+assert queue_promote_code.count(bytes.fromhex("afb0717e29ff018fac717e")) == 1, (
+    "secondary queue promotion lost its paired nine-bit phase"
+)
 assert (
     VID[
         psd_prepared_dma - 0x8000:psd_prepared_dma_end - 0x8000
@@ -1778,9 +2652,28 @@ assert VID[
 ] == bytes(boot_screen_init - queue_promote_end), (
     "private-WRAM queue promoter grew into the Mode 7 boot-screen island"
 )
-assert boot_screen_init < boot_screen_init_end == video_image_end <= 0x10000
+assert boot_screen_init < boot_screen_init_end <= snapshot_dma_plane == 0xF200
+assert VID[
+    boot_screen_init_end - 0x8000:snapshot_dma_plane - 0x8000
+] == bytes(snapshot_dma_plane - boot_screen_init_end), (
+    "Mode 7 boot helper crossed the relocated snapshot-DMA island"
+)
+assert snapshot_dma_plane < snapshot_dma_plane_end == video_image_end <= 0xF300
+snapshot_dma_code = VID[
+    snapshot_dma_plane - 0x8000:snapshot_dma_plane_end - 0x8000
+]
+for required in (
+    bytes.fromhex("a904008594"),
+    bytes.fromhex("a9818d3022"),
+    bytes.fromhex("a9868d3022"),
+    bytes.fromhex("c694d0"),
+    bytes.fromhex("a9208d0b229c3022c22060"),
+):
+    assert required in snapshot_dma_code, (
+        "relocated snapshot DMA lost its four-chunk BW-RAM/IRAM contract"
+    )
 assert len(VID) == video_image_end - 0x8000, (
-    "unexpected video bytes follow the Mode 7 boot-screen helper"
+    "unexpected video bytes follow the relocated snapshot-DMA helper"
 )
 assert bg_slot == 0x854E and bg_tile_dma == 0x859E, (
     "BG allocator stub moved an established renderer/supervisor address"
@@ -3703,6 +4596,10 @@ if _osp.exists("src/escbank5.bin"):
     paced_end = esc5_off("lh_0818_paced_end")
     paced_gateway = esc5_off("lh_0818_vtime_gateway")
     paced_gateway_end = esc5_off("lh_0818_vtime_gateway_end")
+    pacing_camera_mailbox_publish = esc5_off("pacing_camera_mailbox_publish")
+    pacing_camera_mailbox_publish_end = esc5_off(
+        "pacing_camera_mailbox_publish_end"
+    )
     paced_release = esc5_off("lhp_vtime_release_seam")
     charge_12b6c = esc5_off("h11752_charge_12b6c")
     charge_12b6c_end = esc5_off("h11752_charge_12b6c_end")
@@ -3746,7 +4643,8 @@ if _osp.exists("src/escbank5.bin"):
     task259ca_tst_byte_end = esc5_off("h259ca_tst_byte_branch_end")
     assert (
         paced_end <= paced_gateway == 0xFBB0
-        and paced_gateway < paced_gateway_end <= 0xFBE0
+        and paced_gateway < paced_gateway_end == pacing_camera_mailbox_publish == 0xFBC5
+        and pacing_camera_mailbox_publish < pacing_camera_mailbox_publish_end <= 0xFBE0
         and charge_12b6c == 0xFBE0
         and charge_12b6c_end == task24bc2_ccr
         and task24bc2_ccr_end == h13be_inext == 0xFC0C
@@ -3817,9 +4715,20 @@ if _osp.exists("src/escbank5.bin"):
     ] == bytes.fromhex(
         "af0080f2290200f0045cc0f5002200fb995c9bf500"
     ), "$0818 fallback gateway moved or lost its pre-mutation mode split"
-    assert ESC5[paced_gateway_end - 0x8000:charge_12b6c - 0x8000] == bytes(
-        charge_12b6c - paced_gateway_end
-    ), "$0818 fallback gateway overlaps the $11752 AC-charge tail"
+    assert ESC5[0x7B3F:0x7B43] == bytes.fromhex("22c5fb99"), (
+        "$0818 pacing no longer calls the guarded early-camera publisher"
+    )
+    assert ESC5[
+        pacing_camera_mailbox_publish - 0x8000:
+        pacing_camera_mailbox_publish_end - 0x8000
+    ] == bytes.fromhex(
+        "e220af8934418f620141a9a58f630141c2205c00dc9e"
+    ), "early-camera producer lost raw-first/valid-last publication or manifest tail"
+    assert ESC5[
+        pacing_camera_mailbox_publish_end - 0x8000:charge_12b6c - 0x8000
+    ] == bytes(charge_12b6c - pacing_camera_mailbox_publish_end), (
+        "early-camera producer overlaps the $11752 AC-charge tail"
+    )
     assert ESC5[
         h13be_write_end - 0x8000:h13be_ors - 0x8000
     ] == bytes(h13be_ors - h13be_write_end), (

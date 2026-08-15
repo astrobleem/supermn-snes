@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -51,8 +52,15 @@ def be16(data: bytes, offset: int) -> int:
     return int.from_bytes(data[offset : offset + 2], "big")
 
 
+def configure_runtime() -> None:
+    dotnet8 = "/home/chad/.dotnet8"
+    os.environ["DOTNET_ROOT"] = dotnet8
+    os.environ["PATH"] = dotnet8 + os.pathsep + os.environ.get("PATH", "")
+
+
 def main() -> int:
     args = parse_args()
+    configure_runtime()
     for path in (args.rom, args.state, args.nexen):
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -85,6 +93,61 @@ def main() -> int:
             y_plane = m.read_memory("snesWorkRam", 0x3000, 0x0400)
             code_plane = m.read_memory("snesWorkRam", 0x4000, 0x0400)
             xcolor_plane = m.read_memory("snesWorkRam", 0x4400, 0x0400)
+        queued_tile_count = int.from_bytes(
+            m.read_memory("snesWorkRam", 0x89C6, 2), "little"
+        )
+        if queued_tile_count > 0x80:
+            raise RuntimeError(
+                f"invalid deferred OBJ tile count ${queued_tile_count:04X}"
+            )
+        queued_slots = m.read_memory(
+            "snesWorkRam", 0x2D00, queued_tile_count
+        )
+        queued_codes = m.read_memory(
+            "snesWorkRam", 0x2F00, queued_tile_count * 2
+        )
+        queued_tiles = [
+            {
+                "index": index,
+                "slot": queued_slots[index],
+                "code": int.from_bytes(
+                    queued_codes[index * 2 : index * 2 + 2], "little"
+                ),
+            }
+            for index in range(queued_tile_count)
+        ]
+        renderer_state = {
+            "tick": int.from_bytes(
+                m.read_memory("Sa1Memory", 0x0760, 2), "little"
+            ),
+            "render_complete": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x89A2, 2), "little"
+            ),
+            "renderer_busy": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x899C, 2), "little"
+            ),
+            "obj_cursor": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x00E0, 2), "little"
+            ),
+            "obj_output_count": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x00E2, 2), "little"
+            ),
+            "obj_tile_batch_index": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x74A0, 2), "little"
+            ),
+            "obj_tile_batch_due": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x74A2, 2), "little"
+            ),
+            "obj_tile_batch_last_line": m.read_memory(
+                "snesWorkRam", 0x74A4, 1
+            )[0],
+            "obj_tile_batch_count": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x74A6, 2), "little"
+            ),
+            "bg_opt_table_valid": int.from_bytes(
+                m.read_memory("snesWorkRam", 0x74AA, 2), "little"
+            ),
+        }
 
     entries = []
     if manifest_meta & 0x8000:
@@ -231,6 +294,9 @@ def main() -> int:
             for start in range(0, 512, 128)
         ],
         "unique_codes": len({entry["code"] for entry in entries}),
+        "renderer_state": renderer_state,
+        "queued_tile_count": queued_tile_count,
+        "queued_tiles": queued_tiles,
         "palette_banks": sorted({entry["palette_bank"] for entry in entries}),
         "rejected": rejected,
         "entries": entries,
