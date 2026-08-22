@@ -1225,7 +1225,8 @@ or `$025110` alone as an explanation for the multi-million-cycle update spans.
 
 A follow-up audit invalidated the timing conclusion that could be drawn from
 the first current-source `VTIME=1` checkpoint experiment. In the original
-diagnostic source, Poppy encoded `DEC VT_REMAIN_HI` as `CE 08 40` (16-bit
+diagnostic source, the then-used compiler encoded invalid long-form source
+`DEC VT_REMAIN_HI` as `CE 08 40` (16-bit
 absolute `$4008`) because 65816 has no long `DEC`, so it decremented SA-1 IRAM
 rather than the BW-RAM `$40:4008` timer high word. The same hazard applied to
 every `STZ`/`INC`/`DEC` VTIME state mutation. Thus
@@ -1233,7 +1234,8 @@ every `STZ`/`INC`/`DEC` VTIME state mutation. Thus
 `2db6773cfbc705cfdff8622cf3891102fa44fc2f85935af9135500bfca1cc163`) and its
 856-frame ROM-mismatched checkpoint stall are retained only as a failed,
 addressing-broken diagnostic—not evidence that the partial `$025110` ledger
-itself has reached a timing conclusion.
+itself has reached a timing conclusion. The latest corrected fork rejects this
+invalid-addressing class; current source does not rely on it.
 
 The corrected diagnostic uses explicit accumulator read/modify/long-store
 sequences for every such field and is guarded by

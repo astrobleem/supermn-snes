@@ -2,10 +2,11 @@
 
 This document defines the renderer work required after the rejected
 `f25a0e684180cd0d1998f85569deae05cef0e8e89ab0f0188134f32f388ab835`
-ROM. Current response candidate
-`d01db972b1c764a5969d40bb84649d2db7df7c92a03c3b3eb5407f0ad9f73b28`
+ROM. Current ordinary diagnostic build
+`7506f496669050cf188dd767810717a1c35944cd5115b667fe216f33bfe6447c`
 is still governed by this contract. It is a design and validation contract, not
-a playable-ROM claim.
+a playable-ROM claim. Hashes below are predecessor evidence unless explicitly
+identified as `7506f496…`.
 
 ## August 15 stop checkpoint
 
@@ -14,15 +15,17 @@ framebuffers. Sol's review and the machine reports found two independent
 renderer failures. Prepared BG graphics use `$1500`-byte chunks; the final
 128-byte record at every boundary is truncated, producing persistent fragments
 in slots 42/84/126/168. An intervened frame-41 lab reduced the chunk to `$1400`
-and made all four records exact with halt zero. Current source carries that
-change, but no successor ROM has been built.
+and made all four records exact with halt zero. Current `b0f28aa3…` is a later
+successor carrying that change and its pack guard; the intervened predecessor
+result remains causal evidence, not successor acceptance.
 
 The OAM failure is structural: `obj_present_commit` invalidates and overwrites
 the sole presentation buffer across an NMI. That NMI advances BG first, sees OBJ
-pending `$80`, and retains prior-camera hardware OAM for one frame. The next
-candidate must retain an immutable last-published OAM/list path during candidate
-construction. The broader complete-scene contract below remains open; no full
-gameplay replay has been started.
+pending `$80`, and retains prior-camera hardware OAM for one frame. Current source
+retains a last-published OAM/list fallback during candidate construction. Its
+exact-hash aligned scene-coherence and motion acceptance remain open. The broader
+complete-scene contract below remains open; no full gameplay replay has been
+started.
 
 ## August 14 response-candidate result
 
@@ -210,9 +213,35 @@ New work should live behind an isolated renderer build flag until the old and ne
 paths can be compared. An experimental ROM is diagnostic output, not a human-test
 candidate.
 
+## Short implementation loop
+
+The fail-closed promotion matrix below is not the renderer development loop.
+Routine implementation uses Nexen neutral-input attract mode because the game itself
+supplies deterministic scrolling, actor animation, attacks, palette changes, tile
+loads, OAM updates, and transitions.
+
+For each renderer change:
+
+1. Build only after a source change requires it.
+2. Run one bounded Nexen attract-mode window to the first invariant failure or named
+   milestone. Default to no more than 600 observed frames after that boundary.
+3. Retain the compact scene-generation ledger, the first divergence, and only sparse
+   milestone images or one small contact sheet.
+4. Fix the first BG/palette/OAM/camera/pattern ownership violation before extending
+   the window.
+5. Reuse existing exact-hash prefixes and artifacts. Do not record a new movie or
+   repeat an unchanged boot/input prefix.
+
+Routine renderer work must not launch Legacy Mesen, create controller movies, retain
+every-frame PNGs, or run multi-thousand-frame input playbacks. A new movie, long
+playback, every-frame framebuffer campaign, or interactive promotion matrix requires
+Chad's explicit approval. Final promotion remains fail-closed, but it runs once after
+the renderer invariants and targeted attract-mode windows are green.
+
 ## Fail-closed acceptance
 
-The same exact ROM hash and fresh-power movie lineage must supply all required
+This section applies only when Chad explicitly starts final human-test promotion.
+The same exact ROM hash and fresh-power movie lineage must then supply all required
 reports. Missing or unknown coverage is red, not neutral.
 
 - Boot geometry: compare every visible boot phase with approved bounds; any

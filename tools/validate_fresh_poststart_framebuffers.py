@@ -21,7 +21,9 @@ import argparse
 import hashlib
 import json
 import os
+import signal
 import sys
+import traceback
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -55,6 +57,31 @@ BACKGROUND_FIELD_BOX = (0, 24, 256, 192)
 # the upper BG field (not the independently drawn floor) and allow those motifs
 # while still failing before a complete slot can disappear.
 MAX_VERTICAL_BLACK_RUN = 16
+RUN_CONTEXT: dict[str, Any] = {"stage": "argument_validation"}
+
+
+def progress_update(**values: Any) -> None:
+    """Persist bounded progress so external termination cannot erase coverage."""
+
+    RUN_CONTEXT.update(values)
+    raw_output = RUN_CONTEXT.get("output")
+    if not raw_output:
+        return
+    output = Path(raw_output)
+    if not output.is_dir():
+        return
+    temporary = output / ".run-progress.json.tmp"
+    target = output / "run-progress.json"
+    temporary.write_text(json.dumps(RUN_CONTEXT, indent=2, sort_keys=True) + "\n")
+    temporary.replace(target)
+
+
+def install_signal_handlers() -> None:
+    def terminate(signum: int, _frame: Any) -> None:
+        progress_update(signal=signum, stage="terminated_by_signal")
+        raise TimeoutError(f"validator terminated by signal {signum}")
+
+    signal.signal(signal.SIGTERM, terminate)
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,6 +89,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rom", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--emulator", type=Path, default=DEFAULT_EMULATOR)
+    parser.add_argument(
+        "--replay-movie",
+        type=Path,
+        help=(
+            "reuse an authenticated StartWithoutSaveData movie and skip recording; "
+            "phase boundaries are derived from its Select/Start rows"
+        ),
+    )
     parser.add_argument("--record-port", type=int, default=43810)
     parser.add_argument("--playback-port", type=int, default=43811)
     parser.add_argument(
@@ -78,6 +113,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--credit-wait-ceiling", type=int, default=300)
     parser.add_argument("--start-frames", type=int, default=61)
     parser.add_argument("--poststart-frames", type=int, default=600)
+    parser.add_argument(
+        "--poststart-held-buttons",
+        type=lambda value: int(value, 0),
+        default=0,
+        help="real port-1 button mask held during the optional post-Start tail",
+    )
+    parser.add_argument(
+        "--poststart-held-from",
+        type=int,
+        default=0,
+        help="relative post-Start frame at which the held-button tail begins",
+    )
     parser.add_argument("--checkpoint-step", type=int, default=50)
     parser.add_argument("--visual-grace-frames", type=int, default=100)
     return parser.parse_args()
@@ -180,7 +227,7 @@ def require_controller_safe_emulator(emulator: Path) -> Path:
     return resolved
 
 
-def movie_input_contract(movie: Path) -> dict[str, Any]:
+def movie_input_contract(movie: Path, rom: Path | None = None) -> dict[str, Any]:
     """Authenticate that a completed Mesen movie actually contains port-1 input."""
     with zipfile.ZipFile(movie) as archive:
         settings = archive.read("GameSettings.txt").decode("utf-8")
@@ -189,19 +236,83 @@ def movie_input_contract(movie: Path) -> dict[str, Any]:
     controller_rows = sum(row.count("|") >= 2 for row in rows)
     select_rows = sum("S" in row.split("|")[2] for row in rows if row.count("|") >= 2)
     start_rows = sum("T" in row.split("|")[2] for row in rows if row.count("|") >= 2)
+    right_rows = sum("R" in row.split("|")[2] for row in rows if row.count("|") >= 2)
+    left_rows = sum("L" in row.split("|")[2] for row in rows if row.count("|") >= 2)
+    select_indices = [
+        index
+        for index, row in enumerate(rows)
+        if row.count("|") >= 2 and "S" in row.split("|")[2]
+    ]
+    start_indices = [
+        index
+        for index, row in enumerate(rows)
+        if row.count("|") >= 2 and "T" in row.split("|")[2]
+    ]
+    movie_sha1_line = next(
+        (line.split(maxsplit=1)[1] for line in settings.splitlines() if line.startswith("SHA1 ")),
+        "",
+    ).lower()
+    rom_sha1 = ""
+    if rom is not None:
+        rom_sha1 = hashlib.sha1(rom.read_bytes()).hexdigest()
+    rom_matches = rom is None or bool(movie_sha1_line) and movie_sha1_line == rom_sha1
     return {
         "port1_controller": controller_setting,
         "input_rows": len(rows),
         "controller_rows": controller_rows,
         "select_rows": select_rows,
         "start_rows": start_rows,
+        "right_rows": right_rows,
+        "left_rows": left_rows,
+        "first_select_row": select_indices[0] if select_indices else None,
+        "last_select_row": select_indices[-1] if select_indices else None,
+        "first_start_row": start_indices[0] if start_indices else None,
+        "last_start_row": start_indices[-1] if start_indices else None,
+        "movie_rom_sha1": movie_sha1_line,
+        "selected_rom_sha1": rom_sha1 or None,
+        "rom_matches": rom_matches,
         "green": (
             controller_setting
             and bool(rows)
             and controller_rows == len(rows)
             and select_rows > 0
+            and rom_matches
         ),
     }
+
+
+def phases_from_movie_contract(
+    contract: dict[str, Any], poststart_frames: int
+) -> dict[str, int]:
+    """Derive stable phase boundaries from recorded controller rows."""
+
+    required = (
+        "first_select_row",
+        "last_select_row",
+        "first_start_row",
+        "last_start_row",
+    )
+    if any(contract.get(key) is None for key in required):
+        raise RuntimeError(f"movie lacks Select/Start phase rows: {contract}")
+    phases = {
+        "title": int(contract["first_select_row"]),
+        "coin_end": int(contract["last_select_row"]) + 2,
+        "credit_ready": int(contract["first_start_row"]),
+        "poststart": int(contract["last_start_row"]) + 2,
+        "end": int(contract["input_rows"]),
+    }
+    if not (
+        phases["title"] < phases["coin_end"] <= phases["credit_ready"]
+        < phases["poststart"] <= phases["end"]
+    ):
+        raise RuntimeError(f"movie phase rows are not monotonic: {phases}")
+    available = phases["end"] - phases["poststart"]
+    if available < poststart_frames:
+        raise RuntimeError(
+            "movie does not retain the requested post-Start span: "
+            f"phases={phases}, available={available}, requested={poststart_frames}"
+        )
+    return phases
 
 
 def bg_graphics_check(m: McpSession, rom_bytes: bytes) -> dict[str, Any]:
@@ -319,6 +430,81 @@ def advance_to(m: McpSession, target: int) -> None:
         current = observed
 
 
+def repeated_frame_ranges(
+    rows: list[dict[str, Any]], minimum_rows: int = 2
+) -> list[dict[str, Any]]:
+    """Return inclusive runs of byte-identical retained framebuffer PNGs."""
+
+    ranges: list[dict[str, Any]] = []
+    start = 0
+    for index in range(1, len(rows) + 1):
+        changed = index == len(rows) or (
+            rows[index]["screenshot"]["sha256"]
+            != rows[start]["screenshot"]["sha256"]
+        )
+        if not changed:
+            continue
+        count = index - start
+        if count >= minimum_rows:
+            ranges.append(
+                {
+                    "relative_frame_start": rows[start]["relative_frame"],
+                    "relative_frame_end": rows[index - 1]["relative_frame"],
+                    "video_frame_start": rows[start]["frame"],
+                    "video_frame_end": rows[index - 1]["frame"],
+                    "rows": count,
+                    "sha256": rows[start]["screenshot"]["sha256"],
+                }
+            )
+        start = index
+    return ranges
+
+
+def execution_liveness_failures(
+    rows: list[dict[str, Any]], minimum_held_intervals: int = 4
+) -> list[dict[str, Any]]:
+    """Fail sustained intervals where tick, render, and pacing all stop."""
+
+    keys = ("tick", "render_complete", "pacing_vblank_epoch")
+    if len(rows) < 2 or any(key not in row for row in rows for key in keys):
+        return []
+    failures: list[dict[str, Any]] = []
+    start: int | None = None
+    for index in range(1, len(rows) + 1):
+        held = index < len(rows) and all(
+            rows[index][key] == rows[index - 1][key] for key in keys
+        )
+        if held and start is None:
+            start = index - 1
+        if held:
+            continue
+        if start is not None:
+            end = index - 1
+            held_intervals = end - start
+            if held_intervals >= minimum_held_intervals:
+                same_framebuffer = all(
+                    rows[offset]["screenshot"]["sha256"]
+                    == rows[start]["screenshot"]["sha256"]
+                    for offset in range(start + 1, end + 1)
+                )
+                failures.append(
+                    {
+                        "relative_frame": rows[start]["relative_frame"],
+                        "relative_frame_end": rows[end]["relative_frame"],
+                        "kind": "execution_liveness_stall",
+                        "video_frame_start": rows[start]["frame"],
+                        "video_frame_end": rows[end]["frame"],
+                        "held_intervals": held_intervals,
+                        "tick": rows[start]["tick"],
+                        "render_complete": rows[start]["render_complete"],
+                        "pacing_vblank_epoch": rows[start]["pacing_vblank_epoch"],
+                        "framebuffer_repeated": same_framebuffer,
+                    }
+                )
+            start = None
+    return failures
+
+
 def evaluate_rows(
     rows: list[dict[str, Any]], visual_grace_frames: int
 ) -> list[dict[str, Any]]:
@@ -410,11 +596,226 @@ def evaluate_rows(
                         "mismatches": graphics["mismatches"],
                     }
                 )
+    failures.extend(execution_liveness_failures(rows))
     return failures
 
 
-def main() -> int:
+def cadence_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Report bounded cadence without widening this visual gate to performance."""
+
+    if len(rows) < 2:
+        raise ValueError("cadence summary requires at least two capture rows")
+
+    def modular_delta(key: str) -> int:
+        return sum(
+            (int(current[key]) - int(previous[key])) & 0xFFFF
+            for previous, current in zip(rows, rows[1:])
+        )
+
+    video_intervals = int(rows[-1]["frame"]) - int(rows[0]["frame"])
+    if video_intervals <= 0:
+        raise ValueError("cadence summary requires increasing video frames")
+    tick_delta = modular_delta("tick")
+    render_delta = modular_delta("render_complete")
+    return {
+        "authority": "diagnostic_only",
+        "video_frame_intervals": video_intervals,
+        "game_tick_delta": tick_delta,
+        "render_complete_delta": render_delta,
+        "game_ticks_per_60_video_frames": round(tick_delta * 60 / video_intervals, 6),
+        "renders_per_60_video_frames": round(render_delta * 60 / video_intervals, 6),
+        "performance_contract_game_ticks_per_second": 30,
+        "reason": (
+            "Transition-window cadence is reported to distinguish prolonged fades "
+            "from corrupt pixels; it is not an end-to-end performance gate."
+        ),
+    }
+
+
+def replay_existing_movie(
+    args: argparse.Namespace,
+    *,
+    rom: Path,
+    rom_bytes: bytes,
+    emulator: Path,
+    output: Path,
+    boot_milestone_frames: list[int],
+) -> int:
+    """Run the full every-frame gate without recording another fresh prefix."""
+
+    progress_update(stage="replay_authentication")
+    movie = args.replay_movie.resolve()
+    if not movie.is_file():
+        raise FileNotFoundError(movie)
+    contract = movie_input_contract(movie, rom)
+    progress_update(movie=str(movie), movie_contract=contract)
+    if not contract["green"] or contract["start_rows"] <= 0:
+        raise RuntimeError(f"replay movie authentication failed: {contract}")
+    phases = phases_from_movie_contract(contract, args.poststart_frames)
+    progress_update(phases=phases)
+
+    milestone_rows: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    progress_update(stage="playback_launch")
+    with McpSession(
+        rom=rom,
+        mesen=emulator,
+        cwd=ROOT,
+        port=args.playback_port,
+        boot_wait=6.0,
+        socket_timeout=300.0,
+        stderr_log=output / "playback-emulator.stderr.log",
+    ) as m:
+        m.pause()
+        play_response = m.play_movie(movie)
+        m.pause()
+        playback_start_frame = frame_count(m)
+        progress_update(last_frame=playback_start_frame)
+        if playback_start_frame != 0:
+            raise RuntimeError(
+                "StartWithoutSaveData movie did not begin at frame zero: "
+                f"{playback_start_frame}"
+            )
+        named_milestones = [
+            (f"boot-{frame:06d}", frame) for frame in boot_milestone_frames
+        ]
+        named_milestones.extend(
+            (name, phases[name]) for name in ("title", "coin_end", "credit_ready")
+        )
+        seen: set[int] = set()
+        for name, milestone_frame in sorted(named_milestones, key=lambda item: item[1]):
+            if milestone_frame in seen:
+                continue
+            seen.add(milestone_frame)
+            progress_update(stage="playback_milestone", phase=name)
+            advance_to(m, milestone_frame)
+            progress_update(last_frame=frame_count(m))
+            row = capture.snapshot(m)
+            row["phase"] = name
+            row["credits"] = credits(m)
+            row["screenshot"] = capture.take_screenshot(
+                m, output / f"milestone-{name}.png"
+            )
+            milestone_rows.append(row)
+
+        progress_update(stage="poststart_seek", phase="poststart")
+        advance_to(m, phases["poststart"])
+        if credits(m) != 0:
+            raise RuntimeError(
+                f"movie Start did not consume credit by frame {phases['poststart']}: "
+                f"credits={credits(m)}"
+            )
+        progress_update(stage="poststart_capture")
+        for relative in range(args.poststart_frames + 1):
+            observed_frame = frame_count(m)
+            expected_frame = phases["poststart"] + relative
+            progress_update(last_frame=observed_frame, relative_frame=relative)
+            if observed_frame != expected_frame:
+                raise RuntimeError(
+                    f"post-Start coverage gap at {relative}: "
+                    f"expected {expected_frame}, got {observed_frame}"
+                )
+            row = capture.snapshot(m)
+            row["relative_frame"] = relative
+            screenshot_path = output / f"frame-{relative:06d}.png"
+            row["screenshot"] = capture.take_screenshot(m, screenshot_path)
+            row["image_metrics"] = image_metrics(screenshot_path)
+            if relative % args.checkpoint_step == 0:
+                row["checkpoint"] = capture.save_checkpoint(
+                    m, output / f"frame-{relative:06d}.mss"
+                )
+                row["bg_graphics"] = bg_graphics_check(m, rom_bytes)
+            rows.append(row)
+            if relative != args.poststart_frames:
+                row["advance"] = advance_one(m)
+        movie_state_before_stop = m.movie_state()
+        stop_playback_response = m.stop_movie()
+
+    progress_update(stage="reporting")
+    failures = evaluate_rows(rows, args.visual_grace_frames)
+    selected_paths = [
+        Path(row["screenshot"]["path"]) for row in milestone_rows
+    ] + [
+        Path(row["screenshot"]["path"])
+        for row in rows
+        if row["relative_frame"] % args.checkpoint_step == 0
+    ]
+    contact_sheet = make_contact_sheet(selected_paths, output / "contact-sheet.png")
+    coverage = {
+        "fresh_video_frame_start": 0,
+        "fresh_video_frame_end": rows[-1]["frame"],
+        "poststart_relative_start": 0,
+        "poststart_relative_end": args.poststart_frames,
+        "poststart_video_frame_start": rows[0]["frame"],
+        "poststart_video_frame_end": rows[-1]["frame"],
+        "complete": len(rows) == args.poststart_frames + 1,
+    }
+    report = {
+        "schema": 2,
+        "result": "red" if failures else "clear",
+        "scope": (
+            "authenticated existing StartWithoutSaveData movie; every actual "
+            "post-Start video frame retained; bounded visual regression only"
+        ),
+        "rom": str(rom),
+        "rom_sha256": sha256(rom),
+        "emulator": str(emulator),
+        "emulator_sha256": sha256(emulator),
+        "movie": str(movie),
+        "movie_sha256": sha256(movie),
+        "movie_start": "StartWithoutSaveData",
+        "runtime_memory_writes": [],
+        "recording": {
+            "mode": "reused_authenticated_movie",
+            "movie_input_contract": contract,
+            "phases": phases,
+        },
+        "playback": {
+            "play_response": play_response,
+            "movie_state_before_stop": movie_state_before_stop,
+            "stop_response": stop_playback_response,
+        },
+        "coverage": coverage,
+        "cadence": cadence_summary(rows),
+        "repeated_frame_ranges": repeated_frame_ranges(rows),
+        "visual_grace_frames": args.visual_grace_frames,
+        "milestones": milestone_rows,
+        "captures": rows,
+        "contact_sheet": contact_sheet,
+        "manual_review_required": True,
+        "visual_regression_result": "red" if failures else "clear",
+        "first_failure": failures[0] if failures else None,
+        "failures": failures,
+        "acceptance_gate": unknown_diagnostic_gate(
+            "fresh_poststart_framebuffers",
+            "This bounded gate cannot replace aligned MAME pixels or human review.",
+        ),
+        "promotion": {"eligible": False, "status": "blocked", "authority": "none"},
+    }
+    target = output / "results.json"
+    target.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    progress_update(stage="complete", report=str(target))
+    print(
+        json.dumps(
+            {
+                "visual_regression_result": report["visual_regression_result"],
+                "frames": len(rows),
+                "first_failure": report["first_failure"],
+                "contact_sheet": contact_sheet["path"],
+                "report": str(target),
+                "acceptance_status": "unknown",
+                "promotion_status": "blocked",
+            },
+            sort_keys=True,
+        )
+    )
+    return 1 if failures else 0
+
+
+def run_main() -> int:
     args = parse_args()
+    RUN_CONTEXT.clear()
+    RUN_CONTEXT["stage"] = "argument_validation"
     for value in (
         args.title_frame,
         args.coin_frames,
@@ -428,6 +829,10 @@ def main() -> int:
             raise SystemExit("frame counts must be positive")
     if args.visual_grace_frames < 0 or args.visual_grace_frames > args.poststart_frames:
         raise SystemExit("invalid --visual-grace-frames")
+    if not 0 <= args.poststart_held_buttons <= 0x0FFF:
+        raise SystemExit("--poststart-held-buttons must be a 12-bit controller mask")
+    if not 0 <= args.poststart_held_from < args.poststart_frames:
+        raise SystemExit("--poststart-held-from must be within the post-Start span")
     try:
         boot_milestone_frames = parse_milestone_frames(
             args.boot_milestone_frames, args.title_frame
@@ -449,9 +854,21 @@ def main() -> int:
         raise SystemExit("refusing non-production ROM: TESTFLAG is set")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
+    progress_update(output=str(output), rom=str(rom))
+    install_signal_handlers()
     configure_runtime()
+    if args.replay_movie is not None:
+        return replay_existing_movie(
+            args,
+            rom=rom,
+            rom_bytes=rom_bytes,
+            emulator=emulator,
+            output=output,
+            boot_milestone_frames=boot_milestone_frames,
+        )
     movie = output / "fresh-poststart.mmo"
 
+    progress_update(stage="record_launch")
     with McpSession(
         rom=rom,
         mesen=emulator,
@@ -465,11 +882,16 @@ def main() -> int:
         record_response = m.record_movie(
             movie,
             author="supermn-snes fresh post-Start framebuffer gate",
-            description="power-on, coin, Start, neutral post-Start coverage",
+            description=(
+                "power-on, coin, Start, bounded post-Start coverage; "
+                f"held_buttons={args.poststart_held_buttons:#x} "
+                f"from={args.poststart_held_from}"
+            ),
             from_="StartWithoutSaveData",
         )
         advance_to(m, args.title_frame)
         title_frame = frame_count(m)
+        progress_update(stage="record_title", last_frame=title_frame)
         title_credits = credits(m)
         title_snapshot = setup_snapshot(m, output, "title")
         title_readiness = renderer_readiness_failures(title_snapshot)
@@ -513,6 +935,7 @@ def main() -> int:
         )
         release_coin_response = advance_recording_with_input(m, 0, 1)
         coin_end_frame = frame_count(m)
+        progress_update(stage="record_coin", last_frame=coin_end_frame)
         coin_end_snapshot = setup_snapshot(m, output, "coin-end")
         m.run_frames(args.credit_wait_frames)
         m.pause()
@@ -523,6 +946,9 @@ def main() -> int:
             waited += 1
         credit_frame = frame_count(m)
         credit_count = credits(m)
+        progress_update(
+            stage="record_credit", last_frame=credit_frame, credits=credit_count
+        )
         if credit_count <= 0:
             timeout_snapshot = setup_snapshot(m, output, "credit-timeout")
             stop_record_response = m.stop_movie()
@@ -588,13 +1014,27 @@ def main() -> int:
         release_start_response = advance_recording_with_input(m, 0, 1)
         poststart_frame = frame_count(m)
         poststart_credits = credits(m)
+        progress_update(
+            stage="record_poststart",
+            last_frame=poststart_frame,
+            credits=poststart_credits,
+        )
         if poststart_credits >= credit_count:
             raise RuntimeError(
                 f"organic Start did not consume credit: {credit_count}->{poststart_credits}"
             )
-        m.run_frames(args.poststart_frames)
-        m.pause()
+        held_input_response = None
+        if args.poststart_held_buttons:
+            advance_to(m, poststart_frame + args.poststart_held_from)
+            held_input_response = advance_recording_with_input(
+                m,
+                args.poststart_held_buttons,
+                args.poststart_frames - args.poststart_held_from,
+            )
+        else:
+            advance_to(m, poststart_frame + args.poststart_frames)
         record_end_frame = frame_count(m)
+        progress_update(stage="record_stop", last_frame=record_end_frame)
         stop_record_response = m.stop_movie()
     capture.wait_for_file(movie)
     movie_contract = movie_input_contract(movie)
@@ -604,7 +1044,14 @@ def main() -> int:
             f"{movie_contract}"
         )
     if record_end_frame - poststart_frame != args.poststart_frames:
-        raise RuntimeError("recording did not retain the requested post-Start span")
+        raise RuntimeError(
+            "recording did not retain the requested post-Start span: "
+            f"poststart_frame={poststart_frame}, "
+            f"record_end_frame={record_end_frame}, "
+            f"observed_delta={record_end_frame - poststart_frame}, "
+            f"requested_delta={args.poststart_frames}, "
+            f"movie_input_rows={movie_contract['input_rows']}"
+        )
 
     phases = {
         "title": title_frame,
@@ -620,6 +1067,7 @@ def main() -> int:
         )
     milestone_rows: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
+    progress_update(stage="playback_launch", phases=phases)
     with McpSession(
         rom=rom,
         mesen=emulator,
@@ -638,6 +1086,9 @@ def main() -> int:
                 f"StartWithoutSaveData movie did not begin at frame zero: {playback_start_frame}"
             )
         for milestone_frame in boot_milestone_frames:
+            progress_update(
+                stage="playback_milestone", phase=f"boot-{milestone_frame:06d}"
+            )
             advance_to(m, milestone_frame)
             row = capture.snapshot(m)
             row["phase"] = f"boot-{milestone_frame:06d}"
@@ -646,6 +1097,7 @@ def main() -> int:
             )
             milestone_rows.append(row)
         for name in ("title", "coin_end", "credit_ready"):
+            progress_update(stage="playback_milestone", phase=name)
             advance_to(m, phases[name])
             row = capture.snapshot(m)
             row["phase"] = name
@@ -654,8 +1106,10 @@ def main() -> int:
             )
             milestone_rows.append(row)
         advance_to(m, poststart_frame)
+        progress_update(stage="poststart_capture", phase="poststart")
         for relative in range(args.poststart_frames + 1):
             observed_frame = frame_count(m)
+            progress_update(last_frame=observed_frame, relative_frame=relative)
             expected_frame = poststart_frame + relative
             if observed_frame != expected_frame:
                 raise RuntimeError(
@@ -740,6 +1194,9 @@ def main() -> int:
             "release_coin_response": release_coin_response,
             "start_response": start_response,
             "release_start_response": release_start_response,
+            "poststart_held_buttons": args.poststart_held_buttons,
+            "poststart_held_from": args.poststart_held_from,
+            "held_input_response": held_input_response,
             "stop_response": stop_record_response,
             "title_credits": title_credits,
             "credit_count_before_start": credit_count,
@@ -755,6 +1212,8 @@ def main() -> int:
             "stop_response": stop_playback_response,
         },
         "coverage": coverage,
+        "cadence": cadence_summary(rows),
+        "repeated_frame_ranges": repeated_frame_ranges(rows),
         "visual_grace_frames": args.visual_grace_frames,
         "milestones": milestone_rows,
         "captures": rows,
@@ -778,6 +1237,7 @@ def main() -> int:
     }
     target = output / "results.json"
     target.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    progress_update(stage="complete", report=str(target))
     print(
         json.dumps(
             {
@@ -794,6 +1254,85 @@ def main() -> int:
         )
     )
     return 1 if failures else 0
+
+
+def failure_output_from_argv() -> Path | None:
+    try:
+        index = sys.argv.index("--output")
+        return Path(sys.argv[index + 1]).resolve()
+    except (ValueError, IndexError):
+        return None
+
+
+def artifact_inventory(output: Path) -> list[dict[str, Any]]:
+    artifacts: list[dict[str, Any]] = []
+    for path in sorted(output.rglob("*")):
+        if not path.is_file() or path.name in {"failure-report.json", ".failure-report.json.tmp"}:
+            continue
+        artifacts.append(
+            {
+                "path": str(path.relative_to(output)),
+                "bytes": path.stat().st_size,
+                "sha256": sha256(path),
+            }
+        )
+    return artifacts
+
+
+def stderr_tails(output: Path, lines: int = 24) -> dict[str, list[str]]:
+    tails: dict[str, list[str]] = {}
+    for path in sorted(output.glob("*emulator.stderr.log")):
+        tails[path.name] = path.read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines()[-lines:]
+    return tails
+
+
+def write_failure_report(exc: Exception) -> Path | None:
+    output = failure_output_from_argv()
+    if output is None or not output.is_dir():
+        return None
+    rom_path = Path(RUN_CONTEXT["rom"]) if RUN_CONTEXT.get("rom") else None
+    report = {
+        "schema": 1,
+        "result": "unknown",
+        "scope": "post-Start validator infrastructure/runtime failure",
+        "stage": RUN_CONTEXT.get("stage", "unknown"),
+        "exception": {"type": type(exc).__name__, "message": str(exc)},
+        "progress": RUN_CONTEXT,
+        "rom": str(rom_path) if rom_path else None,
+        "rom_sha256": sha256(rom_path) if rom_path and rom_path.is_file() else None,
+        "stderr_tails": stderr_tails(output),
+        "artifacts": artifact_inventory(output),
+        "traceback": traceback.format_exception_only(type(exc), exc),
+        "acceptance": "UNKNOWN",
+        "promotion": "BLOCKED",
+    }
+    temporary = output / ".failure-report.json.tmp"
+    target = output / "failure-report.json"
+    temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    temporary.replace(target)
+    return target
+
+
+def main() -> int:
+    try:
+        return run_main()
+    except Exception as exc:
+        target = write_failure_report(exc)
+        print(
+            json.dumps(
+                {
+                    "result": "unknown",
+                    "stage": RUN_CONTEXT.get("stage", "unknown"),
+                    "exception": f"{type(exc).__name__}: {exc}",
+                    "failure_report": str(target) if target else None,
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 2
 
 
 if __name__ == "__main__":

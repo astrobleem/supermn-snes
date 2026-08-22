@@ -23,6 +23,10 @@ from gameplay_acceptance_contract import unknown_diagnostic_gate
 
 ACTIVE_SIZE = (256, 224)
 PLAYFIELD_BOX = (0, 24, 256, 224)
+# Gameplay picture excluding both the repositioned top HUD and the arcade/SNES
+# bottom status-line difference.  This is diagnostic only; exact-composite
+# acceptance still uses every pixel.
+SCENE_BOX = (0, 24, 256, 208)
 TILE_SIZE = 8
 
 

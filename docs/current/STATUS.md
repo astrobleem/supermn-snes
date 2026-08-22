@@ -1,6 +1,6 @@
 # Authoritative Superman project status
 
-Last evidence review: August 15, 2026.
+Last evidence review: August 21, 2026.
 
 This is the only authoritative project-status summary. Dated reports under
 `docs/history/` retain the evidence and failed experiments behind it, but their
@@ -8,22 +8,231 @@ This is the only authoritative project-status summary. Dated reports under
 
 ## Verdict
 
-The port is an **interactive technical-demo response candidate**. It has **no
-promoted human-test ROM** and is **not playable, release-ready, or shippable**.
+The port has **no promoted human-test ROM** and is **not playable, release-ready,
+or shippable**.
 
 The current ordinary `build/interp.sfc`, SHA-256
-`d01db972b1c764a5969d40bb84649d2db7df7c92a03c3b3eb5407f0ad9f73b28`, is an
-**unpromoted, renderer-red response candidate**. It is pinned at
-`/home/chad/supermn-snes-artifacts/active/d01db972-fixed-poppy-camera-mailbox-v1/rom/`
-and is not a handoff or human-test ROM.
+`7506f496669050cf188dd767810717a1c35944cd5115b667fe216f33bfe6447c`, is an
+**unpromoted interpreter/renderer diagnostic build**. It is not a handoff or
+human-test ROM.
 
-This is the first deliberate build made with Chad's corrected Poppy fork,
-`astrobleem/poppy` commit `0d84bf5d…`; the exact CLI DLL hashes to
-`771916f2…993a`. The corrected assembler rejected real latent source defects that
-old upstream accepted: `.org` overwrites and illegal long-address forms. The
-source and pack guards now repair those defects. Fixed-fork assembly was clean,
-bank audit was green, and the retained MAME semantic gates are 160/160 optest and
-782/782 opsweep. These are static/semantic results, not renderer acceptance.
+This build was assembled with Chad's corrected Poppy fork DLL
+`/home/chad/poppy-astrobleem-latest/src/Poppy.CLI/bin/Release/net10.0/poppy.dll`,
+SHA-256 `715b14431478b62433498cc516c1cbbb8f418c1d7b39a8e71098ed98d9c9167e`.
+Assembly completed with the existing poppy#386 mode-tracking warnings; bank audit
+was green across escape banks 1-9.
+
+This successor changes the ordinary gameplay-OBJ Y transform from `$DA-sy` to
+`$E9-sy`. Registered MAME/SNES entrance frames prove the predecessor's background
+is exact while its Superman mask is exactly 15 lines high: moving that mask down
+15 produces zero differing mask pixels at ticks 309-310 and only seven at tick
+320's publication edge. D0/E0 logical sources match at the completed same-tick
+edge; the defect is foreground registration, not player state or BG construction.
+The source and ROM packer now pin the `$00E9` immediate. A bounded exact-hash
+fresh-power replay authenticates the new ROM and movie and retains all 601
+post-Start frames 5,722-6,322. Halt remains zero; tick/render/pacing continue at
+the terminal edge. Its generic visual result remains red on the coherent Stage-1
+fade at relative frame 100 onward, so it is not a whole-run visual green.
+
+The presentation-aligned entrance component is green. Logical state keeps the
+effective Start relation `MAME tick = SNES tick + 29`; pixels are paired to the
+first retained frame carrying the corresponding `obj_published_sequence`. Across
+MAME ticks 304-339, all 36 scene/playfield comparisons have zero changed pixels.
+The literal-crop full composite remains red by exactly 576 pixels per frame,
+confined to top HUD box `[1,0,240,15]`; this is the port's intentional narrow-
+screen HUD reflow, not missing glyph art. A separate fail-closed transformed-HUD
+oracle applies the production left/center/right mappings and preserves the top-
+wrap rows. It is exact for all 36 frames: 414 red and 243 white glyph pixels per
+frame, with zero missing, extra, or wrong-color pixels. Sol opened its three-row
+review sheet and recorded the component green. The entrance scene evidence is
+under `build/playback-watcher-20260821/obj-y-e9-entrance-aligned-published-v1/`;
+the HUD report and review are under
+`build/playback-watcher-20260821/obj-y-e9-entrance-hud-transformed-v1/`. Neither
+component result alone is a full-composite or behavior acceptance claim.
+An attempted complete software-X1 composite is retained red at
+`build/playback-watcher-20260821/obj-y-e9-entrance-composite-x1-v2/`: its raw
+384x240 reconstruction already differs from MAME by about 60,000 pixels per
+frame, before the SNES transform. The historical software renderer's matching
+palette/decode is therefore not an exact modern framebuffer oracle and none of
+its transformed results are accepted. Exact background pixels hidden beneath
+the arcade HUD and one composed full-frame authority remain open.
+Every predecessor exact-hash promotion report remains invalid for this successor.
+
+A separate fresh-power 900-frame post-Start run records 300 real Right-input
+rows beginning at relative frame 600. The mailbox observes Right after its
+three-frame publication latency and the entire held window has halt zero, no
+machine visual failures, no repeated-frame range, and only `-2/-1/0` presented-
+scroll deltas. Sol opened frames 600/700/800/900 and found the composite intact.
+This is **not** a walking-right green: the run ends at game tick 432 while the
+player remains in the automatic entrance sentinel (`X=64`, `Y=$FFD0`). Canonical
+MAME does not leave the sentinel until tick 817 and does not reach the normal
+floor position until roughly tick 2663. Evidence and the scoped unknown review
+are under `build/playback-watcher-20260821/obj-y-e9-fresh-walk-right-v1/`.
+
+Retired Legacy-Mesen-only evidence enters a `$0000/$D13B` loop near tick 763/764;
+pinned Nexen does not reproduce it and advances beyond that tick. This is not an
+active ROM blocker, not a renderer task, and not a reason to launch Mesen or run
+another cross-emulator replay. The retained artifacts remain under
+`build/playback-watcher-20260821/obj-y-e9-stall764-*` for historical provenance
+only. Active renderer development uses short Nexen attract-mode invariant windows
+under `RENDERER_CONSOLIDATION.md`; it does not record input movies or rerun final
+promotion scenarios during implementation.
+
+Predecessor `b0f28aa3…` adds an explicit `.a8` contract at `obj_fallback_nmi`'s
+`ofn_time_ok` branch target. Predecessor `d61100e4…` emitted `A9 7E 00 48` there;
+the stray zero at `$E9:F489` executed as `BRK #$48`. The current pack guard requires
+`A9 7E 48 AB`, and the build completed green. A cross-ROM retained-state diagnostic
+advances Legacy Mesen from frame 6,261 through 6,271 with S-CPU running, stack
+restored to `$07E5`, NMI busy clear, and no BRK in the 1,000-instruction tail.
+That proves the focused cause/fix only. A subsequent exact-hash fresh-power movie
+replay covers frames 0-6,323 and all 601 requested post-Start intervals. Halt stays
+zero; tick reaches 339, render-complete 273, and tick/render/pacing all change at
+the terminal edge. The predecessor's terminal collapse therefore does not recur.
+The run is still visual-red: the generic detector flags the coherent Stage-1 fade
+at relative frames 100-206; its later aligned entrance oracle belongs only to the
+successor described above.
+Sol reviewed the boot, prompt, transition, gameplay, and terminal frames; the boot
+logo is centered, the prompt is symmetric, and the fade resolves to an intact
+composite, but entrance animation/timing remains unaccepted. The compact verdict is
+`build/playback-watcher-20260821/fresh-poststart-b0f28aa3-replay-v1/sol-terminal-review.json`.
+
+The August 21 bounded evidence confirms and repairs three independent width-
+contract failures in predecessor bytes. `copy32` and `udiv` lacked explicit
+helper-entry mode contracts in source; `ix_wneg` exposed the distinct current-fork
+compiler bug now filed as [Poppy #391](https://github.com/TheAnsarya/poppy/issues/391):
+
+- renderer helper `copy32` had `LDY #$B700` and a backward `BNE` into
+  `obj_place`, recursively consuming the 5A22 stack during the fresh-credit path;
+  the exact trace is
+  `build/trace-snes-stack-collapse-29542515-frame6068-v1/results.json`;
+- generic `udiv` had `LDY #$0620`, consuming the following opcode as the high
+  immediate byte and desynchronizing nonzero DIVU execution. The public `$A46F`
+  entry is address-stable and now jumps to an explicit-I16 helper; ROM packing
+  asserts both the trampoline and helper bytes;
+- shared indexed-EA helper `ix_wneg` had `ADC #$FFFF` encoded as `69 FF 85`,
+  swallowing the following `STA` opcode. The live post-Start
+  `$00766A: JMP (PC,D7.W)` with `D7=$FE90` therefore jumped to illegal `$01738E`
+  and set `$DEAD`. The address-stable replacement uses carry-aware `BCS/DEC`
+  arithmetic and has an exact pack assertion.
+
+Focused `B7:DIVU` differential coverage is green for 171/171 cases, including
+nonzero division, overflow, and immediate/register divide-by-zero traps. Bank
+audit is green across escape banks 1-9. The focused MAME differential for
+`LEA (d8,PC,D7.W),A4`, which shares the repaired arithmetic, is green 5/5 and
+includes the exact `$FE90` index. A production-mode cross-ROM continuation of
+the rejected pre-failure frame advances from frame 5,491/tick 86 to frame
+5,510/tick 90 with halt zero; a diagnostic single-step runs 260 instructions
+beyond the predecessor's failure. These retained-state results are diagnostic
+only.
+
+The rejected predecessor's exact-hash Nexen fresh-power credit gate for
+`d61100e4…` is green through
+video frames 5,250-7,000: one organic credit, halt zero, and valid liveness/task
+mask. Sol opened `screenshots/one-credit-prompt.png` and confirmed the centered,
+coherent HUD, prompt, Superman, spotlight, and `CREDIT 1`. Evidence is retained at
+`build/playback-watcher-20260821/fresh-credit-d61100e4-v4/`. This proves only the
+named title/credit scenario. Chad subsequently flagged the one-sided stair-step
+inside the left half of the spotlight. Registered comparison against the retained
+exact MAME 0.287 one-credit frame identifies it as Superman's arcade cast shadow,
+not a missing light-wedge tile: all 49 comparable gray-contour rows have identical
+outer bounds, and mirrored left/right interior samples each contain zero black
+gaps. The review is
+`build/playback-watcher-20260821/dogfood-poststart-validator-v3-replay-v1/prompt-left-wedge-review.json`.
+The feedback still exposed a gate defect: the old prompt validator asserted only
+the right wedge. It now checks the mirrored left wedge too; this bounded contour
+result does not widen to whole-frame aligned-MAME acceptance.
+It also does not transfer to current `7506f496…`.
+
+The legacy-Mesen replay-only gate authenticates the corrected 6,323-row movie,
+its port-1 Select/Start rows, and the exact `d61100e4…` ROM. Without another boot
+recording or runtime memory writes, it retained all 601 consecutive post-Start
+frames 5,723-6,323 / ticks 156-319 at
+`build/playback-watcher-20260821/dogfood-poststart-validator-v3-replay-v1/`.
+Coverage and liveness are complete, but the visual diagnostic is **red**: blank-
+playfield and black-band ranges are relative frames 100-177, followed by a low-
+diversity fade through 205. Sol opened the contact sheet and exact frames
+127/178/206. They show a coherent black-to-gray Stage-1 fade and an intact full
+composite by frame 206, not the former missing-column corruption. The timing is
+still unacceptable or at least unproved: 600 video-frame intervals advance only
+163 game ticks and 154 completed renders. The run also has a terminal liveness
+failure that the original validator omitted: tick/render stop after relative frame
+537, pacing VBlank stops after 539, and the exact framebuffer repeats through 600.
+At the retained post-stall checkpoint, S-CPU is stopped at `$00:942C` with corrupt
+SP `$8DB8`, NMI-busy stuck at one, while SA-1 waits for IRQ. A focused boundary
+walk originally narrowed the visible terminal loss to fresh frames 6,268-6,269.
+An emulator-matched Legacy Mesen continuation from frame 6,223 reproduces the
+terminal state at 6,273 and retains a 1,000-instruction tail consisting entirely
+of zero-filled BRKs and the `$00:D13B` COP/BRK-vector RTI. A one-frame cut from
+6,261 retains the initiating sequence: at `$E9:F487`, `LDA #$7E` was malformed as
+`A9 7E 00`; `$E9:F489` therefore executes `BRK #$48`. The source branch target
+`ofn_time_ok` lacked an explicit `.a8` contract. A tempting WRAM-NMI-overwrite interpretation was rejected:
+it came from a Nexen diagnostic that loaded a Legacy Mesen save state and from
+trace-displayed fetch bytes rather than a coherent memory-write observation.
+Likewise, an address-only `$D13B` exec hook matched legitimate ROM `$E9:D13B`;
+the focused tool now requires an opcode `$40` filter to distinguish the IRQ RTI.
+The corrected opcode-filter acquisition was blocked once by the host's intermittent
+loopback denial; the one-frame trace then captured the cause without retrying that
+failed launch in a loop. Compact evidence is retained in
+`build/playback-watcher-20260821/d61100e4-nmi-overwrite-root-progress-v1.json`.
+The validator now reports
+sustained tick/render/pacing stalls and identical-frame ranges fail-closed. No
+aligned MAME timing/pixel report exists, and walking/animation acceptance remains
+open. The early Luna report that
+claimed the run ended at relative frame 150 was written while the validator was
+still alive and is superseded by `sol-terminal-review.json` and terminal
+`results.json` in that directory.
+
+Predecessor `b0f28aa3…` replays the same authenticated 6,323-row input contract from
+fresh power at
+`build/playback-watcher-20260821/fresh-poststart-b0f28aa3-replay-v1/`. Coverage is
+complete through relative frame 601 / absolute frame 6,323. Unlike `d61100e4…`,
+it has no terminal stall: halt is always zero, and the final tick/render/pacing
+changes occur at relative frames 601/599/600. Its visual result remains red on the
+transition heuristics (blank/black-band 100-178 and repeated-tile 100-206), so this
+closes only the reproduced BRK/liveness blocker. A same-ROM retained-state Luna
+continuation independently reaches the same terminal tick and halt state at
+`build/playback-watcher-20260821/continuation-from-5822-v1/`; it is diagnostic only.
+
+A focused retained-state suffix and bounded MAME capture align predecessor
+`b0f28aa3…`'s Stage-1
+entrance by the effective Start boundary: MAME tick 170 versus SNES tick 141, so
+`MAME = SNES + 29`. All seven retained logical player fields match for 119/119
+pairs across MAME ticks 221-339. The scene region is pixel-exact immediately
+before the entrance at tick 308, then diverges persistently at tick 309: 10 changed
+scene pixels grow to about 2,000 around tick 320. Sol opened the aligned frames and
+diff mask; the mismatch is the entering Superman silhouette while the background
+remains aligned. Completed same-tick D0/E0 records are exact, and mask analysis
+localizes the discrepancy to the predecessor's systematic 15-line OBJ Y offset,
+not MC68000 player state, tile art, or BG construction. Full-composite equality remains red
+because the two retained input lineages have different credit/life status lines.
+Evidence is
+`build/playback-watcher-20260821/entrance-aligned-offset29-last-v1/pixel-report.json`.
+The earlier first-frame report and `entrance-oam-root-report.json` sampled before
+the same-tick source publication and are superseded for source-cause claims.
+
+Do not widen this result. Rejected predecessor `19131e78…` has a fresh organic
+coin/Start movie that consumes the credit, but its first 180 post-Start frames end
+during a black transition before the newly diagnosed indexed-EA failure. Its
+machine visual result is red at relative frame 90; Sol reviewed the contact sheet
+and frames 90/120/180. The report is
+`build/validate-fresh-poststart-framebuffers-current-19131e78-mesen211-v2/results.json`.
+Renderer behavior after transition, controls, walking/facing/attacks, fence,
+aligned MAME pixels, performance, audio, hardware, and human acceptance remain
+open. No full gameplay replay was started.
+
+## Superseded evidence ledger
+
+Everything below this heading is chronological provenance. Hash-specific words
+such as “current,” “next,” and “active” below describe their original checkpoint
+and are superseded by the verdict and `b0f28aa3…` lineage above. They must not be
+used to select a ROM, compiler, plan, or acceptance claim. Current priorities are
+the checklist at the top of
+[`RELEASE_BLOCKERS.md`](RELEASE_BLOCKERS.md#current-prioritized-de-risking-plan).
+
+The prior ordinary `d01db972b1c764a5969d40bb84649d2db7df7c92a03c3b3eb5407f0ad9f73b28`
+renderer-red response candidate and its evidence remain retained at
+`/home/chad/supermn-snes-artifacts/active/d01db972-fixed-poppy-camera-mailbox-v1/rom/`,
+but it is superseded as the current ordinary build by `b0f28aa3…`.
 
 The exact-hash fresh gate retained 602 consecutive post-Start frames, fresh video
 frames 5,723-6,324, after organic credit and Start. It records no runtime memory
@@ -39,15 +248,15 @@ and floor remain structurally continuous, but the result is red:
 - aligned MAME pixels, facing/animation order, attack, fence behavior, later
   stages, performance, audio, hardware, and human acceptance remain unchecked.
 
-The BG cause is confirmed without another boot replay. An intervened reload of
+For predecessor `d01db972…`, the BG cause was confirmed without another boot replay. An intervened reload of
 the retained relative-frame-41 checkpoint changed only the WRAM mirror's chunk
 constant from `$1500` to `$1400`; 80 frames later all four records matched their
 expected hashes exactly, halt remained zero, and Sol opened the intact resulting
-frame. Current source contains that `$1400` correction and matching pack guard,
-but **no successor ROM has been built**. Therefore `d01db972…` remains the current
-ordinary ROM and the lab is diagnostic evidence only. The next renderer work is
-to retain a last-published OAM path while a new candidate is constructed, then
-build once and rerun bounded exact-hash gates. No full gameplay replay was started.
+frame. Rejected predecessor `d61100e4…` is a later successor containing the `$1400` correction,
+matching pack guard, and last-published OAM fallback. The predecessor lab remains
+causal diagnostic evidence; it does not transfer renderer acceptance to
+`d61100e4…`; current `b0f28aa3…` adds the narrow fallback-NMI A8 repair. No full
+gameplay replay was started.
 
 Exact evidence is under
 `/home/chad/supermn-snes-artifacts/active/d01db972-fixed-poppy-camera-mailbox-v1/`,
@@ -188,7 +397,7 @@ slot-2 owner low/high `$AE/$19`, tile DMA entry, helper, direct path,
 `MDMAEN=$01`, and return, with the destination unchanged. At that helper call,
 `HVBJOY=$C2` still advertises VBlank while `OPVCT=$0000`. The old low-page path
 assumed VBlank implied lines 225-255 and issued a visible-line VRAM write at the
-line-0 transition. Current `f25a0e68…` requires low-page `OPVCT >= $E1`; lower
+line-0 transition. Historical `f25a0e68…` requires low-page `OPVCT >= $E1`; lower
 lines and every high-page descriptor publish for the next NMI. Its packed
 branch, fixed helper seams, and retired high-page tier are build-guarded.
 
@@ -328,13 +537,14 @@ ledgers remain preserved alongside the bounded-clear `50bbed41…` successor.
 
 The first implementation of that scroll work, rejected `95b44eb7…`, never left
 the loading screen. The confirmed cause was source operand `sta $7E74C0,y`:
-65816 has no long-addressed `STA ...,Y`, and Poppy silently emitted bytes
+65816 has no long-addressed `STA ...,Y`, and the then-used compiler emitted bytes
 `99 C0 74` (`STA` absolute,Y), dropping bank `$7E`. The resulting DB-relative
-stores corrupted the arcade boot RAM test and entered its failure loop. Current
-`c6ec69a1…` preserves X, transfers Y to X, and performs the legal long-X store
-(`DA BB 9F C0 74 7E FA`). Both `c6ec69a1…` and `d4873020…` contain that repair.
-The ROM packer now rejects the invalid three-byte
-encoding and requires the long-X sequence.
+stores corrupted the arcade boot RAM test and entered its failure loop. The
+latest corrected fork rejects this invalid-operand class; the ROM packer also
+rejects the invalid three-byte encoding and requires the long-X sequence.
+Historical `c6ec69a1…` preserves X, transfers Y to X, and performs the legal long-X
+store (`DA BB 9F C0 74 7E FA`). Both `c6ec69a1…` and `d4873020…` contain that
+repair.
 
 A bounded exact-hash Luna cold-boot smoke proves liveness, not gameplay
 acceptance: frames 1,250/1,500 remain on the valid Mode-7 RAM-test path with

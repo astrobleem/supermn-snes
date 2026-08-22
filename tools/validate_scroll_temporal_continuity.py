@@ -600,13 +600,19 @@ def main() -> int:
                 {"capture_index": index, "frame": row["frame"], "kind": "presentation-hash"}
             )
         pending = int(row["obj_dma_pending"])
+        presentation_source = row.get("obj_presentation_source", "current")
+        fallback_active = (
+            pending == 0x80
+            and presentation_source == "fallback"
+            and int(row.get("obj_fallback_valid", 0)) == 0xA5
+        )
         active_span = int(row.get("obj_active_low_span", 0x200))
         if not 0 <= active_span <= 0x200 or active_span & 3:
             obj_violations.append(
                 {"capture_index": index, "frame": row["frame"], "kind": "invalid-active-span", "value": active_span}
             )
             active_span = 0x200
-        if pending == 0 and int(row["obj_published_valid"]) == 0xA5:
+        if (pending == 0 or fallback_active) and int(row["obj_published_valid"]) == 0xA5:
             active_matches = hardware[:active_span] == presentation[:active_span]
             high_matches = hardware[0x200:0x220] == presentation[0x200:0x220]
             inactive_hidden = all(
@@ -686,7 +692,7 @@ def main() -> int:
             obj_violations.append(
                 {"capture_index": index, "frame": row["frame"], "kind": "wrong-compensation", "expected": desired, "observed": row["obj_applied_comp"]}
             )
-        if pending not in (0, 1, 2, 3):
+        if pending not in (0, 1, 2, 3) and not fallback_active:
             obj_violations.append(
                 {"capture_index": index, "frame": row["frame"], "kind": "invalid-dma-state", "value": pending}
             )

@@ -15,6 +15,7 @@ from compare_snes_framebuffer_sequence import mismatch_ranges
 from compare_snes_framebuffers import (
     ACTIVE_SIZE,
     PLAYFIELD_BOX,
+    SCENE_BOX,
     changed_pixel_count,
     file_sha256,
     image_sha256,
@@ -105,6 +106,7 @@ def main() -> int:
             difference = ImageChops.difference(mame, snes)
             changed = changed_pixel_count(difference)
             playfield = changed_pixel_count(difference.crop(PLAYFIELD_BOX))
+            scene = changed_pixel_count(difference.crop(SCENE_BOX))
             result = "green" if changed == 0 else "red"
             row: dict[str, Any] = {
                 "index": index,
@@ -113,6 +115,7 @@ def main() -> int:
                 "result": result,
                 "changed_pixels": changed,
                 "playfield_changed_pixels": playfield,
+                "scene_changed_pixels": scene,
                 "difference_bbox": (
                     list(difference.getbbox()) if difference.getbbox() else None
                 ),

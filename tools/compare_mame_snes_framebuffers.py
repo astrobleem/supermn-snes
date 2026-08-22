@@ -18,6 +18,7 @@ from PIL import Image, ImageChops
 from compare_snes_framebuffers import (
     ACTIVE_SIZE,
     PLAYFIELD_BOX,
+    SCENE_BOX,
     changed_pixel_count,
     file_sha256,
     image_sha256,
@@ -64,6 +65,7 @@ def main() -> int:
     difference = ImageChops.difference(mame, snes)
     changed = changed_pixel_count(difference)
     playfield_changed = region_changed(difference, PLAYFIELD_BOX)
+    scene_changed = region_changed(difference, SCENE_BOX)
     hud_changed = region_changed(difference, HUD_BOX)
     green = (
         changed <= args.max_changed_pixels
@@ -112,6 +114,8 @@ def main() -> int:
             "changed_ratio": changed / (ACTIVE_SIZE[0] * ACTIVE_SIZE[1]),
             "hud_changed_pixels": hud_changed,
             "playfield_changed_pixels": playfield_changed,
+            "scene_changed_pixels": scene_changed,
+            "scene_box": list(SCENE_BOX),
             "playfield_changed_ratio": playfield_changed
             / ((PLAYFIELD_BOX[2] - PLAYFIELD_BOX[0]) * (PLAYFIELD_BOX[3] - PLAYFIELD_BOX[1])),
             "difference_bbox": (

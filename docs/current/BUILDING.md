@@ -1,6 +1,6 @@
 # Building, dependencies, and host migration
 
-Last updated: July 24, 2026. **Read this before migrating to a new machine/workspace.**
+Last updated: August 19, 2026. **Read this before migrating to a new machine/workspace.**
 
 > ⚠️ **Honest status:** the git repo carries only *source* (the 65816 interpreter/video, the
 > Python tools, docs). The **build toolchain, the arcade ROM + everything derived from it, and the
@@ -20,20 +20,26 @@ From the repository root:
 
 ```sh
 python3 tools/prepare_roms.py /path/to/superman.zip
-POPPY_DLL=/home/chad/poppy-astrobleem-0d84bf5d/src/Poppy.CLI/bin/Release/net10.0/poppy.dll \
+POPPY_DLL=/home/chad/poppy-astrobleem-latest/src/Poppy.CLI/bin/Release/net10.0/poppy.dll \
   bash tools/build_interp.sh
 python3 tools/audit_banks.py
 stat -c '%s' build/interp.sfc
 sha256sum build/interp.sfc
 ```
 
-At the August 15 engineering checkpoint, the ordinary built ROM is renderer-red
-hash `d01db972…`. Current source additionally contains a checkpoint-proven BG DMA
-chunk correction that has not yet been assembled into a successor ROM. The build
-script prints the selected Poppy path and DLL hash; use the pinned corrected fork
-above for this lineage. `build/interp.sfc` is always unverified and must never be
-renamed or handed off as a test candidate. Its exact evidence scope and remaining
-blockers are recorded in [STATUS.md](STATUS.md).
+At the August 21 engineering checkpoint, the ordinary built ROM is diagnostic
+hash `7506f496…`. It contains exact-byte-guarded `copy32`, generic-DIVU,
+negative-word indexed-EA, fallback-NMI A8, and aligned gameplay-OBJ Y repairs.
+Its exact-hash fresh-power entrance scene is aligned-MAME exact for ticks
+304-339; the full composite remains top-HUD-red, and no predecessor promotion
+report transfers to this successor.
+It is not a promoted human-test ROM and does not close renderer acceptance. The
+build script prints the selected Poppy path and DLL
+hash. Use the latest corrected fork above for new work, and use the retained
+`0d84bf5d…` checkout only when reproducing the `d01db972…` lineage.
+`build/interp.sfc` is always unverified and must never be renamed or handed off
+as a test candidate. Its exact evidence scope and remaining blockers are
+recorded in [STATUS.md](STATUS.md).
 
 Human-test ROM creation is fail-closed and separate from building:
 
@@ -84,7 +90,7 @@ expecting the current audio blob.
 |---|---|---|---|---|
 | **.NET 8** runtime | `/home/chad/.dotnet8` | 8.x | runs the legacy Mesen build / Python client environment | install SDK 8 |
 | **.NET 10** runtime/SDK | `/home/chad/.dotnet10` | 10.x | runs/builds Nexen and the Game Garden suite | install SDK 10 |
-| **Poppy** (65816 assembler) [Game Garden] | pinned corrected checkout `/home/chad/poppy-astrobleem-0d84bf5d` → `src/Poppy.CLI/bin/Release/net10.0/poppy.dll`; old upstream remains `/home/chad/poppy` | corrected fork commit `0d84bf5d…`, DLL SHA-256 `771916f2…993a`; old upstream `fa44a809…` is retained only for historical reproduction | assembles `interp.pasm`/`video.pasm`; emits `.pansy` symbols; SNES target, `.sa1_enabled` | clone `astrobleem/poppy`, pin the commit and DLL hash, then `dotnet build -c Release` (.NET 10); pass `POPPY_DLL=...` explicitly |
+| **Poppy** (65816 assembler) [Game Garden] | latest corrected checkout `/home/chad/poppy-astrobleem-latest` → `src/Poppy.CLI/bin/Release/net10.0/poppy.dll`; retained `d01db972…` compiler `/home/chad/poppy-astrobleem-0d84bf5d`; old upstream remains `/home/chad/poppy` | latest corrected fork commit `ec005c196eedabf7d0c25ff6336398c427dd43ac`, DLL SHA-256 `715b14431478b62433498cc516c1cbbb8f418c1d7b39a8e71098ed98d9c9167e`; retained corrected fork `0d84bf5d…`/`771916f2…993a`; old upstream `fa44a809…` | assembles `interp.pasm`/`video.pasm`; emits `.pansy` symbols; SNES target, `.sa1_enabled` | clone or pull `astrobleem/poppy`, pin the commit and DLL hash, then `dotnet build -c Release` (.NET 10); pass `POPPY_DLL=...` explicitly |
 | **Peony** (68K disassembler) [Game Garden] | `/home/chad/peony` | source build, .NET 10 | recursive-descent disassembly (G1 coverage) | clone `TheAnsarya/peony`, `dotnet build Peony.Cli` — single-threaded, slow on big output |
 | **Nexen** (SNES emulator, primary oracle) | `/mnt/sdc1/Nexen-r5-20260712/bin/linux-x64/Release/linux-x64/publish/Nexen` | recovery branch `6365acc39` on upstream `mcp-server` `ed2e70e94` | real-PPU + SA-1 cycle/debug oracle; R5 adds exact hook-event cycle stamps | clone `astrobleem/Mesen2`, branch `mcp-server`, then build/publish with .NET 10 |
 | **Mesen2** (legacy compatibility checkout) | `/home/chad/Mesen2/bin/linux-x64/Release/Mesen` | source build | older MCP-compatible PPU oracle used by historical scripts | build Mesen2 from source (linux-x64 Release) |
@@ -137,8 +143,11 @@ python3 tools/flyval.py 7000
 ```
 
 `tools/build_interp.sh` sets `DOTNET_ROOT=/home/chad/.dotnet10`, accepts a
-`POPPY_DLL` override (defaulting to the historical `/home/chad/poppy` DLL), prints
-the selected assembler path/hash, and runs from the repository root.
+`POPPY_DLL` override, defaults to the latest corrected fork, and fails closed
+unless the selected DLL has the documented `715b1443…` hash. It prints the
+selected assembler path/hash and runs from the repository root. Set
+`ALLOW_UNPINNED_POPPY=1` only for deliberate historical reproduction or an
+intentional compiler-adoption build whose new identity and gates will be recorded.
 `tools/build_interp_rom.py` reads `data/superman_m68k.bin`,
 `tools/mame-trace/gfx1.bin`, `src/interp.bin`, `src/video.bin` (relative paths — OK if you keep
 the repo layout). Python harnesses are historically mixed: current recovery cycle tools launch the

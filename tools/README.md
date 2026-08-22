@@ -48,6 +48,12 @@ workflow. Legend:
   mismatch ranges.
 
 ## Tracing & coverage (gate G1)
+- **`compare_mesen211_savestates.py`** [G] — parses two Legacy Mesen 2.1.1
+  `.mss` containers directly from disk, compares named serializer fields, and
+  emits bounded scalar/byte-range differences plus focused SA-1 PC/SP/flags,
+  inter-CPU IRQ state, virtual 68K PC/`$AC`, and stack bytes. It never launches
+  an emulator. The result is serialized-state diagnosis, not proof that either
+  checkpoint is safely resumable.
 - **`mame-trace/trace68k.lua`** [G] — headless 68K PC+disasm trace
   (`-debug -debugger none`). env `T68K_OUT/START/FRAMES`.
 - **`mame-trace/trace68k_scenario.lua`** [P/S] — drive game states (attract,
@@ -116,7 +122,8 @@ the design and later corrections.
   `build_interp_rom.py` at SA-1 **$96:8000**. `ALLOWED_PCS` = the validated set;
   `JMP_STATE_PCS` (no-push handlers) is GREEN, `TABLE_PCS` (`--table` called fns) is
   the in-progress class. Runtime mechanism: `xlat_dispatch` at escbank2 **$94:F900**
-  (push+RTL dispatch — `jml [abs]` is Poppy-mis-sized); `ojmp_hook` and `op_rts_norm`
+  (push+RTL dispatch — retained from the old Poppy era where `jml [abs]` was
+  mis-sized); `ojmp_hook` and `op_rts_norm`
   both route through it (gate-check → jml $94F900 → native on hit, else jmp inext).
   **(corrected 2026-06-30: the rts-class table dispatch FIRES 0× in gameplay. `op_rts_norm`'s
   table route is real, but the hot rts-reached PCs ($CE4/$13BE) are entered via the scheduler's
@@ -174,6 +181,10 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   additional samples by default so screenshot latency cannot expose the pre-DMA
   image. Both record interventions and are diagnostic acquisition, never
   gameplay acceptance.
+- **`compare_transformed_mame_snes_hud_sequence.py`** [S] — validates
+  Superman's top-HUD glyphs against aligned MAME frames after the production
+  narrow-screen left/center/right placement transform. It is a HUD-component
+  oracle only and cannot satisfy a full-composite or behavior gate.
 - **`drain_mesen211_renderer.py` / `inspect_mesen211_bg_state.py`** [S] — focused
   legacy-Mesen checkpoint tools. The drain parks the paused SA-1 at its exact PC
   while the 5A22 empties renderer queues; the inspector then checks the selected
@@ -203,7 +214,18 @@ See [graphics conversion](../docs/toolchain/GRAPHICS_CONVERSION.md) and the
   nonconsecutive frames, and interpreter halts are machine-red after the default
   100-frame organic Stage-1 fade grace. A clear result
   remains acceptance-unknown until the contact sheet is manually inspected and
-  the separate exact-MAME pixel/temporal gates pass.
+  the separate exact-MAME pixel/temporal gates pass. `--replay-movie` reuses an
+  embedded-ROM-authenticated movie, derives coin/Start/post-Start boundaries from
+  its controller rows, and refuses a short suffix before emulator launch. Every
+  caught runtime/emulator failure atomically writes `failure-report.json` with
+  stage, progress, exact exception, ROM identity, stderr tails, and artifact
+  hashes; absence or interruption remains `unknown`, never inferred green/red.
+  The terminal report also records game-tick and render-complete deltas per 60
+  video frames so a prolonged coherent fade is not mislabeled as tile corruption.
+  Those cadence fields are diagnostic-only and do not satisfy the production
+  performance contract. Sustained simultaneous holds of game tick, render-complete,
+  and pacing-VBlank counters are machine-red `execution_liveness_stall` ranges;
+  identical framebuffer ranges are always listed in the report.
 - **`reanalyze_fresh_poststart_framebuffers.py`** [S] — re-verifies the ROM,
   movie, contact sheet, every retained PNG hash, and every recomputed framebuffer
   metric before reapplying the visual gate with a new grace threshold. It performs

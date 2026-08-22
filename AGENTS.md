@@ -37,9 +37,12 @@ instruction.
 
 ## Honest baseline
 
-- There is no promoted human-test ROM. Ordinary build `f25a0e68…` is interactive
-  in bounded tests but is visually rejected for a clipped/left-shifted SA-1 boot
-  logo and wrong walking presentation; it is not playable or shippable.
+- There is no promoted human-test ROM. Ordinary build `7506f496…` crosses
+  predecessor `d61100e4…`'s fallback-NMI BRK failure in a bounded exact-hash
+  fresh-power movie replay through frame 6,322 with terminal liveness intact.
+  Its entrance scene/playfield is aligned-MAME exact for ticks 304-339, but the
+  full composite remains red by 576 top-HUD pixels per frame and broader behavior
+  gates remain open; it is not playable or shippable.
 - v124 is the latest formal production run:
   1,783 ticks / 3,602 video frames = 29.700167 game-fps and 360,990.164 SA-1
   cycles/tick. It misses the 30 Hz and 358K gates.
@@ -87,13 +90,23 @@ overwrite them casually.
 - .NET 8: `/home/chad/.dotnet8` — legacy Mesen and Python client.
 - .NET 10: `/home/chad/.dotnet10` — Nexen, Poppy, Peony, Pansy.
 - Poppy:
-  `/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll`.
-  This installed checkout is old upstream `fa44a809…`. Chad's corrected fork is
-  `https://github.com/astrobleem/poppy`; its `main` was `0d84bf5d…` on 2026-08-15
-  and contains the fixes for issues #376, #377, #379, and #380. Do not switch
-  assemblers in the middle of an exact-ROM-hash campaign: pin the compiler
-  commit/DLL hash, rebuild intentionally, and rerun ROM-pack plus bounded
-  exact-hash gates.
+  latest corrected fork:
+  `/home/chad/poppy-astrobleem-latest/src/Poppy.CLI/bin/Release/net10.0/poppy.dll`
+  at `astrobleem/poppy` commit `ec005c196eedabf7d0c25ff6336398c427dd43ac`,
+  CLI DLL SHA-256
+  `715b14431478b62433498cc516c1cbbb8f418c1d7b39a8e71098ed98d9c9167e`.
+  The old upstream checkout remains
+  `/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll`
+  at `fa44a809…`. The previous corrected pinned checkout
+  `/home/chad/poppy-astrobleem-0d84bf5d` is retained to reproduce the
+  `d01db972…` ROM lineage. Do not switch assemblers in the middle of an
+  exact-ROM-hash campaign: pin the compiler commit/DLL hash, rebuild
+  intentionally, and rerun ROM-pack plus bounded exact-hash gates.
+  The pinned fork still has the distinct conditional-target-after-`RTS` width
+  bug filed as Poppy #391; current source works around it and exact-byte guards
+  the affected helper. Do not generalize that issue to unrelated failures.
+  `tools/build_interp.sh` rejects any other DLL hash unless the operator explicitly
+  sets `ALLOW_UNPINNED_POPPY=1` for historical reproduction or compiler adoption.
 - Peony:
   `/home/chad/peony/src/Peony.Cli/bin/Release/net10.0/Peony.Cli.dll`.
 - Pansy source: `/home/chad/pansy`.
@@ -133,9 +146,40 @@ it.
   freeze diagnosis, and rebuild normally afterward.
 - Pause Nexen before coherent grouped reads. Use fresh ports after wedged runs. Long
   scripts may need `socket_timeout=120`.
+- Mesen/Nexen/optest harnesses use localhost sockets. Ordinary Codex shell commands
+  run with network restricted and can block `127.0.0.1` even after the host
+  AppArmor/bubblewrap loopback fix is installed. The Luna playback-watcher role
+  therefore sets `sandbox_workspace_write.network_access=true`; launch localhost-
+  dependent playback through that role. Do not weaken or repeatedly retry the Sol
+  shell, and do not treat `Errno 1` or a loopback timeout as ROM evidence.
 - Retain MAME Lua taps in globals. Snap MAME cannot read `.claude` paths; keep runnable
   scripts and artifacts under the project. Use `SDL_VIDEODRIVER=dummy` headlessly.
 - Never use `pkill -f mame`; inspect and terminate the exact process.
+
+## Renderer development loop
+
+Do not use the final promotion matrix as the renderer implementation loop.
+
+- Nexen is the active SNES oracle. Legacy Mesen is historical compatibility
+  evidence only; do not launch it, replay its movies, or create an active blocker
+  from a Mesen-only failure unless Chad explicitly requests historical reproduction.
+- Use the game's neutral-input attract mode as the default renderer workload. It
+  naturally exercises scrolling, actors, animation, attacks, tile loading, palettes,
+  OAM, and scene transitions without recording controller input.
+- One iteration is one bounded Nexen attract-mode run to the first renderer invariant
+  failure or named milestone. Default to at most 600 observed video frames after the
+  selected boundary. Use hooks/counters to reach a later boundary without retaining
+  every intervening frame.
+- Retain compact scene-generation ledgers and the first failing frame. Capture only
+  sparse milestone screenshots or a small contact sheet. Do not record movies, dump
+  every-frame PNGs, or run multi-thousand-frame input replays during renderer
+  implementation.
+- Diagnose and fix the first violated invariant before widening coverage. Reuse an
+  existing exact-hash artifact when it already covers the question; do not rerecord
+  an unchanged prefix.
+- A long playback, new input movie, every-frame framebuffer campaign, or final
+  coin/Start/walk/attack/fence matrix requires Chad's explicit approval. Those are
+  final acceptance activities, not routine development steps.
 
 ## Fail-closed human-test ROM handoff
 
@@ -161,9 +205,11 @@ and interaction regressions remained.
   without a save state or runtime memory mutation, retain explicit frame coverage,
   list zero failures, and authenticate its visual artifacts. Rebuilding creates a new
   hash and invalidates every prior promotion report for the successor.
-- Long playback belongs to the Luna playback watcher, with raw logs and frame data on
-  disk. Sol reads the compact discrepancy report and opens the mandatory visual
-  artifacts. Promotion remains blocked until that review is recorded green.
+- After Chad explicitly authorizes final promotion playback, it belongs to the Luna
+  playback watcher, with raw logs and frame data on disk. Sol reads the compact
+  discrepancy report and opens the mandatory visual artifacts. Promotion remains
+  blocked until that review is recorded green. This does not authorize long playback
+  during ordinary renderer development.
 - Handoff wording must come from the promotion record. If a scenario is not in that
   record, describe it as **NOT CHECKED**, never inferred clear. If promotion fails,
   preserve the ROM as rejected evidence outside the top of `build/`; do not present a
@@ -171,16 +217,20 @@ and interaction regressions remained.
 
 ## Assembly and layout hazards
 
-- The currently installed upstream Poppy silently permits `.org` overlap; later
-  sections overwrite earlier bytes. The corrected `astrobleem/poppy` fork rejects
-  overlap, but seam audits and ROM-pack assertions remain mandatory defense in
-  depth until a pinned fork build reproduces this project.
+- The old upstream Poppy silently permits `.org` overlap; later sections overwrite
+  earlier bytes. The latest corrected `astrobleem/poppy` fork rejects this class,
+  but seam audits and ROM-pack assertions remain mandatory defense in depth for
+  hand-packed banks, private blobs, and exact-ROM lineage changes.
 - Do not insert code casually into the middle of `interp.pasm`; long branches can wrap
   silently and bank `$00` is tightly packed. Prefer escape banks or size-neutral
   stubs.
-- The installed upstream Poppy mode/layout pass can disagree with code generation
-  around labels, `REP`/`SEP`, expressions, and macros. The corrected fork repairs
-  the reported cases; retain explicit `.a8`/`.a16` and `.i16` plus byte audits.
+- Old upstream Poppy mode/layout bugs around labels, `REP`/`SEP`, expressions,
+  macros, invalid long operands, bank-byte expressions, and width hazards are now
+  fixed or diagnosed in the corrected fork. Retain explicit `.a8`/`.a16` and
+  `.i16` plus byte audits because this project depends on exact packed bytes.
+  Do not attribute a new runtime failure to Poppy unless the build records the
+  wrong DLL hash, a minimized current-fork reproduction exists, or a pack/seam
+  assertion demonstrates bad emitted bytes.
 - Use explicit long-bank calls/jumps across escape banks. Search all `.pasm` files for
   hardcoded addresses after relocating an interpreter label.
 - MC68000 work RAM is big-endian. Preserve CCR/X, stack residue, return conventions,

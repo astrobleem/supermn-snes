@@ -109,37 +109,64 @@ any other `$400000,x` fast-path READ whose An can be ROM.
 ## 2. Poppy assembler gotchas (65816, `.pasm`)
 
 The host's `/home/chad/poppy` remains old upstream `fa44a809…`. Chad's corrected
-fork at [astrobleem/poppy](https://github.com/astrobleem/poppy), `main`
-`0d84bf5d…` on 2026-08-15, contains five commits beyond that checkout and directly
-addresses #376, #377, #379, and #380. Superman deliberately adopted that pinned
+fork at [astrobleem/poppy](https://github.com/astrobleem/poppy), latest local
+checkout `/home/chad/poppy-astrobleem-latest`, is at commit
+`ec005c196eedabf7d0c25ff6336398c427dd43ac` with CLI DLL SHA-256
+`715b14431478b62433498cc516c1cbbb8f418c1d7b39a8e71098ed98d9c9167e`. This includes
+the earlier fixes for #376, #377, #379, and #380 plus the newer #389 bank-byte fix
+and #386 width-hazard diagnostic. Superman deliberately adopted the older pinned
 fork for the `d01db972…` lineage using checkout
-`/home/chad/poppy-astrobleem-0d84bf5d` and CLI DLL SHA-256 `771916f2…993a`.
-The corrected compiler exposed real latent overlap and illegal-addressing defects;
-the source and pack guards were repaired before the bounded exact-hash run. The
-hazards below remain required regression guards even with the fixes.
+`/home/chad/poppy-astrobleem-0d84bf5d` and CLI DLL SHA-256 `771916f2…993a`; keep it
+for exact reproduction. The corrected compiler exposed real latent overlap and
+illegal-addressing defects; the source and pack guards were repaired before the
+bounded exact-hash run. Treat the list below as current project policy, not as a
+claim that latest Poppy still silently miscompiles these cases: several are now
+hard errors or warnings in the fork, but the byte and seam guards remain mandatory
+because Superman relies on densely packed banks.
 
-1. **`.org` overlap is SILENT — last org wins per byte, no error.** A section that grows
-   past the next `.org` gets truncated/overwritten without warning. This produced our
-   worst bug (a handler chain grew past `$F601`; the `.org $F602` section assembled over
-   its tail — a lost `sec/rts` corrupted the boot RAM-test). **Defense:** after every
-   layout change, assert slack seams in the ROM-pack script (see `build_interp_rom.py`
-   guards) — assert the bytes just before each `.org` boundary are the expected
-   terminator/padding. Upstream report and owner-map fix proposal:
+1. **`.org` overlap was silent in old upstream Poppy.** A section that grew past the
+   next `.org` got truncated/overwritten without warning. This produced our worst
+   bug: a handler chain grew past `$F601`, the `.org $F602` section assembled over
+   its tail, and a lost `sec/rts` corrupted the boot RAM-test. The corrected fork
+   rejects this class (#377), but after every layout change still assert slack seams
+   in the ROM-pack script and confirm the bytes just before each `.org` boundary
+   are the expected terminator/padding. Original upstream report:
    [Poppy #377](https://github.com/TheAnsarya/poppy/issues/377#issuecomment-5283787467).
-2. **Mode inference resets at labels after `rtl`/`rts`.** Code after a label following a
-   return is assembled as if `.a16` even when every caller arrives in A8 — 8-bit
-   immediates then swallow the next opcode byte (BRK storms). **Explicit `.a8`/`.i16`
-   directives at such labels are load-bearing.** Byte-audit any A8 code with 16-bit-
-   looking immediates after assembling.
-3. **Never insert code mid-file in `interp.pasm`** — long-range branches wrap silently.
+2. **Mode inference after returns is fixed, but explicit width directives stay
+   load-bearing.** Old upstream leaked M/X state across labels after
+   `rtl`/`rts`/`rti`/`brk`, so code after an external entry label could be sized
+   from the previous routine's tail. The latest fork resets inference to the last
+   explicit `.a8`/`.a16`/`.i8`/`.i16` declaration at those labels. Keep those
+   declarations at entry labels anyway, and byte-audit A8 code with 16-bit-looking
+   immediates after assembling.
+3. **Never insert code mid-file in `interp.pasm`** — long-range branches can still
+   exceed architectural reach or disturb packed branch islands.
    Append new bodies at the end / in escape banks and reach them with stubs.
-4. **`rep #$30` before 16-bit immediates** in any code Poppy might size as 8-bit.
-5. **Forward-reference sizing is not limited to `jml`.** Upstream Poppy `main`
-   at `fa44a809…` mis-sizes forward `jsl target` by one byte and `jml [$1234]`
-   by one byte during semantic layout even though code generation emits the full
-   instruction. It also freezes labels before pass-2 macro expansion. Use a
-   literal 24-bit target or the push+RTL pattern (see `xlat_dispatch`), and keep
-   pack-time byte/seam assertions. Minimized evidence and proposed source seam:
+4. **Use explicit `rep`/`sep` and `.a*`/`.i*` around width-dependent immediates.**
+   The latest fork diagnoses the narrow branch-over-width-change hazard (#386);
+   it does not infer runtime caller state across every independently callable or
+   multiply-entered label. Historical August 21 source lacked explicit entry-state
+   contracts in three helpers, so those builds contained bad bytes: renderer
+   `copy32` had `LDY #$B700` followed by a backward branch into `obj_place`, generic
+   `udiv` had `LDY #$0620`, and shared `ix_wneg` had `69 FF 85` at its A16
+   immediate. Current source repairs all three and the ROM packer asserts their
+   exact bytes. These are closed source/packing regressions, not a blanket claim
+   that the pinned compiler still emits them from current source.
+
+   One distinct compiler case remains open as
+   [Poppy #391](https://github.com/TheAnsarya/poppy/issues/391): a conditional
+   branch target textually after `RTS` is reset to the declared width and can
+   silently truncate an immediate even though the taken edge has a wider live
+   mode. The eight-byte minimized repro is confirmed against pinned commit
+   `ec005c1`; current `ix_wneg` avoids the vulnerable immediate and is byte-guarded.
+   Reopen any other compiler attribution only with a minimized reproduction against
+   the pinned DLL or a failing emitted-byte assertion.
+5. **Forward-reference sizing bugs are fixed in the corrected fork.** Old upstream
+   mis-sized forward `jsl target` and `jml [$1234]` during semantic layout, froze
+   labels before pass-2 macro expansion, and later also mis-sized forward-referenced
+   `=` constants. The fork fixes the reported cases (#376 plus the forward-EQU
+   follow-up), but keep pack-time byte/seam assertions around dispatch tables and
+   packed islands. Original minimized evidence:
    [Poppy #376](https://github.com/TheAnsarya/poppy/issues/376#issuecomment-5283787271).
 6. Escape banks: start files with `.snes`(+`.sa1_enabled`); use explicit `jsl.l`/`jml.l`
    for cross-bank; branchless sign-extension beats branchy (see `escape-bank` notes in
@@ -148,28 +175,53 @@ hazards below remain required regression guards even with the fixes.
    do NOT track relocations in the other file. **After moving anything in `interp.pasm`,
    grep every other `.pasm` for hardcoded addresses into it** — a stale one is a
    mid-instruction `jml` landmine that presents as a silent SA-1 runaway.
-8. **Unsupported 24-bit operands can truncate with exit zero.** For example,
-   `sta $7E74C0,y` emits `99 C0 74` and `stx $7E1234` emits `8E 34 12`, silently
-   discarding bank `$7E`. Reject known illegal encodings in the ROM packer and
+8. **Invalid 24-bit operand forms now fail loud.** Old upstream turned examples
+   like `sta $7E74C0,y` into `99 C0 74` and `stx $7E1234` into `8E 34 12`,
+   silently discarding bank `$7E`. The corrected fork rejects the unsupported
+   forms (#379) and also rejects narrower suffixes that would truncate a resolved
+   long encoding (#385). Still reject known bad encodings in the ROM packer and
    express the operation through a legal long-X sequence or explicit helper.
-   Upstream report: [Poppy #379](https://github.com/TheAnsarya/poppy/issues/379).
-9. **Macro expansion can move bytes without moving labels.** A two-NOP macro can
-   emit `EA EA` while labels after its invocation remain at the definition address;
-   a macro-local branch can also fail operand evaluation. Do not use macros in
-   packed production islands until the pass model is fixed and compile-tested.
-10. **The ca65 converter is not a verified translation path.** On current upstream
-   it drops the dots from `.setcpu/.a16/.i16/.org`, converts `@loop` to an
-   incompatible `.loop`, and places macro bodies at the definition while the
-   invocation becomes a no-op. The output can assemble with exit zero and wrong
-   bytes. Upstream report: [Poppy #380](https://github.com/TheAnsarya/poppy/issues/380).
+9. **Macro sizing and ca65 macro invocation bugs were fixed in the corrected fork.**
+   Old upstream could emit macro bytes without moving following labels, and
+   macro-local branches could fail operand evaluation. Keep macros out of packed
+   production islands unless the exact generated bytes are compile-tested and
+   covered by pack assertions.
+10. **The ca65 converter is improved, not a trusted translation path for this repo.**
+   The corrected fork fixes the reported dot-directive, local-label, and macro
+   invocation failures (#380). Any converted output still needs normal source
+   review, build, and byte/audit gates before it can enter Superman.
 
-The public minimized fixture bundle for items 1, 2, 5, 8, 9, and 10 is
+The public minimized fixture bundle for the original old-upstream failures is
 [poppy-65816-repros](https://gist.github.com/astrobleem/df4465b29b4ea740e5cbc21b44249ad9).
-It was rerun after a forced non-incremental build of clean upstream Poppy
-`fa44a809…`; the rebuilt CLI DLL was byte-identical (SHA-256 `f98d6561…e126c`),
-so these are not local-source or stale-binary differences.
+The latest local fork also carries regression coverage for the follow-up fixes:
+return-label width reset, forward-EQU sizing, parser error propagation, `.incbin`
+sizing, `.w` truncation rejection, `-name` lexing, `.sym` bank export, caret
+bank-byte evaluation, and branch-over-width-change warnings.
 
 ## 3. Emulator-harness operational gotchas
+
+### Codex sandbox and localhost harnesses
+
+Mesen/Nexen/optest validation uses localhost sockets. The host AppArmor workaround in
+`.codex/fix-bwrap-loopback-apparmor.sh` verifies that raw `bwrap --unshare-net` can
+configure loopback, but it does not change Codex's per-command network-restricted
+sandbox profile. Ordinary shell commands may still block `127.0.0.1` with
+`Errno 1` / `Operation not permitted`.
+
+For repeatable filtered optest work, use:
+
+```sh
+bash tools/run_optest_filter.sh 'FILTER TEXT' 120
+```
+
+Approve that wrapper prefix once for emulator work. For any other localhost-dependent
+MCP harness, use the Luna playback-watcher role. Its project role file keeps
+`workspace-write` filesystem isolation and enables network only for that agent via
+`sandbox_workspace_write.network_access=true`. This setting is read when the agent
+session starts; changing it cannot repair a watcher that was already spawned under
+a network-disabled permission profile. Do not retry a failed loopback command inside
+the same default Sol sandbox; inspect exact host processes first if a port may have
+been left occupied.
 
 ### Mesen MCP (`mesen_mcp` Python)
 - Needs `DOTNET_ROOT=/home/chad/.dotnet8` (and `.dotnet8` first in PATH).

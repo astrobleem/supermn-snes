@@ -75,6 +75,13 @@ def main() -> int:
     assert one_frame_overshoot.frame == 109
     assert response["overshoot_frames"] == 1
 
+    zero_then_progress = PartialTimedInput(100, [5, 0, 3])
+    response = advance_recording_with_input(zero_then_progress, 4, 8)
+    assert zero_then_progress.frame == 108
+    assert [row["advanced"] for row in response["responses"]] == [5, 0, 3]
+    assert response["responses"][1]["zero_progress_retry"] == 1
+    assert response["overshoot_frames"] == 0
+
     staging = b"".join(
         bytes(
             (

@@ -28,6 +28,50 @@ def interp_symbol(name: str) -> int:
     raise AssertionError(f"missing interpreter layout symbol {name}")
 
 
+def jml_interp_symbol(name: str) -> bytes:
+    return bytes([0x5C]) + interp_symbol(name).to_bytes(2, "little") + bytes([0x00])
+
+
+udiv = interp_symbol("udiv")
+udiv_fixed = interp_symbol("udiv_fixed")
+udiv_fixed_end = interp_symbol("udiv_fixed_end")
+assert udiv == 0xA46F and udiv_fixed_end <= 0xE000
+assert INTERP[udiv - 0x8000:udiv - 0x8000 + 4] == (
+    bytes([0x4C]) + udiv_fixed.to_bytes(2, "little") + bytes([0xEA])
+), "udiv no longer uses its address-stable four-byte fixed-helper trampoline"
+assert INTERP[
+    udiv_fixed - 0x8000:udiv_fixed - 0x8000 + 12
+] == bytes.fromhex("6494a02000065026522694b0"), (
+    "udiv_fixed lost its explicit-I16 $0020 iteration count or loop prologue"
+)
+assert INTERP[udiv_fixed_end - 0x8000 - 1] == 0x60, (
+    "udiv_fixed no longer returns through the original caller's JSR frame"
+)
+
+ix_wneg = interp_symbol("ix_wneg")
+ix_long = interp_symbol("ix_long")
+assert ix_long - ix_wneg == 12, "negative-word indexed-EA seam moved"
+assert INTERP[ix_wneg - 0x8000:ix_long - 0x8000] == bytes.fromhex(
+    "1865548554b002c65260eaea"
+), "negative-word indexed EA lost its width-independent high-word correction"
+
+# Poppy #386 warns about these branch targets because a REP/SEP lies on another
+# incoming path.  Runtime is A16 at every edge; pin the emitted immediates so a
+# future mode-tracking change fails the build instead of swallowing an opcode.
+for _symbol, _prefix in {
+    "cba_noff": "a901008560",
+    "rb_io": "c99000",
+    "rbz_0": "a9000060",
+    "rws_nb": "c90100",
+    "e15_slow": "a9ff00859c",
+}.items():
+    _offset = interp_symbol(_symbol) - 0x8000
+    _expected = bytes.fromhex(_prefix)
+    assert INTERP[_offset:_offset + len(_expected)] == _expected, (
+        f"{_symbol} lost its explicit A16 immediate byte shape"
+    )
+
+
 # The bank-$00 dispatch extension is packed into a formerly zero seam between
 # two long-lived hot paths. Poppy permits .org overlap and short-branch drift,
 # so pin every boundary that protects the $01F2E4 arm and the following $25110
@@ -84,18 +128,24 @@ assert INTERP[0x6EC9:0x6ECD] == bytes.fromhex("5c03a09d"), (
 )
 assert interp_symbol("entry_20e8_return") == 0xF589
 assert interp_symbol("loop_hook") == 0xF58C
-assert INTERP[0x7589:0x758C] == bytes.fromhex("4c6fd1"), (
+assert INTERP[0x7589:0x758C] == (
+    bytes([0x4C]) + interp_symbol("ors_pre").to_bytes(2, "little")
+), (
     "$20E8 return no longer uses the size-neutral bank-aware sentinel path"
 )
 
-# op_lea_pc is a fixed four-byte bank-$00 bridge. The production pacing vector
-# trampolines consume the final eight bytes of the old zero seam while keeping
-# op_movl_imm_d16 pinned at $9430. Catch drift or Poppy .org overlap here.
-assert INTERP[0x13EA:0x13EE] == bytes.fromhex("5c00f999"), (
-    "op_lea_pc bridge at $00:93EA no longer targets $99:F900"
+# op_lea_pc is a fixed four-byte bank-$00 bridge. Corrected Poppy places it at
+# $93E8 while keeping op_movl_imm_d16 pinned at $9430. Catch bridge drift or
+# overlap with the production pacing-vector trampoline seam.
+op_lea_pc = interp_symbol("op_lea_pc")
+assert op_lea_pc == 0x93E8, (
+    "op_lea_pc moved; re-audit the $93E8-$9427 seam before accepting this ROM"
 )
-assert INTERP[0x13EE:0x1428] == bytes(0x3A), (
-    "op_lea_pc bridge grew across the $93EE-$9427 pinned seam"
+assert INTERP[op_lea_pc - 0x8000:op_lea_pc - 0x8000 + 4] == bytes.fromhex(
+    "5c00f999"
+), "op_lea_pc bridge no longer targets $99:F900"
+assert INTERP[op_lea_pc - 0x8000 + 4:0x1428] == bytes(0x9428 - (op_lea_pc + 4)), (
+    "op_lea_pc bridge grew across the $93EC-$9427 pinned seam"
 )
 assert INTERP[0x1428:0x1430] == bytes.fromhex("5c408f7f5c008f7f"), (
     "production IRQ/NMI trampolines moved or no longer target $7F:8F40/$7F:8F00"
@@ -118,24 +168,35 @@ assert INTERP[lh_sched - 0x8000:lh_sched - 0x8000 + 7] == bytes.fromhex(
 assert INTERP[lh_sched_end - 0x8000:0x7A00] == bytes(
     0xFA00 - lh_sched_end
 ), "native scheduler scan consumed the zero seam before op_move_g@$00:FA00"
+mvcloop_check = interp_symbol("mvc_check")
+op_move_g = interp_symbol("op_move_g")
+mvcloop_prefix = bytes.fromhex("c230a544")       # REP #$30 / LDA $44
+mvcloop_resume = mvcloop_check + len(mvcloop_prefix)
 assert interp_symbol("iloop") == 0x80A5
 assert INTERP[0x00AC:0x00B1] == bytes.fromhex("22c0e597ea"), (
     "packed virtual-IRQ reload no longer calls campaign_irq_reload@$97:E5C0"
 )
 # readbyte deliberately reuses the store mapper to translate video-shadow
 # addresses.  The bank-$9E publisher distinguishes that read by the exact JSR
-# return word ($B615), so pin the caller and both ends of the packed bridge.
-assert interp_symbol("rb_zero") == 0xB60D
+# return word, so pin the caller relationship and both ends of the packed bridge.
+rb_zero = interp_symbol("rb_zero")
+rb_zero_map_snes_stack_guard = rb_zero + 0x0A
 assert interp_symbol("map_snes") == 0xF800
 assert interp_symbol("ms_shadow_return") == 0xF846
-assert INTERP[0x360D:0x3616] == bytes.fromhex("a554856aa5522000f8"), (
+assert INTERP[rb_zero - 0x8000:rb_zero - 0x8000 + 9] == bytes.fromhex(
+    "a554856aa5522000f8"
+), (
     "rb_zero video-shadow mapping call moved; update the read-only publisher guard"
 )
 # STZ has no 65816 long-address form.  Poppy silently truncated the old
 # `stz $400000,x` virtual-IRQ PC push to `stz $0000,x`, letting emulated
 # stack offsets overwrite IRAM (including FRAME_REQ at physical $0300).
 # Guard the size-neutral two-word long store and its bank-$00 layout seam.
-assert INTERP[0x340F:0x342B] == (
+take_irq_vtime_entry_seam_guard = interp_symbol("take_irq_vtime_entry_seam")
+take_irq_pc_push_guard = take_irq_vtime_entry_seam_guard - 19
+assert INTERP[
+    take_irq_pc_push_guard - 0x8000:take_irq_vtime_entry_seam_guard - 0x8000 + 9
+] == (
     bytes.fromhex("c220a542eb9f000040e8e8a540eb9f000040e8")
     + bytes.fromhex("ea" * 9)
 ), "take_irq no longer performs the pinned long-address PC stack push"
@@ -149,6 +210,23 @@ trap1_dispatch = interp_symbol("trap1_dispatch")
 trap1_dispatch_end = interp_symbol("trap1_dispatch_end")
 clear_work_byte = interp_symbol("clear_work_byte")
 clear_work_byte_end = interp_symbol("clear_work_byte_end")
+ea_extw = interp_symbol("ea_extw")
+ea_extw_return = interp_symbol("ea_extw_return")
+ea_write = interp_symbol("ea_write")
+ea_write_a16_entry = interp_symbol("ea_write_a16_entry")
+writelong_a16_entry = interp_symbol("writelong_a16_entry")
+ea_write_a16_entry_end = interp_symbol("ea_write_a16_entry_end")
+writebyte = interp_symbol("writebyte")
+writeword = interp_symbol("writeword")
+writelong = interp_symbol("writelong")
+writebyte_fixed = interp_symbol("writebyte_fixed")
+writeword_fixed = interp_symbol("writeword_fixed")
+writelong_fixed = interp_symbol("writelong_fixed")
+write_helpers_fixed_end = interp_symbol("write_helpers_fixed_end")
+store_vid_byte = interp_symbol("store_vid_byte")
+store_vid_word = interp_symbol("store_vid_word")
+store_vid_long = interp_symbol("store_vid_long")
+eawm_l = interp_symbol("eawm_l")
 op_movem_abs = interp_symbol("op_movem_abs")
 assert trap1_dispatch == 0xD3A1 and trap1_dispatch_end <= 0xD3BC, (
     "TRAP #1 dispatcher moved or escaped its dead-$25110 island"
@@ -170,6 +248,76 @@ assert INTERP[
 ] == bytes.fromhex("0848a9009f000040682860"), (
     "work-byte clear helper lost A/P preservation or legal bank-long store"
 )
+assert (
+    clear_work_byte_end == 0xD3CB
+    and ea_write_a16_entry == 0xD3D0
+    and writelong_a16_entry == 0xD3D5
+    and ea_write_a16_entry_end == 0xD3DA
+), "EA-write A16 wrapper island moved out of the audited $D3CB-$DFFF gap"
+assert INTERP[
+    clear_work_byte_end - 0x8000:ea_write_a16_entry - 0x8000
+] == bytes(ea_write_a16_entry - clear_work_byte_end), (
+    "work-byte clear helper overlapped the EA-write A16 wrapper island"
+)
+assert INTERP[
+    ea_write_a16_entry - 0x8000:ea_write_a16_entry_end - 0x8000
+] == (
+    bytes.fromhex("c2304c")
+    + ea_write.to_bytes(2, "little")
+    + bytes.fromhex("c2304c")
+    + writelong.to_bytes(2, "little")
+), (
+    "EA-write A16 wrapper island lost REP/JMP shape"
+)
+assert INTERP[eawm_l - 0x8000:eawm_l - 0x8000 + 3] == (
+    bytes([0x4C]) + writelong_a16_entry.to_bytes(2, "little")
+), "EA long memory writes no longer enter writelong through the A16 wrapper"
+assert (
+    writebyte == 0xA25F
+    and writeword == 0xA295
+    and writelong == 0xA2B2
+), "packed write helper entry labels moved; re-audit all callers before accepting this ROM"
+assert ea_extw_return == ea_extw + 4, (
+    "ea_extw return label no longer names the rts immediately after its JML stub"
+)
+assert INTERP[ea_extw - 0x8000:ea_extw_return - 0x8000 + 1] == (
+    bytes.fromhex("5c00f79960")
+), "ea_extw no longer JMLs to eaw5_fix and returns through the exported RTS"
+assert (
+    writebyte_fixed == 0xD3E0
+    and writeword_fixed == 0xD419
+    and writelong_fixed == 0xD437
+    and write_helpers_fixed_end == 0xD463
+), "fixed write-helper island moved out of the audited $D3CB-$DFFF gap"
+assert INTERP[writebyte - 0x8000:writebyte - 0x8000 + 6] == (
+    bytes([0x4C]) + writebyte_fixed.to_bytes(2, "little") + bytes.fromhex("eaeaea")
+), "writebyte entry is no longer a size-neutral trampoline"
+assert INTERP[writeword - 0x8000:writeword - 0x8000 + 6] == (
+    bytes([0x4C]) + writeword_fixed.to_bytes(2, "little") + bytes.fromhex("eaeaea")
+), "writeword entry is no longer a size-neutral trampoline"
+assert INTERP[writelong - 0x8000:writelong - 0x8000 + 6] == (
+    bytes([0x4C]) + writelong_fixed.to_bytes(2, "little") + bytes.fromhex("eaeaea")
+), "writelong entry is no longer a size-neutral trampoline"
+expected_fixed_write_helpers = (
+    bytes.fromhex(
+        "a552c9f000d00da654e220a5809f000040c22060"
+        "c99000d01da554c9010cd009e220a5808562c22060"
+        "a654e220a5809f00f041c22060"
+    )
+    + bytes([0x4C]) + store_vid_byte.to_bytes(2, "little")
+    + bytes.fromhex(
+        "a552c9f000d014a654e220a5819f000040e8a5809f000040c22060"
+    )
+    + bytes([0x4C]) + store_vid_word.to_bytes(2, "little")
+    + bytes.fromhex(
+        "a552c9f000d022a654e220a5839f000040e8a5829f000040e8a5819f000040"
+        "e8a5809f000040c22060"
+    )
+    + bytes([0x4C]) + store_vid_long.to_bytes(2, "little")
+)
+assert INTERP[writebyte_fixed - 0x8000:write_helpers_fixed_end - 0x8000] == (
+    expected_fixed_write_helpers
+), "fixed write-helper island lost A16 compare/store byte shape"
 assert INTERP.count(bytes.fromhex("20c0d3")) == 7, (
     "one or more formerly truncated STZ-long sites lost the guarded helper call"
 )
@@ -495,6 +643,14 @@ def vid_off(symbol):
     raise AssertionError("missing video layout symbol %s" % symbol)
 
 
+copy32 = vid_off("copy32") - 0x8000
+assert VID[copy32:copy32 + 15] == bytes.fromhex(
+    "a00000b7d097d4c8c8c02000d0f560"
+), (
+    "copy32 lost its explicit-I16 Y immediates or exact 32-byte loop"
+)
+
+
 # rc_copy mirrors only the ordinary $E9:8000-$AFFF renderer window.  The queue
 # promoter is installed lazily in private $7E:ED00 WRAM while pacing has the SA-1
 # asleep.  Bank $7F is never suitable: all 64 KiB are active emulated 68000 work
@@ -662,8 +818,13 @@ assert VID[
 assert VID[0x099C:0x09AB] == bytes.fromhex(
     "bf0080e99f00807fe8e8e00030d0f1"
 ), "rc_copy no longer mirrors the full $8000-$AFFF production supervisor"
+joy5a22 = vid_off("joy5a22")
+joy5a22_ordered = vid_off("joy5a22_ordered")
+assert joy5a22_ordered == 0x8DD0
 assert VID[0x0DD0:0x0DE4] == bytes.fromhex(
-    "08e220eaeaeaaf2c0141c9a5f004284c56882860"
+    "08e220eaeaeaaf2c0141c9a5f00428"
+) + bytes([0x4C]) + joy5a22.to_bytes(2, "little") + bytes.fromhex(
+    "2860"
 ), "ordered-input wrapper moved or changed"
 assert VID[0x0DE4:0x0E00] == bytes(0x1C), (
     "ordered-input wrapper grew into pacing_try_wake"
@@ -685,9 +846,9 @@ pacing_publish_input_and_scroll_end = vid_off(
 nmi_video_keepalive_end = vid_off("nmi_video_keepalive_end")
 renderer_mailboxes_init = vid_off("renderer_mailboxes_init")
 assert VID[
-    renderer_mailboxes_init - 0x8000:renderer_mailboxes_init - 0x8000 + 20
+    renderer_mailboxes_init - 0x8000:renderer_mailboxes_init - 0x8000 + 24
 ] == bytes.fromhex(
-    "8f2201418f2a01418f2c01418f3001418f620141"
+    "8f221f7e8f2201418f2a01418f2c01418f3001418f620141"
 ), "renderer boot no longer clears pacing and early-camera mailboxes together"
 nmi_present_then_wake = vid_off("nmi_present_then_wake")
 nmi_present_then_wake_end = vid_off("nmi_present_then_wake_end")
@@ -756,20 +917,30 @@ assert VID[pacing_publish_input_and_scroll_end - 0x8000:0x0F00] == bytes(
     0x8F00 - pacing_publish_input_and_scroll_end
 ), "latest-scroll helper grew into the fixed NMI handler"
 assert VID[0x0F00:0x0F40] == bytes.fromhex(
-    "08c23048da5a8b0ba900005be220a90048aba9808d"
-    "0122af2a01411a8f2a014120b08f20338a20d08f20808fad02332bab"
-    "eaeaeaeaeaeaeaea"
+    "08c23048da5a8b0ba900005be220a90048ab"
+    "20718fd01da9808d0122af2a01411a8f2a0141"
+    "20b08f20338a20d08f20808f207c8fad02332bab"
     "c2307afa682840"
 ), (
-    "pacing NMI handler lost its wake/DMA adjacency, input/tail presentation "
-    "order, or its A/Direct-Page-preserving restore order"
+    "pacing NMI handler lost its hardware re-entry exclusion, wake/DMA adjacency, "
+    "input/tail presentation order, or A/Direct-Page-preserving restore order"
 )
-assert VID[0x0F40:0x0F69] == bytes.fromhex(
+assert VID[0x0F40:0x0F71] == bytes.fromhex(
     "08c23048da5a8b0ba900005be220a90048aba9808d"
-    "022220008eeaeaeaad02332babc2307afa682840"
+    "02229c012220718fd00620008e207c8fad02332babc2307afa682840"
 ), "pacing IRQ handler no longer establishes and restores Direct Page zero"
-assert VID[0x0F69:0x0F80] == bytes(0x17), (
-    "pacing IRQ/cache-scroll handler grew into an adjacent reserved island"
+nmi_guard_enter = vid_off("nmi_guard_enter")
+nmi_guard_helpers_end = vid_off("nmi_guard_helpers_end")
+assert nmi_guard_enter == 0x8F71
+assert VID[
+    nmi_guard_enter - 0x8000:nmi_guard_helpers_end - 0x8000
+] == bytes.fromhex("ad221fd005ee221fa900609c221f60"), (
+    "pacing IRQ/NMI helpers lost their private busy-flag exclusion"
+)
+assert VID[nmi_guard_helpers_end - 0x8000:0x0F80] == bytes(
+    0x8F80 - nmi_guard_helpers_end
+), (
+    "pacing IRQ wake helper grew into the adjacent NMI tail island"
 )
 assert VID[0x0F80:nmi_video_keepalive_end - 0x8000] == bytes.fromhex(
     "20008bad1b1f301eaf9b717ec9a5d007a9008f9b717e60a9008f9b717e"
@@ -1056,6 +1227,11 @@ boot_screen_init = vid_off("boot_screen_init")
 boot_screen_init_end = vid_off("boot_screen_init_end")
 snapshot_dma_plane = vid_off("snapshot_dma_plane")
 snapshot_dma_plane_end = vid_off("snapshot_dma_plane_end")
+obj_fallback_prepare_lock = vid_off("obj_fallback_prepare_lock")
+obj_fallback_prepare_lock_end = vid_off("obj_fallback_prepare_lock_end")
+obj_fallback_nmi = vid_off("obj_fallback_nmi")
+obj_fallback_nmi_end = vid_off("obj_fallback_nmi_end")
+ofn_time_ok = vid_off("ofn_time_ok")
 video_image_end = vid_off("video_image_end")
 assert palette_test == 0xA1A0 and palette_test < palette_test_end <= bg_test == 0xA1E8
 assert (
@@ -1066,14 +1242,14 @@ assert (
 )
 assert VID[
     bg_scroll - 0x8000:bg_scroll_end - 0x8000
-] == bytes.fromhex(
-    "20998808e220afbf897e301aafb1727ef006afb0727e8004af94897e"
+] == bytes([0x20]) + bg_hscroll.to_bytes(2, "little") + bytes.fromhex(
+    "08e220afbf897e301aafb1727ef006afb0727e8004af94897e"
     "8d0e21a9008d0e212860"
     "a9008d0e218d0e212860"
 ), "BG scroll dispatcher lost its title/OPT guard or two-write VOFS publication"
 assert VID[
     bg_scroll_with_opt - 0x8000:bg_scroll_with_opt_end - 0x8000
-] == bytes.fromhex("2200c0e94cb0a1"), (
+] == bytes.fromhex("2200c0e9") + bytes([0x4C]) + bg_scroll.to_bytes(2, "little"), (
     "foreground BG scroll no longer publishes the Mode-2 table before registers"
 )
 assert VID[bg_hscroll - 0x8000:bg_hscroll - 0x8000 + 5] == bytes.fromhex(
@@ -1458,11 +1634,17 @@ obj_present_step_code = VID[
 obj_present_nmi_code = VID[
     obj_present_nmi - 0x8000:obj_present_nmi_end - 0x8000
 ]
+obj_fallback_prepare_lock_code = VID[
+    obj_fallback_prepare_lock - 0x8000:obj_fallback_prepare_lock_end - 0x8000
+]
+obj_fallback_nmi_code = VID[
+    obj_fallback_nmi - 0x8000:obj_fallback_nmi_end - 0x8000
+]
 assert obj_present_commit_code.count(bytes.fromhex("547e7e")) == 1, (
     "OBJ commit lost its exact 544-byte WRAM-to-WRAM presentation copy"
 )
-assert bytes.fromhex("a9808f89717ea9008f84717e") in obj_present_commit_code, (
-    "OBJ commit lost its NMI-visible construction lock"
+assert bytes.fromhex("2200f3e9") in obj_present_commit_code, (
+    "OBJ commit lost its last-published fallback snapshot/lock helper"
 )
 assert bytes.fromhex("2200cee9") in obj_present_commit_code, (
     "OBJ commit lost its packed active-span preparation"
@@ -1499,8 +1681,8 @@ assert bytes.fromhex("a9008f89717e") in obj_present_nmi_code, (
 assert bytes.fromhex("9c8971") not in obj_present_nmi_code, (
     "Poppy silently truncated the OBJ pending clear to bank-relative STZ"
 )
-assert bytes.fromhex("af89717ec980") in obj_present_nmi_code, (
-    "NMI OBJ publisher no longer rejects the foreground construction lock"
+assert bytes.fromhex("2200f4e9") in obj_present_nmi_code, (
+    "NMI OBJ publisher no longer falls back while foreground constructs OAM"
 )
 obj_present_wait_code = VID[
     obj_present_wait - 0x8000:obj_present_wait_end - 0x8000
@@ -1528,6 +1710,38 @@ assert bytes.fromhex("a9608d6243a96f8d6343a97e8d6443") in obj_present_dma_base_c
 )
 assert bytes.fromhex("a960718d6243a920008d6543") in obj_present_dma_base_code, (
     "base-delta OBJ publisher lost its complete packed high-table transfer"
+)
+assert obj_fallback_prepare_lock == 0xF300 and obj_fallback_nmi == 0xF400, (
+    "last-published OAM fallback helpers moved from their guarded ROM islands"
+)
+assert bytes.fromhex("8f2c647eaf84717ec9a5") in obj_fallback_prepare_lock_code, (
+    "fallback lock helper no longer invalidates fallback before testing current OAM"
+)
+assert bytes.fromhex("a91f02a2606fa00060547e7e") in obj_fallback_prepare_lock_code, (
+    "fallback lock helper lost its exact 544-byte OAM backup copy"
+)
+assert bytes.fromhex("a9ff01a2406da02062547e7e") in obj_fallback_prepare_lock_code, (
+    "fallback lock helper lost its exact compact world-list backup copy"
+)
+assert bytes.fromhex("8d2064ad85718d2164") in obj_fallback_prepare_lock_code, (
+    "fallback lock helper lost base/compensation metadata backup"
+)
+assert bytes.fromhex("a9808f89717e") in obj_fallback_prepare_lock_code, (
+    "fallback lock helper lost the NMI-visible construction lock"
+)
+assert bytes.fromhex("af2c647ec9a5") in obj_fallback_nmi_code, (
+    "fallback NMI helper no longer requires a valid backup OAM source"
+)
+assert VID[ofn_time_ok - 0x8000:ofn_time_ok - 0x8000 + 11] == bytes.fromhex(
+    "8a8f8c717ea97e48abc220"
+), "fallback NMI safe-line path lost its explicit A8 DBR switch"
+assert bytes.fromhex("a900628d6243a920008d6543") in obj_fallback_nmi_code, (
+    "fallback NMI helper lost its backup high-table DMA source"
+)
+assert bytes.fromhex("ad24648f90717e") in obj_fallback_nmi_code and bytes.fromhex(
+    "ad20648f92717ead21648f93717e"
+) in obj_fallback_nmi_code, (
+    "fallback NMI helper lost hardware provenance publication"
 )
 assert VID[
     nmi_gameplay_present - 0x8000:nmi_gameplay_present_end - 0x8000
@@ -1583,9 +1797,23 @@ assert bytes.fromhex("c903") in obj_present_nmi_code and bytes.fromhex(
 ) in obj_present_nmi_code and bytes.fromhex("2000cc") in obj_present_nmi_code, (
     "NMI OBJ publisher no longer distinguishes base-delta and camera-only DMA"
 )
-assert VID[0x0441:0x046B] == bytes.fromhex(
-    "2200c8e922a0cbe9" + "ea" * 34
-), "foreground OAM path no longer commits and waits for NMI-owned publication"
+foreground_oam_wait_seq = (
+    bytes([0x22]) + obj_present_commit.to_bytes(2, "little") + bytes([0xE9])
+    + bytes([0x22]) + obj_present_wait.to_bytes(2, "little") + bytes([0xE9])
+)
+vid_obj = vid_off("vid_obj")
+foreground_oam_wait_off = VID.find(
+    foreground_oam_wait_seq, vid_obj - 0x8000, vid_bg - 0x8000
+)
+assert 0x0430 <= foreground_oam_wait_off < 0x0450, (
+    "foreground OAM path no longer commits and waits for NMI-owned publication"
+)
+assert VID[
+    foreground_oam_wait_off + len(foreground_oam_wait_seq):
+    foreground_oam_wait_off + len(foreground_oam_wait_seq) + 34
+] == bytes.fromhex("ea" * 34), (
+    "foreground OAM path no longer preserves the post-wait patch seam"
+)
 assert VID[palette_test_end - 0x8000:bg_test - 0x8000] == bytes(
     bg_test - palette_test_end
 ), "palette manifest consumer overlapped the fixed BG consumer"
@@ -1597,9 +1825,9 @@ assert obj_y_transform < obj_y_transform_end <= bg_capacity_exact == 0xA220
 assert VID[
     obj_y_transform - 0x8000:obj_y_transform_end - 0x8000
 ] == bytes.fromhex(
-    "a5ecc9e200f00fc9f000b00aa9da0038e5ec29ff0060"
+    "a5ecc9e200f00fc9f000b00aa9e90038e5ec29ff0060"
     "a9ea0138e5ec29ff0060"
-), "top-HUD Y transform lost its bounded $E2/$F0-$F2 wrap mapping"
+), "OBJ Y transform lost its aligned gameplay or bounded top-HUD mapping"
 assert VID[
     obj_y_transform_end - 0x8000:bg_capacity_exact - 0x8000
 ] == bytes(bg_capacity_exact - obj_y_transform_end), (
@@ -1657,9 +1885,9 @@ assert VID[
 ), (
     "fast OBJ planner dispatcher no longer fits its private-WRAM nine-byte seam"
 )
-assert obj_hclr_stub == 0x8740 and obj_slot_legacy == 0x8756
-assert VID[obj_hclr_stub - 0x8000:obj_hclr_stub - 0x8000 + 3] == bytes.fromhex(
-    "4c00a0"
+assert obj_hclr_stub == 0x873F and obj_slot_legacy == 0x8756
+assert VID[obj_hclr_stub - 0x8000:obj_hclr_stub - 0x8000 + 3] == (
+    bytes([0x4C]) + obj_hash_clear.to_bytes(2, "little")
 ), "OBJ hash clear no longer redirects to the guarded widened-hash helper"
 assert obj_upload_dispatch == 0x9C27
 assert VID[0x9C2A - 0x8000:obj_slot_fast_hash - 0x8000] == bytes(
@@ -1711,9 +1939,11 @@ assert VID[vf_tick - 0x8000 + 12:vf_tick - 0x8000 + 16] == bytes.fromhex(
 assert VID[vf_tick - 0x8000 + 9:vf_tick - 0x8000 + 12] == bytes.fromhex(
     "20ff80"
 ), "vf_tick no longer calls the complete-frame renderer"
-assert bg_upload == 0x86D0 and bg_upload_commit == 0x86D4
+assert bg_upload == 0x86CF and bg_upload_commit == 0x86D3
 assert VID[bg_upload - 0x8000:bg_upload_commit - 0x8000] == bytes.fromhex(
-    "2280c1e9"
+    "22"
+) + bg_upload_mode_current.to_bytes(2, "little") + bytes.fromhex(
+    "e9"
 ), "BG upload no longer preserves the active Mode 1/2 policy before DMA wait"
 assert VID[bg_upload - 0x8000:obj_hclr_stub - 0x8000].count(
     bytes((0x22, bg_scroll_map_commit & 0xFF, bg_scroll_map_commit >> 8, 0xE9))
@@ -2525,7 +2755,7 @@ assert VID[
     cpu5a22_boot_extended - 0x8000:cpu5a22_boot_extended_end - 0x8000
 ] == bytes.fromhex(
     "e220a9ff8d2922a9808d2622a9008d2822a9008d0322a9808d0422"
-    "a9208d00229c002218fbc2305c0b80e9"
+    "a9208d00229c002218fbc230a2ff079a5c0b80e9"
 ), "5A22 boot continuation lost its reset/shared-memory/native-mode contract"
 assert clear_bg_duplicate_flag_long == 0xDAD0
 assert VID[
@@ -2658,7 +2888,23 @@ assert VID[
 ] == bytes(snapshot_dma_plane - boot_screen_init_end), (
     "Mode 7 boot helper crossed the relocated snapshot-DMA island"
 )
-assert snapshot_dma_plane < snapshot_dma_plane_end == video_image_end <= 0xF300
+assert (
+    snapshot_dma_plane
+    < snapshot_dma_plane_end
+    <= obj_fallback_prepare_lock
+    == 0xF300
+    < obj_fallback_prepare_lock_end
+    <= obj_fallback_nmi
+    == 0xF400
+    < obj_fallback_nmi_end
+    == video_image_end
+    <= 0xF800
+)
+assert VID[
+    snapshot_dma_plane_end - 0x8000:obj_fallback_prepare_lock - 0x8000
+] == bytes(obj_fallback_prepare_lock - snapshot_dma_plane_end), (
+    "snapshot DMA island crossed the OAM fallback helper"
+)
 snapshot_dma_code = VID[
     snapshot_dma_plane - 0x8000:snapshot_dma_plane_end - 0x8000
 ]
@@ -2822,6 +3068,14 @@ vtime_esc5_payload_start = vtime_off("vtime_esc5_charge") - 0x8000
 vtime_esc5_payload_end = vtime_off("vtime_esc5_metadata_end") - 0x8000
 vtime_mvc_payload_start = vtime_off("vtime_mvc_gateway") - 0x8000
 vtime_mvc_payload_end = vtime_off("vtime_mvc_gateway_end") - 0x8000
+vtime_mvc_payload = bytes(vtime_packed[vtime_mvc_payload_start:vtime_mvc_payload_end])
+assert (
+    vtime_mvc_payload[:17] == bytes.fromhex("c230af0080f229ff00890200d006a5445c")
+    and vtime_mvc_payload[20:24] == bytes.fromhex("5c00fa00")
+), "VTIME MOVE-collapse gateway source shape changed; re-audit the dynamic resume patch"
+vtime_packed[vtime_mvc_payload_start + 16:vtime_mvc_payload_start + 20] = (
+    bytes([0x5C]) + mvcloop_resume.to_bytes(2, "little") + bytes([0x00])
+)
 if not vtime_enabled:
     # This range was an all-zero diagnostic gap in the accepted production
     # image.  Keep ordinary ROM bytes/hash unchanged while still assembling
@@ -3153,10 +3407,10 @@ if _osp.exists("src/escbank2.bin"):
     entry_8fat = esc2_off("entry_8fat")
     entry_8fat_resume = esc2_off("h8fa_generated_resume")
     entry_8fat_body = esc2_off("h8fa_generated_body")
-    assert entry_8fat == 0xAD98 and entry_8fat_resume == 0xAD9E, (
+    assert entry_8fat == 0xAD97 and entry_8fat_resume == 0xAD9D, (
         "$08FA redirect/resume moved in bank $94"
     )
-    assert entry_8fat_body == 0xADA3, "$08FA generated body moved from $94:ADA3"
+    assert entry_8fat_body == 0xADA2, "$08FA generated body moved from $94:ADA2"
     assert ESC2[entry_8fat - 0x8000:entry_8fat_resume - 0x8000] == bytes.fromhex(
         "5c009d95eaea"
     ), "entry_8fat lost its size-neutral JML $95:9D00 wrapper"
@@ -3299,10 +3553,22 @@ if _osp.exists("src/escbank2.bin"):
     assert entry_2e49c_end == 0xD425, (
         "$02E49C hand-exact body changed size; re-audit guards and CCR/X/RTS"
     )
-    assert hashlib.sha256(
-        ESC2[entry_2e49c - 0x8000:entry_2e49c_end - 0x8000]
-    ).hexdigest() == (
-        "24a383a57947dc2a735c8b2ee9270dedb414c2ac6e1586789e7ec1a3e64ce9c7"
+    e49c_body = ESC2[entry_2e49c - 0x8000:entry_2e49c_end - 0x8000]
+    e49c_ors_pre = jml_interp_symbol("ors_pre")
+    e49c_inext = jml_interp_symbol("inext")
+    assert e49c_body.count(e49c_ors_pre) == 1, (
+        "$02E49C hand-exact body lost its exact dynamic ors_pre tail"
+    )
+    assert e49c_body.count(e49c_inext) == 1, (
+        "$02E49C hand-exact cold path lost its exact dynamic inext tail"
+    )
+    e49c_normalized = (
+        e49c_body
+        .replace(e49c_ors_pre, bytes.fromhex("5c000000"))
+        .replace(e49c_inext, bytes.fromhex("5c000000"))
+    )
+    assert hashlib.sha256(e49c_normalized).hexdigest() == (
+        "e9daf5640f56fce938ab82544e46499c73d8c6c4e2693fa50ba2f6b74a7ee73d"
     ), "$02E49C hand-exact body bytes changed without differential review"
     h8_mark_palette_dirty = esc2_off("h8_mark_palette_dirty")
     h8_mark_palette_dirty_end = esc2_off("h8_mark_palette_dirty_end")
@@ -3917,9 +4183,10 @@ if _osp.exists("src/escbank4.bin"):
     ), (
         "escbank4 compact byte-TST helper moved within the $8FD9-$8FFF seam"
     )
-    assert ESC4[0x0FD9:0x0FFE] == bytes.fromhex(
-        "a518d01268a966338540a9020085422080905c28d100"
-        "22b6e50029ff0049800038e9800060"
+    assert ESC4[0x0FD9:0x0FFE] == (
+        bytes.fromhex("a518d01268a966338540a902008542208090")
+        + bytes([0x5C]) + interp_symbol("inext").to_bytes(2, "little") + bytes([0x00])
+        + bytes.fromhex("22b6e50029ff0049800038e9800060")
     ), (
         "escbank4 compact byte-TST helper lost its final-iteration fallback "
         "or no longer sign-normalizes bit 7"
@@ -4392,6 +4659,17 @@ if _osp.exists("src/escbank5.bin"):
                 return int(fields[0].split(":", 1)[1], 16)
         raise AssertionError("missing escbank5 layout symbol %s" % symbol)
 
+    eaw5_fix = esc5_off("eaw5_fix")
+    eaw5_fix_body = ESC5[eaw5_fix - 0x8000:eaw5_fix - 0x8000 + 0x30]
+    assert (
+        bytes([0x5C]) + ea_extw_return.to_bytes(2, "little") + bytes([0x00])
+    ) in eaw5_fix_body, (
+        "eaw5_fix no longer returns to the exported ea_extw_return stub label"
+    )
+    assert bytes.fromhex("5c43b800") not in eaw5_fix_body, (
+        "eaw5_fix still contains the stale hardcoded $00:B843 return"
+    )
+
     esc5_root_2429c = esc5_off("entry_2429c")
     assert ESC5[
         esc5_root_2429c - 0x8000:esc5_root_2429c - 0x8000 + 4
@@ -4549,9 +4827,11 @@ if _osp.exists("src/escbank5.bin"):
     assert ESC5[hle_generic_return - 0x8000:hle_generic_return - 0x8000 + 4] == bytes.fromhex(
         "c230a63c"
     ), "$2742 generic-fallback CCR shim prologue changed"
-    assert ESC5[hle_2742_end - 0x8000 - 4:hle_2742_end - 0x8000] == bytes.fromhex(
-        "5c6fd100"
-    ), "$2742 generic-fallback CCR shim no longer returns through ors_pre"
+    assert ESC5[
+        hle_2742_end - 0x8000 - 4:hle_2742_end - 0x8000
+    ] == jml_interp_symbol("ors_pre"), (
+        "$2742 generic-fallback CCR shim no longer returns through ors_pre"
+    )
     validation_spin = esc5_off("h2742_validation_spin")
     validation_spin_end = esc5_off("h2742_validation_spin_end")
     seam_start = hle_2742_end - 0x8000
@@ -4674,7 +4954,7 @@ if _osp.exists("src/escbank5.bin"):
     )
     assert ESC5[
         h13be_inext - 0x8000:h13be_inext_end - 0x8000
-    ] == bytes.fromhex("5c28d100"), (
+    ] == jml_interp_symbol("inext"), (
         "$0013BE direct-entry terminal bridge moved or changed"
     )
     assert ESC5[
@@ -4684,23 +4964,26 @@ if _osp.exists("src/escbank5.bin"):
     ), "$0013BE direct write/CCR island moved or changed"
     assert ESC5[
         h13be_ors - 0x8000:h13be_ors_end - 0x8000
-    ] == bytes.fromhex("5c6fd100"), (
+    ] == jml_interp_symbol("ors_pre"), (
         "$0013BE table-entry terminal bridge moved or changed"
     )
     assert ESC5[
         c846_clear - 0x8000:c846_clear_end - 0x8000
-    ] == bytes.fromhex(
-        "64706472646e64605c28d100"
+    ] == (
+        bytes.fromhex("64706472646e6460") + jml_interp_symbol("inext")
     ), "$00C846 clear-NZVC exit island moved or changed"
     assert ESC5[
         c846_z - 0x8000:c846_z_end - 0x8000
-    ] == bytes.fromhex(
-        "64706472646ea9010085605c28d100"
+    ] == (
+        bytes.fromhex("64706472646ea901008560") + jml_interp_symbol("inext")
     ), "$00C846 Z-preserving exit island moved or changed"
     assert ESC5[
         c846_tst - 0x8000:c846_tst_end - 0x8000
-    ] == bytes.fromhex(
-        "64706472646e6460a51cf0081002e6705c28d100e6605c28d100"
+    ] == (
+        bytes.fromhex("64706472646e6460a51cf0081002e670")
+        + jml_interp_symbol("inext")
+        + bytes.fromhex("e660")
+        + jml_interp_symbol("inext")
     ), "$00C846 TST.W-D7 exit island moved or changed"
     assert ESC5[
         h13be_table_store - 0x8000:h13be_table_store_end - 0x8000
@@ -5859,7 +6142,7 @@ if _osp.exists("src/escbank8.bin"):
         "c230a534"
     ), "$000466 entry lost its guarded canonical-A5 prologue"
     assert ESC8[entry_466_8 - 0x8000:entry_466_8_end - 0x8000].count(
-        bytes.fromhex("5cb8b300")
+        jml_interp_symbol("op_rte")
     ) == 1, "$000466 body no longer tail-calls the exact bank-$00 op_rte"
     assert ESC8[entry_1c9ae_empty_8 - 0x8000:entry_1c9ae_empty_8 - 0x8000 + 4] == bytes.fromhex(
         "c230a522"
@@ -5962,7 +6245,11 @@ if _osp.exists("src/escbank8.bin"):
     )
     assert ESC8[
         shadow_dirty_publish_8 - 0x8000:shadow_dirty_publish_8 - 0x8000 + 8
-    ] == bytes.fromhex("c230a301c915b6f0"), (
+    ] == (
+        bytes.fromhex("c230a301c9")
+        + rb_zero_map_snes_stack_guard.to_bytes(2, "little")
+        + bytes.fromhex("f0")
+    ), (
         "map_snes publisher lost the pinned rb_zero read-only caller guard"
     )
     assert shadow_dirty_publish_8 < shadow_dirty_publish_8_end == 0xDE6D
@@ -6615,7 +6902,7 @@ if _osp.exists("src/escbank9.bin"):
     assert body_1337e_bytes.count(bytes.fromhex("1a3a")) == 2, (
         "$01337E lost one of its two exact TST.W N/Z materializers"
     )
-    assert body_1337e_bytes.endswith(bytes.fromhex("5c6fd100")), (
+    assert body_1337e_bytes.endswith(jml_interp_symbol("ors_pre")), (
         "$01337E lost its exact terminal mapped-RTS jump"
     )
     assert ESC9[
@@ -6650,7 +6937,7 @@ if _osp.exists("src/escbank9.bin"):
     assert stage3_79_loop_bytes.count(bytes.fromhex("2000a1")) == 1, (
         "$0079FE hot path lost its cumulative AC charge"
     )
-    assert stage3_79_loop_bytes.count(bytes.fromhex("5c28d100")) == 2, (
+    assert stage3_79_loop_bytes.count(jml_interp_symbol("inext")) == 2, (
         "$0079FE hot/cold paths lost an interpreter delegation"
     )
     assert ESC9[
@@ -6766,13 +7053,14 @@ if _osp.exists("src/escbank9.bin"):
         bytes.fromhex(
             "c230a53ac9f000d01ca538c940009015c90040b010"
             "a53ec9f000d009a53cc9fd3fb002800e"
-            "a914338540a9010085425c28d100"
+            "a914338540a901008542"
         )
+        + jml_interp_symbol("inext")
     ), "$013314 lost its exact A6/A7 canonical guard"
     assert body_13314_bytes.count(bytes.fromhex("2000a1")) == 9, (
         "$013314 lost an AC-charge basic block"
     )
-    assert body_13314_bytes.endswith(bytes.fromhex("5c6fd100")), (
+    assert body_13314_bytes.endswith(jml_interp_symbol("ors_pre")), (
         "$013314 lost its exact terminal mapped-RTS jump"
     )
     assert ESC9[
@@ -7197,9 +7485,9 @@ if _osp.exists("src/escbank9.bin"):
             )
         return offsets
 
-    player_ojmp_offsets = player_jml_offsets(bytes.fromhex("5cb3d100"))
+    player_ojmp_offsets = player_jml_offsets(jml_interp_symbol("ojmp_hook"))
     player_ibridge_offsets = player_jml_offsets(bytes.fromhex("5c28f892"))
-    player_ors_offsets = player_jml_offsets(bytes.fromhex("5c6fd100"))
+    player_ors_offsets = player_jml_offsets(jml_interp_symbol("ors_pre"))
     assert len(player_ojmp_offsets) == 8, (
         "admitted player bodies lost or gained a logical-JSR OJMP handoff"
     )
@@ -7394,7 +7682,7 @@ for a, b, what in [(0xF5FC, 0xF602, "loop-hook flow chain vs .org $F602"),
             "loop_hook root-cause notes in interp.pasm/escbank5.pasm)"
             % (what, a, b - 1, fo, chunk.hex()))
 
-# --- TESTFLAG guard (see interp.pasm TESTFLAG declaration) ---
+# --- TESTFLAG guard (see interp.pasm RESP1/TESTFLAG note) ---
 # The production cold-boot path requires $00:F7E0 == 0 in BOTH ROM views (SA-1
 # LoROM mirror file $77E0 / 5A22 HiROM file $F7E0). This byte has been silently
 # covered by code growth TWICE ($F400, then $F600), each time making cold boot
@@ -7526,21 +7814,18 @@ if vtime_enabled:
 # only VTIME images through the fixed $F2 gateway; ordinary images retain the
 # byte-identical REP/LDA prefix. Bit 1 declines to op_move_g, while bit 0 resumes
 # the collapse after re-materializing this prefix in the gateway.
-mvc_check = interp_symbol("mvc_check")
-op_move_g = interp_symbol("op_move_g")
-mvc_prefix = bytes.fromhex("c230a544")       # REP #$30 / LDA $44
 mvc_vtime_gateway = bytes.fromhex("5cd1b4f2") # JML $F2:B4D1
-assert mvc_check == 0x95EE and op_move_g == 0xFA00, (
+assert 0x9500 <= mvcloop_check < op_move_g == 0xFA00, (
     "VTIME mvc gateway fixed bank-$00 continuations moved"
 )
-for mvc_offset in (mvc_check - 0x8000, mvc_check):
-    actual = bytes(ROM[mvc_offset:mvc_offset + len(mvc_prefix)])
-    assert actual == mvc_prefix, (
+for mvc_offset in (mvcloop_check - 0x8000, mvcloop_check):
+    actual = bytes(ROM[mvc_offset:mvc_offset + len(mvcloop_prefix)])
+    assert actual == mvcloop_prefix, (
         "mvc_check prefix changed at file $%06X: expected %s, got %s"
-        % (mvc_offset, mvc_prefix.hex(), actual.hex())
+        % (mvc_offset, mvcloop_prefix.hex(), actual.hex())
     )
     if vtime_enabled:
-        ROM[mvc_offset:mvc_offset + len(mvc_prefix)] = mvc_vtime_gateway
+        ROM[mvc_offset:mvc_offset + len(mvcloop_prefix)] = mvc_vtime_gateway
 
 # The scheduler fire counters are validation telemetry, not emulated game
 # state.  Keep them in PC_RING diagnostic ROMs for the existing scheduler

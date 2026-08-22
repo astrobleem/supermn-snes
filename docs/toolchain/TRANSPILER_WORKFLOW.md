@@ -80,11 +80,12 @@ Superman-specific.
 
 ## Deploy without corrupting layout
 
-Poppy silently allows `.org` overlap, and a later section wins. Keep generated bodies
-in audited escape-bank space, run the ROM pack assertions and `tools/audit_banks.py`,
-then byte-audit every changed seam. The charged-shot freeze was caused by a valid body
-crossing a later `.org $F000` island; local semantic tests did not detect the overwritten
-tail.
+Old upstream Poppy silently allowed `.org` overlap, and a later section won. The
+latest corrected fork rejects that class, but keep generated bodies in audited
+escape-bank space, run the ROM pack assertions and `tools/audit_banks.py`, then
+byte-audit every changed seam. The charged-shot freeze was caused by a valid body
+crossing a later `.org $F000` island; local semantic tests did not detect the
+overwritten tail.
 
 The historical [transpiler design](../history/designs/TRANSPILER_DESIGN.md),
 [call-bridge design](../history/designs/CALL_BRIDGE_DESIGN.md), and

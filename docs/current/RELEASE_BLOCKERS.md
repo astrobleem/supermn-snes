@@ -1,8 +1,14 @@
 # Superman release blockers
 
-There is no promoted human-test ROM. Current ordinary response candidate
-`d01db972…` is renderer-red and is not playable or shippable; rejected bounded renderer/scroll build
-`f25a0e68…` remains negative evidence. This file
+There is no promoted human-test ROM. Current ordinary diagnostic build
+`7506f496…` inherits `b0f28aa3…`'s reproduced 5A22 `copy32` stack recursion, malformed
+generic DIVU loop, and negative-word indexed-EA desynchronization, but is not playable or
+shippable. It changes the aligned gameplay-OBJ Y transform from `$DA-sy` to
+`$E9-sy`; its exact-hash fresh-power entrance scene and transformed narrow-screen
+HUD components are green for MAME ticks 304-339. A literal centered-crop composite
+remains HUD-red by design and is not the final full-composite authority. Previous ordinary response candidate `d01db972…` remains
+renderer-red, and rejected bounded renderer/scroll build `f25a0e68…` remains
+negative evidence. This file
 lists what must change or be proven before either label can return. The preserved
 `a9765fbf…` timing evidence line is a 66-byte, hash-guarded patch of preserved `5c7e…`, limited to two terminal
 native `TST.B` CCR publications in `$02429C/$0259CA`; it does not repair the
@@ -20,17 +26,95 @@ OAM base at camera 160/sequence 457 and only its X fields were translated. The
 source fail-safe now targets the last hardware-OAM base instead of live future
 camera state; queue latency, MAME facing, and animation order remain open.
 
+The August 20 boot-crash diagnostic first isolated `$00CA3E: DIVU.W #$000A,D1`.
+The August 21 exact-byte audit then found that predecessor source lacked an
+explicit I16 helper-entry contract and assembled generic `udiv`'s iteration count
+as `LDY #$0620`, swallowing the following opcode. Current
+`b0f28aa3…` preserves the public `$A46F` address with a trampoline to an
+explicit-I16 helper. Focused `B7:DIVU` differential coverage is green 171/171,
+including nonzero division, overflow, and both divide-by-zero trap forms. The
+rejected predecessor's fresh one-credit gate is green. Generic DIVU is no longer
+the immediate blocker.
+
+The next predecessor failure occurs after Start at `$00766A: JMP (PC,D7.W)` with
+the live negative index `$FE90`. The now-minimized compiler case filed as
+[Poppy #391](https://github.com/TheAnsarya/poppy/issues/391) encoded shared `ix_wneg`'s
+`ADC #$FFFF` as `69 FF 85`, consuming `STA` and landing at illegal `$01738E`.
+Current `b0f28aa3…` retains that address-stable carry-aware
+arithmetic. Its shared-helper MAME differential is green 5/5 and retained-state
+production continuation crosses the old failure with halt zero. Its exact-hash
+Nexen fresh-power one-credit gate is green through video frame 7,000, with one
+organic credit, halt zero, and a Sol-reviewed coherent prompt screenshot at
+`build/playback-watcher-20260821/fresh-credit-d61100e4-v4/`. This does not prove
+Start or gameplay. Replay-only dogfood now authenticates the corrected 6,323-row
+legacy-Mesen movie and ROM and retains all 601 requested consecutive frames
+5,723-6,323 without a new boot recording or runtime memory writes. The run is
+machine-red from relative frame 100: blank-playfield and black-band ranges are
+100-177 and the low-diversity fade range is 100-205. Sol reviewed the contact
+sheet and frames 127/178/206: this is a coherent but prolonged round fade, with
+the intact Stage-1 composite present at 206, not the former missing-column
+corruption. Across 600 video-frame intervals, only 163 game ticks and 154 renders
+complete. Aligned MAME timing/pixels remain unknown, so this is diagnostic timing
+evidence rather than renderer acceptance. More seriously, game tick and render
+stop after relative frame 537, the pacing VBlank epoch stops after 539, and the
+framebuffer repeats identically through 600. The post-stall checkpoint has the
+S-CPU stopped at `$00:942C`, corrupt SP `$8DB8`, NMI-busy stuck at one, and SA-1
+waiting for IRQ. A focused boundary walk places the loss of valid 5A22 stack/
+control flow around fresh frames 6,268-6,269; the exact source instruction remains
+unconfirmed. The first Luna handoff incorrectly
+reported partial coverage while the validator was still alive; the terminal
+review supersedes it at `build/playback-watcher-20260821/dogfood-poststart-validator-v3-replay-v1/sol-terminal-review.json`.
+
+## Current prioritized de-risking plan
+
+This checklist is the planning authority. The long narrative below is a
+chronological evidence ledger; artifact names containing `current` and old prose
+that once called a hash current do not make that hash active. Only `7506f496…` is
+the current ordinary ROM.
+
+| Priority | Risk / likely solution | Required closure evidence |
+| --- | --- | --- |
+| P0 complete | Wrong or silently changed assembler. `build_interp.sh` now defaults to the corrected fork and rejects any DLL except pinned SHA `715b1443…` unless `ALLOW_UNPINNED_POPPY=1` is explicitly set. Exact pack guards cover the three repaired width-sensitive helpers. | Build transcript names the DLL and hash; pack/seam assertions and bank audit pass. A compiler blame additionally requires a minimized pinned-DLL reproduction or emitted-byte failure. |
+| P0 complete | Rejected predecessor `d61100e4…` emitted `obj_fallback_nmi`'s A8 `LDA #$7E` as `A9 7E 00`; `$E9:F489` executed `BRK #$48` and initiated the terminal cascade. Predecessor `b0f28aa3…` adds `.a8` at `ofn_time_ok` plus an exact pack guard. Current `7506f496…` inherits it and completes 601 exact-hash post-Start frames with halt zero and terminal tick/render/pacing advancement. | Reproduced BRK/liveness cause remains closed for this hash. The same run remains red on generic transition heuristics and does not satisfy broader gameplay acceptance. |
+| P1 component complete / blocker active | Predecessor `b0f28aa3…`'s exact BG exposed a gameplay OBJ mask exactly 15 lines high. Current `7506f496…` changes `$DA-sy` to `$E9-sy`, pins the emitted bytes, and completes a fresh-power replay. Pairing MAME ticks 304-339 to the first frame carrying `obj_published_sequence = tick-29` yields 36/36 scene/playfield comparisons with zero changed pixels. A separate production-transform HUD oracle is also exact 36/36, with zero missing, extra, or wrong-color glyph pixels; Sol reviewed both artifact sets. | Entrance scene/animation and transformed-HUD components are closed. The raw crop's 576-pixel HUD difference is intentional and cannot serve as the final composite authority. Compose the transformed HUD with the registered scene in one exact oracle, then run separate fresh left/right walk and required behavior scenarios; no component result widens to those gates. |
+| P0 active | Finish the renderer's single scene-generation commit path. BG map, palette, OAM, camera/scroll, and tile-pattern dependencies must become one immutable ready packet with one NMI commit; no old due/valid path may bypass it. | Short bounded Nexen attract-mode windows retain a compact generation ledger and stop at the first ownership violation. Close each invariant independently before widening the window; no movie recording or long input replay is required. |
+| P1 | Renderer may mix BG, OAM, palette, camera, or pattern generations even when a still looks plausible. | One bounded Nexen attract-mode window, normally at most 600 observed frames after its selected boundary, has no missing/duplicate generation, stale OAM age, incomplete pattern dependency, black band, or unpaired camera/OBJ publication. Retain the ledger, first-divergence report, and sparse milestone images only. |
+| P1 deferred promotion | Controls and interaction still require final acceptance, but they are not the renderer implementation loop. | Only after renderer invariants are green, and only with Chad's explicit approval, run one consolidated fresh-power coin/Start/walk/attack/fence promotion campaign. Reuse existing authenticated inputs where possible; do not rerecord unchanged prefixes. |
+| P2 | Performance evidence predates the current renderer/compiler lineage. Measure only after P1 visual/behavior gates are stable, using production `TESTFLAG=0`, organic input, pacing/rendering included, and retained raw logs. | At least 30 complete gameplay ticks/s and no more than 358K SA-1 cycles/tick, followed by human combat/audio playtest. |
+| P2 | Audio remains mechanically present but perceptually poor. Keep compiler/ARAM/command-map checks separate from listening quality; compare captured SNES output against arcade/VGM references cue by cue. | Human A/B acceptance for representative music, jingles, attacks, impacts, and boss cues with no command-path regressions. |
+
+### Process guardrails
+
+- Preserve one ROM hash while diagnosing. A bounded build is allowed, but record
+  the confirmed cause, rebuild necessity, and invalidated exact-hash evidence
+  before changing lineage. Full playback still requires explicit approval.
+- Every validator must fail closed and emit `green`, `red`, or `unknown`; a missing
+  report, emulator crash, timeout, or incomplete frame range is `unknown`, never
+  inferred success or ROM failure.
+- Long playback, new movie recording, every-frame framebuffer capture, and the
+  interactive promotion matrix are prohibited unless Chad explicitly approves
+  them. If approved, Luna owns the run and writes raw evidence to disk; this is
+  not authorization to use long playback for ordinary renderer diagnosis.
+- A green state/byte/background check cannot satisfy composite behavior. Promotion
+  remains exclusively through `tools/promote_human_test_rom.py`.
+- Keep generated campaigns out of the top-level `build/` browsing surface: each
+  bounded run gets one named directory with a compact report and manifest; archive
+  superseded bulky evidence rather than mixing it with current ROM outputs.
+- Commit a coherent checkpoint after a confirmed fix, its bounded gates, and
+  synchronized status/blocker documentation. Do not accumulate unrelated frontier
+  experiments behind an unrecorded working-tree state.
+
 The August 15 exact-hash gate for `d01db972…` retained 602 consecutive
 post-Start frames and is red. Its first persistent visual corruption is four
 truncated BG pattern records at slots 42/84/126/168: the last record of every
 `$1500`-byte prepared-BG DMA exceeds the real VBlank budget after mandatory
 BG/OAM presentation. A same-ROM, intervened frame-41 lab proves `$1400` fixes all
-four hashes with halt zero; current source contains that change, but no successor
-ROM exists yet. Separately, the single OBJ presentation buffer is locked across
-NMI during candidate construction. BG advances first while OAM remains at the
-prior camera for one frame. A retained last-published OAM path is required before
-the next bounded build/replay. The `d01db972…` run remains regression evidence and
-does not transfer exact-hash acceptance to a successor.
+four hashes with halt zero. Current `b0f28aa3…` is a later successor containing
+that correction, its pack guard, and a last-published OAM fallback, but it does not
+inherit the predecessor's renderer acceptance. In `d01db972…`, the single OBJ
+presentation buffer was locked across NMI during candidate construction: BG
+advanced first while OAM remained at the prior camera for one frame. The retained
+run remains regression evidence only.
 
 Predecessor `72838eca…` closes one reproduced structural failure only. A physical
 column move formerly cleared the destination before unchanged cached cells could
@@ -60,7 +144,7 @@ visible. The source recorder remains red only because this short cross-ROM windo
 did not execute its independently required BG-chunk hook; the cadence reducer
 authenticates that source and reports its narrower component separately.
 
-Current `c14c0184…` adds the symbolic boot-target repair and has authenticated
+Historical `c14c0184…` adds the symbolic boot-target repair and has authenticated
 exact-hash fresh power, centered boot geometry, title, organic credit/Start, and
 601 consecutive post-Start frames. Its background is structurally clear after the
 normal fade, but its temporal and scene-coherence gates are red: 77 PPU holds occur
@@ -107,7 +191,7 @@ but live X1 has 392 cells/178 codes while `$7E:2000/$2400` retain the exact
 The helper/promoter bytes are present and exact, but `$E9:C400` never executes
 across the fresh transition. Organic gameplay uses direct
 `snapshot_acquire_paced` → `psd_prepared_dma`; only queued promotion calls the
-helper. Current `50bbed41…` adds that direct call, while pack-time guards require
+helper. Historical `50bbed41…` adds that direct call, while pack-time guards require
 exactly one call in both prepared consumers. Its fresh organic movie retains 602
 consecutive post-Start frames. Manual review shows the Stage-1 fade completing by
 frame 90 and the complete wall/floor remaining through frame 601. Authenticated
@@ -205,14 +289,15 @@ cross-hash, mutated, or unauthenticated evidence blocks creation of a test ROM.
 Intermediate candidates were correctly rejected by the new gate. `b1e57e0e…`
 had the correct 1/2-pixel cadence but flashed at tilemap publications;
 `d43c8bb4…` rebased one frame after the DMA; and `562928a5…` still had nine
-background discontinuities because Poppy silently encoded the impossible long
-`STZ` marker clear as a bank-relative store. Current source uses a legal explicit
-long store and pack-time guards pin same-NMI commit/clear ownership.
+background discontinuities because the then-used compiler encoded the impossible long
+`STZ` marker clear as a bank-relative store. The latest corrected fork rejects
+this invalid-operand class. Current source uses a legal explicit long store and
+pack-time guards pin same-NMI commit/clear ownership.
 
 That work closed only the reproduced bounded Stage-1 black-band and cadence
 regressions; it did not promote `f25a0e68…`. Predecessor `72838eca…` separately
 closes the reproduced destructive physical-slot loss under bounded checkpoint
-coverage. Current `927a2879…` adds the narrow uninterrupted once-per-NMI cadence
+coverage. Historical `927a2879…` adds the narrow uninterrupted once-per-NMI cadence
 repair described above. Aligned exact-MAME pixels, formal MAME-frame conservation,
 fresh exact-hash coverage, later stages/organic Stage 2, renderer throughput,
 current performance, hardware, and human combat/audio acceptance remain open. No
@@ -295,8 +380,9 @@ conservation. Capture, trace, cross-emulator, single-frame, and repetition tools
 always carry diagnostic-only or bounded-oracle authority and cannot fill missing
 aggregate gates.
 
-Current source builds rejected SHA `f25a0e68…` at the unverified ordinary path
-`build/interp.sfc`. There is no reviewed or promoted byte-identical test copy.
+At that historical checkpoint, source built rejected SHA `f25a0e68…` at the
+unverified ordinary path `build/interp.sfc`. It is not the current ordinary ROM,
+and there is no reviewed or promoted byte-identical test copy.
 The superseded `3a5f3694…` pin and earlier ROMs/evidence are preserved outside
 the repository under `/home/chad/supermn-snes-artifacts/`; the archive README
 maps former `build/` paths to their retained locations. Predecessor `6413924c…`'s focused token and producer
@@ -309,10 +395,11 @@ lineage, its video mirror/cache migration is an intervention, and no exact-MAME
 pixel oracle was run. The exact-hash fresh-boot, aligned-pixel, and every-frame
 temporal gates therefore remain `unknown`.
 
-Rejected intermediate `95b44eb7…` never exited loading because Poppy silently
+Rejected intermediate `95b44eb7…` never exited loading because the then-used compiler
 encoded invalid source `sta $7E74C0,y` as DB-relative absolute,Y bytes
-`99 C0 74`, corrupting the arcade boot RAM test. Current `c6ec69a1…` uses an
-X-preserving legal long-X store and adds a ROM-pack assertion against recurrence.
+`99 C0 74`, corrupting the arcade boot RAM test. The latest corrected fork rejects
+this invalid-operand class. Historical `c6ec69a1…` uses an X-preserving legal long-X
+store and adds a ROM-pack assertion against recurrence.
 Its bounded cold-boot smoke reaches tick 185/render 89/PC `$0818` with halt zero,
 and the exact-hash vertical-scroll bridge gate is green 10/10. Both supplied old
 Mesen states now pass the explicit same-emulator checkpoint rebuild contract.

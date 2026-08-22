@@ -22,6 +22,9 @@ REFERENCE_RE = re.compile(r"^\s*\[[^\]\n]+\]:\s*(<[^>\n]+>|\S+)", re.MULTILINE)
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 EXPLICIT_ANCHOR_RE = re.compile(r"""<(?:a\s+(?:name|id)|[^>]+\sid)=["']([^"']+)["']""", re.I)
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+ACTIVE_ROM_SHA256 = "7506f496669050cf188dd767810717a1c35944cd5115b667fe216f33bfe6447c"
+ACTIVE_ROM_SHORT = ACTIVE_ROM_SHA256[:8]
+PINNED_POPPY_SHA256 = "715b14431478b62433498cc516c1cbbb8f418c1d7b39a8e71098ed98d9c9167e"
 
 
 def markdown_files() -> list[Path]:
@@ -84,8 +87,71 @@ def line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
-def main() -> int:
+def current_truth_failures() -> list[str]:
+    """Keep the short authoritative layer from regressing into the history ledger."""
+
     failures: list[str] = []
+    status = (ROOT / "docs/current/STATUS.md").read_text(encoding="utf-8")
+    status_current, separator, _history = status.partition("## Superseded evidence ledger")
+    if not separator:
+        failures.append("docs/current/STATUS.md: missing superseded-evidence authority boundary")
+    if ACTIVE_ROM_SHA256 not in status_current:
+        failures.append("docs/current/STATUS.md: current verdict lacks the pinned active ROM hash")
+    if PINNED_POPPY_SHA256 not in status_current:
+        failures.append("docs/current/STATUS.md: current verdict lacks the pinned Poppy DLL hash")
+
+    blockers = (ROOT / "docs/current/RELEASE_BLOCKERS.md").read_text(encoding="utf-8")
+    blockers_current = blockers.partition("The August 15 exact-hash gate")[0]
+    building = (ROOT / "docs/current/BUILDING.md").read_text(encoding="utf-8")
+    validation = (ROOT / "docs/current/VALIDATION.md").read_text(encoding="utf-8")
+    renderer = (ROOT / "docs/current/RENDERER_CONSOLIDATION.md").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    debugging = (ROOT / "docs/toolchain/DEBUGGING.md").read_text(encoding="utf-8")
+    build_script = (ROOT / "tools/build_interp.sh").read_text(encoding="utf-8")
+
+    for name, text in (
+        ("docs/current/RELEASE_BLOCKERS.md", blockers_current),
+        ("docs/current/BUILDING.md", building),
+        ("docs/current/VALIDATION.md", validation),
+        ("docs/current/RENDERER_CONSOLIDATION.md", renderer),
+    ):
+        if ACTIVE_ROM_SHORT not in text:
+            failures.append(
+                f"{name}: does not identify {ACTIVE_ROM_SHORT} as current"
+            )
+
+    for name, text in (
+        ("AGENTS.md", agents),
+        ("docs/current/BUILDING.md", building),
+        ("docs/toolchain/DEBUGGING.md", debugging),
+        ("tools/build_interp.sh", build_script),
+    ):
+        if PINNED_POPPY_SHA256 not in text:
+            failures.append(f"{name}: pinned Poppy SHA-256 is missing or stale")
+
+    if "poppy-astrobleem-latest" not in build_script:
+        failures.append("tools/build_interp.sh: corrected Poppy fork is not the default")
+    if "ALLOW_UNPINNED_POPPY" not in build_script:
+        failures.append("tools/build_interp.sh: missing explicit unpinned-compiler override gate")
+    if "poppy/issues/391" not in status_current or "poppy/issues/391" not in debugging:
+        failures.append("current Poppy #391 scope is not linked from status and debugging")
+
+    forbidden = (
+        "no successor ROM has been built",
+        "successor evidence is pending",
+        "defaulting to the historical `/home/chad/poppy`",
+        "Current `c14c0184",
+        "Current `d01db972",
+    )
+    authoritative = "\n".join((status_current, blockers_current, building, validation))
+    for phrase in forbidden:
+        if phrase in authoritative:
+            failures.append(f"current documentation retains contradictory phrase: {phrase!r}")
+    return failures
+
+
+def main() -> int:
+    failures = current_truth_failures()
     checked = 0
     files = markdown_files()
     anchor_cache: dict[Path, set[str]] = {}
@@ -131,7 +197,7 @@ def main() -> int:
                     )
 
     if failures:
-        print("Documentation link check failed:", file=sys.stderr)
+        print("Documentation consistency check failed:", file=sys.stderr)
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         return 1

@@ -84,6 +84,23 @@ def parse_args() -> argparse.Namespace:
             "byte. This tests register-only temporal decoupling without a ROM build."
         ),
     )
+    parser.add_argument(
+        "--capture-obj-vram",
+        action="store_true",
+        help=(
+            "Retain the 32 KiB displayed OBJ tile region (VRAM bytes "
+            "$8000-$FFFF). Intended for focused tile-cache forensics; omit "
+            "from long playback captures."
+        ),
+    )
+    parser.add_argument(
+        "--diagnostic-obj-y-constant",
+        type=lambda value: int(value, 0),
+        help=(
+            "Checkpoint diagnostic only: replace vid_obj's ordinary 16-bit "
+            "Y-transform immediate after verifying the current $00DA bytes."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -120,6 +137,10 @@ def le16(data: bytes) -> int:
     return int.from_bytes(data, "little")
 
 
+def be16(data: bytes) -> int:
+    return int.from_bytes(data, "big")
+
+
 def park_sa1_at_current_pc(m: McpSession, reason: str) -> dict[str, Any]:
     """Park the paused SA-1 CPU without stopping the 5A22/NMI consumer.
 
@@ -148,7 +169,7 @@ def park_sa1_at_current_pc(m: McpSession, reason: str) -> dict[str, Any]:
     }
 
 
-def snapshot(m: McpSession) -> dict[str, Any]:
+def snapshot(m: McpSession, *, capture_obj_vram: bool = False) -> dict[str, Any]:
     state = m.get_state()
     snes_cpu = m.get_cpu_state("Snes")
     sa1_cpu = m.get_cpu_state("Sa1")
@@ -163,6 +184,9 @@ def snapshot(m: McpSession) -> dict[str, Any]:
     live_scrolly = int(
         m.read_memory("snesMemory", 0x413481, 1)[0]
     )
+    player = bytes(m.read_memory("snesMemory", 0x4012B4, 0x38))
+    video_d0 = bytes(m.read_memory("snesMemory", 0x413000, 0x1000))
+    video_e0 = bytes(m.read_memory("snesMemory", 0x414000, 0x4000))
     bg_cgram = bytes(m.read_memory("snesCgRam", 0, 0x100))
     bg_cgram_staging = bytes(
         m.read_memory("snesWorkRam", 0x8000, 0x100)
@@ -176,6 +200,11 @@ def snapshot(m: McpSession) -> dict[str, Any]:
     displayed_bg_graphics = bytes(
         m.read_memory("snesVideoRam", 0x2000, 0x6000)
     )
+    displayed_obj_vram = (
+        bytes(m.read_memory("snesVideoRam", 0x8000, 0x8000))
+        if capture_obj_vram
+        else None
+    )
     displayed_opt_table = bytes(
         m.read_memory("snesVideoRam", 0xF000, 0x80)
     )
@@ -183,17 +212,45 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         m.read_memory("snesWorkRam", 0x9000, 0x1000)
     )
     hardware_oam = bytes(m.read_memory("snesSpriteRam", 0, 0x220))
-    presentation_oam = bytes(
-        m.read_memory("snesWorkRam", 0x6F60, 0x220)
-    )
     obj_meta = bytes(m.read_memory("snesWorkRam", 0x7180, 0x10))
+    obj_dma_pending = obj_meta[9]
+    fallback_meta = bytes(m.read_memory("snesWorkRam", 0x6420, 0x0D))
+    fallback_valid = fallback_meta[12]
+    obj_presentation_source = "current"
+    presentation_oam = bytes(m.read_memory("snesWorkRam", 0x6F60, 0x220))
+    obj_base_scrollx = obj_meta[3]
+    obj_present_valid = obj_meta[4]
+    obj_applied_comp = obj_meta[5]
     obj_world_count = le16(obj_meta[6:8])
+    obj_base_sequence = le16(obj_meta[10:12])
+    obj_world_first = None
+    obj_world_span = None
+    obj_active_low_span = None
+    obj_world_list_base = 0x6D40
+    if obj_dma_pending == 0x80 and fallback_valid == 0xA5:
+        obj_presentation_source = "fallback"
+        presentation_oam = bytes(m.read_memory("snesWorkRam", 0x6000, 0x220))
+        obj_base_scrollx = fallback_meta[0]
+        obj_present_valid = fallback_valid
+        obj_applied_comp = fallback_meta[1]
+        obj_world_count = le16(fallback_meta[2:4])
+        obj_base_sequence = le16(fallback_meta[4:6])
+        obj_world_first = le16(fallback_meta[6:8])
+        obj_world_span = le16(fallback_meta[8:10])
+        obj_active_low_span = le16(fallback_meta[10:12])
+        obj_world_list_base = 0x6220
     obj_world_list = bytes(
-        m.read_memory("snesWorkRam", 0x6D40, min(obj_world_count, 128) * 4)
+        m.read_memory("snesWorkRam", obj_world_list_base, min(obj_world_count, 128) * 4)
     )
     obj_published = bytes(m.read_memory("snesWorkRam", 0x7190, 5))
     obj_dma_detail = bytes(m.read_memory("snesWorkRam", 0x7195, 6))
     obj_base_span_detail = bytes(m.read_memory("snesWorkRam", 0x71A0, 4))
+    if obj_world_first is None:
+        obj_world_first = le16(obj_dma_detail[0:2])
+    if obj_world_span is None:
+        obj_world_span = le16(obj_dma_detail[2:4])
+    if obj_active_low_span is None:
+        obj_active_low_span = le16(obj_base_span_detail[0:2])
     pacing_shared = bytes(m.read_memory("snesMemory", 0x410122, 0x42))
     obj_cache_marker = le16(m.read_memory("snesWorkRam", 0x8980, 2))
     obj_queue_count_raw = le16(m.read_memory("snesWorkRam", 0x89C6, 2))
@@ -211,7 +268,7 @@ def snapshot(m: McpSession) -> dict[str, Any]:
     bg_reverse_owner_slot2 = le16(
         bytes(m.read_memory("snesWorkRam", 0xD004, 2))
     )
-    return {
+    result = {
         "frame": int(state.get("frameCount", 0)),
         "bg_reverse_owner_slot2": bg_reverse_owner_slot2,
         "snes_pc": (
@@ -323,6 +380,21 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "live_scrollx_column0": live_scrollx_column0,
         "live_scrollx_column4": live_scrollx,
         "live_scrolly_column4": live_scrolly,
+        "player": {
+            "health": be16(player[0x00:0x02]),
+            "previous_input": player[0x0B],
+            "input": player[0x0A],
+            "flags": player[0x2A],
+            "action": player[0x2B],
+            "y": be16(player[0x2C:0x2E]),
+            "x": be16(player[0x30:0x32]),
+            "animation": be16(player[0x34:0x36]),
+            "animation_step": be16(player[0x36:0x38]),
+        },
+        "video_d0": video_d0.hex(),
+        "video_d0_sha256": hashlib.sha256(video_d0).hexdigest(),
+        "video_e0": video_e0.hex(),
+        "video_e0_sha256": hashlib.sha256(video_e0).hexdigest(),
         "latest_scrollx": int(
             m.read_memory("snesWorkRam", 0x72B2, 1)[0]
         ),
@@ -388,16 +460,18 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "presentation_oam_sha256": hashlib.sha256(
             presentation_oam
         ).hexdigest(),
+        "obj_presentation_source": obj_presentation_source,
+        "obj_fallback_valid": fallback_valid,
         "obj_cache_scrollx": obj_meta[0],
         "obj_queue_scrollx": obj_meta[1],
         "obj_queue2_scrollx": obj_meta[2],
-        "obj_base_scrollx": obj_meta[3],
-        "obj_present_valid": obj_meta[4],
-        "obj_applied_comp": obj_meta[5],
+        "obj_base_scrollx": obj_base_scrollx,
+        "obj_present_valid": obj_present_valid,
+        "obj_applied_comp": obj_applied_comp,
         "obj_world_count": obj_world_count,
         "obj_step_changed": obj_meta[8],
-        "obj_dma_pending": obj_meta[9],
-        "obj_base_sequence": le16(obj_meta[10:12]),
+        "obj_dma_pending": obj_dma_pending,
+        "obj_base_sequence": obj_base_sequence,
         "obj_last_dma_line": le16(obj_meta[12:14]),
         "obj_dma_skips": le16(obj_meta[14:16]),
         "obj_world_list": obj_world_list.hex(),
@@ -405,13 +479,13 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "obj_published_base_scrollx": obj_published[2],
         "obj_published_comp": obj_published[3],
         "obj_published_valid": obj_published[4],
-        "obj_world_first": le16(obj_dma_detail[0:2]),
-        "obj_world_span": le16(obj_dma_detail[2:4]),
+        "obj_world_first": obj_world_first,
+        "obj_world_span": obj_world_span,
         "obj_partial_dmas": le16(obj_dma_detail[4:6]),
         "obj_last_skip_line": int(
             m.read_memory("snesWorkRam", 0x719D, 1)[0]
         ),
-        "obj_active_low_span": le16(obj_base_span_detail[0:2]),
+        "obj_active_low_span": obj_active_low_span,
         "obj_base_low_span": le16(obj_base_span_detail[2:4]),
         "bg_column_kind": le16(
             m.read_memory("snesWorkRam", 0x8996, 2)
@@ -498,6 +572,18 @@ def snapshot(m: McpSession) -> dict[str, Any]:
         "forced_blank": bool(ppu.get("forcedBlank", False)),
         "ppu_frame": int(ppu.get("frameCount", 0)),
     }
+    if displayed_obj_vram is not None:
+        result["displayed_obj_vram"] = displayed_obj_vram.hex()
+        result["displayed_obj_vram_sha256"] = hashlib.sha256(
+            displayed_obj_vram
+        ).hexdigest()
+        result["displayed_obj_vram_record_sha256"] = [
+            hashlib.sha256(
+                displayed_obj_vram[offset : offset + 0x80]
+            ).hexdigest()
+            for offset in range(0, len(displayed_obj_vram), 0x80)
+        ]
+    return result
 
 
 def wait_for_file(path: Path, timeout: float = 30.0) -> None:
@@ -558,6 +644,11 @@ def main() -> int:
         raise SystemExit("--state and --movie are mutually exclusive")
     if args.refresh_video_mirror and args.state is None:
         raise SystemExit("--refresh-video-mirror requires --state")
+    if args.diagnostic_obj_y_constant is not None:
+        if args.state is None:
+            raise SystemExit("--diagnostic-obj-y-constant requires --state")
+        if not 0 <= args.diagnostic_obj_y_constant <= 0xFFFF:
+            raise SystemExit("--diagnostic-obj-y-constant must fit in 16 bits")
     rom = args.rom.resolve()
     if rom.stat().st_size != 0x400000:
         raise SystemExit("expected a 4 MiB production ROM")
@@ -609,9 +700,21 @@ def main() -> int:
                     "reason": "same-ROM register-only temporal-scroll diagnostic",
                 }
             ] if args.mirror_live_scroll else [])
+            + ([
+                {
+                    "region": "snesWorkRam $7F:A20D-$A20E",
+                    "source": (
+                        "diagnostic vid_obj ordinary Y-transform immediate "
+                        f"${args.diagnostic_obj_y_constant:04X}"
+                    ),
+                    "guard": "original bytes DA 00",
+                    "reason": "same-ROM aligned-pixel OBJ Y-registration test",
+                }
+            ] if args.diagnostic_obj_y_constant is not None else [])
         ),
         "input": "recorded movie" if args.movie else "controller idle",
         "obj_temporal_capture": True,
+        "obj_vram_capture": args.capture_obj_vram,
     }
     print(json.dumps({"event": "provenance", **provenance}, sort_keys=True))
 
@@ -673,6 +776,37 @@ def main() -> int:
                 ),
                 flush=True,
             )
+        if args.diagnostic_obj_y_constant is not None:
+            obj_y_immediate = 0x1A20D
+            observed = bytes(
+                m.read_memory("snesWorkRam", obj_y_immediate, 2)
+            )
+            if observed != b"\xDA\x00":
+                raise RuntimeError(
+                    "vid_obj ordinary Y-transform immediate guard failed: "
+                    f"expected da00, got {observed.hex()}"
+                )
+            replacement = args.diagnostic_obj_y_constant.to_bytes(2, "little")
+            m.write_memory("snesWorkRam", obj_y_immediate, replacement.hex())
+            verified = bytes(
+                m.read_memory("snesWorkRam", obj_y_immediate, 2)
+            )
+            if verified != replacement:
+                raise RuntimeError(
+                    "vid_obj ordinary Y-transform diagnostic patch did not verify"
+                )
+            print(
+                json.dumps(
+                    {
+                        "event": "diagnostic_obj_y_constant",
+                        "region": "$7F:A20D-$A20E",
+                        "original": observed.hex(),
+                        "replacement": replacement.hex(),
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
         current = int(m.get_state().get("frameCount", 0))
         if current > args.start_frame:
             raise RuntimeError(
@@ -699,7 +833,7 @@ def main() -> int:
 
         next_checkpoint = args.start_frame
         while current <= args.end_frame:
-            snap = snapshot(m)
+            snap = snapshot(m, capture_obj_vram=args.capture_obj_vram)
             if snap["frame"] != current:
                 raise RuntimeError(
                     f"frame changed while paused: expected {current}, got "

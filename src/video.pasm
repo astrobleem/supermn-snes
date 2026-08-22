@@ -202,12 +202,24 @@ RQ2_OBJ=$B420           ; $0300 bytes
 RQ2_BG_LIST=$B720       ; incremental list below $0100 bytes
 RQ2_BG_VALUES=$B820     ; corresponding pairs below $0200 bytes; ends before $BC00
 ; $7E:5000-$74FF formerly held an abandoned double-buffer snapshot design.
-; The widened OBJ hash owns $5000-$5FFF; title staging uses $6000-$6D3F;
-; $6D40-$719B is the immutable OAM presentation image/manifest/provenance; and
+; The widened OBJ hash owns $5000-$5FFF. Title staging uses $6000-$6D3F until
+; its BG2 map/font have been uploaded; gameplay reuses $6000-$642D as the
+; last-published OAM fallback while a new foreground candidate is under
+; construction. $6D40-$719B is the immutable OAM presentation image/manifest/provenance; and
 ; $72A0-$737F holds the applied per-column-Y/Mode-2 bridge. $7380-$73FF is its
 ; candidate table and $74A0-$74AB owns bounded NMI tile-batch/cache markers.
 ; $7E:C000-$CBFF is the bounded OBJ pre-VBlank staging window.  The remaining
 ; space stays private renderer scratch and must not alias queue payloads.
+OBJ_FALLBACK_OAM=$6000
+OBJ_FALLBACK_LIST=$6220
+OBJ_FALLBACK_BASE_SCROLLX=$6420
+OBJ_FALLBACK_APPLIED_COMP=$6421
+OBJ_FALLBACK_WORLD_COUNT=$6422
+OBJ_FALLBACK_BASE_SEQUENCE=$6424
+OBJ_FALLBACK_WORLD_FIRST=$6426
+OBJ_FALLBACK_WORLD_SPAN=$6428
+OBJ_FALLBACK_ACTIVE_LOW_SPAN=$642A
+OBJ_FALLBACK_VALID=$642C
 STAGING_CGRAM=$8000
 TITLE_TEXT_META=$89BE ; palette dirty bit 15 = overloaded title composition uses BG2
 TITLE_FONT_MARK=$89DC ; $A55B after coherent BG2 font/map VRAM has been initialized
@@ -701,6 +713,14 @@ obj_place:
     rts
 
 copy32:                  ; copy 32 bytes $7E:($D0) -> $7E:($D4) (16-bit words)
+    ; Poppy can reach this label with its tracked I flag stale even though every
+    ; runtime caller is I16.  Without the explicit mode it encoded both Y
+    ; immediates one byte short: the following B7 opcode became LDY's high byte
+    ; and D0 became a backward branch into obj_place.  Each pass then nested
+    ; another JSR and lost two stack bytes.  Make both assembly and runtime
+    ; contracts explicit at this independently callable helper.
+    .a16
+    .i16
     ldy #$0000
 c32l:
     lda [$D0],y
@@ -1680,6 +1700,7 @@ rc_l:
     rep #$30             ; 16-bit A/X (guaranteed, independent of plp/vid_init) for the long stores
     lda #$0000
 renderer_mailboxes_init:
+    sta $7E1F22          ; 5A22-private IRQ/NMI renderer busy flag + reserved high byte
     sta $410122          ; pacing snapshot arm = inactive until the organic production gate
     sta $41012A          ; vblank epoch + last-release epoch = 0
     sta $41012C          ; cadence marker + 5A22-ready byte = 0
@@ -2198,6 +2219,8 @@ nmi_pacing_wram:
     lda #$00
     pha
     plb
+    jsr nmi_guard_enter
+    bne nmi_pacing_restore_guarded
     lda #$80
     sta $2201            ; keep the coprocessor-IRQ source enabled
     lda $41012A
@@ -2207,6 +2230,9 @@ nmi_pacing_wram:
     jsr service_pending_dma0
     jsr nmi_present_then_sample
     jsr nmi_video_keepalive ; boot/game presentation runs only after wake and tile service
+nmi_pacing_restore:
+    jsr nmi_guard_exit
+nmi_pacing_restore_guarded:
     lda $3302            ; leave Bus-A latched on IRAM, not a ROM fetch
     pld                   ; restore the interrupted foreground Direct Page
     plb
@@ -2218,14 +2244,6 @@ nmi_pacing_wram:
     ; a nested IRQ inside an interrupted IRQ handler.  Both paths can grow the
     ; stack until control returns into data.  Keep this eight-byte slot
     ; size-neutral because the WRAM mirror has fixed downstream addresses.
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
     rep #$30
     ply
     plx
@@ -2252,18 +2270,14 @@ irq_pacing_wram:
     plb
     lda #$80
     sta $2202            ; acknowledge SA-1 -> S-CPU coprocessor IRQ
+    stz $2201            ; bound a still-asserted source; the next normal NMI re-enables it
+    ; The coprocessor IRQ is also a required wake source for the $0818 wait.
+    ; Publish the same private busy flag used by NMI re-entry exclusion.
+    jsr nmi_guard_enter
+    bne irq_pacing_restore
     jsr pacing_try_wake
-    ; NMI is the sole controller sampler.  A coprocessor IRQ can begin here
-    ; shortly before vblank; the non-maskable NMI then preempts this handler.
-    ; Calling the same serial reader from both paths lets NMI reset $1F12/13
-    ; and relatch $4016 halfway through the IRQ's 16-bit loop.  The interrupted
-    ; IRQ subsequently resumes against the wrong shift position, while NMI can
-    ; publish the IRQ's half-cleared sample as a one-tick neutral input.  Keep
-    ; this slot size-neutral because save states can resume at downstream WRAM
-    ; mirror instruction boundaries.
-    nop
-    nop
-    nop
+    jsr nmi_guard_exit
+irq_pacing_restore:
     lda $3302            ; leave Bus-A latched on IRAM
     pld                   ; restore the interrupted foreground Direct Page
     plb
@@ -2273,6 +2287,22 @@ irq_pacing_wram:
     pla
     plp
     rti
+
+.org $8F71
+.a8
+.i16
+nmi_guard_enter:
+    lda $1F22
+    bne nge_done
+    inc $1F22
+nge_acquired:
+    lda #$00
+nge_done:
+    rts
+nmi_guard_exit:
+    stz $1F22
+    rts
+nmi_guard_helpers_end:
 
 ; A save state can restore a complete cached Stage-3 tilemap while leaving the
 ; serialized PPU BG1 horizontal register at a stale pre-map value.  At normal
@@ -3514,7 +3544,9 @@ pbct_clean:
 pacing_bg_cache_test_end:
 
 ; Convert the logical X1-001 Y byte to the established SNES OAM coordinate.
-; Ordinary $01-$EF records retain the exact v131-v134 transform ($DA-sy).
+; Ordinary $01-$EF records use the aligned MAME/SNES crop transform ($E9-sy).
+; The former $DA constant placed every gameplay OBJ exactly 15 scanlines high;
+; background registration hid that systematic foreground-only displacement.
 ; Newly admitted $F0-$F2 top-HUD records are the MAME foreground wrap copy:
 ; their glyph pixels occupy the lower half of a 16x16 tile, so $1EA-sy maps
 ; them to OAM $FA-$F8 and exposes those eight pixels at SNES rows 0-7.
@@ -3527,7 +3559,7 @@ obj_y_transform:
     beq oyt_top_hud
     cmp #$00F0
     bcs oyt_top_hud
-    lda #$00DA
+    lda #$00E9
     sec
     sbc $EC
     and #$00FF
@@ -8109,14 +8141,7 @@ obj_present_commit:
     lda $D6
     pha
 
-    sep #$20
-.a8
-    lda #$80
-    sta $7E7189          ; NMI lock: image/list/compensation are not coherent yet
-    lda #$00
-    sta $7E7184          ; NMI must retain the preceding coherent OAM while copying
-    rep #$30
-.a16
+    jsl.l $E9F300        ; snapshot last coherent OAM, then lock this candidate
     lda #$021F           ; 544-byte low/high OAM image
     ldx #$8600
     ldy #$6F60
@@ -8421,16 +8446,17 @@ obj_present_nmi:
     phx
     sep #$20
 .a8
+    lda $7E7189
+    cmp #$80
+    beq opn_fallback
     lda $7E7184
     cmp #$A5
     beq opn_valid
+opn_fallback:
+    jsl.l $E9F400
     jmp opn_restore
 opn_valid:
     lda $7E7189
-    cmp #$80
-    bne opn_not_locked
-    jmp opn_restore      ; foreground is still constructing the immutable image
-opn_not_locked:
     cmp #$00
     bne opn_due
     lda $7E72B3
@@ -9966,7 +9992,13 @@ nmi_batch_camera_mailbox_intake_end:
 ; 5A22 reset continuation for the size-neutral $00:FC00 stub.  Keeping this
 ; setup in a guarded video-bank seam prevents the old bank-$00 bootstrap from
 ; overlapping op_addsubq_g@$FD00.  It preserves the established SA-1 reset,
-; shared-memory enable, and native-mode transition order exactly.
+; shared-memory enable, and native-mode transition order exactly.  Unlike the
+; SA-1, the 5A22 never passes through `reset` and therefore must establish its
+; own native stack here.  Reset leaves emulation-mode S=$01FF; that proved too
+; small for the foreground renderer plus asynchronous NMI frame construction
+; and wrapped below zero during the fresh-credit path.  Use the project's
+; established native-stack top at $07FF; the renderer owns direct-page scratch
+; below $0100, leaving the intervening low-WRAM span for call depth.
 .org $DAA0
 .a8
 .i16
@@ -9988,6 +10020,8 @@ cpu5a22_boot_extended:
     clc
     xce
     rep #$30
+    ldx #$07FF
+    txs
     jml.l $E9800B       ; preserve the established wrapper and explicit ROM bank
 cpu5a22_boot_extended_end:
 
@@ -11566,4 +11600,365 @@ sdp_chunk:
 .a16
     rts
 snapshot_dma_plane_end:
+
+.org $F300
+.a8
+.i16
+obj_fallback_prepare_lock:
+    php
+    phb
+    rep #$30
+.a16
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+
+    sep #$20
+.a8
+    lda #$00
+    sta.l $7E642C        ; fallback is invalid until the complete copy lands
+    lda.l $7E7184
+    cmp #$A5
+    beq ofpl_have_current
+    jmp ofpl_no_backup
+ofpl_have_current:
+    lda.l $7E7194
+    cmp #$A5
+    beq ofpl_have_published
+    jmp ofpl_no_backup
+ofpl_have_published:
+    lda.l $7E7189
+    cmp #$80
+    bne ofpl_can_backup
+    jmp ofpl_no_backup
+ofpl_can_backup:
+
+    lda #$00
+    pha
+    plb                  ; PPU register reads need DBR=$00
+ofpl_wait_active:
+    lda HVBJOY
+    bmi ofpl_wait_active
+    lda STAT78
+    lda SLHV
+    lda OPVCT
+    cmp #$D0
+    bcc ofpl_copy
+ofpl_wait_vblank:
+    lda HVBJOY
+    bpl ofpl_wait_vblank
+ofpl_wait_post_vblank:
+    lda HVBJOY
+    bmi ofpl_wait_post_vblank
+
+ofpl_copy:
+    rep #$30
+.a16
+    lda #$021F
+    ldx #OBJ_PRESENT_OAM
+    ldy #OBJ_FALLBACK_OAM
+    mvn $7E,$7E
+    lda #$01FF
+    ldx #OBJ_WORLD_LIST
+    ldy #OBJ_FALLBACK_LIST
+    mvn $7E,$7E          ; DBR=$7E for the metadata copy below
+
+    sep #$20
+.a8
+    lda OBJ_BASE_SCROLLX
+    sta OBJ_FALLBACK_BASE_SCROLLX
+    lda OBJ_APPLIED_COMP
+    sta OBJ_FALLBACK_APPLIED_COMP
+    rep #$20
+.a16
+    lda OBJ_WORLD_COUNT
+    sta OBJ_FALLBACK_WORLD_COUNT
+    lda OBJ_BASE_SEQUENCE
+    sta OBJ_FALLBACK_BASE_SEQUENCE
+    lda OBJ_WORLD_FIRST
+    sta OBJ_FALLBACK_WORLD_FIRST
+    lda OBJ_WORLD_SPAN
+    sta OBJ_FALLBACK_WORLD_SPAN
+    lda OBJ_ACTIVE_LOW_SPAN
+    sta OBJ_FALLBACK_ACTIVE_LOW_SPAN
+    sep #$20
+.a8
+    lda #$A5
+    sta OBJ_FALLBACK_VALID
+    bra ofpl_lock_current
+
+ofpl_no_backup:
+.a8
+    lda #$00
+    sta.l $7E7184        ; first base has no prior OAM source to fall back to
+
+ofpl_lock_current:
+    lda #$80
+    sta.l $7E7189        ; candidate image/list/compensation are under construction
+    rep #$30
+.a16
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plb
+    plp
+    rtl
+obj_fallback_prepare_lock_end:
+
+.org $F400
+.a8
+.i16
+obj_fallback_nmi:
+    php
+    phb
+    rep #$30
+.a16
+    pha
+    phx
+    phy
+    lda $D0
+    pha
+    lda $D2
+    pha
+    lda $D4
+    pha
+
+    sep #$20
+.a8
+    lda.l $7E642C
+    cmp #$A5
+    beq ofn_have_fallback
+    jmp ofn_restore8
+ofn_have_fallback:
+    lda.l $7E72B3
+    cmp #$A5
+    beq ofn_have_bg
+    jmp ofn_restore8
+ofn_have_bg:
+    lda.l $7E6420
+    sec
+    sbc.l $7E72B4
+    sta $D0              ; desired fallback compensation
+    sec
+    sbc.l $7E6421
+    bne ofn_delta_needed
+    jmp ofn_restore8
+ofn_delta_needed:
+    bmi ofn_negative
+    sta $D2
+    bra ofn_budget
+ofn_negative:
+    eor #$FF
+    inc a
+    sta $D2
+
+ofn_budget:
+    lda #$00
+    pha
+    plb
+    lda HVBJOY
+    bmi ofn_vblank
+    lda #$FF
+    sta.l $7E719D
+    bra ofn_late
+ofn_vblank:
+    lda STAT78
+    lda SLHV
+    lda OPVCT
+    tax
+    lda OPVCT
+    and #$01
+    bne ofn_late_line
+    txa
+    cmp #$FC             ; fallback publishes the compact world span + high table
+    bcc ofn_time_ok
+ofn_late_line:
+    txa
+    sta.l $7E719D
+ofn_late:
+    rep #$20
+.a16
+    lda.l $7E718E
+    inc a
+    sta.l $7E718E
+    jmp ofn_restore16
+
+ofn_time_ok:
+.a8
+    txa
+    sta.l $7E718C
+    lda #$7E
+    pha
+    plb
+    rep #$20
+.a16
+    lda OBJ_FALLBACK_WORLD_COUNT
+    sta $D4
+    beq ofn_publish
+    ldy #$0000
+    sep #$20
+.a8
+    lda $D0
+    sec
+    sbc OBJ_FALLBACK_APPLIED_COMP
+    bmi ofn_subtract
+
+ofn_add_loop:
+    rep #$20
+.a16
+    lda OBJ_FALLBACK_LIST,y
+    tax
+    sep #$20
+.a8
+    lda OBJ_FALLBACK_OAM,x
+    clc
+    adc $D2
+    sta OBJ_FALLBACK_OAM,x
+    bcc ofn_add_no_wrap
+    lda OBJ_FALLBACK_LIST+2,y
+    tax
+    lda OBJ_FALLBACK_OAM+$0200,x
+    eor OBJ_FALLBACK_LIST+3,y
+    sta OBJ_FALLBACK_OAM+$0200,x
+ofn_add_no_wrap:
+    rep #$20
+.a16
+    tya
+    clc
+    adc #$0004
+    tay
+    dec $D4
+    bne ofn_add_loop
+    bra ofn_publish
+
+ofn_subtract:
+    rep #$20
+.a16
+ofn_sub_loop:
+    lda OBJ_FALLBACK_LIST,y
+    tax
+    sep #$20
+.a8
+    lda OBJ_FALLBACK_OAM,x
+    sec
+    sbc $D2
+    sta OBJ_FALLBACK_OAM,x
+    bcs ofn_sub_no_wrap
+    lda OBJ_FALLBACK_LIST+2,y
+    tax
+    lda OBJ_FALLBACK_OAM+$0200,x
+    eor OBJ_FALLBACK_LIST+3,y
+    sta OBJ_FALLBACK_OAM+$0200,x
+ofn_sub_no_wrap:
+    rep #$20
+.a16
+    tya
+    clc
+    adc #$0004
+    tay
+    dec $D4
+    bne ofn_sub_loop
+
+ofn_publish:
+    sep #$20
+.a8
+    lda $D0
+    sta OBJ_FALLBACK_APPLIED_COMP
+    rep #$20
+.a16
+    lda OBJ_FALLBACK_WORLD_SPAN
+    beq ofn_publish_metadata
+    lda OBJ_FALLBACK_WORLD_FIRST
+    lsr a
+    sep #$20
+.a8
+    sta OAMADDL
+    stz OAMADDH
+    stz $4360
+    lda #$04
+    sta $4361
+    rep #$20
+.a16
+    lda OBJ_FALLBACK_WORLD_FIRST
+    clc
+    adc #OBJ_FALLBACK_OAM
+    sta $4362
+    sep #$20
+.a8
+    lda #$7E
+    sta $4364
+    rep #$20
+.a16
+    lda OBJ_FALLBACK_WORLD_SPAN
+    sta $4365
+    sep #$20
+.a8
+    lda #$40
+    sta MDMAEN
+
+    stz OAMADDL
+    lda #$01
+    sta OAMADDH
+    stz $4360
+    lda #$04
+    sta $4361
+    rep #$20
+.a16
+    lda #OBJ_FALLBACK_OAM+$0200
+    sta $4362
+    lda #$0020
+    sta $4365
+    sep #$20
+.a8
+    lda #$7E
+    sta $4364
+    lda #$40
+    sta MDMAEN
+    rep #$20
+.a16
+    lda $7E7199
+    inc a
+    sta $7E7199
+
+ofn_publish_metadata:
+    rep #$20
+.a16
+    lda OBJ_FALLBACK_BASE_SEQUENCE
+    sta $7E7190
+    sep #$20
+.a8
+    lda OBJ_FALLBACK_BASE_SCROLLX
+    sta $7E7192
+    lda OBJ_FALLBACK_APPLIED_COMP
+    sta $7E7193
+    lda #$A5
+    sta $7E7194
+    bra ofn_restore8
+
+ofn_restore8:
+    rep #$30
+.a16
+ofn_restore16:
+    pla
+    sta $D4
+    pla
+    sta $D2
+    pla
+    sta $D0
+    ply
+    plx
+    pla
+    plb
+    plp
+    rtl
+obj_fallback_nmi_end:
+
 video_image_end:

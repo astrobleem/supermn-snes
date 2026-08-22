@@ -1477,8 +1477,8 @@ vtime_choke_gateway_end:
 ; without returning to the common clock. In the explicit interpreter-only
 ; diagnostic, decline that optimization before it changes registers, memory,
 ; PC, or CCR. Other modes re-materialize the two bank-$00 instructions replaced
-; by the pack-time JML and resume at mvc_check's mask. The fixed return PCs are
-; guarded against interp.sym and exact source bytes by build_interp_rom.py.
+; by the pack-time JML and resume at mvc_check's mask. The packer derives and
+; patches the exact resume PC from interp.sym, then guards this source shape.
     .org $B4D1
 vtime_mvc_gateway:
     rep #$30
@@ -1487,7 +1487,7 @@ vtime_mvc_gateway:
     bit #VTIME_FLAG_INTERPRETER_ONLY
     bne vtime_mvc_interpret
     lda $44
-    jml.l $0095F2         ; mvc_check after REP #$30 / LDA $44
+    jml.l $0095F1         ; patched by packer from mvc_check + REP/LDA prefix
 vtime_mvc_interpret:
     jml.l $00FA00         ; op_move_g: execute the already-prepared MOVE normally
 vtime_mvc_gateway_end:

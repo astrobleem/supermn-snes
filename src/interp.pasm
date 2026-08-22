@@ -120,7 +120,7 @@ ccramclr:                ; else random power-on values break the start handshake
     ; UNREACHABLE. $F400 fell inside the entry_20e8 escape body; $F600 was covered
     ; by loop_hook growth (read $64 = lh code, found 2026-07-09 — every Mesen cold
     ; boot had been dropping into test mode). Now an org-pinned, labeled byte at
-    ; $00:F7E0 (RESP1 tail slack; see the TESTFLAG declaration) — zero in BOTH ROM
+    ; $00:F7E0 (RESP1 tail slack; see the RESP1/TESTFLAG note) — zero in BOTH ROM
     ; views (SA-1 file $77E0 / 5A22 file $F7E0); optest/opsweep bake file $77E0.
     lda $F7E0            ; TESTFLAG (LITERAL, not the symbol: Poppy forward-refs can
     beq notest           ;  mis-size operands and ANY shift here is fatal)
@@ -1810,7 +1810,8 @@ op_lsr_b:                ; lsr.b #cnt,Dn : Dn.byte >>= cnt ; Z=(byte==0) ; PC +=
     lda $00,x            ; Dn byte
 lsr_loop:
     ldy $50
-    cpy #0
+    nop
+    nop
     beq lsr_done
     lsr a
     dec $50
@@ -2515,7 +2516,8 @@ op_lsl_b:                ; lsl.b #cnt,Dn : Dn.lobyte <<= cnt ; Z ; PC += 2
     lda $00,x            ; Dn byte
 lsl_loop:
     ldy $50
-    cpy #0
+    nop
+    nop
     beq lsl_done
     asl a
     dec $50
@@ -2626,13 +2628,14 @@ op_btst_imm_d16:         ; btst #bit,(d16,An) : Z=!(byte bit set) ; PC += 6
     and #$00FF
     sta $54              ; byte
     ldy $50
+    iny
     lda #$0001
 bt_sh:
-    cpy #0
+    dey
     beq bt_done
     asl a
-    dey
     bra bt_sh
+    nop
 bt_done:
     and $54
     jsr setz_from_a
@@ -2906,7 +2909,8 @@ op_lsl_w:                ; lsl.w #cnt,Dn : Dn.lo <<= cnt ; Z ; PC += 2
     lda $00,x            ; Dn low16
 lslw_loop:
     ldy $50
-    cpy #0
+    nop
+    nop
     beq lslw_done
     asl a
     dec $50
@@ -3724,13 +3728,14 @@ op_btst_imm_dn:        ; btst #bit,Dn : Z = !(Dn bit (imm&31) set) ; PC+=4
     cmp #$0010
     bcs btd_hi
     ldy $50
+    iny
     lda #$0001
 btd_lsh:
-    cpy #0
+    dey
     beq btd_ltest
     asl a
-    dey
     bra btd_lsh
+    nop
 btd_ltest:
     and $00,x           ; AND with Dn low16
     jsr setz_from_a
@@ -3740,13 +3745,14 @@ btd_hi:
     lda $50
     sbc #$0010
     tay                 ; bit - 16
+    iny
     lda #$0001
 btd_hsh:
-    cpy #0
+    dey
     beq btd_htest
     asl a
-    dey
     bra btd_hsh
+    nop
 btd_htest:
     and $02,x           ; AND with Dn high16
     jsr setz_from_a
@@ -4325,13 +4331,14 @@ op_btst_dn_dn:        ; btst Dn,Dn : Z = !(srcDn bit (cntDn&31) set) ; PC+=2
     cmp #$0010
     bcs btdd_hi
     ldy $50
+    iny
     lda #$0001
 btdd_l:
-    cpy #0
+    dey
     beq btdd_lt
     asl a
-    dey
     bra btdd_l
+    nop
 btdd_lt:
     and $00,x
     jsr setz_from_a
@@ -4341,13 +4348,14 @@ btdd_hi:
     lda $50
     sbc #$0010
     tay
+    iny
     lda #$0001
 btdd_h:
-    cpy #0
+    dey
     beq btdd_ht
     asl a
-    dey
     bra btdd_h
+    nop
 btdd_ht:
     and $02,x
     jsr setz_from_a
@@ -4522,10 +4530,20 @@ ix_wneg:
     clc
     adc $54
     sta $54
-    lda $52
-    adc #$FFFF
-    sta $52
+    ; Add a sign-extended negative word index to the high half without an
+    ; immediate whose width depends on Poppy's incoming A-mode tracking.
+    ; The old source `lda $52 / adc #$FFFF / sta $52` assembled as
+    ; `A5 52 69 FF 85 52 60`: runtime A16 swallowed the STA opcode as the
+    ; immediate high byte and desynchronized every negative-word indexed EA.
+    ; Carry from the low-word ADC means -1+carry == 0, so leave $52 alone;
+    ; otherwise decrement it.  Two NOPs keep ix_long and all later bank-$00
+    ; addresses exactly stable.
+    bcs ix_wneg_done
+    dec $52
+ix_wneg_done:
     rts
+    nop
+    nop
 ix_long:
     lda $00,x            ; full 32-bit index
     clc
@@ -4541,9 +4559,10 @@ ix_long:
 ;     Data: writebyte uses $80(low byte); writeword $80(word, big-endian);
 ;     writelong $80(lo16)/$82(hi16) (big-endian 4 bytes). Caller is 16-bit (rep).
 writebyte:
-    lda $52
-    cmp #$00F0
-    bne wb_io
+    jmp writebyte_fixed
+    nop
+    nop
+    nop
     ldx $54
     sep #$20
     lda $80
@@ -4572,9 +4591,10 @@ wb_ram:
 wb_vid:
     jmp store_vid_byte   ; $B0/$D0/$E0 -> $41 shadow (else dropped); rts to caller
 writeword:
-    lda $52
-    cmp #$00F0
-    bne ww_vid
+    jmp writeword_fixed
+    nop
+    nop
+    nop
     ldx $54
     sep #$20
     lda $81              ; high byte first (big-endian)
@@ -4588,9 +4608,10 @@ ww_done:
 ww_vid:
     jmp store_vid_word   ; $B0/$D0/$E0 -> $41 shadow (else dropped); rts to caller
 writelong:
-    lda $52
-    cmp #$00F0
-    bne wl_vid
+    jmp writelong_fixed
+    nop
+    nop
+    nop
     ldx $54
     sep #$20
     lda $83              ; bits 31-24
@@ -4735,13 +4756,14 @@ op_bset_dn_dn:         ; bset Dn,Dn : Z=!(bit); set bit (cntDn&31) in dstDn ; PC
     cmp #$0010
     bcs bs_hi
     ldy $50
+    iny
     lda #$0001
 bs_ls:
-    cpy #0
+    dey
     beq bs_lset
     asl a
-    dey
     bra bs_ls
+    nop
 bs_lset:
     sta $94
     bra bs_test
@@ -4750,13 +4772,14 @@ bs_hi:
     lda $50
     sbc #$0010
     tay
+    iny
     lda #$0001
 bs_hs:
-    cpy #0
+    dey
     beq bs_hset
     asl a
-    dey
     bra bs_hs
+    nop
 bs_hset:
     sta $96
 bs_test:
@@ -4842,8 +4865,13 @@ um_done:
 
 ; udiv: dividend $50(lo16):$52(hi16) / divisor $54 -> quot $50:$52, rem $94
 udiv:
-    stz $94
-    ldy #$0020
+    ; The old four-byte source pair assembled as `64 94 A0 20` because Poppy
+    ; inherited I8 here.  Runtime I16 consumed the following ASL opcode as the
+    ; immediate high byte (Y=$0620) and desynchronized every nonzero DIVU.
+    ; Preserve ud_l and every downstream bank-$00 address with a four-byte
+    ; trampoline into the explicit-mode implementation in reclaimed slack.
+    jmp udiv_fixed
+    nop
 ud_l:
     asl $50
     rol $52
@@ -5079,13 +5107,14 @@ op_bchg_dn_d16:        ; bchg Dn,(d16,An) : toggle bit (Dn&7) in [An+d16].b ; Z=
     sta $52            ; byte
     rep #$20
     ldy $50
+    iny
     lda #$0001
 bcd_sh:
-    cpy #0
+    dey
     beq bcd_t
     asl a
-    dey
     bra bcd_sh
+    nop
 bcd_t:
     sta $56            ; mask
     and $52
@@ -6268,13 +6297,14 @@ op_bclr_imm_dn:        ; bclr #bit,Dn : Z=!(bit); clear bit (mod 32) ; PC+=4
     cmp #$0010
     bcs bc_hi
     ldy $50
+    iny
     lda #$0001
 bc_ls:
-    cpy #0
+    dey
     beq bc_lset
     asl a
-    dey
     bra bc_ls
+    nop
 bc_lset:
     sta $94
     bra bc_test
@@ -6283,13 +6313,14 @@ bc_hi:
     lda $50
     sbc #$0010
     tay
+    iny
     lda #$0001
 bc_hs:
-    cpy #0
+    dey
     beq bc_hset
     asl a
-    dey
     bra bc_hs
+    nop
 bc_hset:
     sta $96
 bc_test:
@@ -6490,13 +6521,14 @@ op_btst_imm_abs:       ; btst #bit,(xxx).L : Z=!(byte bit) (I/O/ROM-aware) ; PC+
     and #$00FF
     sta $52            ; byte
     ldy $50
+    iny
     lda #$0001
 bia_sh:
-    cpy #0
+    dey
     beq bia_t
     asl a
-    dey
     bra bia_sh
+    nop
 bia_t:
     and $52
     jsr setz_from_a
@@ -7584,10 +7616,11 @@ ea_extw:
     ; already bank-aware; this fetch path was missed. Fixed body (bank-aware, low16-carry
     ; preserved) lives in escbank5 @ $99:F700 (eaw5_fix) behind this byte-neutral stub —
     ; NEVER inline-grow interp.pasm (branch-wrap + literal cross-bank addr landmines).
-    ; eaw5_fix returns via jml to the rts below ($00:B843 — LITERAL in escbank5; if this
-    ; region EVER shifts, regenerate that literal (the lh_nofire $F5B1 lesson)).
+    ; eaw5_fix returns via jml to ea_extw_return below; escbank5 imports that
+    ; symbol instead of hardcoding the address so this stub can move safely.
     jml $99F700          ; eaw5_fix (escbank5)
-    rts                  ; $00:B843 — eaw5_fix jml's back here; rts to the jsr caller
+ea_extw_return:
+    rts                  ; eaw5_fix jml's back here; rts to the jsr caller
     nop                  ; pad to the original 25-byte body (byte-neutral, zero shift)
     nop
     nop
@@ -7760,7 +7793,7 @@ eawm_nb:
     bne eawm_l
     jmp writeword
 eawm_l:
-    jmp writelong
+    jmp writelong_a16_entry
 
 ; logflags: result $80/$82, size $5E -> N,Z set; V,C cleared; X untouched
 logflags:
@@ -10390,7 +10423,7 @@ muld_v:
     jmp inext
 
 op_divu:                 ; DIVU.W <ea>,Dn : Dn(32)/ea.w -> quot(lo16),rem(hi16)
-    lda #$0001
+    jmp op_divu_ext      ; zero-shift trampoline; body lives in reclaimed bank-0 slack
     sta $5E              ; word divisor
     lda #$0002
     sta $46
@@ -15628,6 +15661,113 @@ _25110_t281:
     jmp inext
 .endif
 
+.org $D463
+; op_divu_ext — zero-dividend guard for generic DIVU.W.
+;
+; Fresh boot reaches `$00CA3E: divu.w #$000A,D1` with D1 already zero.  The
+; shared udiv path is currently unstable under that boot/optest evidence, so
+; avoid it for the mathematically trivial case: quotient=0, remainder=0, Z=1,
+; N=V=C=0, X preserved, PC += the EA engine's consumed length in $46.
+; Nonzero dividends retain the original generic algorithm until the broader
+; DIVU helper is repaired under optest.
+op_divu_ext:
+    lda #$0001
+    sta $5E              ; word divisor
+    lda #$0002
+    sta $46
+    lda $44
+    and #$003F
+    sta $9C
+    jsr ea_resolve
+    jsr ea_read          ; divisor -> $80
+    lda $80
+    bne divu_ext_ok
+    stz $70              ; DIVU #0 (per MAME): N=Z=V=C=0, X kept
+    stz $60
+    stz $72
+    stz $6E
+    jmp do_trap5         ; divide by zero -> vector 5
+divu_ext_ok:
+    sta $54              ; divisor
+    jsr regdst
+    lda $00,x
+    sta $50              ; dividend lo16
+    lda $02,x
+    sta $52              ; dividend hi16
+    ora $50
+    bne divu_ext_slow
+    jsr regdst
+    stz $00,x            ; quotient -> low16
+    stz $02,x            ; remainder -> high16
+    lda #$0001
+    sta $60              ; Z=1
+    stz $70              ; N=0
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    jmp div_pcadv
+divu_ext_slow:
+    jsr udiv             ; quot $50:$52, rem $94
+    lda $52
+    beq divu_ext_noov
+    lda #$0001
+    sta $72              ; quotient overflow: V=1, no write
+    stz $6E              ; C=0
+    jmp div_pcadv
+divu_ext_noov:
+    jsr regdst
+    lda $50
+    sta $00,x            ; quotient -> low16
+    lda $94
+    sta $02,x            ; remainder -> high16
+    stz $72              ; V=0
+    stz $6E              ; C=0
+    lda $50
+    bne divu_ext_nz
+    lda #$0001
+    sta $60
+    bra divu_ext_n
+divu_ext_nz:
+    stz $60
+divu_ext_n:
+    lda $50
+    and #$8000
+    beq divu_ext_np
+    lda #$0001
+    sta $70
+    jmp div_pcadv
+divu_ext_np:
+    stz $70
+    jmp div_pcadv
+
+; Address-stable replacement for udiv's malformed immediate-width prologue.
+; The public entry at $A46F tail-jumps here, so this RTS consumes the original
+; caller's JSR frame.  Keep the mode declarations local and explicit: this is
+; the exact poppy#386 failure shape that corrupted organic title execution.
+udiv_fixed:
+    .a16
+    .i16
+    stz $94
+    ldy #$0020
+udiv_fixed_loop:
+    asl $50
+    rol $52
+    rol $94
+    bcs udiv_fixed_sub
+    lda $94
+    cmp $54
+    bcc udiv_fixed_no
+udiv_fixed_sub:
+    lda $94
+    sec
+    sbc $54
+    sta $94
+    inc $50
+udiv_fixed_no:
+    dey
+    bne udiv_fixed_loop
+    rts
+udiv_fixed_end:
+
 .org $E000
 ; op_mw_d16d16_v2 — MOVE.W (d16,An),(d16,An) with a ROM-AWARE source read. The original
 ; read src from $40 work RAM unconditionally; but e.g. $8D86 `move.w $4(a1),$2930(a5)` has
@@ -18918,16 +19058,11 @@ RESP1:
 ; lh code before gm_verify), so `lda $F600 / beq notest` was never zero and the
 ; production cold-boot (notest) path was SILENTLY UNREACHABLE — the exact failure
 ; class the $F400 note below warns about.
-; HONEST CAVEAT: bank $00 has NO free byte (fully packed) — $F7E0 OVERLAPS the
-; tail of the 256-byte RESP1 block above (RESP1[$E0], zero in the real C-Chip
-; capture). This is safe by construction: PRODUCTION needs TESTFLAG==0, which
-; equals the real data (the .db below re-asserts it); TEST ROMs bake it nonzero
-; (optest/opsweep poke SA-1 file view $77E0) but then enter test mode and never
-; boot the game, so the corrupted RESP1 tail is never downloaded. Do NOT bake
-; TESTFLAG and expect a production boot from the same image.
-.org $F7E0
-TESTFLAG:
-    .db $00              ; == RESP1[$E0] (must stay 0 in production)
+; Bank $00 has no free byte.  TESTFLAG is therefore the existing RESP1[$E0] ROM
+; byte, which is zero in the real C-Chip response.  Latest Poppy correctly
+; rejects a second overlapping `.org $F7E0` declaration, so no label/data is
+; emitted here.  Production requires both ROM views to remain zero; optest/opsweep
+; bake file $77E0 nonzero in disposable test copies that never download RESP1.
 
 ; =============================================================================
 ; VIDEO PLUMBING routines, placed in free bank space ($F800+) so adding them does
@@ -20170,3 +20305,110 @@ clear_work_byte:
     plp
     rts
 clear_work_byte_end:
+
+; A16/I16 entry wrappers for generic EA writes that tail-call the shared memory
+; helpers.  Keep the wrappers in the large $D3CB-$DFFF gap so no packed handler
+; shifts.
+.org $D3D0
+.a16
+.i16
+ea_write_a16_entry:
+    rep #$30
+    jmp ea_write
+writelong_a16_entry:
+    rep #$30
+    jmp writelong
+ea_write_a16_entry_end:
+
+; Fixed shared memory WRITE helpers.  The original packed helper entries at
+; $A25F/$A295/$A2B2 remain stable trampolines; the full bodies live here because
+; their bank compares must assemble as A16 immediates.  The old in-place bodies
+; were emitted with 8-bit immediates (`C9 F0 D0...`), so runtime A16 decoded the
+; branch opcode as the immediate high byte and fell through into a bogus JSL to
+; bank $E2.  `CLR.L (A0)+` during the reset clear loop exposes this immediately.
+.org $D3E0
+.a16
+.i16
+writebyte_fixed:
+    lda $52
+    cmp #$00F0
+    bne wbf_io
+    ldx $54
+    sep #$20
+    lda $80
+    sta.l $400000,x
+    rep #$20
+    rts
+wbf_io:
+.a16
+.i16
+    cmp #$0090           ; C-Chip shared RAM / command port
+    bne wbf_vid
+    lda $54
+    cmp #$0C01
+    bne wbf_ram
+    sep #$20
+    lda $80
+    sta $62
+    rep #$20
+    rts
+wbf_ram:
+.a16
+.i16
+    ldx $54
+    sep #$20
+    lda $80
+    sta.l $41F000,x
+    rep #$20
+    rts
+wbf_vid:
+.a16
+.i16
+    jmp store_vid_byte
+
+writeword_fixed:
+.a16
+.i16
+    lda $52
+    cmp #$00F0
+    bne wwf_vid
+    ldx $54
+    sep #$20
+    lda $81
+    sta.l $400000,x
+    inx
+    lda $80
+    sta.l $400000,x
+    rep #$20
+    rts
+wwf_vid:
+.a16
+.i16
+    jmp store_vid_word
+
+writelong_fixed:
+.a16
+.i16
+    lda $52
+    cmp #$00F0
+    bne wlf_vid
+    ldx $54
+    sep #$20
+    lda $83
+    sta.l $400000,x
+    inx
+    lda $82
+    sta.l $400000,x
+    inx
+    lda $81
+    sta.l $400000,x
+    inx
+    lda $80
+    sta.l $400000,x
+    rep #$20
+    rts
+wlf_vid:
+.a16
+.i16
+    jmp store_vid_long
+write_helpers_fixed_end:

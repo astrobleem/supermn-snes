@@ -4,10 +4,19 @@
 set -euo pipefail
 export DOTNET_ROOT=/home/chad/.dotnet10
 export PATH="$DOTNET_ROOT:$PATH"
-POPPY=${POPPY_DLL:-/home/chad/poppy/src/Poppy.CLI/bin/Release/net10.0/poppy.dll}
+POPPY=${POPPY_DLL:-/home/chad/poppy-astrobleem-latest/src/Poppy.CLI/bin/Release/net10.0/poppy.dll}
 [ -f "$POPPY" ] || { echo "Poppy DLL not found: $POPPY" >&2; exit 1; }
+EXPECTED_POPPY_SHA256=715b14431478b62433498cc516c1cbbb8f418c1d7b39a8e71098ed98d9c9167e
+POPPY_SHA256=$(sha256sum "$POPPY" | awk '{print $1}')
+if [ "$POPPY_SHA256" != "$EXPECTED_POPPY_SHA256" ] && [ "${ALLOW_UNPINNED_POPPY:-0}" != 1 ]; then
+  echo "Refusing unpinned Poppy DLL: $POPPY" >&2
+  echo "observed: $POPPY_SHA256" >&2
+  echo "expected: $EXPECTED_POPPY_SHA256" >&2
+  echo "Set ALLOW_UNPINNED_POPPY=1 only for deliberate historical reproduction or compiler adoption." >&2
+  exit 1
+fi
 echo "Poppy DLL: $POPPY"
-sha256sum "$POPPY"
+echo "Poppy SHA-256: $POPPY_SHA256"
 cd "$(dirname "$0")/.."
 dotnet "$POPPY" -t snes -I . -o src/interp.bin -s src/interp.sym src/interp.pasm
 # video subsystem + TAD sound module. Poppy has no .include, so concatenate: video.pasm (supervisor)

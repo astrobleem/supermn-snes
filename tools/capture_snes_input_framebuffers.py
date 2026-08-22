@@ -289,6 +289,7 @@ def advance_recording_with_input(
     target = start + frames
     current = start
     responses: list[dict[str, Any]] = []
+    zero_progress_attempts = 0
     while current < target:
         remaining = target - current
         response = m.set_input(buttons, remaining)
@@ -303,6 +304,25 @@ def advance_recording_with_input(
                 "response": response,
             }
         )
+        if observed == current and buttons == 0:
+            fallback_response = m.run_frames(remaining)
+            m.pause()
+            fallback_observed = int(m.get_state().get("frameCount", 0))
+            responses[-1]["release_fallback"] = {
+                "response": fallback_response,
+                "after": fallback_observed,
+                "advanced": fallback_observed - current,
+            }
+            observed = fallback_observed
+            responses[-1]["after"] = observed
+            responses[-1]["advanced"] = observed - current
+        if observed == current and buttons != 0:
+            zero_progress_attempts += 1
+            responses[-1]["zero_progress_retry"] = zero_progress_attempts
+            if zero_progress_attempts <= 8:
+                continue
+        if observed > current:
+            zero_progress_attempts = 0
         if observed <= current or observed > target + 1:
             raise RuntimeError(
                 "timed controller input did not advance monotonically: "

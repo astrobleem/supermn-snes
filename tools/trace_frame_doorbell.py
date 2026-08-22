@@ -51,15 +51,29 @@ START = 0x1000
 RING_START = 0x0400
 RING_END = 0x05FF
 
+
+def escbank5_symbol(name: str) -> int:
+    """Resolve a current bank-$99 native landmark or fail loud."""
+    path = ROOT / "src" / "escbank5.sym"
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        fields = raw.split()
+        if len(fields) != 2 or fields[1] != name:
+            continue
+        bank_text, offset_text = fields[0].split(":", 1)
+        if int(bank_text, 16) != 0:
+            raise RuntimeError(f"unexpected escbank5 symbol bank: {raw}")
+        return 0x990000 | int(offset_text, 16)
+    raise RuntimeError(f"missing {name} in {path}")
+
 # These hooks are notification-only context.  The physical-$0300 zero hook is
 # the sole early stop condition before this set is armed.  Once armed, the
 # harness uses free-running notification mode because Nexen run_until stops at
 # every installed hook regardless of the requested handle.
 LATE_EXEC_HOOKS = {
-    "lhp_entry": 0x99FB00,
-    "lhp_wai": 0x99FB47,
-    "lhp_after_wai": 0x99FB48,
-    "lhp_rtl": 0x99FB6D,
+    "lhp_entry": escbank5_symbol("lh_0818_paced"),
+    "lhp_wai": escbank5_symbol("lhp_wai"),
+    "lhp_after_wai": escbank5_symbol("lhp_wai") + 1,
+    "lhp_rtl": escbank5_symbol("lh_0818_paced_end") - 1,
     "tick_0818": 0x00F5A3,
     "vid_frame_call": 0x0080B6,
     "vid_frame_wrapper": 0xE98000,

@@ -43,10 +43,21 @@ Execution contract:
 - Preserve artifacts on timeout, crash, hang, launch failure, or oracle loss.
   Track exact processes; never use `pkill -f mame`.
 - If the runner yields an active exec/session identifier, poll that same session
-  until it exits or the parent-supplied timeout actually expires.  A movie file
+  until it returns an exit code or the parent-supplied wall-clock timeout actually
+  expires. A tool/session poll timeout is not a runner timeout and never authorizes
+  a final handoff. Retain the original session identifier; do not abandon it or
+  infer completion from a quiet console. A movie file
   may remain zero bytes while Mesen is still recording; that is progress, not a
   launch failure.  Never start a concurrent retry while the original validator
   or emulator process is alive.
+- For validators that write `run-progress.json`, require its terminal stage to be
+  `complete` or `terminated_by_signal`. Before finalizing, verify the exact
+  validator process is gone and require an on-disk terminal `results.json` or
+  `failure-report.json`. Partial PNG/checkpoint coverage is never a terminal run.
+- If the parent-supplied wall-clock timeout genuinely expires, send SIGTERM only
+  to the exact validator process, continue polling the same session until that
+  process exits, and retain its failure report/progress journal. Do not synthesize
+  an early watcher report while the validator is alive.
 - Do not send progress narration to the parent. If useful, write progress to
   the artifact directory and return once after the run/reduction finishes.
 
@@ -96,6 +107,8 @@ Reduction contract:
   directly.
 
 Final handoff contract:
+- A final handoff is forbidden while the validator process is alive, while its
+  exec session remains active, or while no terminal validator report exists.
 - Return only the following five fields, in at most 12 lines total. Use paths
   relative to the repository. Put complete ranges and manifests in
   `watcher-report.json` when they do not fit.
@@ -110,3 +123,9 @@ Do not add greetings, status prose, conclusions, raw excerpts, transcript
 summaries, diagnostic theories, proposed fixes, or requests for the parent to
 read conversational history.
 """
+
+# Legacy Mesen, Nexen, and MAME MCP use loopback TCP between the watcher and
+# emulator. Keep filesystem access workspace-scoped while permitting that
+# agent sandbox to create the local sockets required by the harnesses.
+[sandbox_workspace_write]
+network_access = true

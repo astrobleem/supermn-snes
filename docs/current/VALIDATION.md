@@ -28,6 +28,23 @@ partial, cross-hash, cross-range, mutated, unauthenticated, background-only, or
 state-only evidence cannot create a test ROM. A new ROM hash invalidates all prior
 promotion reports for the successor.
 
+Rejected predecessor `d61100e4…` has a green bounded Nexen fresh-power
+title/one-credit result at
+`build/playback-watcher-20260821/fresh-credit-d61100e4-v4/`, including Sol review
+of the retained prompt screenshot. The separate legacy-Mesen post-Start attempt
+retained Select/Start movie input but failed strict frame-span accounting before
+aligned capture and remains **UNKNOWN**. Its no-poke, every-tenth-frame diagnostic
+replay through frame 6,315 is green only for its named predecessor evidence and
+ends in the newly diagnosed fallback-NMI BRK collapse. Current `b0f28aa3…` has
+only a focused cross-ROM continuation across that exact failure; it has no fresh
+scenario report. Neither result satisfies the remaining every-frame walking,
+attack, scroll, fence, composite-MAME, or promotion scenarios.
+
+Hash-specific command examples and retained-result paragraphs later in this file
+are recipes and provenance. Their filenames may contain `current`, but they do not
+override the active hash or evidence scope in `STATUS.md` and the prioritized
+checklist in `RELEASE_BLOCKERS.md`.
+
 The settled boot geometry/pixel component is checked with:
 
 ```sh
@@ -72,6 +89,23 @@ python3 tools/prepare_roms.py /path/to/superman.zip --validate-only
 
 These prove links, Python syntax/unit behavior, set authentication, deterministic
 derivation, and existing-output identity. They do not prove the game runs.
+
+## Renderer implementation validation
+
+Do not use the human-test promotion campaign as the implementation loop. The default
+renderer workload is a neutral-input Nexen attract-mode run:
+
+- advance with hooks or compact counters to a named renderer boundary;
+- observe at most 600 video frames after that boundary by default;
+- retain the scene-generation ledger and first invariant failure;
+- capture only sparse milestone screenshots or one small contact sheet; and
+- stop and fix the first BG/palette/OAM/camera/pattern ownership violation.
+
+Do not record a controller movie, replay multi-thousand-frame input sequences, dump
+every frame as PNG, or launch Legacy Mesen for routine renderer work. Reuse existing
+exact-hash prefixes and artifacts. A long playback, new movie, every-frame capture,
+or final coin/Start/walk/attack/fence matrix requires Chad's explicit approval and
+runs only after the bounded attract-mode invariants are green.
 
 ## Build and layout
 
@@ -122,6 +156,102 @@ With MAME 0.287 and Nexen MCP configured:
 python3 tools/optest.py
 python3 tools/opsweep.py
 ```
+
+Filtered optest runs should use the bounded wrapper so Codex can approve one
+localhost-capable command prefix instead of repeatedly launching Nexen/Mesen MCP
+inside the default network-restricted sandbox:
+
+```sh
+bash tools/run_optest_filter.sh 'RESETSEQ' 120
+```
+
+Current optest readiness is hook-based. The harness waits for the TESTFLAG reset
+path to execute `test_idle`; it no longer accepts a random power-on `$7E == 1`
+byte as proof that the single-step loop is ready. Filtered one-op completion also
+requires an actual `inext` hook notification before register readback; `$4E`
+alone is not trusted because direct-page scratch corruption can make it nonzero
+before the instruction has architecturally completed. Filtered runs print compact
+per-vector interpreter stop/PC/opcode lines.
+
+The retained August 21 focused semantic gate, still present in current
+`b0f28aa3…`, is:
+
+```sh
+bash tools/run_optest_filter.sh 'B7:DIVU' 120
+```
+
+It passes 171/171 focused vectors, including nonzero division, overflow, and
+immediate/register divide-by-zero traps. This closes the reproduced generic-DIVU
+width failure; it does not widen into whole-program or renderer acceptance.
+
+The indexed-EA regression gate is:
+
+```sh
+bash tools/run_optest_filter.sh 'LEA (d8,PC,D7.W),A4' 120
+```
+
+It passes 5/5 against MAME and includes `D7.W=$FE90`, the exact negative index
+from the post-Start `$00766A JMP (PC,D7.W)` failure.
+
+The bounded predecessor post-Start replay is retained at
+`build/playback-watcher-20260821/fresh-poststart-b0f28aa3-replay-v1/`. It
+authenticates ROM SHA-256 `b0f28aa3…`, the 6,323-row fresh-power movie, port-1
+Select/Start input, and complete frame coverage through absolute frame 6,323.
+Terminal liveness is green: halt remains zero and tick/render/pacing continue at
+the end. The overall result remains red because generic blank/band/tile heuristics
+flag the Stage-1 transition at relative frames 100-206. Sol's review records that
+the transition resolves to an intact composite, but this does not replace an
+aligned-MAME animation/pixel comparison. Read `sol-terminal-review.json`, not the
+25 MiB raw `results.json`, for the compact verdict.
+
+Current `7506f496…` has its own authenticated replay at
+`build/playback-watcher-20260821/obj-y-e9-fresh-entrance-playback-v1/`, covering
+all 601 post-Start frames 5,722-6,322. Its generic transition heuristic is red and
+cannot be called whole-run visual acceptance. The focused aligned entrance report
+is separate:
+
+```sh
+python3 tools/build_mame_snes_alignment_manifest.py \
+  --mame-summary build/playback-watcher-20260821/mame-entrance-ticks221-339-v3/summary.json \
+  --snes-results build/playback-watcher-20260821/obj-y-e9-fresh-entrance-playback-v1/results.json \
+  --rom-sha256 7506f496669050cf188dd767810717a1c35944cd5115b667fe216f33bfe6447c \
+  --tick-offset 29 --mame-tick-min 304 --mame-tick-max 339 \
+  --snes-alignment-field obj_published_sequence \
+  --snes-frame-selector first \
+  --output build/playback-watcher-20260821/obj-y-e9-entrance-aligned-published-v1/manifest.json
+```
+
+`pixel-report.json` is scene/playfield exact 36/36 but the literal centered-crop
+full composite is red by 576 top-HUD pixels on every frame. That raw crop is not
+the correct HUD authority because production intentionally moves the outer score
+records inward and preserves the wrapped top glyph rows. Validate that component
+independently without replaying:
+
+```sh
+python3 tools/compare_transformed_mame_snes_hud_sequence.py \
+  --manifest build/playback-watcher-20260821/obj-y-e9-entrance-aligned-published-v1/manifest.json \
+  --output build/playback-watcher-20260821/obj-y-e9-entrance-hud-transformed-v1
+```
+
+The result is exact 36/36: each frame has the same 414 red and 243 white glyph
+pixels after the production transform, with zero missing, extra, or wrong-color
+pixels. `hud-review.png` and `sol-review.json` record the required visual review.
+This closes the entrance scene and transformed-HUD components only; a single
+composed full-frame oracle and the separate behavior scenarios remain open.
+
+Do not use `render_full_frame.py` or its derivatives as an exact composite
+oracle merely because their colors and tile decode were historically validated.
+The fail-closed current-shadow attempt at
+`build/playback-watcher-20260821/obj-y-e9-entrance-composite-x1-v2/report.json`
+is red at its prerequisite raw-MAME reconstruction by roughly 60,000 pixels per
+frame. Its SNES-transform output has no acceptance authority.
+
+If a localhost harness reports `Errno 1`, `Operation not permitted`, or a loopback
+timeout, treat it as a sandbox routing failure. Do not retry it in the Sol shell.
+Start the Luna playback-watcher role, whose project config enables network inside
+its otherwise `workspace-write` sandbox; if that watcher was created before the
+setting changed, start a new watcher/session rather than assuming a live agent
+reloaded its configuration. A launch failure remains `unknown`, never ROM evidence.
 
 When the revision-4339 snap is not mounted at its historical path, stage its
 exact payload under the gitignored build tree without replacing the installed
@@ -183,8 +313,9 @@ it is not fresh-boot or full-playthrough evidence.
 
 ## Rendering
 
-Current ordinary response candidate `c14c0184…` has exact-hash fresh boot and
-post-Start evidence but is temporal/scene-coherence red. Run the exact physical-column/PPU
+Historical response candidate `c14c0184…` has exact-hash fresh boot and
+post-Start evidence but is temporal/scene-coherence red. It remains a renderer
+regression fixture, not the current ordinary ROM. Run its exact physical-column/PPU
 bridge with:
 
 ```sh
@@ -540,9 +671,30 @@ gate is red for blank/repeated playfields, hidden BG1, absent cache ownership,
 partial tile DMA, nonconsecutive frames, or interpreter halt. It remains
 acceptance-unknown even when clear until the separate exact-MAME pixels and
 every-video-frame temporal-conservation reports cover the same ROM/range. The
-default 100-frame visual grace covers the authenticated organic Stage-1 fade;
+default 100-frame visual grace covered earlier authenticated organic Stage-1
+fades. It is deliberately not widened to hide a slower successor: the report now
+records game-tick and render-complete deltas per 60 video frames so an overlong,
+coherent fade can be separated from missing/corrupt geometry. This cadence is
+diagnostic-only, not an end-to-end fps result. Sustained simultaneous holds of
+game tick, render-complete, and pacing-VBlank counters are nevertheless a hard
+liveness failure, and byte-identical framebuffer ranges are retained explicitly.
 `tools/reanalyze_fresh_poststart_framebuffers.py` re-verifies every retained PNG
 hash and metric after threshold-only changes, without replaying the boot prefix.
+If recording succeeded but playback/reporting failed, reuse that exact movie
+instead of recording the prefix again:
+
+```sh
+python3 tools/validate_fresh_poststart_framebuffers.py \
+  --rom build/interp.sfc \
+  --replay-movie /path/to/fresh-poststart.mmo \
+  --output /path/to/new-replay-evidence \
+  --playback-port 43831
+```
+
+The movie's embedded ROM SHA-1, controller type, complete controller-row count,
+Select/Start spans, and available post-Start suffix must authenticate before
+Mesen launches. Runtime failures write atomic `failure-report.json` evidence and
+remain `unknown`.
 Do not
 start a full long gameplay campaign without explicit approval. Builds and bounded
 fresh-power regression gates do not require separate approval; before rebuilding,

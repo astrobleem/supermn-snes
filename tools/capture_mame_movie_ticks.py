@@ -61,6 +61,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=300.0)
     parser.add_argument(
+        "--snapshots",
+        action="store_true",
+        help="retain a MAME PNG at every requested tick",
+    )
+    parser.add_argument(
+        "--video-shadows",
+        action="store_true",
+        help="retain raw $B00000/$D00000/$E00000 video shadow spans at every tick",
+    )
+    parser.add_argument(
         "--boundary",
         choices=("completion_0818", "tick_start"),
         default="completion_0818",
@@ -133,11 +143,12 @@ def timeline_rows(
     path: Path, requested: set[int], boundary: str
 ) -> dict[int, dict[str, Any]]:
     rows: dict[int, dict[str, Any]] = {}
+    expected_event = "tick" if boundary == "completion_0818" else "tick_start"
     with path.open(encoding="utf-8") as stream:
         for line in stream:
             row = json.loads(line)
             tick = int(row.get("tick", -1))
-            if row.get("event") == "tick" and tick in requested:
+            if row.get("event") == expected_event and tick in requested:
                 if boundary == "completion_0818":
                     valid = (
                         row.get("boundary_kind") == "completion_0818"
@@ -166,7 +177,8 @@ def main() -> int:
     cfg = output / "cfg"
     nvram = output / "nvram"
     states = output / "states"
-    for path in (cfg, nvram, states):
+    snapshots = output / "snapshots"
+    for path in (cfg, nvram, states, snapshots):
         path.mkdir()
     if MAME_CFG.is_file():
         shutil.copy2(MAME_CFG, cfg / MAME_CFG.name)
@@ -198,6 +210,8 @@ def main() -> int:
         str(nvram),
         "-cfg_directory",
         str(cfg),
+        "-snapshot_directory",
+        str(snapshots),
     ]
     environment = mame_environment(
         os.environ,
@@ -205,6 +219,12 @@ def main() -> int:
         SDL_AUDIODRIVER="dummy",
         ORGANIC_DAMAGE_OUT=str(output),
         ORGANIC_DAMAGE_TICKS=",".join(str(tick) for tick in args.ticks),
+        ORGANIC_DAMAGE_SNAPSHOT_TICKS=(
+            ",".join(str(tick) for tick in args.ticks)
+            if args.snapshots
+            else ""
+        ),
+        ORGANIC_DAMAGE_VIDEO_SHADOWS="1" if args.video_shadows else "0",
         ORGANIC_DAMAGE_BOUNDARY=args.boundary,
         ORGANIC_DAMAGE_SAVE_TICK=str(args.save_tick),
         ORGANIC_DAMAGE_HEALTH_MIN="0",
@@ -256,6 +276,19 @@ def main() -> int:
             f"expected {sorted(requested)}"
         )
 
+    snapshot_paths: dict[int, Path] = {}
+    if args.snapshots:
+        generated = sorted(
+            (snapshots / "superman").glob("*.png"),
+            key=lambda path: int(path.stem),
+        )
+        if len(generated) != len(args.ticks):
+            raise RuntimeError(
+                f"MAME retained {len(generated)} snapshots, "
+                f"expected {len(args.ticks)}"
+            )
+        snapshot_paths = dict(zip(args.ticks, generated, strict=True))
+
     captures: list[dict[str, Any]] = []
     for tick in args.ticks:
         path = output / f"mame-tick-{tick:05d}.work.bin"
@@ -264,17 +297,26 @@ def main() -> int:
             raise RuntimeError(f"{path}: expected {WORK_SIZE} bytes")
         observed = {
             "health": be16(work, 0x12B4),
+            "previous_input": work[0x12BF],
+            "input": work[0x12BE],
+            "flags": work[0x12DE],
             "player_x": be16(work, 0x12E4),
             "player_y": be16(work, 0x12E0),
             "action": work[0x12DF],
+            "animation": be16(work, 0x12E8),
+            "animation_step": be16(work, 0x12EA),
         }
         reference = {
             name: int(references[tick][name])
             for name in ("health", "player_x", "player_y", "action")
         }
-        if observed != reference:
+        observed_reference = {
+            name: observed[name]
+            for name in ("health", "player_x", "player_y", "action")
+        }
+        if observed_reference != reference:
             raise RuntimeError(
-                f"tick {tick}: player {observed}, expected {reference}"
+                f"tick {tick}: player {observed_reference}, expected {reference}"
             )
         boundary = boundaries[tick]
         if args.boundary == "completion_0818":
@@ -295,8 +337,7 @@ def main() -> int:
             raise RuntimeError(
                 f"tick {tick}: capture was not made at {args.boundary}"
             )
-        captures.append(
-            {
+        capture = {
                 "tick": tick,
                 "frame": int(boundary["frame"]),
                 "path": str(path),
@@ -304,7 +345,31 @@ def main() -> int:
                 "size": len(work),
                 "player": observed,
             }
-        )
+        if tick in snapshot_paths:
+            snapshot = snapshot_paths[tick]
+            capture["snapshot"] = {
+                "path": str(snapshot),
+                "sha256": sha256(snapshot),
+                "size": snapshot.stat().st_size,
+            }
+        if args.video_shadows:
+            capture["video_shadows"] = {}
+            for label, size in (
+                ("b0", 0x1000),
+                ("d0", 0x1000),
+                ("e0", 0x4000),
+            ):
+                shadow = output / f"mame-tick-{tick:05d}.{label}.bin"
+                if not shadow.is_file() or shadow.stat().st_size != size:
+                    raise RuntimeError(
+                        f"tick {tick}: invalid {label} shadow {shadow}"
+                    )
+                capture["video_shadows"][label] = {
+                    "path": str(shadow),
+                    "sha256": sha256(shadow),
+                    "size": size,
+                }
+        captures.append(capture)
 
     saved_state_path = None
     if args.save_tick:
@@ -351,6 +416,8 @@ def main() -> int:
         "timeline": str(args.timeline.resolve()),
         "timeline_sha256": sha256(args.timeline),
         "ticks": args.ticks,
+        "snapshots": args.snapshots,
+        "video_shadows": args.video_shadows,
         "save_tick": args.save_tick,
         "saved_state": (
             {

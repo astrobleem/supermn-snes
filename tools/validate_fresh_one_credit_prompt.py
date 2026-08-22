@@ -6,7 +6,7 @@ by ``replay_mame_controller_campaign.py``.  It starts at power-on, sends one
 real Select/coin edge, waits for the stable prompt, and retains the exact state
 and screenshot.  Pixel predicates cover the two reported renderer failures:
 
-* the right-hand gray artwork wedge must contain no black gap;
+* both gray artwork wedges must contain no black gap;
 * the CREDIT text must leave the gray artwork visible between its glyphs.
 
 The empty lower-right prompt area is also required to remain black.  This is a
@@ -109,6 +109,16 @@ def inspect_pixels(path: Path) -> dict[str, Any]:
         for x in range(150, y - 30)
         if image.getpixel((x, y)) == black
     ]
+    # Mirror the same interior sample around the 127.5-pixel cone center.  The
+    # arcade artwork has a legitimate one-sided cast shadow on the left, but
+    # the outer light wedge itself must remain present on both sides.  The old
+    # gate checked only the right and could therefore miss a left-column loss.
+    left_wedge_black = [
+        [255 - x, y]
+        for y in range(190, 221)
+        for x in range(150, y - 30)
+        if image.getpixel((255 - x, y)) == black
+    ]
 
     # CREDIT overlays the gray triangle.  Transparent glyph rendering leaves
     # both $94 and $63 gray artwork pixels visible between white glyph pixels;
@@ -129,6 +139,8 @@ def inspect_pixels(path: Path) -> dict[str, Any]:
         "size": list(image.size),
         "right_wedge_black_count": len(right_wedge_black),
         "right_wedge_black_first": right_wedge_black[:32],
+        "left_wedge_black_count": len(left_wedge_black),
+        "left_wedge_black_first": left_wedge_black[:32],
         "credit_box_artwork_gray_pixels": credit_artwork_pixels,
         "credit_box_artwork_gray_minimum": 700,
         "lower_right_nonblack_pixels": lower_right_nonblack,
@@ -253,6 +265,9 @@ def main() -> int:
         ),
         "right_artwork_wedge_has_no_black_gap": (
             pixels["right_wedge_black_count"] == 0
+        ),
+        "left_artwork_wedge_has_no_black_gap": (
+            pixels["left_wedge_black_count"] == 0
         ),
         "credit_text_preserves_artwork_underlay": (
             pixels["credit_box_artwork_gray_pixels"]

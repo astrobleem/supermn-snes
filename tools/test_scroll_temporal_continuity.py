@@ -67,6 +67,8 @@ def make_capture(directory: Path, *, failure: str | None) -> Path:
         )
         world_x = 100 if failure == "obj_hold" else 100 + obj_comp
         fixed_x = 50 + (obj_comp if failure == "obj_hud" else 0)
+        fallback_source = failure == "fallback"
+        invalid_lock = failure == "invalid_lock"
         presentation_oam = bytearray(0x220)
         presentation_oam[0:8] = bytes(
             (fixed_x & 0xFF, 0x08, 0x11, 0x22,
@@ -103,11 +105,13 @@ def make_capture(directory: Path, *, failure: str | None) -> Path:
                 "hardware_oam_sha256": presentation_sha,
                 "presentation_oam": presentation_oam.hex(),
                 "presentation_oam_sha256": presentation_sha,
+                "obj_presentation_source": "fallback" if fallback_source else "current",
+                "obj_fallback_valid": 0xA5 if fallback_source else 0,
                 "obj_base_scrollx": obj_base_scrollx,
                 "obj_present_valid": 0xA5,
                 "obj_applied_comp": obj_comp,
                 "obj_world_count": 1,
-                "obj_dma_pending": 0,
+                "obj_dma_pending": 0x80 if (fallback_source or invalid_lock) else 0,
                 "obj_base_sequence": tick,
                 "obj_dma_skips": 0,
                 "obj_world_list": "04000004",
@@ -254,6 +258,29 @@ def main() -> int:
         assert any(
             row["kind"] == "fixed-or-non-x-oam-changed"
             for row in obj_hud_report["obj_temporal"]["violations"]
+        )
+
+        fallback_dir = temp / "fallback"
+        fallback_dir.mkdir()
+        fallback_output = fallback_dir / "report.json"
+        fallback = run(make_capture(fallback_dir, failure="fallback"), fallback_output)
+        assert fallback.returncode == 0, fallback.stderr or fallback.stdout
+        fallback_report = json.loads(fallback_output.read_text())
+        assert fallback_report["result"] == "green"
+
+        invalid_lock_dir = temp / "invalid-lock"
+        invalid_lock_dir.mkdir()
+        invalid_lock_output = invalid_lock_dir / "report.json"
+        invalid_lock = run(
+            make_capture(invalid_lock_dir, failure="invalid_lock"),
+            invalid_lock_output,
+        )
+        assert invalid_lock.returncode == 1, invalid_lock.stderr or invalid_lock.stdout
+        invalid_lock_report = json.loads(invalid_lock_output.read_text())
+        assert invalid_lock_report["result"] == "red"
+        assert any(
+            row["kind"] == "invalid-dma-state"
+            for row in invalid_lock_report["obj_temporal"]["violations"]
         )
 
     print("temporal scroll cadence gate: green")

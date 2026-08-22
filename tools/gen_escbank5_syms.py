@@ -15,7 +15,7 @@ from pathlib import Path
 NEEDED = ["inext", "rdw40_l", "wrw40_l", "rdb40_l", "wrb40_l", "push32_l",
           "rdw_ea_l", "readbyte_l", "writeword_l", "writebyte_l", "usmul_l",
           "op_rts_sentinel", "ojmp_hook", "ors_pre", "lh_nofire",
-          "lh_0818_after_gateway"]
+          "lh_0818_after_gateway", "ea_extw_return"]
 # cross-bank native callees: (symbol, source .sym, forced bank)
 XBANK = [("entry_23342", "src/escbank4.sym", 0x98),
          ("entry_235e0", "src/escbank4.sym", 0x98),

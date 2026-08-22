@@ -27,14 +27,18 @@ class FakeMemory:
 
 
 def main() -> int:
+    run_source = inspect.getsource(gate.run_main)
     main_source = inspect.getsource(gate.main)
-    assert "advance_to(m, args.title_frame)" in main_source
-    assert "m.run_frames(args.title_frame)" not in main_source
-    assert "advance_recording_with_input(" in main_source
-    assert "m.set_input(" not in main_source
-    assert '"promotion_status": "blocked"' in main_source
-    assert '"cold_boot_logo_geometry"' in main_source
-    assert '"player_animation_order"' in main_source
+    replay_source = inspect.getsource(gate.replay_existing_movie)
+    assert "advance_to(m, args.title_frame)" in run_source
+    assert "m.run_frames(args.title_frame)" not in run_source
+    assert "advance_recording_with_input(" in run_source
+    assert "m.set_input(" not in run_source
+    assert '"promotion_status": "blocked"' in run_source
+    assert '"cold_boot_logo_geometry"' in run_source
+    assert '"player_animation_order"' in run_source
+    assert "write_failure_report(exc)" in main_source
+    assert "runtime_memory_writes" in replay_source
     assert gate.require_controller_safe_emulator(gate.DEFAULT_EMULATOR) == (
         gate.DEFAULT_EMULATOR.resolve()
     )
@@ -146,8 +150,73 @@ def main() -> int:
         item["kind"] for item in gate.evaluate_rows([attract_not_gameplay], 100)
     ] == ["gameplay_bg_mode_not_active"]
 
+    cadence = gate.cadence_summary(
+        [
+            {"frame": 100, "tick": 0xFFFE, "render_complete": 10},
+            {"frame": 101, "tick": 0xFFFF, "render_complete": 10},
+            {"frame": 102, "tick": 0x0000, "render_complete": 11},
+        ]
+    )
+    assert cadence["video_frame_intervals"] == 2
+    assert cadence["game_tick_delta"] == 2
+    assert cadence["render_complete_delta"] == 1
+    assert cadence["game_ticks_per_60_video_frames"] == 60.0
+    assert cadence["renders_per_60_video_frames"] == 30.0
+    assert cadence["authority"] == "diagnostic_only"
+
+    live_rows = []
+    for relative in range(7):
+        row = dict(clear)
+        row.update(
+            frame=200 + relative,
+            relative_frame=relative,
+            tick=9 if relative >= 1 else 8,
+            render_complete=4 if relative >= 1 else 3,
+            pacing_vblank_epoch=12 if relative >= 1 else 11,
+            screenshot={"sha256": "held" if relative >= 1 else "first"},
+        )
+        live_rows.append(row)
+    stall = gate.execution_liveness_failures(live_rows)
+    assert stall == [
+        {
+            "relative_frame": 1,
+            "relative_frame_end": 6,
+            "kind": "execution_liveness_stall",
+            "video_frame_start": 201,
+            "video_frame_end": 206,
+            "held_intervals": 5,
+            "tick": 9,
+            "render_complete": 4,
+            "pacing_vblank_epoch": 12,
+            "framebuffer_repeated": True,
+        }
+    ]
+    assert gate.repeated_frame_ranges(live_rows) == [
+        {
+            "relative_frame_start": 1,
+            "relative_frame_end": 6,
+            "video_frame_start": 201,
+            "video_frame_end": 206,
+            "rows": 6,
+            "sha256": "held",
+        }
+    ]
+    assert gate.evaluate_rows(live_rows, 100)[-1] == stall[0]
+
     with tempfile.TemporaryDirectory(prefix="fresh-poststart-gate-test-") as raw:
         temp = Path(raw)
+        old_context = dict(gate.RUN_CONTEXT)
+        try:
+            gate.RUN_CONTEXT.clear()
+            gate.RUN_CONTEXT.update(output=str(temp), stage="test_start")
+            gate.progress_update(stage="test_capture", relative_frame=7)
+            journal = gate.json.loads((temp / "run-progress.json").read_text())
+            assert journal["stage"] == "test_capture"
+            assert journal["relative_frame"] == 7
+        finally:
+            gate.RUN_CONTEXT.clear()
+            gate.RUN_CONTEXT.update(old_context)
+
         movie = temp / "controller.mmo"
         with zipfile.ZipFile(movie, "w") as archive:
             archive.writestr(
@@ -160,6 +229,41 @@ def main() -> int:
         assert contract["controller_rows"] == 2
         assert contract["select_rows"] == 1
         assert contract["start_rows"] == 1
+        assert contract["first_select_row"] == 0
+        assert contract["last_start_row"] == 1
+
+        phases = gate.phases_from_movie_contract(
+            {
+                "first_select_row": 5500,
+                "last_select_row": 5503,
+                "first_start_row": 5660,
+                "last_start_row": 5721,
+                "input_rows": 6323,
+            },
+            600,
+        )
+        assert phases == {
+            "title": 5500,
+            "coin_end": 5505,
+            "credit_ready": 5660,
+            "poststart": 5723,
+            "end": 6323,
+        }
+        try:
+            gate.phases_from_movie_contract(
+                {
+                    "first_select_row": 5500,
+                    "last_select_row": 5503,
+                    "first_start_row": 5660,
+                    "last_start_row": 5720,
+                    "input_rows": 6316,
+                },
+                600,
+            )
+        except RuntimeError as exc:
+            assert "available=594" in str(exc)
+        else:
+            raise AssertionError("accepted a short post-Start movie")
 
         no_controller_movie = temp / "no-controller.mmo"
         with zipfile.ZipFile(no_controller_movie, "w") as archive:

@@ -11,7 +11,7 @@ were true only before pixels first rendered. For current acceptance state, use
 > title/gameplay/HUD output, but renderer conservation, attack-animation tiles,
 > organic Stage 2 behavior, and aligned MAME pixels remain open.
 
-## Current focused correction: every-frame BG/OBJ integration (August 13–14, 2026)
+## August 13–14 focused correction: every-frame BG/OBJ integration
 
 Preserved `50bbed41…` produces the right Stage-1 wall/floor but does not move it
 at source cadence. In the retained exact-hash frame-5,871 suffix, live X1 column
@@ -127,7 +127,7 @@ status and counter straddled the line-0 boundary. The low-page path lacked a
 minimum-line check and mistook line 0 for lines 225-255. Rejected `b92ac14f…`
 retired the line-256+ tiers but did not address this low-page race.
 
-Current `f25a0e68…` permits low-page direct DMA only at `OPVCT >= $E1`; lower
+Historical `f25a0e68…` permits low-page direct DMA only at `OPVCT >= $E1`; lower
 lines and every high-page descriptor publish for the next NMI. Packer guards
 pin the helper seams, the low-page floor, the high-page publish branch, and its
 inert retired tier. At exact fresh frame 5,250, slot 2 matches its ROM record
@@ -202,7 +202,7 @@ Its fresh evidence and reviewed contact sheet are in
 `d487-fresh-poststart-framebuffers-v2`; helper-flow evidence is
 `d487-organic-helper-poststart0-v1`.
 
-Current `50bbed41…` places the same `$E9:C400` reconstruction call after the
+Historical `50bbed41…` places the same `$E9:C400` reconstruction call after the
 direct prepared map/list/palette snapshot. Pack-time guards require exactly one
 call in both direct and queued consumers. Its organic fresh movie retains 602
 consecutive post-Start frames. The old 50-frame grace flags only the real
@@ -222,9 +222,11 @@ performance, hardware, or gameplay acceptance.
 Preserved unaccepted candidate `c6ec69a1…` added the per-column vertical-scroll
 capture and Mode-2 window path on top of the blank-slot/map-authority repair.
 Rejected predecessor `95b44eb7…` used `sta $7E74C0,y`; that addressing mode does
-not exist on 65816, and Poppy silently emitted DB-relative absolute,Y bytes
+not exist on 65816, and the then-used compiler emitted DB-relative absolute,Y bytes
 `99 C0 74`. Those stores corrupted the arcade boot RAM test, which is why the ROM
-stayed on the loading screen despite passing the focused renderer fixture.
+stayed on the loading screen despite passing the focused renderer fixture. The
+latest `astrobleem/poppy` fork now rejects this invalid-operand class; the packer
+guard remains to pin the project's intended legal byte sequence.
 
 The repaired capture preserves X, transfers Y to X, and uses legal long,X:
 `DA BB 9F C0 74 7E FA`. `tools/build_interp_rom.py` rejects the bad encoding and

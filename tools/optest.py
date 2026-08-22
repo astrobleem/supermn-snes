@@ -185,6 +185,16 @@ end)
 
 # ---------------------------------------------------------------------------
 # Interpreter (Mesen)
+def _interp_symbol(name):
+    path=os.path.join(REPO, "src/interp.sym")
+    with open(path, encoding="utf-8-sig") as f:
+        for line in f:
+            fields=line.split()
+            if len(fields)>=2 and fields[1]==name:
+                bank,addr=fields[0].split(":", 1)
+                return (int(bank,16)<<16) | int(addr,16)
+    raise RuntimeError(f"missing interpreter symbol {name!r} in {path}")
+
 def _regblk(v):
     """64-byte DP image $00-$3F: D0lo,D0hi,..,A7lo,A7hi (each 16-bit little-endian)."""
     b=bytearray(0x40)
@@ -207,24 +217,62 @@ def _make_test_sfc(opwords):
     return f.name
 
 def _prepare_interp_session(m):
-    """Pause coherently and wait until the TESTFLAG reset path reaches test mode."""
+    """Pause coherently after the TESTFLAG reset path reaches test_idle.
+
+    SA-1 IRAM is intentionally random at power-on.  Polling only $7E can falsely
+    see the test-mode byte before reset has cleared IRAM and reached the harness,
+    causing the caller to poke a vector that boot immediately wipes.  The real
+    readiness condition is execution of test_idle with TESTFLAG mode live.
+    """
     m.pause()
-    for _ in range(MAX_STEP_FRAMES):
-        mode=m.read_memory(DP_SPACE, 0x7E, 1)[0]
-        if mode==1:
-            return
-        m.run_frames(1)
-    raise RuntimeError("interpreter did not enter TESTFLAG single-step mode")
+    hook=m.add_exec_hook(_interp_symbol("test_idle"), cpu_type="Sa1")
+    try:
+        m.drain_notifications(timeout=0.05)
+        for _ in range(max(MAX_STEP_FRAMES, 120)):
+            hit=m.run_until(max_frames=1, hook_handle=hook)
+            m.pause()
+            if (hit or {}).get("reason")!="hookFired":
+                continue
+            mode=m.read_memory(DP_SPACE, 0x7E, 1)[0]
+            if mode==1:
+                m.write_memory(DP_SPACE, 0xA0, "0000")
+                m.write_memory(DP_SPACE, 0x4E, "0000")
+                return
+    finally:
+        m.remove_hook(hook)
+    raise RuntimeError("interpreter did not reach TESTFLAG test_idle")
 
 def _run_single_step(m):
-    """Run through the done marker, even when an op straddles a video frame.
+    """Run exactly one instruction to the interpreter's real completion seam.
 
-    A single run_frames(1) is not a completion primitive: a value-dependent op
-    can begin near a frame boundary and finish in the next frame.  Reading and
-    rewriting its state at that boundary corrupts the in-flight instruction and
-    commonly turns the following vector into $DEAD.  Clear the stale marker,
-    submit one request, and wait a bounded number of frames for a fresh marker.
+    `$4E` is retained as the historical marker, but it is direct-page state near
+    hot scratch and is not a safe completion oracle by itself.  Stop on the real
+    `inext` entry, where architectural registers/PC are final, then advance to
+    `test_idle` so the next vector begins from the poll loop.
     """
+    m.write_memory(DP_SPACE, 0x4E, "0000")
+    inext_hook=m.add_exec_hook(_interp_symbol("inext"), cpu_type="Sa1")
+    try:
+        m.drain_notifications(timeout=0.05)
+        m.write_memory(DP_SPACE, 0xA0, "0100")
+        for frames in range(1, MAX_STEP_FRAMES+1):
+            m.run_frames(1)
+            for note in m.drain_notifications(timeout=0.05):
+                if note.get("method")!="notifications/mesen/hookFired":
+                    continue
+                params=note.get("params")
+                if isinstance(params, dict) and int(params.get("handle", -1))==inext_hook:
+                    m.pause()
+                    return 1, frames
+        raise RuntimeError(
+            f"single step did not reach inext within {MAX_STEP_FRAMES} "
+            f"video frames; session state is unsafe"
+        )
+    finally:
+        m.remove_hook(inext_hook)
+
+def _run_single_step_marker(m):
+    """Legacy marker-based path, retained only for comparing old diagnostics."""
     m.write_memory(DP_SPACE, 0x4E, "0000")
     m.write_memory(DP_SPACE, 0xA0, "0100")
     for frames in range(1, MAX_STEP_FRAMES+1):
@@ -257,7 +305,7 @@ def interp_run(opwords, oplen, vecs, same_pc=False):
     try:
         with McpSession(rom=sfc, mesen=MESEN, port=7339, boot_wait=3.0) as m:
             _prepare_interp_session(m)
-            for v in vecs:
+            for vi,v in enumerate(vecs):
                 # Poke vector state directly into the paused test-idle interpreter.
                 m.write_memory(DP_SPACE, 0x00, _regblk(v).hex())
                 pc=MAME_CODE if same_pc else INTERP_CODE_68K
@@ -278,7 +326,28 @@ def interp_run(opwords, oplen, vecs, same_pc=False):
                     m.write_memory(DP_SPACE, addr, bytes([val,0]).hex())
                 m.write_memory(DP_SPACE, 0x7C, bytes([0x07,0]).hex())   # SR mask
                 m.write_memory(OPND_SPACE, OPND_ADDR, v.opnd.hex())
-                stop_value, step_frames = _run_single_step(m)
+                try:
+                    stop_value, step_frames = _run_single_step(m)
+                except RuntimeError as e:
+                    pcblk=m.read_memory(DP_SPACE, 0x40, 4)
+                    opblk=m.read_memory(DP_SPACE, 0x44, 2)
+                    pc=pcblk[0]|(pcblk[1]<<8)|(pcblk[2]<<16)|(pcblk[3]<<24)
+                    opcode=opblk[0]|(opblk[1]<<8)
+                    raise RuntimeError(
+                        f"interp_run vector {vi} timed out; "
+                        f"pc=${pc:06X}, opcode=${opcode:04X}, opwords="
+                        f"{','.join(f'${w:04X}' for w in opwords)}"
+                    ) from e
+                if os.environ.get("OPTEST_TRACE_VECTORS") or globals().get("_FILTER"):
+                    pcblk=m.read_memory(DP_SPACE, 0x40, 4)
+                    opblk=m.read_memory(DP_SPACE, 0x44, 2)
+                    pc=pcblk[0]|(pcblk[1]<<8)|(pcblk[2]<<16)|(pcblk[3]<<24)
+                    opcode=opblk[0]|(opblk[1]<<8)
+                    print(
+                        f"  interp vec{vi}: stop=${stop_value:04X} "
+                        f"frames={step_frames} pc=${pc:06X} opcode=${opcode:04X}",
+                        flush=True,
+                    )
                 regblk=m.read_memory(DP_SPACE, 0x00, 0x40)
                 flagblk=m.read_memory(DP_SPACE, 0x60, 0x20)   # $60..$7F
                 xbyte=m.read_memory(DP_SPACE, 0xA2, 1)        # X flag
@@ -372,7 +441,8 @@ if __name__=="__main__":
         check_regs=["A4","PC"], ccr_mask=0x1F, same_pc=True))
     r.append(run_test("LEA (d8,PC,D7.W),A4", [0x49FB,0x7026], 4,
         [Vec({"D7":v,"A4":0},ccr=c) for v,c in
-         ((0x00000000,0x00),(0x00000010,0x1F),(0x0000FFFF,0x15),(0x12340020,0x0A))],
+         ((0x00000000,0x00),(0x00000010,0x1F),(0x0000FFFF,0x15),
+          (0x0000FE90,0x00),(0x12340020,0x0A))],
         check_regs=["D7","A4","PC"], ccr_mask=0x1F, same_pc=True))
     r.append(run_test("LEA (d8,PC,D7.L),A4", [0x49FB,0x7826], 4,
         [Vec({"D7":v,"A4":0},ccr=c) for v,c in
@@ -432,6 +502,49 @@ if __name__=="__main__":
     r.append(run_test("NOT.L (A0)+", [0x4698], 2,
         [Vec({"A0":OPND},opnd=opL(0x12345678)), Vec({"A0":OPND},opnd=opL(0x00000000))],
         check_regs=["A0"], check_opnd=True, ccr_mask=0x1F))
+    # CLR.L (A0)+ covers the reset clear loop at $003F50.  The $E00000 case is
+    # the boot's video-shadow write path; a prior gap in this micro-suite let
+    # that path regress while the generic work-RAM form stayed untested here.
+    r.append(run_test("CLR.L (A0)+ work", [0x4298], 2,
+        [Vec({"A0":OPND},opnd=opL(0x12345678),ccr=XIN),
+         Vec({"A0":OPND},opnd=opL(0x00000000))],
+        check_regs=["A0","PC"], check_opnd=True, ccr_mask=0x1F))
+    r.append(run_test("CLR.L (A0)+ video $E0", [0x4298], 2,
+        [Vec({"A0":0x00E00000},ccr=XIN),
+         Vec({"A0":0x00E03FFC})],
+        check_regs=["A0","PC"], ccr_mask=0x1F))
+    # Reset RAM-fill loop smoke tests.  Fresh boot executes this exact sequence
+    # after the $E0/$B0 CLR.L loops:
+    #   MOVE.W #4,D7; MOVE.L #$3FFE,D0; LEA (0,A5),A0; MOVE.B #pat,D1;
+    #   LEA (A0),A1; MOVE.L D0,D2; MOVE.B D1,(A1)+; SUBQ.L #1,D2; BNE.
+    # Keep these as single-op differentials so a boot stall points at a named
+    # semantic instead of a 5500-frame renderer-readiness failure.
+    r.append(run_test("RESETSEQ MOVE.W #4,D7", [0x3E3C,0x0004], 4,
+        [Vec({"D7":0xDEAD0000},ccr=XIN)],
+        check_regs=["D7","PC"], ccr_mask=0x00))
+    r.append(run_test("RESETSEQ MOVE.L #$3FFE,D0", [0x203C,0x0000,0x3FFE], 6,
+        [Vec({"D0":0xDEADBEEF},ccr=XIN)],
+        check_regs=["D0","PC"], ccr_mask=0x00))
+    r.append(run_test("RESETSEQ LEA (0,A5),A0", [0x41ED,0x0000], 4,
+        [Vec({"A5":OPND,"A0":0},ccr=XIN)],
+        check_regs=["A0","A5","PC"], ccr_mask=0x00))
+    r.append(run_test("RESETSEQ MOVE.B #$FF,D1", [0x123C,0x00FF], 4,
+        [Vec({"D1":0x12345678},ccr=XIN), Vec({"D1":0})],
+        check_regs=["D1","PC"], ccr_mask=0x00))
+    r.append(run_test("RESETSEQ MOVE.L D0,D2", [0x2400], 2,
+        [Vec({"D0":0x00003FFE,"D2":0xDEADBEEF},ccr=XIN)],
+        check_regs=["D0","D2","PC"], ccr_mask=0x00))
+    r.append(run_test("RESETSEQ MOVE.B D1,(A1)+", [0x12C1], 2,
+        [Vec({"D1":0x123456FF,"A1":OPND},opnd=bytes([0x55]),ccr=XIN),
+         Vec({"D1":0x12345600,"A1":OPND},opnd=bytes([0xAA]))],
+        check_regs=["D1","A1","PC"], check_opnd=True, ccr_mask=0x00))
+    r.append(run_test("RESETSEQ SUBQ.L #1,D2", [0x5382], 2,
+        [Vec({"D2":0x00000002},ccr=XIN), Vec({"D2":0x00000001}),
+         Vec({"D2":0x00000000})],
+        check_regs=["D2","PC"], ccr_mask=0x1F))
+    r.append(run_test("RESETSEQ BNE.B -6", [0x66FA], 2,
+        [Vec(ccr=ccr_bits(z=0)), Vec(ccr=ccr_bits(z=1))],
+        check_regs=["PC"], ccr_mask=0x1F))
     # NOT.W -(A0)  (pre-decrement; operand sits at OPND, so A0 starts at OPND+2)
     r.append(run_test("NOT.W -(A0)", [0x4660], 2,
         [Vec({"A0":OPND+2},opnd=(0x1234).to_bytes(2,"big")),
@@ -872,6 +985,10 @@ if __name__=="__main__":
          Vec({"D0":0x00000000,"D1":0x00000005},ccr=X1),
          Vec({"D0":0x0001FFFF,"D1":0x00000002},ccr=X1)],
         check_regs=["D0","D1"], ccr_mask=0x1F))
+    # Fresh-boot regression shape: $00CA3E DIVU.W #$000A,D1 with zero dividend.
+    r.append(run_test("B7:DIVU.W #10,D1 zero", [divu(1,7,4),0x000A], 4,
+        [Vec({"D1":0x00000000},ccr=X1)],
+        check_regs=["D1"], ccr_mask=0x1F))
     # DIVU.W overflow: V=1, C=0, no write (N/Z undefined -> mask V,C only)
     r.append(run_test("B7:DIVU.W ovf", [divu(0,0,1)], 2,
         [Vec({"D0":0xFFFFFFFE,"D1":0x00000001},ccr=X1),
